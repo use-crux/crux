@@ -9,6 +9,7 @@ export {
   isPollingTransport,
   isSseTransport,
   isStreamTransport,
+  isWebSocketTransport,
   isWebhookTransport,
   signalProvider,
 } from "./signal-provider";

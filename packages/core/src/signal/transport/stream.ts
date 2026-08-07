@@ -29,11 +29,28 @@ export interface StreamOpenContext {
 }
 
 /**
+ * Optional post-accept provider acknowledgement for one stream envelope item.
+ *
+ * @remarks Process-local only. Runtime invokes this only after durable #337
+ * accept (or same-digest duplicate) and, when the item carries a cursor, after
+ * that cursor is successfully checkpointed (or checkpoint is skipped because
+ * the store port is absent). Failure is observable as a transient connection
+ * fault and must not undo acceptance or clear the durable cursor.
+ *
+ * Prefer omitting this for receive-only streams and SSE. WebSocket adapters
+ * that must ack only after durable progress attach a closure here.
+ */
+export type StreamEnvelopeAcknowledge = () => void | Promise<void>;
+
+/**
  * One authenticated provider event, matching webhook/poll envelope fields.
  *
  * @remarks Optional `cursor` is progress **through this item inclusive**.
  * Runtime may checkpoint that cursor only after this envelope is durably
  * accepted or same-digest duplicate. Digest conflicts never advance the cursor.
+ * Optional {@link acknowledge} is the smallest post-accept seam for protocols
+ * (typically WebSocket) that must notify the provider only after durable
+ * progress — never before accept, and never as a rollback of accept.
  */
 export interface StreamEnvelopeItem {
   readonly kind: "envelope";
@@ -48,6 +65,13 @@ export interface StreamEnvelopeItem {
    * the durable resume position (only when the provider truly has none).
    */
   readonly cursor?: string | null;
+  /**
+   * Optional provider ack after durable accept (and cursor checkpoint when set).
+   *
+   * @remarks Omit for ordinary receive-only streams. Never serialized into
+   * inert bindings, checkpoints, or program JSON.
+   */
+  readonly acknowledge?: StreamEnvelopeAcknowledge;
 }
 
 /**

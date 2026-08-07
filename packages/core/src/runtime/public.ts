@@ -79,6 +79,7 @@ export {
   isSafeProviderErrorCode,
   ManagedStreamTerminalError,
   managedStreamTerminalErrorCode,
+  TRANSPORT_ACK_FAILED,
   TRANSPORT_STREAM_TERMINAL_CODE,
   TRANSPORT_STREAM_CONTRACT_INVALID,
   validateStreamCursor,

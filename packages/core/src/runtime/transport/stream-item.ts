@@ -121,6 +121,7 @@ function validateEnvelopeItem(record: {
   readonly authenticatedRouting?: unknown;
   readonly payload?: unknown;
   readonly cursor?: unknown;
+  readonly acknowledge?: unknown;
 }): StreamEnvelopeItem {
   const accountId = requireNonEmptyIdentifier(record.accountId, "accountId");
   const eventId = requireNonEmptyIdentifier(record.eventId, "eventId");
@@ -143,16 +144,27 @@ function validateEnvelopeItem(record: {
     throw error;
   }
 
-  const item: StreamEnvelopeItem = {
-    kind: "envelope",
-    accountId,
-    eventId,
-    authenticatedRouting,
-    payload,
-  };
+  let acknowledge: StreamEnvelopeItem["acknowledge"] | undefined;
+  if ("acknowledge" in record && record.acknowledge !== undefined) {
+    // Optional process-local post-accept ack (WebSocket and similar protocols).
+    // Never required; never serialized into durable checkpoints.
+    if (typeof record.acknowledge !== "function") {
+      throw contractError(
+        "stream envelope acknowledge must be a function when provided.",
+      );
+    }
+    acknowledge = record.acknowledge as StreamEnvelopeItem["acknowledge"];
+  }
 
   if (!("cursor" in record) || record.cursor === undefined) {
-    return Object.freeze(item);
+    return Object.freeze({
+      kind: "envelope" as const,
+      accountId,
+      eventId,
+      authenticatedRouting,
+      payload,
+      ...(acknowledge !== undefined ? { acknowledge } : {}),
+    });
   }
 
   if (record.cursor !== null && typeof record.cursor !== "string") {
@@ -162,8 +174,13 @@ function validateEnvelopeItem(record: {
   }
 
   return Object.freeze({
-    ...item,
+    kind: "envelope" as const,
+    accountId,
+    eventId,
+    authenticatedRouting,
+    payload,
     cursor: validateStreamCursor(record.cursor as string | null),
+    ...(acknowledge !== undefined ? { acknowledge } : {}),
   });
 }
 
