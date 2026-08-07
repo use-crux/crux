@@ -86,6 +86,8 @@ function parentDraft(childIds: readonly string[], communities: ReadonlyMap<strin
     chunkRefs: childCommunities.flatMap((child) => child.chunkRefs).sort(compareChunkRefs),
     estimatedInputChars: childCommunities.reduce((total, child) => total + parentInputSize(child), 0),
     memberIdentities,
+    primaryAssertionIds: [...new Set(childCommunities.flatMap((child) => child.primaryAssertionIds))].sort(),
+    secondaryAssertionIds: [...new Set(childCommunities.flatMap((child) => child.secondaryAssertionIds))].sort(),
   }
 }
 
@@ -123,6 +125,8 @@ function emptyRoot(): CommunityDraft {
     chunkRefs: [],
     estimatedInputChars: 0,
     memberIdentities: [],
+    primaryAssertionIds: [],
+    secondaryAssertionIds: [],
   }
 }
 

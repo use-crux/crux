@@ -10,6 +10,8 @@ import { stableHash } from '../../indexing/hash'
 import type { JsonObject, RecordEntry, RecordStore } from '../../storage'
 import { knowledgeCurrentKey, knowledgeGenerationPrefix } from '../keys'
 import { asKnowledgeEdgeRecord, asKnowledgeEntityRecord } from '../records'
+import type { KnowledgeAssertionRecord } from '../assertions/identity'
+import { isAssertionRelationRecord } from '../assertions/relations'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { ViewRevisionMember } from '../view/revision'
 import type {
@@ -46,6 +48,7 @@ export async function buildCommunityGraphInput(
   }
 
   const entries = await listAll(config.records, knowledgeGenerationPrefix(config.indexerId, config.namespace, generationId))
+  const indexedEntries = await listAll(config.records, indexedNamespacePrefix(config.indexerId, config.namespace))
   const entityRecords = new Map(entries.flatMap((entry) => {
     const record = asKnowledgeEntityRecord(entry.value)
     return record && record.namespace === config.namespace && record.generationId === generationId
@@ -56,6 +59,30 @@ export async function buildCommunityGraphInput(
     const record = asKnowledgeEdgeRecord(entry.value)
     return record && record.namespace === config.namespace && record.generationId === generationId ? [record] : []
   })
+  const assertions = indexedEntries.flatMap((entry) => {
+    const value = entry.value
+    return value._cruxRecordType === 'knowledge-assertion' && value.namespace === config.namespace &&
+      value.generationId === generationId && typeof value.assertionId === 'string' && typeof value.type === 'string' &&
+      Array.isArray(value.evidence)
+      ? [value as unknown as KnowledgeAssertionRecord]
+      : []
+  }).map((assertion) => ({
+    assertionId: assertion.assertionId,
+    type: assertion.type,
+    data: assertion.data,
+    evidence: assertion.evidence,
+  })).sort((left, right) => left.assertionId.localeCompare(right.assertionId))
+  const assertionRelations = indexedEntries.flatMap((entry) => {
+    const relation = isAssertionRelationRecord(entry.value) ? entry.value : null
+    return relation && relation.namespace === config.namespace && relation.generationId === generationId
+      ? [{
+          relationId: relation.relationId,
+          type: relation.type,
+          fromAssertionId: relation.from.assertionId,
+          toAssertionId: relation.to.assertionId,
+        }]
+      : []
+  }).sort((left, right) => left.relationId.localeCompare(right.relationId))
 
   const mentionCounts = new Map<string, number>()
   const mentionsByChunk = new Map<string, Set<string>>()
@@ -101,7 +128,7 @@ export async function buildCommunityGraphInput(
     return { chunkRef: chunk.ref, entityId, weight }
   }).sort(compareMentionWeights)
 
-  return emptyGraph(config.namespace, chunks, mentionWeights, entities, weightedEdges)
+  return { ...emptyGraph(config.namespace, chunks, mentionWeights, entities, weightedEdges), assertions, assertionRelations }
 }
 
 function emptyGraph(

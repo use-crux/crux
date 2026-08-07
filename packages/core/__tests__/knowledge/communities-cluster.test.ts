@@ -10,7 +10,9 @@ import {
   type CommunityGraphInput,
 } from '../../src/knowledge/communities/cluster'
 import { buildCommunityGraphInput } from '../../src/knowledge/communities/graph-input'
+import { assertionEntityEdges, projectAssertionCommunities } from '../../src/knowledge/communities/assertion-policy'
 import { createKnowledgeGenerationStore } from '../../src/knowledge/generation'
+import { knowledgeAssertionsItemKey } from '../../src/knowledge/keys'
 import { createKnowledgeEdgeRecord, createKnowledgeEntityRecord, type KnowledgeEdgeRecord } from '../../src/knowledge/records'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../../src/knowledge/refs'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
@@ -18,6 +20,107 @@ const indexerId = 'docs'
 const namespace = 'kb'
 
 describe('knowledge community clustering', () => {
+  it('projects assertion support, entity affinity, relation weights, and deterministic memberships', () => {
+    const chunks = [
+      chunkInput('source-a', 'a', 1, 'alpha'),
+      chunkInput('source-a', 'b', 2, 'bravo charlie'),
+      chunkInput('source-b', 'c', 1, 'delta'),
+    ]
+    const projection = projectAssertionCommunities({
+      chunks,
+      mentionWeights: [
+        { chunkRef: chunkRef('source-a', 'a'), entityId: 'alpha', weight: 1 },
+        { chunkRef: chunkRef('source-a', 'b'), entityId: 'bravo', weight: 1 },
+        { chunkRef: chunkRef('source-a', 'b'), entityId: 'charlie', weight: 1 },
+        { chunkRef: chunkRef('source-b', 'c'), entityId: 'delta', weight: 1 },
+      ],
+      assertions: [
+        assertion('assertion:a', ['source-a:a', 'source-a:b']),
+        assertion('assertion:b', ['source-a:b']),
+        assertion('assertion:c', ['source-b:c']),
+      ],
+      relations: [
+        { relationId: 'relation:1', type: 'supersedes', fromAssertionId: 'assertion:a', toAssertionId: 'assertion:b' },
+      ],
+      leafByChunk: new Map([
+        ['chunk:source-a:a', 'leaf:z'],
+        ['chunk:source-a:b', 'leaf:a'],
+        ['chunk:source-b:c', 'leaf:c'],
+      ]),
+    })
+
+    expect(projection.supports).toEqual([
+      { assertionId: 'assertion:a', chunkRef: chunkRef('source-a', 'a'), weight: 0.5 / Math.sqrt(2) },
+      { assertionId: 'assertion:a', chunkRef: chunkRef('source-a', 'b'), weight: 0.5 / Math.sqrt(2) },
+      { assertionId: 'assertion:b', chunkRef: chunkRef('source-a', 'b'), weight: 1 / Math.sqrt(2) },
+      { assertionId: 'assertion:c', chunkRef: chunkRef('source-b', 'c'), weight: 1 },
+    ])
+    expect(projection.entityAffinities).toEqual([
+      { assertionId: 'assertion:a', entityId: 'alpha', weight: 0.5 / Math.sqrt(2) },
+      { assertionId: 'assertion:a', entityId: 'bravo', weight: 0.25 / Math.sqrt(2) },
+      { assertionId: 'assertion:a', entityId: 'charlie', weight: 0.25 / Math.sqrt(2) },
+      { assertionId: 'assertion:b', entityId: 'bravo', weight: 0.5 / Math.sqrt(2) },
+      { assertionId: 'assertion:b', entityId: 'charlie', weight: 0.5 / Math.sqrt(2) },
+      { assertionId: 'assertion:c', entityId: 'delta', weight: 1 },
+    ])
+    expect(projection.relations).toEqual([expect.objectContaining({ relationId: 'relation:1', weight: 1.25 / Math.sqrt(2) })])
+    expect(projection.memberships).toEqual([
+      { assertionId: 'assertion:a', primaryCommunityId: 'leaf:a', secondaryCommunityIds: ['leaf:z'] },
+      { assertionId: 'assertion:b', primaryCommunityId: 'leaf:a', secondaryCommunityIds: [] },
+      { assertionId: 'assertion:c', primaryCommunityId: 'leaf:c', secondaryCommunityIds: [] },
+    ])
+  })
+
+  it('assigns one primary and deterministic report-only secondary membership per visible assertion', () => {
+    const base: CommunityGraphInput = {
+      ...graph({
+        entities: [],
+        chunks: [chunkInput('a', 'one', 1, 'one'), chunkInput('b', 'two', 1, 'two')],
+        mentions: [], edges: [],
+      }),
+      assertions: [
+        assertion('assertion:visible', ['a:one', 'b:two']),
+        assertion('assertion:hidden', ['hidden:none']),
+      ],
+      assertionRelations: [],
+    }
+    const first = clusterKnowledgeCommunities(base)
+    const second = clusterKnowledgeCommunities({
+      ...base,
+      chunks: [...base.chunks].reverse(),
+      assertions: [...(base.assertions ?? [])].reverse(),
+    })
+
+    expect(assertionMembershipSignature(first)).toEqual(assertionMembershipSignature(second))
+    expect(first.leaves.filter((leaf) => leaf.primaryAssertionIds.includes('assertion:visible'))).toHaveLength(1)
+    expect(first.leaves.filter((leaf) => leaf.secondaryAssertionIds.includes('assertion:visible'))).toHaveLength(1)
+    expect(first.communities.flatMap((community) => [...community.primaryAssertionIds, ...community.secondaryAssertionIds]))
+      .not.toContain('assertion:hidden')
+  })
+
+  it('uses assertion relations for affinity without merging assertions from a shared source alone', () => {
+    const chunks = [chunkInput('shared', 'alpha', 1, 'alpha'), chunkInput('shared', 'bravo', 2, 'bravo')]
+    const mentionWeights = [
+      { chunkRef: chunkRef('shared', 'alpha'), entityId: 'alpha', weight: 1 },
+      { chunkRef: chunkRef('shared', 'bravo'), entityId: 'bravo', weight: 1 },
+    ]
+    const assertions = [assertion('assertion:alpha', ['shared:alpha']), assertion('assertion:bravo', ['shared:bravo'])]
+    const base = { chunks, mentionWeights, assertions, leafByChunk: new Map<string, string>() }
+
+    expect(assertionEntityEdges({ ...base, relations: [] })).toEqual([])
+    expect(assertionEntityEdges({ ...base, relations: [{
+      relationId: 'relation:support', type: 'supports',
+      fromAssertionId: 'assertion:alpha', toAssertionId: 'assertion:bravo',
+    }] })).toEqual([{ leftEntityId: 'alpha', rightEntityId: 'bravo', weight: 1 / Math.sqrt(2) }])
+
+    const related = clusterKnowledgeCommunities({
+      namespace, entities: ['alpha', 'bravo'].map((entityId) => ({ entityId, canonicalName: entityId })),
+      chunks, mentionWeights, residualChunks: [], edges: [], assertions,
+      assertionRelations: [{ relationId: 'relation:support', type: 'supports', fromAssertionId: 'assertion:alpha', toAssertionId: 'assertion:bravo' }],
+    })
+    expect(related.leaves.filter((leaf) => leaf.entityIds.length > 0).map((leaf) => leaf.entityIds)).toEqual([['alpha', 'bravo']])
+  })
+
   it('is deterministic across identical and permuted graph inputs', () => {
     const input = graph({
       entities: ['charlie', 'alpha', 'bravo'],
@@ -127,6 +230,34 @@ describe('knowledge community clustering', () => {
     })).resolves.toMatchObject({ chunks: [], entities: [] })
   })
 
+  it('reprojects assertions against visible admissible view support', async () => {
+    const { records } = inMemoryStorage()
+    await persistChunks(records, namespace, [
+      cruxChunk('member', 'm1', 1, 'member evidence'),
+      cruxChunk('outside', 'o1', 1, 'outside evidence'),
+    ])
+    await publish(records, namespace, 'gen-assertions', [], [])
+    await records.put(knowledgeAssertionsItemKey(indexerId, namespace, 'facts', 'gen-assertions', 'assertion:both'), {
+      _cruxRecordType: 'knowledge-assertion', assertionId: 'assertion:both', type: 'fact', data: { value: 'both' },
+      evidence: [support('member', 'm1'), support('outside', 'o1')], provenance: 'exact', stageId: 'facts',
+      stageVersion: 1, stageFingerprint: 'facts-v1', generationId: 'gen-assertions', namespace, createdAt: 1, updatedAt: 1,
+    })
+    await records.put(knowledgeAssertionsItemKey(indexerId, namespace, 'facts', 'gen-assertions', 'assertion:outside'), {
+      _cruxRecordType: 'knowledge-assertion', assertionId: 'assertion:outside', type: 'fact', data: { value: 'outside' },
+      evidence: [support('outside', 'o1')], provenance: 'exact', stageId: 'facts', stageVersion: 1,
+      stageFingerprint: 'facts-v1', generationId: 'gen-assertions', namespace, createdAt: 1, updatedAt: 1,
+    })
+
+    const input = await buildCommunityGraphInput({
+      records, indexerId, namespace,
+      viewMembers: [{ sourceId: 'member', contentHash: await sourceContentHash(records, 'member', 'm1') }],
+    })
+    const result = clusterKnowledgeCommunities(input)
+
+    expect(result.leaves.flatMap((leaf) => leaf.primaryAssertionIds)).toEqual(['assertion:both'])
+    expect(result.communities.flatMap((community) => community.primaryAssertionIds)).not.toContain('assertion:outside')
+  })
+
   it('splits oversized components deterministically by strongest valid merge', () => {
     const input = graph({
       entities: ['alpha', 'bravo', 'charlie'],
@@ -223,6 +354,14 @@ function entityLeafIds(result: ReturnType<typeof clusterKnowledgeCommunities>): 
   return result.leaves.filter((leaf) => leaf.entityIds.length > 0).map((leaf) => leaf.communityId).sort()
 }
 
+function assertionMembershipSignature(result: ReturnType<typeof clusterKnowledgeCommunities>) {
+  return result.leaves.map((leaf) => ({
+    id: leaf.communityId,
+    primary: leaf.primaryAssertionIds,
+    secondary: leaf.secondaryAssertionIds,
+  })).sort((left, right) => left.id.localeCompare(right.id))
+}
+
 async function persistChunks(records: RecordStore, ns: string, chunks: readonly CruxChunk[]): Promise<void> {
   await createIndexedKnowledgeStore({ records, indexerId, namespace: ns }).persistGeneration({
     chunks,
@@ -292,6 +431,23 @@ function cruxChunk(sourceId: string, chunkId: string, ordinal: number, content: 
 
 function chunkRef(sourceId: string, chunkId: string) {
   return { kind: 'chunk' as const, sourceId, chunkId }
+}
+
+function assertion(assertionId: string, supports: readonly string[]) {
+  return {
+    assertionId,
+    type: 'fact',
+    data: { statement: assertionId },
+    evidence: supports.map((support) => {
+      const [sourceId, chunkId] = support.split(':')
+      if (!sourceId || !chunkId) throw new Error('Invalid assertion support fixture.')
+      return { sourceId, chunkRef: chunkRef(sourceId, chunkId), provenance: 'exact' as const }
+    }),
+  }
+}
+
+function support(sourceId: string, chunkId: string) {
+  return { sourceId, chunkRef: chunkRef(sourceId, chunkId), provenance: 'exact' as const }
 }
 
 function entityRef(entityId: string): KnowledgeRef {

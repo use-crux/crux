@@ -29,6 +29,12 @@ export function normalizeCommunityGraphInput(input: CommunityGraphInput): Commun
     mentionWeights,
     residualChunks: chunks.filter((chunk) => !mentionedChunks.has(encodeKnowledgeRef(chunk.ref))),
     edges: coalesceEdges(input.edges, entityIds),
+    assertions: [...(input.assertions ?? [])].map((assertion) => ({
+      ...assertion,
+      evidence: [...new Map(assertion.evidence.map((support) => [encodeKnowledgeRef(support.chunkRef), support])).values()]
+        .sort((left, right) => encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))),
+    })).sort((left, right) => left.assertionId.localeCompare(right.assertionId)),
+    assertionRelations: [...(input.assertionRelations ?? [])].sort((left, right) => left.relationId.localeCompare(right.relationId)),
   }
 }
 

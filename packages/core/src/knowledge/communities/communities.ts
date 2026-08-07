@@ -11,9 +11,10 @@ import {
   COMMUNITY_PARENT_BUDGET_MULTIPLE,
   PARENT_INPUT_BUDGET,
 } from './cluster'
+import { ASSERTION_MEMBERSHIP_POLICY_VERSION, ASSERTION_REPORT_PROMPT_VERSION } from './assertion-policy'
 
 /** Internal community strategy version. */
-export const COMMUNITY_STRATEGY_VERSION = 1
+export const COMMUNITY_STRATEGY_VERSION = 2
 
 /** Configuration returned by {@link communities}. */
 export interface CommunitiesConfig {
@@ -64,6 +65,8 @@ export function communities(config: CommunitiesFactoryConfig): CommunitiesConfig
         parent: PARENT_INPUT_BUDGET,
         parentMultiple: COMMUNITY_PARENT_BUDGET_MULTIPLE,
       },
+      assertionMembershipPolicy: ASSERTION_MEMBERSHIP_POLICY_VERSION,
+      reportPrompt: ASSERTION_REPORT_PROMPT_VERSION,
     }),
   })
 }

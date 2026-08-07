@@ -6,6 +6,7 @@
 
 import type { KnowledgeRef } from '../refs'
 import type { CruxSourceFacts } from '../../indexing'
+import type { CommunityAssertionInput, CommunityAssertionRelationInput } from './assertion-policy'
 
 export type CommunityChunkRef = Extract<KnowledgeRef, { readonly kind: 'chunk' }>
 
@@ -44,6 +45,8 @@ export interface CommunityGraphInput {
   readonly chunks: readonly CommunityChunkInput[]
   readonly mentionWeights: readonly CommunityMentionWeightInput[]
   readonly residualChunks: readonly CommunityChunkInput[]
+  readonly assertions?: readonly CommunityAssertionInput[]
+  readonly assertionRelations?: readonly CommunityAssertionRelationInput[]
 }
 
 export interface KnowledgeCommunity {
@@ -56,6 +59,8 @@ export interface KnowledgeCommunity {
   readonly chunkRefs: readonly CommunityChunkRef[]
   readonly estimatedInputChars: number
   readonly memberIdentities: readonly string[]
+  readonly primaryAssertionIds: readonly string[]
+  readonly secondaryAssertionIds: readonly string[]
 }
 
 export interface KnowledgeCommunityClustering {
@@ -65,7 +70,7 @@ export interface KnowledgeCommunityClustering {
 }
 
 export interface CommunityDraft {
-  readonly communityId: string
+  communityId: string
   level: number
   kind: KnowledgeCommunity['kind']
   parentCommunityId?: string
@@ -74,4 +79,6 @@ export interface CommunityDraft {
   chunkRefs: CommunityChunkRef[]
   estimatedInputChars: number
   readonly memberIdentities: string[]
+  readonly primaryAssertionIds: string[]
+  readonly secondaryAssertionIds: string[]
 }
