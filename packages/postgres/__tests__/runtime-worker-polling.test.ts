@@ -12,7 +12,11 @@ import {
   signalProvider,
 } from '@use-crux/core/signal/provider'
 import {
+  bindingLeaseResource,
   createRuntimeProgram,
+  type Lease,
+  type LeaseToken,
+  type RuntimeTransportBindingCheckpoint,
   type RuntimeWorker,
 } from '@use-crux/core/runtime'
 import { postgres, type PostgresRuntimeStore } from '../src/runtime'
@@ -153,6 +157,113 @@ describe('PostgreSQL Runtime worker polling supervision', () => {
     })
   }, 60_000)
 
+  it('atomically rejects stale, incorrect, and expired binding checkpoint fences', async () => {
+    await withStores(async ({ firstStore: store }) => {
+      const namespace = 'worker-poll-fence'
+      const bindingId = 'binding.orders.poll.fence'
+      const resource = bindingLeaseResource(namespace, bindingId)
+      const lease = await store.leases.claim(resource, {
+        ttlMs: 30_000,
+        ownerId: 'worker-a',
+      })
+      expect(lease).not.toBeNull()
+
+      const accepted = await store.transports!.putBindingCheckpoint!({
+        checkpoint: sampleCheckpoint({
+          namespace,
+          bindingId,
+          cursor: 'cursor:1',
+          lastOwnerId: 'worker-a',
+        }),
+        lease: lease!,
+      })
+      expect(accepted).toEqual({ kind: 'accepted' })
+      await expect(
+        store.transports!.getBindingCheckpoint!({ namespace, bindingId }),
+      ).resolves.toMatchObject({ cursor: 'cursor:1' })
+
+      const wrongToken: Lease = Object.freeze({
+        ...lease!,
+        token: 'lease_stale' as LeaseToken,
+      })
+      expect(
+        await store.transports!.putBindingCheckpoint!({
+          checkpoint: sampleCheckpoint({
+            namespace,
+            bindingId,
+            cursor: 'cursor:stale-token',
+            lastOwnerId: 'worker-a',
+          }),
+          lease: wrongToken,
+        }),
+      ).toEqual({ kind: 'rejected' })
+
+      const wrongOwner: Lease = Object.freeze({
+        ...lease!,
+        ownerId: 'worker-intruder',
+      })
+      expect(
+        await store.transports!.putBindingCheckpoint!({
+          checkpoint: sampleCheckpoint({
+            namespace,
+            bindingId,
+            cursor: 'cursor:stale-owner',
+            lastOwnerId: 'worker-intruder',
+          }),
+          lease: wrongOwner,
+        }),
+      ).toEqual({ kind: 'rejected' })
+
+      await store.leases.release(lease!)
+
+      const missingBindingId = 'binding.orders.poll.missing'
+      expect(
+        await store.transports!.putBindingCheckpoint!({
+          checkpoint: sampleCheckpoint({
+            namespace,
+            bindingId: missingBindingId,
+            cursor: 'cursor:no-row',
+            lastOwnerId: 'worker-a',
+          }),
+          lease: Object.freeze({
+            resource: bindingLeaseResource(namespace, missingBindingId),
+            token: 'lease_missing' as LeaseToken,
+            expiresAt: new Date(Date.now() + 30_000),
+            ownerId: 'worker-a',
+          }),
+        }),
+      ).toEqual({ kind: 'rejected' })
+      await expect(
+        store.transports!.getBindingCheckpoint!({
+          namespace,
+          bindingId: missingBindingId,
+        }),
+      ).resolves.toBeNull()
+
+      const short = await store.leases.claim(resource, {
+        ttlMs: 1,
+        ownerId: 'worker-a',
+      })
+      expect(short).not.toBeNull()
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      expect(
+        await store.transports!.putBindingCheckpoint!({
+          checkpoint: sampleCheckpoint({
+            namespace,
+            bindingId,
+            cursor: 'cursor:expired',
+            lastOwnerId: 'worker-a',
+          }),
+          lease: short!,
+        }),
+      ).toEqual({ kind: 'rejected' })
+
+      await expect(
+        store.transports!.getBindingCheckpoint!({ namespace, bindingId }),
+      ).resolves.toMatchObject({ cursor: 'cursor:1' })
+    })
+  }, 60_000)
+
   async function withStores(
     run: (stores: {
       readonly firstStore: PostgresRuntimeStore
@@ -179,3 +290,22 @@ describe('PostgreSQL Runtime worker polling supervision', () => {
     }
   }
 })
+
+function sampleCheckpoint(options: {
+  readonly namespace: string
+  readonly bindingId: string
+  readonly cursor: string | null
+  readonly lastOwnerId?: string
+}): RuntimeTransportBindingCheckpoint {
+  return Object.freeze({
+    schemaVersion: 1 as const,
+    namespace: options.namespace,
+    bindingId: options.bindingId,
+    cursor: options.cursor,
+    updatedAt: '2026-08-07T12:00:00.000Z',
+    lastPolledAt: '2026-08-07T12:00:00.000Z',
+    ...(options.lastOwnerId !== undefined
+      ? { lastOwnerId: options.lastOwnerId }
+      : {}),
+  })
+}

@@ -14,6 +14,7 @@ import type { RuntimeProgram } from "../program";
 import { resolveProgramProvider } from "../program-providers";
 import type { Lease } from "../ports/leases";
 import type { RuntimeStoreAdapter } from "../store";
+import type { RuntimeTransportBindingCheckpoint } from "../transport/binding-checkpoint";
 import { createRuntimeError } from "../engine/errors";
 import { pollAndAccept, recordPollFailure } from "./worker-transport-poll";
 
@@ -77,17 +78,14 @@ export interface TransportSupervisionRunner {
 export function createWorkerTransportSupervision(
   options: CreateWorkerTransportSupervisionOptions,
 ): TransportSupervisionRunner | undefined {
+  // Webhook (and other non-polling) bindings do not need in-process providers
+  // for polling supervision construction. Skip them. Bindings that resolve to a
+  // polling provider are supervised; a polling binding whose provider is absent
+  // is still rejected at createRuntimeProgram() as CAPABILITY_MISSING.
   const pollingBindings = options.program.transports.filter((binding) => {
     const provider = resolveProgramProvider(options.program.providers, binding);
     if (!provider) {
-      throw createRuntimeError({
-        code: "CAPABILITY_MISSING",
-        whatFailed: `Runtime worker cannot resolve provider for transport binding \`${binding.id}\`.`,
-        why: "Managed-transport supervision requires program-declared provider authority.",
-        whatStillWorks:
-          "Queued Work maintenance still runs for executable targets in the same program.",
-        nextStep: `Pass the matching signalProvider() in createRuntimeProgram({ providers }) for adapter \`${binding.adapter.id}\`.`,
-      });
+      return false;
     }
     return isPollingTransport(provider.transport);
   });
@@ -147,68 +145,71 @@ export function createWorkerTransportSupervision(
           break;
         }
 
-        const provider = resolveProgramProvider(
-          options.program.providers,
-          binding,
-        );
-        if (!provider || !isPollingTransport(provider.transport)) {
-          skipped += 1;
-          continue;
-        }
-
-        const transport = provider.transport;
-        const resource = bindingLeaseResource(options.namespace, binding.id);
+        // Isolate claim / checkpoint-read / poll / failure-record errors so one
+        // binding cannot abort the rest of the supervision cycle.
         let lease = heldLeases.get(binding.id) ?? null;
+        let checkpoint: RuntimeTransportBindingCheckpoint | null = null;
 
-        if (lease) {
-          try {
-            lease = await options.store.leases.extend(
-              lease,
-              DEFAULT_BINDING_LEASE_MS,
-            );
-            heldLeases.set(binding.id, lease);
-          } catch {
-            heldLeases.delete(binding.id);
-            lease = null;
-          }
-        }
-
-        if (!lease) {
-          lease = await options.store.leases.claim(resource, {
-            ttlMs: DEFAULT_BINDING_LEASE_MS,
-            ...(options.ownerId ? { ownerId: options.ownerId } : {}),
-          });
-          if (!lease) {
+        try {
+          const provider = resolveProgramProvider(
+            options.program.providers,
+            binding,
+          );
+          if (!provider || !isPollingTransport(provider.transport)) {
             skipped += 1;
             continue;
           }
-          heldLeases.set(binding.id, lease);
-        }
 
-        leased += 1;
+          const transport = provider.transport;
+          const resource = bindingLeaseResource(options.namespace, binding.id);
 
-        const checkpoint =
-          await options.store.transports!.getBindingCheckpoint!({
+          if (lease) {
+            try {
+              lease = await options.store.leases.extend(
+                lease,
+                DEFAULT_BINDING_LEASE_MS,
+              );
+              heldLeases.set(binding.id, lease);
+            } catch {
+              heldLeases.delete(binding.id);
+              lease = null;
+            }
+          }
+
+          if (!lease) {
+            lease = await options.store.leases.claim(resource, {
+              ttlMs: DEFAULT_BINDING_LEASE_MS,
+              ...(options.ownerId ? { ownerId: options.ownerId } : {}),
+            });
+            if (!lease) {
+              skipped += 1;
+              continue;
+            }
+            heldLeases.set(binding.id, lease);
+          }
+
+          leased += 1;
+
+          checkpoint = await options.store.transports!.getBindingCheckpoint!({
             namespace: options.namespace,
             bindingId: binding.id,
           });
 
-        if (
-          transport.intervalMs !== undefined &&
-          checkpoint?.lastPolledAt !== undefined &&
-          checkpoint.morePending !== true
-        ) {
-          const lastPolledMs = Date.parse(checkpoint.lastPolledAt);
           if (
-            Number.isFinite(lastPolledMs) &&
-            now.getTime() < lastPolledMs + transport.intervalMs
+            transport.intervalMs !== undefined &&
+            checkpoint?.lastPolledAt !== undefined &&
+            checkpoint.morePending !== true
           ) {
-            skipped += 1;
-            continue;
+            const lastPolledMs = Date.parse(checkpoint.lastPolledAt);
+            if (
+              Number.isFinite(lastPolledMs) &&
+              now.getTime() < lastPolledMs + transport.intervalMs
+            ) {
+              skipped += 1;
+              continue;
+            }
           }
-        }
 
-        try {
           const outcome = await pollAndAccept({
             store: options.store,
             namespace: options.namespace,
@@ -216,6 +217,7 @@ export function createWorkerTransportSupervision(
             provider,
             transport,
             checkpoint,
+            lease,
             signal,
             now,
             ownerId: options.ownerId ?? lease.ownerId,
@@ -229,17 +231,30 @@ export function createWorkerTransportSupervision(
           if (outcome.failed) {
             failed += 1;
           }
+          if (outcome.leaseLost) {
+            heldLeases.delete(binding.id);
+          }
         } catch {
           failed += 1;
-          await recordPollFailure({
-            store: options.store,
-            namespace: options.namespace,
-            bindingId: binding.id,
-            checkpoint,
-            now,
-            ownerId: options.ownerId ?? lease.ownerId,
-            code: "TRANSPORT_POLL_FAILED",
-          });
+          if (lease) {
+            try {
+              const failure = await recordPollFailure({
+                store: options.store,
+                namespace: options.namespace,
+                bindingId: binding.id,
+                checkpoint,
+                lease,
+                now,
+                ownerId: options.ownerId ?? lease.ownerId,
+                code: "TRANSPORT_POLL_FAILED",
+              });
+              if (failure.leaseLost) {
+                heldLeases.delete(binding.id);
+              }
+            } catch {
+              // Failure recording must not prevent later bindings.
+            }
+          }
         }
       }
 

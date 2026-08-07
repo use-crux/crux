@@ -226,8 +226,22 @@ function isSignalProviderTransport(
   if (value === null || typeof value !== "object") {
     return false;
   }
-  const tag = (value as { readonly _tag?: unknown })._tag;
-  return tag === "WebhookTransport" || tag === "PollingTransport";
+
+  const transport = value as {
+    readonly _tag?: unknown;
+    readonly handle?: unknown;
+    readonly poll?: unknown;
+  };
+
+  if (transport._tag === "WebhookTransport") {
+    return typeof transport.handle === "function";
+  }
+
+  if (transport._tag === "PollingTransport") {
+    return typeof transport.poll === "function";
+  }
+
+  return false;
 }
 
 /** Type-narrow a provider transport to the polling form. */

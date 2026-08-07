@@ -265,11 +265,20 @@ authoring beside `webhook()`, `signalProvider` transport union, durable binding
 cursor checkpoints on the transport store (Memory + PostgreSQL), and single
 Runtime worker acquisition that leases each polling binding, polls once per
 tick, accepts events through the existing envelope kernel, and checkpoints
-`nextCursor` only after the full batch is durably accepted. Optional
-`PollResult.more` skips `intervalMs` once after acceptance; poll failures keep
-the previous cursor and a safe `lastErrorCode`. Competing supervisors
-coordinate through Runtime leases; worker stop aborts in-flight polls and
-releases binding leases. Project Index discovers `polling()` with static/native
+`nextCursor` only after the full batch is durably accepted. Checkpoint writes
+are lease-fenced: `putBindingCheckpoint` requires the active binding lease
+owner/token and returns `accepted` or `rejected`; Memory and PostgreSQL
+atomically reject stale, incorrect, or expired fences (including when no
+checkpoint row exists), and supervision drops the held lease when a write is
+rejected. Optional `PollResult.more` skips `intervalMs` once after acceptance;
+poll failures keep the previous cursor and a safe `lastErrorCode`. Managed
+polling treats `TransportEnvelopeConflictError` as progressable only when the
+shared envelope store still holds durable identity evidence for that event
+(accepted/claimed/normalized/dead-letter), so a conflicting redelivery cannot
+poison the provider cursor; other accept failures retain fail-without-checkpoint
+semantics and no parallel dead-letter store is introduced. Competing
+supervisors coordinate through Runtime leases; worker stop aborts in-flight
+polls and releases binding leases. Project Index discovers `polling()` with static/native
 parity and rejects live `poll` fields on inert bindings. SSE, WebSocket, and
 generic stream adapters remain follow-on #340 children on the same lifecycle
 seam. Channel exclusive conversation ownership remains #302.

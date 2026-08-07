@@ -5,6 +5,7 @@
  */
 
 import type { StatisticsLedgerExport } from "../../statistics";
+import type { Lease } from "../ports/leases";
 import type { RuntimePruneOptions, RuntimePruneResult } from "../ports/retention";
 import type {
   RuntimeTransportDeliveryLineageEntry,
@@ -154,10 +155,35 @@ export interface RuntimeTransportStorePort {
    * Persist the durable cursor checkpoint for one supervised binding.
    *
    * @remarks Call only after every event from the poll batch was durably
-   * accepted or treated as a same-digest duplicate. Never write credentials,
-   * clients, sockets, or raw payloads.
+   * accepted, treated as a same-digest duplicate, or progressable after
+   * `TransportEnvelopeConflictError` with confirmed durable envelope-store
+   * evidence for that identity. Never write credentials, clients, sockets, or
+   * raw payloads.
+   *
+   * Writes are fenced by the active binding {@link Lease}: the store accepts
+   * only when the supplied owner/token still holds an unexpired lease for the
+   * binding resource. Stale, incorrect, or expired fences are rejected without
+   * mutation, including when no checkpoint row exists yet.
    */
   putBindingCheckpoint?(
-    checkpoint: RuntimeTransportBindingCheckpoint,
-  ): Promise<void>;
+    input: PutRuntimeTransportBindingCheckpointInput,
+  ): Promise<PutRuntimeTransportBindingCheckpointResult>;
 }
+
+/** Lease-fenced input for one durable binding checkpoint write. */
+export interface PutRuntimeTransportBindingCheckpointInput {
+  readonly checkpoint: RuntimeTransportBindingCheckpoint;
+  /**
+   * Active binding lease that authorizes this write.
+   *
+   * @remarks Resource must be the binding lease identity for
+   * `checkpoint.namespace` / `checkpoint.bindingId`. Token is the fence;
+   * optional `ownerId` must match the held lease when present.
+   */
+  readonly lease: Lease;
+}
+
+/** Outcome of a lease-fenced binding checkpoint write. */
+export type PutRuntimeTransportBindingCheckpointResult =
+  | { readonly kind: "accepted" }
+  | { readonly kind: "rejected" };

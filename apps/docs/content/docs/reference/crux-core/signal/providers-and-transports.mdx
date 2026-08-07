@@ -73,10 +73,12 @@ cadence is the poll cadence.
 
 The single Runtime worker leases the binding, calls `poll`, accepts each event
 through `acceptTransportEnvelope()`, and persists `nextCursor` only after the
-full batch is accepted or treated as a same-digest duplicate. Partial failure
-or abort leaves the previous cursor. Restart resumes from the durable
-checkpoint without inventing a second worker. `signal` aborts on worker stop or
-lease release.
+full batch is accepted, treated as a same-digest duplicate, or progressable
+after `TransportEnvelopeConflictError` when durable envelope-store evidence for
+that identity is confirmed. Other accept failures keep the previous cursor.
+Partial failure or abort also leaves the previous cursor. Restart resumes from
+the durable checkpoint without inventing a second worker. `signal` aborts on
+worker stop or lease release.
 
 ### `signalProvider({ id, transport, signals, onEvent })`
 
@@ -178,7 +180,7 @@ Polling supervision stores opaque cursors through the transport store:
 | Field | Meaning |
 | --- | --- |
 | `cursor` | Last fully accepted poll position |
-| `lastPolledAt` | Last successful poll start (also set on recorded failures) |
+| `lastPolledAt` | Start of the latest poll attempt, including failed attempts |
 | `lastOwnerId` | Diagnostic owner id from the last poll |
 | `lastErrorCode` | Safe failure code when the last poll/accept failed |
 | `morePending` | Provider reported more pages; next tick may skip `intervalMs` |

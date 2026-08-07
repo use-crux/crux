@@ -33,6 +33,8 @@ export type {
   ClaimRuntimeTransportEnvelopesOptions,
   CompleteRuntimeTransportNormalizationInput,
   FailRuntimeTransportNormalizationInput,
+  PutRuntimeTransportBindingCheckpointInput,
+  PutRuntimeTransportBindingCheckpointResult,
   ReplayRuntimeTransportEnvelopeInput,
   AcceptTransportEnvelopeOptions,
   AcceptTransportEnvelopeResult,

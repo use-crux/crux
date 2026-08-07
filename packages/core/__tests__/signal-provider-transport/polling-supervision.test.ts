@@ -6,7 +6,6 @@
  * occurrence → stop aborts acquisition.
  */
 
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -24,104 +23,11 @@ import {
   createWorkerTransportSupervision,
   inMemoryRuntimeStore,
   node,
-  type RuntimeAcceptedTransportPayload,
 } from "../../src/runtime/public";
-
-function inlinePayload(text: string): RuntimeAcceptedTransportPayload {
-  const bytes = new TextEncoder().encode(text);
-  return {
-    kind: "inline-base64url",
-    value: Buffer.from(bytes).toString("base64url"),
-    byteLength: bytes.byteLength,
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  };
-}
-
-function createPollingFixture(options?: {
-  readonly failPollOnce?: boolean;
-}) {
-  const orderSubmitted = signal({
-    id: "order.submitted",
-    schema: z.object({ orderId: z.string() }),
-  });
-  const published: Array<{ orderId: string; occurrenceId: string }> = [];
-  orderSubmitted.subscribe((occurrence) => {
-    published.push({
-      orderId: occurrence.payload.orderId,
-      occurrenceId: occurrence.id,
-    });
-  });
-
-  const pollCalls: Array<{ cursor: string | null }> = [];
-  let pages = new Map<string | null, { events: string[]; next: string | null }>([
-    [null, { events: ["evt_1"], next: "cursor:1" }],
-    ["cursor:1", { events: ["evt_2"], next: "cursor:2" }],
-    ["cursor:2", { events: [], next: "cursor:2" }],
-  ]);
-  let failOnce = options?.failPollOnce === true;
-
-  const provider = signalProvider({
-    id: "orders.poll",
-    transport: polling({
-      async poll({ cursor, signal }) {
-        if (signal.aborted) {
-          throw new DOMException("aborted", "AbortError");
-        }
-        pollCalls.push({ cursor });
-        if (failOnce) {
-          failOnce = false;
-          throw Object.assign(new Error("provider unavailable"), {
-            code: "PROVIDER_UNAVAILABLE",
-          });
-        }
-        const page = pages.get(cursor) ?? { events: [], next: cursor };
-        return {
-          events: page.events.map((eventId) => ({
-            accountId: "acct_1",
-            eventId,
-            authenticatedRouting: { source: "polling" },
-            payload: inlinePayload(
-              JSON.stringify({ orderId: eventId.replace("evt_", "ord_") }),
-            ),
-          })),
-          nextCursor: page.next,
-        };
-      },
-    }),
-    signals: { orderSubmitted },
-    async onEvent(envelope, { signals }) {
-      const raw =
-        envelope.payload.kind === "inline-base64url"
-          ? Buffer.from(envelope.payload.value, "base64url").toString("utf8")
-          : "";
-      const body = JSON.parse(raw) as { orderId: string };
-      await signals.orderSubmitted.publish({ orderId: body.orderId });
-    },
-  });
-
-  const binding = managedTransportBinding(provider, {
-    id: "binding.orders.poll",
-    configRef: { id: "config.orders.poll", revision: "rev.1" },
-    signalId: "order.submitted",
-  });
-  const program = createRuntimeProgram({
-    targets: [],
-    providers: [provider],
-    transports: [binding],
-  });
-
-  return {
-    binding,
-    program,
-    published,
-    pollCalls,
-    setPages(
-      next: Map<string | null, { events: string[]; next: string | null }>,
-    ) {
-      pages = next;
-    },
-  };
-}
+import {
+  createPollingFixture,
+  inlinePayload,
+} from "./polling-supervision-helpers";
 
 describe("Runtime worker polling supervision", () => {
   it("polls, durably accepts, checkpoints, and normalizes through the worker", async () => {
@@ -247,7 +153,7 @@ describe("Runtime worker polling supervision", () => {
   it("coordinates competing supervisors through binding leases", async () => {
     const { binding, program, published } = createPollingFixture();
     const store = inMemoryRuntimeStore();
-    const signal = new AbortController().signal;
+    const signalAbort = new AbortController().signal;
 
     const first = createWorkerTransportSupervision({
       program,
@@ -264,8 +170,8 @@ describe("Runtime worker polling supervision", () => {
 
     try {
       const [left, right] = await Promise.all([
-        first.runOnce(signal, new Date("2026-08-07T12:00:00.000Z")),
-        second.runOnce(signal, new Date("2026-08-07T12:00:00.000Z")),
+        first.runOnce(signalAbort, new Date("2026-08-07T12:00:00.000Z")),
+        second.runOnce(signalAbort, new Date("2026-08-07T12:00:00.000Z")),
       ]);
 
       const winners = [left, right].filter((result) => result.polled > 0);
@@ -393,11 +299,11 @@ describe("Runtime worker polling supervision", () => {
       namespace: "poll-fail",
       ownerId: "worker-a",
     })!;
-    const signal = new AbortController().signal;
+    const signalAbort = new AbortController().signal;
 
     try {
       const failed = await runner.runOnce(
-        signal,
+        signalAbort,
         new Date("2026-08-07T12:00:00.000Z"),
       );
       expect(failed.failed).toBe(1);
@@ -412,7 +318,7 @@ describe("Runtime worker polling supervision", () => {
       expect(checkpoint?.lastErrorCode).toBe("PROVIDER_UNAVAILABLE");
 
       const recovered = await runner.runOnce(
-        signal,
+        signalAbort,
         new Date("2026-08-07T12:00:01.000Z"),
       );
       expect(recovered.accepted).toBe(1);
@@ -513,44 +419,84 @@ describe("Runtime worker polling supervision", () => {
     }
   });
 
-  it("aborts in-flight poll acquisition and releases the binding lease on dispose", async () => {
+  it("advances past TransportEnvelopeConflictError when durable envelope evidence is already present", async () => {
     const orderSubmitted = signal({
       id: "order.submitted",
       schema: z.object({ orderId: z.string() }),
     });
-    let pollEntered: (() => void) | undefined;
-    const pollStarted = new Promise<void>((resolve) => {
-      pollEntered = resolve;
+    const published: string[] = [];
+    orderSubmitted.subscribe((occurrence) => {
+      published.push(occurrence.payload.orderId);
     });
-    let sawAbort = false;
+
+    // First page accepts evt_conflict with payload A; later redelivery of the
+    // same identity with payload B must not poison the provider cursor forever.
+    let page = 0;
+    const pollCalls: Array<{ cursor: string | null }> = [];
     const provider = signalProvider({
-      id: "orders.poll.abort",
+      id: "orders.poll.conflict",
       transport: polling({
-        async poll({ signal }) {
-          pollEntered?.();
-          await new Promise<void>((resolve, reject) => {
-            if (signal.aborted) {
-              reject(new DOMException("aborted", "AbortError"));
-              return;
-            }
-            signal.addEventListener(
-              "abort",
-              () => {
-                sawAbort = true;
-                reject(new DOMException("aborted", "AbortError"));
-              },
-              { once: true },
-            );
-          });
-          return { events: [], nextCursor: null };
+        async poll({ cursor }) {
+          pollCalls.push({ cursor });
+          page += 1;
+          if (page === 1) {
+            return {
+              events: [
+                {
+                  accountId: "acct_1",
+                  eventId: "evt_conflict",
+                  authenticatedRouting: { source: "polling" },
+                  payload: inlinePayload(
+                    JSON.stringify({ orderId: "ord_original" }),
+                  ),
+                },
+              ],
+              nextCursor: "cursor:1",
+            };
+          }
+          if (page === 2) {
+            return {
+              events: [
+                {
+                  accountId: "acct_1",
+                  eventId: "evt_conflict",
+                  authenticatedRouting: { source: "polling" },
+                  // Different authenticated payload → digest conflict.
+                  payload: inlinePayload(
+                    JSON.stringify({ orderId: "ord_conflicting" }),
+                  ),
+                },
+                {
+                  accountId: "acct_1",
+                  eventId: "evt_next",
+                  authenticatedRouting: { source: "polling" },
+                  payload: inlinePayload(
+                    JSON.stringify({ orderId: "ord_next" }),
+                  ),
+                },
+              ],
+              nextCursor: "cursor:2",
+            };
+          }
+          return {
+            events: [],
+            nextCursor: cursor ?? "cursor:2",
+          };
         },
       }),
       signals: { orderSubmitted },
-      async onEvent() {},
+      async onEvent(envelope, { signals }) {
+        const raw =
+          envelope.payload.kind === "inline-base64url"
+            ? Buffer.from(envelope.payload.value, "base64url").toString("utf8")
+            : "";
+        const body = JSON.parse(raw) as { orderId: string };
+        await signals.orderSubmitted.publish({ orderId: body.orderId });
+      },
     });
     const binding = managedTransportBinding(provider, {
-      id: "binding.orders.poll.abort",
-      configRef: { id: "config.orders.poll.abort", revision: "rev.1" },
+      id: "binding.orders.poll.conflict",
+      configRef: { id: "config.orders.poll.conflict", revision: "rev.1" },
       signalId: "order.submitted",
     });
     const program = createRuntimeProgram({
@@ -562,29 +508,266 @@ describe("Runtime worker polling supervision", () => {
     const runner = createWorkerTransportSupervision({
       program,
       store,
-      namespace: "poll-abort",
+      namespace: "poll-conflict",
       ownerId: "worker-a",
     })!;
-    const controller = new AbortController();
+    const drain = createTransportNormalizationRunner({
+      store,
+      namespace: "poll-conflict",
+      providers: program.providers,
+    });
+    const signalAbort = new AbortController().signal;
 
-    const runPromise = runner.runOnce(
-      controller.signal,
-      new Date("2026-08-07T12:00:00.000Z"),
-    );
-    await pollStarted;
-    controller.abort();
-    const outcome = await runPromise;
-    expect(sawAbort).toBe(true);
-    expect(outcome.checkpointed).toBe(0);
-    expect(outcome.accepted).toBe(0);
+    try {
+      const first = await runner.runOnce(
+        signalAbort,
+        new Date("2026-08-07T12:00:00.000Z"),
+      );
+      expect(first.accepted).toBe(1);
+      expect(first.checkpointed).toBe(1);
+      await drain.runOnce({ now: new Date("2026-08-07T12:00:00.500Z") });
+      expect(published).toEqual(["ord_original"]);
 
-    await runner.dispose();
+      const conflicted = await runner.runOnce(
+        signalAbort,
+        new Date("2026-08-07T12:00:01.000Z"),
+      );
+      // Conflict must not fail the page or freeze the cursor: durable evidence
+      // for the identity already exists, and later events still accept.
+      expect(conflicted.failed).toBe(0);
+      expect(conflicted.checkpointed).toBe(1);
+      expect(conflicted.accepted).toBe(1);
 
-    const reclaim = await store.leases.claim(
-      bindingLeaseResource("poll-abort", binding.id),
-      { ttlMs: 1_000, ownerId: "replacement" },
-    );
-    expect(reclaim).not.toBeNull();
-    await store.leases.release(reclaim!);
+      const checkpoint = await store.transports!.getBindingCheckpoint!({
+        namespace: "poll-conflict",
+        bindingId: binding.id,
+      });
+      expect(checkpoint?.cursor).toBe("cursor:2");
+      expect(checkpoint?.lastErrorCode).toBeUndefined();
+
+      const original = await store.transports!.get({
+        namespace: "poll-conflict",
+        provider: "orders.poll.conflict",
+        accountId: "acct_1",
+        eventId: "evt_conflict",
+      });
+      expect(original?.state).toBe("normalized");
+      expect(original?.envelope.payload).toEqual(
+        inlinePayload(JSON.stringify({ orderId: "ord_original" })),
+      );
+
+      await drain.runOnce({ now: new Date("2026-08-07T12:00:01.500Z") });
+      expect(published).toEqual(["ord_original", "ord_next"]);
+
+      // Subsequent ticks resume from the advanced cursor, not the poisoned page.
+      const idle = await runner.runOnce(
+        signalAbort,
+        new Date("2026-08-07T12:00:02.000Z"),
+      );
+      expect(idle.failed).toBe(0);
+      expect(pollCalls.some((call) => call.cursor === "cursor:2")).toBe(true);
+    } finally {
+      await runner.dispose();
+    }
   });
+
+  it("does not checkpoint when conflict evidence cannot be confirmed in the transport store", async () => {
+    const orderSubmitted = signal({
+      id: "order.submitted",
+      schema: z.object({ orderId: z.string() }),
+    });
+    const provider = signalProvider({
+      id: "orders.poll.conflict-missing",
+      transport: polling({
+        async poll() {
+          return {
+            events: [
+              {
+                accountId: "acct_1",
+                eventId: "evt_ghost",
+                authenticatedRouting: { source: "polling" },
+                payload: inlinePayload(
+                  JSON.stringify({ orderId: "ord_ghost" }),
+                ),
+              },
+            ],
+            nextCursor: "cursor:ghost",
+          };
+        },
+      }),
+      signals: { orderSubmitted },
+      async onEvent() {},
+    });
+    const binding = managedTransportBinding(provider, {
+      id: "binding.orders.poll.conflict-missing",
+      configRef: {
+        id: "config.orders.poll.conflict-missing",
+        revision: "rev.1",
+      },
+      signalId: "order.submitted",
+    });
+    const program = createRuntimeProgram({
+      targets: [],
+      providers: [provider],
+      transports: [binding],
+    });
+    const base = inMemoryRuntimeStore();
+    // Seed a conflicting identity, then hide get() so durable evidence cannot
+    // be confirmed after TransportEnvelopeConflictError.
+    await base.transports!.accept({
+      namespace: "poll-conflict-missing",
+      envelope: {
+        _tag: "RuntimeAcceptedTransportEnvelope",
+        schemaVersion: 1,
+        bindingId: binding.id,
+        adapterId: provider.id,
+        provider: provider.id,
+        accountId: "acct_1",
+        eventId: "evt_ghost",
+        receivedAt: "2026-08-07T12:00:00.000Z",
+        authenticatedRouting: { source: "seed" },
+        payload: inlinePayload(JSON.stringify({ orderId: "ord_seed" })),
+        configRef: binding.configRef,
+        target: { kind: "signal", signalId: "order.submitted" },
+      },
+      envelopeDigest: "seed-digest-not-matching-poll-payload",
+      maxAttempts: 5,
+      now: new Date("2026-08-07T12:00:00.000Z"),
+    });
+    const store = {
+      ...base,
+      transports: {
+        ...base.transports!,
+        async get() {
+          return null;
+        },
+        async accept(
+          input: Parameters<NonNullable<typeof base.transports>["accept"]>[0],
+        ) {
+          return base.transports!.accept(input);
+        },
+      },
+      async transact<T>(fn: (tx: typeof base) => Promise<T>): Promise<T> {
+        return base.transact(async (tx) =>
+          fn({
+            ...tx,
+            transports: {
+              ...tx.transports!,
+              async get() {
+                return null;
+              },
+            },
+          } as typeof base),
+        );
+      },
+    };
+    const runner = createWorkerTransportSupervision({
+      program,
+      store: store as typeof base,
+      namespace: "poll-conflict-missing",
+      ownerId: "worker-a",
+    })!;
+    const signalAbort = new AbortController().signal;
+
+    try {
+      const outcome = await runner.runOnce(
+        signalAbort,
+        new Date("2026-08-07T12:00:01.000Z"),
+      );
+      expect(outcome.failed).toBe(1);
+      expect(outcome.checkpointed).toBe(0);
+
+      const checkpoint = await base.transports!.getBindingCheckpoint!({
+        namespace: "poll-conflict-missing",
+        bindingId: binding.id,
+      });
+      expect(checkpoint?.cursor).toBeNull();
+      expect(checkpoint?.lastErrorCode).toBe("TRANSPORT_ENVELOPE_CONFLICT");
+    } finally {
+      await runner.dispose();
+    }
+  });
+
+  it("retains failure semantics for non-conflict accept errors", async () => {
+    const orderSubmitted = signal({
+      id: "order.submitted",
+      schema: z.object({ orderId: z.string() }),
+    });
+    const provider = signalProvider({
+      id: "orders.poll.accept-fail",
+      transport: polling({
+        async poll() {
+          return {
+            events: [
+              {
+                accountId: "acct_1",
+                eventId: "evt_1",
+                authenticatedRouting: { source: "polling" },
+                payload: inlinePayload(JSON.stringify({ orderId: "ord_1" })),
+              },
+            ],
+            nextCursor: "cursor:1",
+          };
+        },
+      }),
+      signals: { orderSubmitted },
+      async onEvent() {},
+    });
+    const binding = managedTransportBinding(provider, {
+      id: "binding.orders.poll.accept-fail",
+      configRef: { id: "config.orders.poll.accept-fail", revision: "rev.1" },
+      signalId: "order.submitted",
+    });
+    const program = createRuntimeProgram({
+      targets: [],
+      providers: [provider],
+      transports: [binding],
+    });
+    const base = inMemoryRuntimeStore();
+    const store = {
+      ...base,
+      async transact<T>(fn: (tx: typeof base) => Promise<T>): Promise<T> {
+        return base.transact(async (tx) =>
+          fn({
+            ...tx,
+            transports: {
+              ...tx.transports!,
+              async accept() {
+                throw Object.assign(new Error("store write failed"), {
+                  code: "TRANSPORT_STORE_WRITE_FAILED",
+                });
+              },
+            },
+          } as typeof base),
+        );
+      },
+    };
+    const runner = createWorkerTransportSupervision({
+      program,
+      store: store as typeof base,
+      namespace: "poll-accept-fail",
+      ownerId: "worker-a",
+    })!;
+    const signalAbort = new AbortController().signal;
+
+    try {
+      const outcome = await runner.runOnce(
+        signalAbort,
+        new Date("2026-08-07T12:00:00.000Z"),
+      );
+      expect(outcome.failed).toBe(1);
+      expect(outcome.checkpointed).toBe(0);
+      expect(outcome.accepted).toBe(0);
+
+      const checkpoint = await base.transports!.getBindingCheckpoint!({
+        namespace: "poll-accept-fail",
+        bindingId: binding.id,
+      });
+      expect(checkpoint?.cursor).toBeNull();
+      expect(checkpoint?.lastErrorCode).toBe("TRANSPORT_STORE_WRITE_FAILED");
+    } finally {
+      await runner.dispose();
+    }
+  });
+
 });

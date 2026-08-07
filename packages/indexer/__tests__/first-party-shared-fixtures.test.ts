@@ -467,6 +467,7 @@ describe("first-party shared static index fixtures", () => {
         identity.extractor === "signal" ||
         identity.extractor === "signal.provider" ||
         identity.extractor === "signal.transport" ||
+        identity.extractor === "signal.transport.polling" ||
         identity.extractor === "signal.transportBinding";
       expect(identity.extension).toBe(
         media

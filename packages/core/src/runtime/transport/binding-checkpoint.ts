@@ -28,7 +28,12 @@ export interface RuntimeTransportBindingCheckpoint {
   readonly cursor: string | null;
   /** Canonical UTC ISO-8601 instant of the last durable checkpoint write. */
   readonly updatedAt: string;
-  /** Canonical UTC ISO-8601 instant of the last successful poll start. */
+  /**
+   * Canonical UTC ISO-8601 instant of the start of the latest poll attempt.
+   *
+   * @remarks Updated for both successful and failed attempts so interval
+   * spacing and health views reflect the most recent acquisition start.
+   */
   readonly lastPolledAt?: string;
   /**
    * Optional worker/process owner id observed at the last successful poll.
