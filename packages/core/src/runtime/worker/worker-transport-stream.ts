@@ -15,12 +15,15 @@ import type { Lease } from "../ports/leases";
 import type { RuntimeStoreAdapter } from "../store";
 import type { RuntimeManagedTransportBinding } from "../transport/contracts";
 import {
+  createLeaseBoundPollSignal,
   isLeaseExpired,
+  type LeaseBoundPollSignal,
 } from "./worker-transport-poll-signal";
 import {
   loadBindingCheckpoint,
   runStreamConnection,
   writeStreamCheckpoint,
+  type StreamLeaseSlot,
 } from "./worker-transport-stream-connection";
 import { resolveStreamCheckpoint } from "./worker-transport-stream-resolve";
 
@@ -28,6 +31,7 @@ export type {
   RunStreamConnectionOptions,
   RunStreamConnectionResult,
   StreamConnectionOutcome,
+  StreamLeaseSlot,
 } from "./worker-transport-stream-connection";
 export { runStreamConnection } from "./worker-transport-stream-connection";
 export {
@@ -79,6 +83,19 @@ export interface RunManagedStreamOptions {
   readonly transport: StreamTransport;
   /** Active binding lease that fences durable checkpoint writes. */
   readonly lease: Lease;
+  /**
+   * Optional mutable lease view updated by supervision on extend.
+   *
+   * @remarks When omitted, a private slot is created from {@link lease}.
+   */
+  readonly leaseSlot?: StreamLeaseSlot;
+  /**
+   * Optional pre-built lease-bound signal owned by supervision.
+   *
+   * @remarks When set, the fiber reuses the signal and does not dispose it.
+   * Supervision refreshes the deadline after each lease extend.
+   */
+  readonly leaseBound?: LeaseBoundPollSignal;
   readonly signal: AbortSignal;
   /**
    * Fallback clock instant when {@link clock} is omitted.
@@ -150,6 +167,14 @@ export async function runManagedStream(
   const baseBackoffMs =
     options.baseBackoffMs ?? DEFAULT_STREAM_BASE_BACKOFF_MS;
   const maxBackoffMs = options.maxBackoffMs ?? DEFAULT_STREAM_MAX_BACKOFF_MS;
+  const leaseSlot: StreamLeaseSlot = options.leaseSlot ?? {
+    current: options.lease,
+  };
+  const ownsLeaseBound = options.leaseBound === undefined;
+  const leaseBound =
+    options.leaseBound ??
+    createLeaseBoundPollSignal(options.signal, leaseSlot.current);
+  const fiberSignal = leaseBound.signal;
 
   let accepted = 0;
   let duplicated = 0;
@@ -160,215 +185,225 @@ export async function runManagedStream(
   let backoffAttempt = 0;
   let lastErrorCode: string | undefined;
 
-  while (!options.signal.aborted && !isLeaseExpired(options.lease)) {
-    const checkpoint = await loadBindingCheckpoint(
-      options.store,
-      options.namespace,
-      options.binding.id,
-    );
-    const resolved = resolveStreamCheckpoint(
-      checkpoint,
-      options.binding.configRef,
-    );
+  try {
+    while (!fiberSignal.aborted && !isLeaseExpired(leaseSlot.current)) {
+      leaseBound.refresh(leaseSlot.current);
 
-    // Durable faulted/disabled under the live config identity: do not open.
-    // Checkpoint get is unfenced, so supervision may make this skip decision
-    // before claiming a binding lease (no write on the skip path).
-    if (resolved.skipOpen) {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: resolved.status === "faulted",
-        leaseLost: false,
-        outcome:
-          resolved.status === "faulted"
-            ? lastErrorCode === TRANSPORT_STREAM_EXHAUSTED ||
-              checkpoint?.lastErrorCode === TRANSPORT_STREAM_EXHAUSTED
-              ? "exhausted"
-              : "terminal"
-            : "skipped",
-        lastErrorCode:
-          lastErrorCode ?? checkpoint?.lastErrorCode ?? undefined,
-        opens,
-        reconnects,
-      };
-    }
+      const checkpoint = await loadBindingCheckpoint(
+        options.store,
+        options.namespace,
+        options.binding.id,
+      );
+      const resolved = resolveStreamCheckpoint(
+        checkpoint,
+        options.binding.configRef,
+      );
 
-    const now = clock.now();
-    opens += 1;
+      // Durable faulted/disabled under the live config identity: do not open.
+      // Checkpoint get is unfenced, so supervision may make this skip decision
+      // before claiming a binding lease (no write on the skip path).
+      if (resolved.skipOpen) {
+        return {
+          accepted,
+          duplicated,
+          checkpointed,
+          failed: resolved.status === "faulted",
+          leaseLost: false,
+          outcome:
+            resolved.status === "faulted"
+              ? lastErrorCode === TRANSPORT_STREAM_EXHAUSTED ||
+                checkpoint?.lastErrorCode === TRANSPORT_STREAM_EXHAUSTED
+                ? "exhausted"
+                : "terminal"
+              : "skipped",
+          lastErrorCode:
+            lastErrorCode ?? checkpoint?.lastErrorCode ?? undefined,
+          opens,
+          reconnects,
+        };
+      }
 
-    const connection = await runStreamConnection({
-      store: options.store,
-      namespace: options.namespace,
-      binding: options.binding,
-      provider: options.provider,
-      transport: options.transport,
-      checkpoint,
-      // Effective cursor after config over-invalidation (may be null).
-      cursor: resolved.cursor,
-      lease: options.lease,
-      signal: options.signal,
-      now,
-      ownerId: options.ownerId,
-    });
+      const now = clock.now();
+      opens += 1;
 
-    accepted += connection.accepted;
-    duplicated += connection.duplicated;
-    if (connection.checkpointed) {
-      checkpointed = true;
-    }
-    if (connection.lastErrorCode !== undefined) {
-      lastErrorCode = connection.lastErrorCode;
-    }
+      const connection = await runStreamConnection({
+        store: options.store,
+        namespace: options.namespace,
+        binding: options.binding,
+        provider: options.provider,
+        transport: options.transport,
+        checkpoint,
+        // Effective cursor after config over-invalidation (may be null).
+        cursor: resolved.cursor,
+        lease: leaseSlot.current,
+        leaseSlot,
+        leaseBound,
+        signal: options.signal,
+        now,
+        ownerId: options.ownerId,
+      });
 
-    if (connection.outcome === "aborted") {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: false,
-        leaseLost: false,
-        outcome: "aborted",
-        lastErrorCode,
-        opens,
-        reconnects,
-      };
-    }
+      accepted += connection.accepted;
+      duplicated += connection.duplicated;
+      if (connection.checkpointed) {
+        checkpointed = true;
+      }
+      if (connection.lastErrorCode !== undefined) {
+        lastErrorCode = connection.lastErrorCode;
+      }
 
-    if (connection.outcome === "lease_lost") {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: true,
-        leaseLost: true,
-        outcome: "lease_lost",
-        lastErrorCode,
-        opens,
-        reconnects,
-      };
-    }
+      if (connection.outcome === "aborted") {
+        return {
+          accepted,
+          duplicated,
+          checkpointed,
+          failed: false,
+          leaseLost: false,
+          outcome: "aborted",
+          lastErrorCode,
+          opens,
+          reconnects,
+        };
+      }
 
-    if (connection.outcome === "terminal") {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: true,
-        leaseLost: false,
-        outcome: "terminal",
-        lastErrorCode: connection.lastErrorCode ?? lastErrorCode,
-        opens,
-        reconnects,
-      };
-    }
-
-    const madeProgress =
-      connection.accepted > 0 ||
-      connection.duplicated > 0 ||
-      connection.checkpointed;
-
-    if (madeProgress) {
-      consecutiveFailures = 0;
-      backoffAttempt = 0;
-    }
-
-    if (
-      connection.outcome === "transient" ||
-      connection.outcome === "contract_invalid"
-    ) {
-      consecutiveFailures += 1;
-      if (consecutiveFailures >= maxTransientFailures) {
-        const previous = await loadBindingCheckpoint(
-          options.store,
-          options.namespace,
-          options.binding.id,
-        );
-        const written = await writeStreamCheckpoint({
-          store: options.store,
-          namespace: options.namespace,
-          bindingId: options.binding.id,
-          cursor: previous?.cursor ?? null,
-          lease: options.lease,
-          now: clock.now(),
-          ownerId: options.ownerId,
-          configRef: options.binding.configRef,
-          status: "faulted",
-          lastErrorCode: TRANSPORT_STREAM_EXHAUSTED,
-          previous,
-        });
-
+      if (connection.outcome === "lease_lost") {
         return {
           accepted,
           duplicated,
           checkpointed,
           failed: true,
-          leaseLost: written.kind === "rejected",
-          outcome: written.kind === "rejected" ? "lease_lost" : "exhausted",
-          lastErrorCode: TRANSPORT_STREAM_EXHAUSTED,
+          leaseLost: true,
+          outcome: "lease_lost",
+          lastErrorCode,
+          opens,
+          reconnects,
+        };
+      }
+
+      if (connection.outcome === "terminal") {
+        return {
+          accepted,
+          duplicated,
+          checkpointed,
+          failed: true,
+          leaseLost: false,
+          outcome: "terminal",
+          lastErrorCode: connection.lastErrorCode ?? lastErrorCode,
+          opens,
+          reconnects,
+        };
+      }
+
+      const madeProgress =
+        connection.accepted > 0 ||
+        connection.duplicated > 0 ||
+        connection.checkpointed;
+
+      if (madeProgress) {
+        consecutiveFailures = 0;
+        backoffAttempt = 0;
+      }
+
+      if (
+        connection.outcome === "transient" ||
+        connection.outcome === "contract_invalid"
+      ) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= maxTransientFailures) {
+          const previous = await loadBindingCheckpoint(
+            options.store,
+            options.namespace,
+            options.binding.id,
+          );
+          const written = await writeStreamCheckpoint({
+            store: options.store,
+            namespace: options.namespace,
+            bindingId: options.binding.id,
+            cursor: previous?.cursor ?? null,
+            lease: leaseSlot.current,
+            now: clock.now(),
+            ownerId: options.ownerId,
+            configRef: options.binding.configRef,
+            status: "faulted",
+            lastErrorCode: TRANSPORT_STREAM_EXHAUSTED,
+            previous,
+          });
+
+          return {
+            accepted,
+            duplicated,
+            checkpointed,
+            failed: true,
+            leaseLost: written.kind === "rejected",
+            outcome: written.kind === "rejected" ? "lease_lost" : "exhausted",
+            lastErrorCode: TRANSPORT_STREAM_EXHAUSTED,
+            opens,
+            reconnects,
+          };
+        }
+      }
+
+      if (fiberSignal.aborted || isLeaseExpired(leaseSlot.current)) {
+        return {
+          accepted,
+          duplicated,
+          checkpointed,
+          failed: false,
+          leaseLost: isLeaseExpired(leaseSlot.current),
+          outcome: isLeaseExpired(leaseSlot.current) ? "lease_lost" : "aborted",
+          lastErrorCode,
+          opens,
+          reconnects,
+        };
+      }
+
+      // Clean EOF and transient/contract failures reconnect with backoff.
+      backoffAttempt += 1;
+      const delayMs = retryDelayMs({
+        attempt: backoffAttempt,
+        rng,
+        baseDelayMs: baseBackoffMs,
+        maxDelayMs: maxBackoffMs,
+      });
+      reconnects += 1;
+
+      try {
+        await clock.delay(delayMs, fiberSignal);
+      } catch {
+        // Delay implementations may reject on abort; treat as cooperative stop.
+      }
+
+      if (fiberSignal.aborted || isLeaseExpired(leaseSlot.current)) {
+        return {
+          accepted,
+          duplicated,
+          checkpointed,
+          failed: false,
+          leaseLost: isLeaseExpired(leaseSlot.current),
+          outcome: isLeaseExpired(leaseSlot.current) ? "lease_lost" : "aborted",
+          lastErrorCode,
           opens,
           reconnects,
         };
       }
     }
 
-    if (options.signal.aborted || isLeaseExpired(options.lease)) {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: false,
-        leaseLost: isLeaseExpired(options.lease),
-        outcome: isLeaseExpired(options.lease) ? "lease_lost" : "aborted",
-        lastErrorCode,
-        opens,
-        reconnects,
-      };
-    }
-
-    // Clean EOF and transient/contract failures reconnect with backoff.
-    backoffAttempt += 1;
-    const delayMs = retryDelayMs({
-      attempt: backoffAttempt,
-      rng,
-      baseDelayMs: baseBackoffMs,
-      maxDelayMs: maxBackoffMs,
-    });
-    reconnects += 1;
-
-    try {
-      await clock.delay(delayMs, options.signal);
-    } catch {
-      // Delay implementations may reject on abort; treat as cooperative stop.
-    }
-
-    if (options.signal.aborted || isLeaseExpired(options.lease)) {
-      return {
-        accepted,
-        duplicated,
-        checkpointed,
-        failed: false,
-        leaseLost: isLeaseExpired(options.lease),
-        outcome: isLeaseExpired(options.lease) ? "lease_lost" : "aborted",
-        lastErrorCode,
-        opens,
-        reconnects,
-      };
+    return {
+      accepted,
+      duplicated,
+      checkpointed,
+      failed: false,
+      leaseLost: isLeaseExpired(leaseSlot.current),
+      outcome: isLeaseExpired(leaseSlot.current) ? "lease_lost" : "aborted",
+      lastErrorCode,
+      opens,
+      reconnects,
+    };
+  } finally {
+    if (ownsLeaseBound) {
+      leaseBound.dispose();
     }
   }
-
-  return {
-    accepted,
-    duplicated,
-    checkpointed,
-    failed: false,
-    leaseLost: isLeaseExpired(options.lease),
-    outcome: isLeaseExpired(options.lease) ? "lease_lost" : "aborted",
-    lastErrorCode,
-    opens,
-    reconnects,
-  };
 }
 
 function createDefaultStreamClock(): ManagedStreamClock {

@@ -39,6 +39,7 @@ import {
 import {
   createLeaseBoundPollSignal,
   isLeaseExpired,
+  type LeaseBoundPollSignal,
 } from "./worker-transport-poll-signal";
 
 /**
@@ -55,6 +56,17 @@ export type StreamConnectionOutcome =
   | "contract_invalid"
   | "aborted"
   | "lease_lost";
+
+/**
+ * Mutable lease snapshot shared with supervision while a stream fiber runs.
+ *
+ * @remarks Supervision extends the store lease each tick and updates
+ * `current` so accept/checkpoint fencing and process-local expiry checks stay
+ * aligned without a second lease type.
+ */
+export interface StreamLeaseSlot {
+  current: Lease;
+}
 
 /** Options for one leased stream connection attempt. */
 export interface RunStreamConnectionOptions {
@@ -78,6 +90,20 @@ export interface RunStreamConnectionOptions {
   readonly cursor?: string | null;
   /** Active binding lease that fences durable checkpoint writes. */
   readonly lease: Lease;
+  /**
+   * Optional mutable lease view updated by supervision on extend.
+   *
+   * @remarks When set, expiry checks and checkpoint fences read
+   * {@link StreamLeaseSlot.current} instead of the frozen initial lease.
+   */
+  readonly leaseSlot?: StreamLeaseSlot;
+  /**
+   * Optional pre-built lease-bound signal owned by the reconnect fiber.
+   *
+   * @remarks When set, this connection reuses the signal (and does not
+   * dispose it). Supervision refreshes the deadline after lease extension.
+   */
+  readonly leaseBound?: LeaseBoundPollSignal;
   readonly signal: AbortSignal;
   readonly now: Date;
   readonly ownerId?: string;
@@ -106,10 +132,10 @@ export interface RunStreamConnectionResult {
 export async function runStreamConnection(
   options: RunStreamConnectionOptions,
 ): Promise<RunStreamConnectionResult> {
-  const streamControl = createLeaseBoundPollSignal(
-    options.signal,
-    options.lease,
-  );
+  const ownsControl = options.leaseBound === undefined;
+  const streamControl =
+    options.leaseBound ??
+    createLeaseBoundPollSignal(options.signal, activeLease(options));
 
   let accepted = 0;
   let duplicated = 0;
@@ -117,8 +143,13 @@ export async function runStreamConnection(
   let latestCheckpoint = options.checkpoint;
 
   try {
-    if (streamControl.signal.aborted || isLeaseExpired(options.lease)) {
-      return abortedOutcome(options.lease, accepted, duplicated, checkpointed);
+    if (streamControl.signal.aborted || isLeaseExpired(activeLease(options))) {
+      return abortedOutcome(
+        activeLease(options),
+        accepted,
+        duplicated,
+        checkpointed,
+      );
     }
 
     const openCursor =
@@ -145,19 +176,27 @@ export async function runStreamConnection(
       });
     }
 
-    if (streamControl.signal.aborted || isLeaseExpired(options.lease)) {
+    if (streamControl.signal.aborted || isLeaseExpired(activeLease(options))) {
       await bestEffortReturn(iterable);
-      return abortedOutcome(options.lease, accepted, duplicated, checkpointed);
+      return abortedOutcome(
+        activeLease(options),
+        accepted,
+        duplicated,
+        checkpointed,
+      );
     }
 
     const iterator = iterable[Symbol.asyncIterator]();
 
     try {
       for (;;) {
-        if (streamControl.signal.aborted || isLeaseExpired(options.lease)) {
+        if (
+          streamControl.signal.aborted ||
+          isLeaseExpired(activeLease(options))
+        ) {
           await bestEffortIteratorReturn(iterator);
           return abortedOutcome(
-            options.lease,
+            activeLease(options),
             accepted,
             duplicated,
             checkpointed,
@@ -190,10 +229,10 @@ export async function runStreamConnection(
           };
         }
 
-        if (streamControl.signal.aborted || isLeaseExpired(options.lease)) {
+        if (streamControl.signal.aborted || isLeaseExpired(activeLease(options))) {
           await bestEffortIteratorReturn(iterator);
           return abortedOutcome(
-            options.lease,
+            activeLease(options),
             accepted,
             duplicated,
             checkpointed,
@@ -210,7 +249,7 @@ export async function runStreamConnection(
             namespace: options.namespace,
             bindingId: options.binding.id,
             cursor: latestCheckpoint?.cursor ?? null,
-            lease: options.lease,
+            lease: activeLease(options),
             now: options.now,
             ownerId: options.ownerId,
             configRef: options.binding.configRef,
@@ -248,7 +287,7 @@ export async function runStreamConnection(
             namespace: options.namespace,
             bindingId: options.binding.id,
             cursor: item.cursor,
-            lease: options.lease,
+            lease: activeLease(options),
             now: options.now,
             ownerId: options.ownerId,
             configRef: options.binding.configRef,
@@ -286,7 +325,7 @@ export async function runStreamConnection(
         if (itemResult.kind === "aborted") {
           await bestEffortIteratorReturn(iterator);
           return abortedOutcome(
-            options.lease,
+            activeLease(options),
             accepted,
             duplicated,
             checkpointed,
@@ -315,10 +354,10 @@ export async function runStreamConnection(
           continue;
         }
 
-        if (streamControl.signal.aborted || isLeaseExpired(options.lease)) {
+        if (streamControl.signal.aborted || isLeaseExpired(activeLease(options))) {
           await bestEffortIteratorReturn(iterator);
           return abortedOutcome(
-            options.lease,
+            activeLease(options),
             accepted,
             duplicated,
             checkpointed,
@@ -330,7 +369,7 @@ export async function runStreamConnection(
           namespace: options.namespace,
           bindingId: options.binding.id,
           cursor: item.cursor,
-          lease: options.lease,
+          lease: activeLease(options),
           now: options.now,
           ownerId: options.ownerId,
           configRef: options.binding.configRef,
@@ -362,8 +401,15 @@ export async function runStreamConnection(
       await bestEffortIteratorReturn(iterator);
     }
   } finally {
-    streamControl.dispose();
+    if (ownsControl) {
+      streamControl.dispose();
+    }
   }
+}
+
+/** Resolve the freshest lease snapshot for fencing and expiry checks. */
+function activeLease(options: RunStreamConnectionOptions): Lease {
+  return options.leaseSlot?.current ?? options.lease;
 }
 
 /**
@@ -472,7 +518,7 @@ async function acceptStreamEnvelope(args: {
 > {
   const { options, item, signal, latestCheckpoint } = args;
 
-  if (signal.aborted || isLeaseExpired(options.lease)) {
+  if (signal.aborted || isLeaseExpired(activeLease(options))) {
     return { kind: "aborted" };
   }
 
@@ -486,7 +532,7 @@ async function acceptStreamEnvelope(args: {
       now: options.now,
     });
 
-    if (signal.aborted || isLeaseExpired(options.lease)) {
+    if (signal.aborted || isLeaseExpired(activeLease(options))) {
       return { kind: "aborted" };
     }
 
@@ -520,7 +566,7 @@ async function acceptStreamEnvelope(args: {
         namespace: options.namespace,
         bindingId: options.binding.id,
         cursor: latestCheckpoint?.cursor ?? null,
-        lease: options.lease,
+        lease: activeLease(options),
         now: options.now,
         ownerId: options.ownerId,
         configRef: options.binding.configRef,
@@ -542,7 +588,7 @@ async function acceptStreamEnvelope(args: {
       namespace: options.namespace,
       bindingId: options.binding.id,
       cursor: latestCheckpoint?.cursor ?? null,
-      lease: options.lease,
+      lease: activeLease(options),
       now: options.now,
       ownerId: options.ownerId,
       configRef: options.binding.configRef,
@@ -578,8 +624,8 @@ async function handleConnectionError(args: {
     signal,
   } = args;
 
-  if (signal.aborted || isAbortError(error) || isLeaseExpired(options.lease)) {
-    return abortedOutcome(options.lease, accepted, duplicated, checkpointed);
+  if (signal.aborted || isAbortError(error) || isLeaseExpired(activeLease(options))) {
+    return abortedOutcome(activeLease(options), accepted, duplicated, checkpointed);
   }
 
   if (isManagedStreamTerminalError(error)) {
@@ -590,7 +636,7 @@ async function handleConnectionError(args: {
       namespace: options.namespace,
       bindingId: options.binding.id,
       cursor: latestCheckpoint?.cursor ?? null,
-      lease: options.lease,
+      lease: activeLease(options),
       now: options.now,
       ownerId: options.ownerId,
       configRef: options.binding.configRef,
@@ -616,7 +662,7 @@ async function handleConnectionError(args: {
     namespace: options.namespace,
     bindingId: options.binding.id,
     cursor: latestCheckpoint?.cursor ?? null,
-    lease: options.lease,
+    lease: activeLease(options),
     now: options.now,
     ownerId: options.ownerId,
     configRef: options.binding.configRef,

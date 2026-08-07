@@ -67,10 +67,12 @@ export interface RuntimeWorkerStopOptions {
  * composer-owned maintenance, and runs its own immediate serial maintenance
  * loop. One worker may own a store and namespace in the current process.
  * When the program declares managed transports, each tick also supervises
- * polling bindings (lease, poll, durable accept, cursor checkpoint), then
- * claims a bounded batch of accepted Signal-provider envelopes and normalizes
- * them through the existing restart-safe transport kernel using
- * `program.providers`.
+ * polling bindings (lease, poll, durable accept, cursor checkpoint) and stream
+ * bindings (lease, start/refresh connection fibers, durable accept, cursor
+ * checkpoint). Stream fibers continue between ticks so long-lived connections
+ * never block the maintenance loop. Each tick then claims a bounded batch of
+ * accepted Signal-provider envelopes and normalizes them through the existing
+ * restart-safe transport kernel using `program.providers`.
  * Each tick also claims interrupted durable Effect rollback scopes, resolves
  * recovery only through `program.effectTargets`, and executes their exact
  * reconstructed plans before transport work.
@@ -199,8 +201,9 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
       if (effectRecoveryDrain && state === 'running') {
         await effectRecoveryDrain.runOnce(recoveryAbort.signal)
       }
-      // Acquire polling bindings on the same serial cadence before drain so
-      // newly accepted envelopes can normalize in a later tick.
+      // Acquire polling/stream bindings on the same serial cadence before drain
+      // so newly accepted envelopes can normalize in a later tick. Stream
+      // runOnce is bounded: it starts/refreshes fibers without awaiting them.
       if (transportSupervision && state === 'running') {
         await transportSupervision.runOnce(recoveryAbort.signal)
       }
