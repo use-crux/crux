@@ -92,10 +92,14 @@ export function renderBoundedRepairPrompt(args: {
   readonly stageId: string
   readonly sourceId: string
   readonly prompt: string
+  /** Slots containing invalid material; every other slot must be returned as []. */
+  readonly invalidSlots?: readonly string[]
   readonly errors: readonly string[]
 }): BoundedDerivePrompt {
   return boundWithWarning(
-    `${args.prompt}\n\nFix these validation errors:\n${args.errors.join('\n')}`,
+    `${args.prompt}\n\nRepair only these invalid slots: ${args.invalidSlots?.join(', ') || '(none; remove unknown slots)'}. ` +
+    `Return [] for every retained slot so valid first-pass material is not repeated. Remove unknown slots.\n` +
+    `Fix these validation errors:\n${args.errors.join('\n')}`,
     MAX_DERIVE_PROMPT_CHARS,
     promptWarning(args.stageId, args.sourceId, 'repair prompt'),
   )

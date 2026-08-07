@@ -2,14 +2,17 @@
 
 import { z } from 'zod'
 
-export const ASSERTION_WIRE_COMPILER_VERSION = 1
+export const ASSERTION_WIRE_COMPILER_VERSION = 2
 
 const MAX_SCHEMA_DEPTH = 8
 const MAX_SCHEMA_NODES = 128
-const FORBIDDEN_KEYWORDS = new Set([
-  'oneOf', 'anyOf', 'allOf', 'not', 'nullable', 'patternProperties',
-  'additionalItems', 'contains', 'prefixItems', 'unevaluatedItems', 'unevaluatedProperties',
+const ALLOWED_KEYWORDS = new Set([
+  'type', 'description', 'properties', 'required', 'additionalProperties', 'items',
+  'enum', 'const', 'minLength', 'maxLength', 'minimum', 'maximum',
+  'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minItems', 'maxItems',
 ])
+const PRIMITIVE_TYPES = new Set(['string', 'number', 'integer', 'boolean'])
+const ROOT_METADATA_KEYWORDS = new Set(['$schema'])
 
 export type AssertionWireMode = 'typed' | 'json-string'
 
@@ -18,6 +21,7 @@ export interface AssertionWireSlot {
   readonly type: string
   readonly mode: AssertionWireMode
   readonly schema: z.ZodType<unknown>
+  readonly dataSchema: z.ZodType<unknown>
   readonly fallbackReason?: string
   readonly expectedShape: string
 }
@@ -33,18 +37,8 @@ export interface CompiledAssertionWire {
 }
 
 export function compileAssertionWire(types: Record<string, z.ZodType<unknown>>): CompiledAssertionWire {
-  const slots = Object.entries(types).sort(([left], [right]) => left.localeCompare(right)).map(([type, schema], index) => {
-    const json = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>
-    const fallbackReason = portableSchemaIssue(json)
-    return {
-      slot: `type_${index}` as const,
-      type,
-      mode: fallbackReason === undefined ? 'typed' as const : 'json-string' as const,
-      schema,
-      ...(fallbackReason === undefined ? {} : { fallbackReason }),
-      expectedShape: describeShape(json),
-    }
-  })
+  const slots = Object.entries(types).sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, schema], index) => compileSlot(type, schema, index))
   const evidence = z.array(z.object({
     kind: z.literal('chunk').describe('Evidence kind; always chunk.'),
     sourceId: z.string().describe('Source id shown in the prompt.'),
@@ -53,7 +47,7 @@ export function compileAssertionWire(types: Record<string, z.ZodType<unknown>>):
   const provenance = z.enum(['exact', 'derived']).describe('Use exact for explicit claims and derived for supported inference.')
   const shape = Object.fromEntries(slots.map((entry) => {
     const data = entry.mode === 'typed'
-      ? z.fromJSONSchema(z.toJSONSchema(entry.schema, { io: 'input' }) as never)
+      ? entry.dataSchema
       : z.string().describe(`JSON-encoded assertion data. Expected shape: ${entry.expectedShape}`)
     const item = entry.mode === 'typed'
       ? z.object({ data, evidence, provenance }).strict()
@@ -63,6 +57,46 @@ export function compileAssertionWire(types: Record<string, z.ZodType<unknown>>):
   return {
     schema: z.object(shape).strict().describe('Grouped assertions; every slot is required and absent kinds use [].'),
     manifest: { compilerVersion: ASSERTION_WIRE_COMPILER_VERSION, slots },
+  }
+}
+
+function compileSlot(type: string, schema: z.ZodType<unknown>, index: number): AssertionWireSlot {
+  const slot = `type_${index}` as const
+  const authoredIssue = authoredSchemaIssue(schema)
+  if (authoredIssue !== undefined) return fallbackSlot(slot, type, schema, authoredIssue)
+  let json: Record<string, unknown>
+  try {
+    json = z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>
+  } catch {
+    return fallbackSlot(slot, type, schema, 'schema conversion failed')
+  }
+  const fallbackReason = portableSchemaIssue(json)
+  if (fallbackReason !== undefined) return fallbackSlot(slot, type, schema, fallbackReason, describeShape(json))
+  try {
+    return { slot, type, mode: 'typed', schema, dataSchema: z.fromJSONSchema(json as never), expectedShape: describeShape(json) }
+  } catch {
+    return fallbackSlot(slot, type, schema, 'schema reconstruction failed', describeShape(json))
+  }
+}
+
+function authoredSchemaIssue(schema: z.ZodType<unknown>): string | undefined {
+  const type = (schema as { _zod?: { def?: { type?: unknown } } })._zod?.def?.type
+  if (type === 'any' || type === 'unknown') return `unconstrained ${type} schema is unsupported`
+  if (type === 'pipe') return 'transformed schemas are unsupported'
+  return undefined
+}
+
+function fallbackSlot(
+  slot: `type_${number}`,
+  type: string,
+  schema: z.ZodType<unknown>,
+  fallbackReason: string,
+  expectedShape = schema.description || 'JSON value',
+): AssertionWireSlot {
+  return {
+    slot, type, mode: 'json-string', schema,
+    dataSchema: z.string().describe(`JSON-encoded assertion data. Expected shape: ${expectedShape}`),
+    fallbackReason, expectedShape,
   }
 }
 
@@ -90,22 +124,29 @@ function portableSchemaIssue(root: Record<string, unknown>): string | undefined 
     if (!isRecord(value)) return undefined
     nodes += 1
     if (nodes > MAX_SCHEMA_NODES) return `schema exceeds maximum size ${MAX_SCHEMA_NODES}`
-    for (const keyword of FORBIDDEN_KEYWORDS) {
-      if (keyword in value) return `unsupported keyword ${keyword}`
+    for (const keyword of Object.keys(value)) {
+      if (!ALLOWED_KEYWORDS.has(keyword) && !(depth === 0 && ROOT_METADATA_KEYWORDS.has(keyword))) {
+        return `unsupported keyword ${keyword}`
+      }
     }
-    if (Array.isArray(value.type) || value.type === 'null') return 'optional, nullable, or union types are unsupported'
+    if (typeof value.type !== 'string') return 'unconstrained schema is unsupported'
+    if (!PRIMITIVE_TYPES.has(value.type) && value.type !== 'object' && value.type !== 'array') return `unsupported type ${value.type}`
     if (value.type === 'object') {
       if (!isRecord(value.properties) || value.additionalProperties !== false) return 'unconstrained objects and records are unsupported'
       const keys = Object.keys(value.properties)
+      if (keys.length === 0) return 'empty objects are unsupported'
       if (!Array.isArray(value.required) || keys.some((key) => !value.required!.includes(key))) {
         return 'optional object properties are unsupported'
       }
     }
     if (value.type === 'array' && !isRecord(value.items)) return 'arrays must have one homogeneous item schema'
-    for (const child of Object.values(value)) {
-      const issue = visit(child, depth + 1)
-      if (issue) return issue
+    if (isRecord(value.properties)) {
+      for (const child of Object.values(value.properties)) {
+        const issue = visit(child, depth + 1)
+        if (issue) return issue
+      }
     }
+    if (value.items !== undefined) return visit(value.items, depth + 1)
     return undefined
   }
   return visit(root, 0)

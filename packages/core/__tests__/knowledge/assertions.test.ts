@@ -77,6 +77,26 @@ describe('assertions', () => {
     expect(first.fingerprint()).not.toBe(changed.fingerprint())
   })
 
+  it('keeps unrepresentable provider schemas out of deterministic run setup', async () => {
+    const transformed = z.string().transform((value) => value.trim())
+    const stage = assertions({
+      id: 'facts', version: 1, types: { fact: transformed },
+      run: (_input, api) => { api.emit('fact', ' fact ', { evidence: chunkRef }) },
+    })
+
+    await expect(runDeriveStages({
+      records: inMemoryStorage().records, indexerId, namespace, stages: [stage], document: document('doc-1'),
+      chunks: [chunk('doc-1', 'c1', 'Fact')],
+    })).resolves.toMatchObject([{ status: 'ran', claims: 1 }])
+  })
+
+  it('fingerprints model wire fallback behavior', () => {
+    const portable = assertions({ id: 'facts', version: 1, types: { fact: z.string() }, model: retrievalModel() })
+    const fallback = assertions({ id: 'facts', version: 1, types: { fact: z.string().transform((value) => value) }, model: retrievalModel() })
+
+    expect(portable.fingerprint()).not.toBe(fallback.fingerprint())
+  })
+
   it('persists deterministic assertions under exact claim and generation keys', async () => {
     const { records } = inMemoryStorage()
     await persistChunks(records, [chunk('doc-1', 'c1', 'Price is 12 EUR')])

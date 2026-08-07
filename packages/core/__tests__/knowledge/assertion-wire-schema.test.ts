@@ -46,6 +46,78 @@ describe("generated assertion wire schema", () => {
     expect(json).not.toContain("anyOf");
   });
 
+  it("uses JSON strings for unconstrained, transformed, and unapproved schemas", () => {
+    const compiled = compileAssertionWire({
+      any: z.any(),
+      unknown: z.unknown(),
+      transformed: z.string().transform((value) => value.trim()),
+      formatted: z.string().email(),
+      empty: z.object({}).strict(),
+      date: z.date(),
+      portable: z.object({ value: z.string() }).strict(),
+    });
+
+    expect(compiled.manifest.slots.map(({ type, mode }) => ({ type, mode }))).toEqual([
+      { type: "any", mode: "json-string" },
+      { type: "date", mode: "json-string" },
+      { type: "empty", mode: "json-string" },
+      { type: "formatted", mode: "json-string" },
+      { type: "portable", mode: "typed" },
+      { type: "transformed", mode: "json-string" },
+      { type: "unknown", mode: "json-string" },
+    ]);
+  });
+
+  it("decodes typed and JSON-string slots together", async () => {
+    const model = fixedModel([{
+      type_0: [{ dataJson: '{"value":"fallback"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      type_1: [{ data: { value: "typed" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+    }]);
+    const stage = assertions({
+      id: "facts", version: 1, model,
+      types: { fallback: z.union([z.object({ value: z.string() }), z.string()]), portable: z.object({ value: z.string() }) },
+    });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 2 }]);
+  });
+
+  it("repairs only invalid slots and preserves claims from retained slots", async () => {
+    const prompts: string[] = [];
+    const model = fixedModel([
+      {
+        type_0: [{ data: { value: "keep" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+        type_1: [{ data: { count: "bad" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      },
+      {
+        type_0: [],
+        type_1: [{ data: { count: 2 }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      },
+    ], prompts);
+    const stage = assertions({ id: "facts", version: 1, model, types: {
+      alpha: z.object({ value: z.string() }), beta: z.object({ count: z.number() }),
+    } });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 2 }]);
+    expect(prompts[1]).toContain("Repair only these invalid slots: type_1");
+    expect(prompts[1]).toContain("Return [] for every retained slot");
+  });
+
+  it("repairs malformed JSON and unknown slots locally", async () => {
+    const prompts: string[] = [];
+    const model = fixedModel([
+      { type_0: [{ dataJson: "{bad", evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }], unexpected: [] },
+      { type_0: [{ dataJson: '{"value":"fixed"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }] },
+    ], prompts);
+    const stage = assertions({ id: "facts", version: 1, model, types: { fact: z.union([z.object({ value: z.string() }), z.string()]) } });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 1 }]);
+    expect(prompts[1]).toContain("type_0[0]: malformed dataJson");
+    expect(prompts[1]).toContain("unexpected: unknown assertion slot");
+  });
+
   it("is constant in chunk count and uses generic evidence references", async () => {
     const small = await captureSchema(chunks(2));
     const large = await captureSchema(chunks(40));

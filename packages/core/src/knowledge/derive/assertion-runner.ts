@@ -142,10 +142,12 @@ async function runGeneratedBatch(
   if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
 
   const invalidSlots = [...new Set(first.errors.map((error) => error.slot))]
+    .filter((slot) => manifestSlot(first.manifest, slot))
   const repairedPrompt = renderBoundedRepairPrompt({
     stageId: input.stage.id,
     sourceId: input.document.sourceId,
     prompt: batch.prompt,
+    invalidSlots,
     errors: first.errors.map((error) => error.message),
   })
   warnings.push(...repairedPrompt.warnings)
@@ -191,12 +193,13 @@ async function readGeneratedAssertionClaims(
   const validated = validateAssertionClaims(stage, decoded.claims, batch.chunks, input.targetKeys)
   const errors = [
     ...decoded.errors,
-    ...validated.errors.map((message, index) => ({ slot: decoded.claimSlots[index] ?? '<root>', message })),
+    ...validationErrors(validated.errors, validated.issues, decoded.claimSlots),
   ]
   return {
     ...validated,
     errors,
     warnings: result.warnings,
+    manifest,
     validationError: new z.ZodError([
       ...decoded.errors.map((error) => ({ code: 'custom' as const, path: [error.slot], message: error.message })),
       ...validated.issues.map((issue) => ({
@@ -205,6 +208,19 @@ async function readGeneratedAssertionClaims(
       })),
     ]),
   }
+}
+
+function manifestSlot(manifest: AssertionWireManifest, slot: string): boolean {
+  return manifest.slots.some((entry) => entry.slot === slot)
+}
+
+function validationErrors(
+  messages: readonly string[],
+  issues: readonly z.core.$ZodIssue[],
+  claimSlots: readonly string[],
+): readonly { slot: string; message: string }[] {
+  const failedIndexes = [...new Set(issues.map((issue) => Number(issue.path[0])).filter(Number.isInteger))]
+  return messages.map((message, index) => ({ slot: claimSlots[failedIndexes[index] ?? -1] ?? '<root>', message }))
 }
 
 function decodeWire(value: unknown, manifest: AssertionWireManifest, repairSlots?: readonly string[]): {

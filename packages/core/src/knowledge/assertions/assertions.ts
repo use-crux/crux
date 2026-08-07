@@ -149,7 +149,7 @@ export function assertions<const TTypes extends Record<string, z.ZodType<unknown
     id: config.id,
     version: config.version,
     types: schemaFingerprintInput(normalizedTypes),
-    wire: assertionWireFingerprintInput(normalizedTypes),
+    ...(mode === 'model' ? { wire: assertionWireFingerprintInput(normalizedTypes) } : {}),
     mode: fingerprintMode,
   })
 
@@ -256,7 +256,18 @@ function normalizeTypes<TTypes extends Record<string, z.ZodType<unknown>>>(types
 }
 
 function schemaFingerprintInput(types: Record<string, z.ZodType<unknown>>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(types).map(([name, schema]) => [name, zodSchemaFingerprintValue(schema)]))
+  return Object.fromEntries(Object.entries(types).map(([name, schema]) => [name, schemaFingerprintValue(schema)]))
+}
+
+function schemaFingerprintValue(schema: z.ZodType<unknown>): unknown {
+  try {
+    return zodSchemaFingerprintValue(schema)
+  } catch {
+    return {
+      unrepresentable: (schema as { _zod?: { def?: { type?: unknown } } })._zod?.def?.type ?? 'schema',
+      description: schema.description ?? null,
+    }
+  }
 }
 
 function isZodType(value: unknown): value is z.ZodType<unknown> {
