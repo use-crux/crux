@@ -5,6 +5,7 @@
  */
 
 import type { PollingTransport } from "./polling";
+import type { SseTransport } from "./sse";
 import type { StreamTransport } from "./stream";
 import type { WebhookTransport } from "./webhook";
 
@@ -37,8 +38,20 @@ export type {
   StreamTransport,
 } from "./stream";
 
+export { sse } from "./sse";
+export type {
+  SseCursorItem,
+  SseEnvelopeItem,
+  SseItem,
+  SseOpen,
+  SseOpenContext,
+  SseOptions,
+  SseTransport,
+} from "./sse";
+
 /** Live transport definitions accepted by {@link import("../provider").signalProvider}. */
 export type SignalProviderTransport =
   | WebhookTransport
   | PollingTransport
-  | StreamTransport;
+  | StreamTransport
+  | SseTransport;

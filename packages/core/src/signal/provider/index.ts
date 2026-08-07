@@ -5,7 +5,9 @@
  */
 
 export {
+  isManagedStreamTransport,
   isPollingTransport,
+  isSseTransport,
   isStreamTransport,
   isWebhookTransport,
   signalProvider,
