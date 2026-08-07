@@ -7,8 +7,10 @@
  * identity, so evidence from the policy-unaware epoch must not be reused.
  * 12: accepted preparation amendments and pinned control-resource revisions
  * participate in provider-call decisions, invalidating earlier task evidence.
+ * 13: internal Connected Knowledge community refresh no longer contributes a
+ * captured public defer signal to Eval task evidence.
  */
-export const TASK_EVIDENCE_CACHE_EPOCH = 12;
+export const TASK_EVIDENCE_CACHE_EPOCH = 13;
 
 /** Bump when managed external-scorer result identity changes. */
 export const SCORER_RESULT_CACHE_EPOCH = 3;

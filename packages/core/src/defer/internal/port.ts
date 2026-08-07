@@ -34,8 +34,18 @@ export type DiagnosticsOnlyDeferredWorkHandle =
 export function scheduleDiagnosticsOnlyDeferredCallback(
   callback: DeferredCallback,
 ): DiagnosticsOnlyDeferredWorkHandle {
+  return (
+    tryScheduleDiagnosticsOnlyDeferredCallback(callback) ??
+    startInline(callback)
+  );
+}
+
+/** Attempt diagnostics-only scheduling without the correctness-oriented inline fallback. */
+export function tryScheduleDiagnosticsOnlyDeferredCallback(
+  callback: DeferredCallback,
+): DiagnosticsOnlyDeferredWorkHandle | undefined {
   const registration = resolveDiagnosticsOnlyDeferRegistration();
-  if (!registration) return startInline(callback);
+  if (!registration) return undefined;
 
   let resolveSettlement!: () => void;
   let rejectSettlement!: (error: unknown) => void;
@@ -61,7 +71,7 @@ export function scheduleDiagnosticsOnlyDeferredCallback(
     if (status === "captured") resolveSettlement();
     return Object.freeze({ status, settled });
   } catch (error) {
-    if (isKnownRegistrationInability(error)) return startInline(callback);
+    if (isKnownRegistrationInability(error)) return undefined;
     throw error;
   }
 }

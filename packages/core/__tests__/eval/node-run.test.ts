@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { evaluate } from "../../src/eval";
 import { runEval } from "../../src/eval/node";
 import { runDiscoveredEval } from "../../src/eval/node/runner";
+import { createEvalRunFileStore } from "../../src/eval/node/stores";
 import {
   fingerprintEvalPersistencePolicy,
   normalizeEvalPersistencePolicy,
@@ -130,6 +131,100 @@ describe.sequential("runEval", () => {
       task: { status: "reused", reason: "exact_evidence" },
       runIds: run.cells[0]?.runIds,
       capturedSignals: [],
+    });
+  });
+
+  it("terminalizes an Eval-owned in-memory Knowledge Base on success and failure", async () => {
+    const fixture = await import(
+      "./fixtures/node-run-project/evals/knowledge-lifecycle.eval"
+    );
+    const success = await runDiscoveredEval(
+      "knowledge-lifecycle",
+      { case: "success", confirmUnknownCost: true, fresh: true },
+      projectRoot,
+    );
+    if ("schemaVersion" in success && success.schemaVersion === 1) {
+      throw new TypeError("Expected an Eval run.");
+    }
+
+    expect(success).toMatchObject({
+      status: "complete",
+      passed: true,
+      cells: [
+        {
+          caseId: "success",
+          status: "passed",
+          task: { status: "executed" },
+          capturedSignals: [],
+          output: {
+            assertions: 2,
+            reports: expect.any(Number),
+            indexedChunks: 2,
+          },
+        },
+      ],
+    });
+    expect(success.endedAt).toBeGreaterThanOrEqual(success.startedAt);
+    expect(
+      (success.cells[0]?.output as { reports: number }).reports,
+    ).toBeGreaterThan(0);
+    await expect(
+      createEvalRunFileStore({ projectRoot }).read(success.runId),
+    ).resolves.toMatchObject({
+      status: "found",
+      run: {
+        runId: success.runId,
+        status: "complete",
+        cells: [{ status: "passed" }],
+      },
+    });
+    await expect(
+      fixture.inspectKnowledgeLifecycle("success"),
+    ).resolves.toMatchObject({
+        communities: "ready",
+        assertions: 2,
+        inspection: { lifecycle: { indexedChunks: 2, indexedSources: 1 } },
+    });
+
+    const failure = await runDiscoveredEval(
+      "knowledge-lifecycle",
+      { case: "failure", confirmUnknownCost: true, fresh: true },
+      projectRoot,
+    );
+    if ("schemaVersion" in failure && failure.schemaVersion === 1) {
+      throw new TypeError("Expected an Eval run.");
+    }
+
+    expect(failure).toMatchObject({
+      status: "incomplete",
+      passed: false,
+      reasons: ["task_error"],
+      cells: [
+        {
+          caseId: "failure",
+          status: "errored",
+          task: { status: "errored" },
+          capturedSignals: [],
+        },
+      ],
+    });
+    expect(failure.endedAt).toBeGreaterThanOrEqual(failure.startedAt);
+    await expect(
+      createEvalRunFileStore({ projectRoot }).read(failure.runId),
+    ).resolves.toMatchObject({
+      status: "found",
+      run: {
+        runId: failure.runId,
+        status: "incomplete",
+        cells: [{ status: "errored" }],
+      },
+    });
+    await expect(
+      fixture.inspectKnowledgeLifecycle("failure"),
+    ).resolves.toMatchObject({
+        communities: "ready",
+        assertions: 2,
+        inspection: { lifecycle: { indexedChunks: 2, indexedSources: 1 } },
     });
   });
 
