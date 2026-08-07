@@ -253,6 +253,8 @@ export const ordersSse = signalProvider({
       });
 
       if (!response.ok) {
+        // Release an unused body when present; null bodies are a no-op.
+        await response.body?.cancel?.();
         const kind = classifySseHttpStatus(response.status);
         if (kind === "terminal") {
           throw new ManagedStreamTerminalError(

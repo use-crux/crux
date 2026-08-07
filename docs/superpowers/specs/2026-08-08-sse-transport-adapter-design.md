@@ -213,8 +213,12 @@ export function isManagedStreamTransport(
 ### Example (illustrative; adapter owns fetch)
 
 ```ts
-import { sse, classifySseHttpStatus, ManagedStreamTerminalError } from "@use-crux/core/signal/transport";
-// ManagedStreamTerminalError is exported from runtime; re-export or import path as shipped today.
+import {
+  sse,
+  classifySseHttpStatus,
+  sseHttpStatusErrorCode,
+} from "@use-crux/core/signal/transport";
+import { ManagedStreamTerminalError } from "@use-crux/core/runtime";
 import { signalProvider } from "@use-crux/core/signal/provider";
 
 export const ordersSse = signalProvider({
@@ -228,6 +232,8 @@ export const ordersSse = signalProvider({
       });
 
       if (!response.ok) {
+        // Release an unused body when present; null bodies are a no-op.
+        await response.body?.cancel?.();
         const kind = classifySseHttpStatus(response.status);
         if (kind === "terminal") {
           throw new ManagedStreamTerminalError(

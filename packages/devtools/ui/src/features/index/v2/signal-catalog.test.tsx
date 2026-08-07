@@ -122,14 +122,14 @@ describe("signal catalog", () => {
           (definition) => definition.kind !== "signal.provider",
         ),
         {
-          id: "signal.provider:orders.sse",
+          id: "signal.provider:orders.live",
           kind: "signal.provider",
-          name: "orders.sse",
+          name: "orders.live",
           fidelity: "resolved",
           metadata: {
             facts: {
               kind: "signal.provider",
-              providerId: "orders.sse",
+              providerId: "orders.live",
               identity: "static",
               transportKind: "sse",
               signalIds: ["order.submitted"],
@@ -140,7 +140,7 @@ describe("signal catalog", () => {
       ],
     } as unknown as ProjectIndexData;
     const index = buildIndex(sseData);
-    const definition = index.byId("signal.provider:orders.sse")!;
+    const definition = index.byId("signal.provider:orders.live")!;
     const html = renderToStaticMarkup(
       <IndexIndexProvider index={index}>
         <IndexSelectProvider select={() => undefined}>
@@ -148,8 +148,9 @@ describe("signal catalog", () => {
         </IndexSelectProvider>
       </IndexIndexProvider>,
     );
-    expect(html).toContain("orders.sse");
-    expect(html).toContain("sse");
+    // Identifiers omit "sse" so the transport value assertion is not a false positive.
+    expect(html).toContain("orders.live");
+    expect(html).toMatch(/transport<\/span><span[^>]*>sse<\/span>/);
   });
 
   it("renders transport binding config-ref and Signal target lineage", () => {

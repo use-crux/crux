@@ -337,6 +337,8 @@ export const marketplaceSse = signalProvider({
       });
 
       if (!response.ok) {
+        // Release an unused body when present; null bodies are a no-op.
+        await response.body?.cancel?.();
         if (classifySseHttpStatus(response.status) === "terminal") {
           throw new ManagedStreamTerminalError(
             sseHttpStatusErrorCode(response.status),

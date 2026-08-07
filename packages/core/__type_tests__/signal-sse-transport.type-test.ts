@@ -123,17 +123,13 @@ if (isWebhookTransport(unknownTransport)) {
   unknownTransport.open;
 }
 
-// Runtime narrowing checks for isStreamTransport vs isManagedStreamTransport.
-declare function assertFalse(value: false): void;
-declare function assertTrue(value: true): void;
-
-if (isStreamTransport(sseOnly as SignalProviderTransport)) {
-  // Should not narrow SSE as StreamTransport at the type level for pure SSE values.
-  // Use isManagedStreamTransport / isSseTransport instead.
+// Runtime narrowing: pure SseTransport is never StreamTransport at the type level.
+// Use isManagedStreamTransport / isSseTransport for SSE selection.
+if (isStreamTransport(sseOnly)) {
+  const unreachable: never = sseOnly;
+  void unreachable;
 }
 
 // Keep streamOnly referenced so unused-locals do not fire in strict type tests.
 void streamOnly;
 void sseOnly;
-void assertFalse;
-void assertTrue;

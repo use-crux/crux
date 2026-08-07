@@ -279,9 +279,9 @@ poison the provider cursor; other accept failures retain fail-without-checkpoint
 semantics and no parallel dead-letter store is introduced. Competing
 supervisors coordinate through Runtime leases; worker stop aborts in-flight
 polls and releases binding leases. Project Index discovers `polling()` with static/native
-parity and rejects live `poll` fields on inert bindings. SSE, WebSocket, and
-generic stream adapters remain follow-on #340 children on the same lifecycle
-seam. Channel exclusive conversation ownership remains #302.
+parity and rejects live `poll` fields on inert bindings. Generic stream and managed
+SSE authoring ship below on the same lifecycle seam; WebSocket remains a follow-on
+thin adapter. Channel exclusive conversation ownership remains #302.
 
 Add managed stream transport supervision beside polling: author `stream({ open })`
 on `@use-crux/core/signal/transport`, accept it from `signalProvider`, and let the
@@ -290,11 +290,12 @@ checkpoint cursor law, config-ref invalidation, and durable faulted/disabled
 status on binding checkpoints. Memory and PostgreSQL implement lease-fenced
 checkpoint fields (`configRef`, `status`) with multi-worker exclusivity.
 Project Index discovers `stream()` with static/native parity and rejects live
-`open` on inert bindings. SSE and WebSocket remain follow-on thin adapters over
-this seam, not first-party helpers in this release. Stream envelope validation
-detaches immutable payload and routing snapshots; digest conflicts never advance
-stream cursors; checkpoint timestamps use a fresh clock at each write; and
-supervision faults after consecutive top-level rejected stream fibers with
+`open` on inert bindings. Managed SSE (`sse({ open })`) ships as a thin adapter
+over this seam below; WebSocket remains the follow-on thin adapter, not a
+first-party helper in this release. Stream envelope validation detaches immutable
+payload and routing snapshots; digest conflicts never advance stream cursors;
+checkpoint timestamps use a fresh clock at each write; and supervision faults
+after consecutive top-level rejected stream fibers with
 `TRANSPORT_STREAM_EXHAUSTED` without unhandled rejections.
 
 Add first-party managed SSE transport authoring as a thin adapter over the

@@ -21,7 +21,9 @@ export function authoredTransportKind(
   value: StaticSyntaxValue | undefined,
 ): "webhook" | "polling" | "stream" | "sse" | undefined {
   const call = resolved?.value.kind === "call" ? resolved.value : value;
-  if (call?.kind !== "call") return undefined;
+  if (call?.kind !== "call") {
+    return undefined;
+  }
   const name = call.callee.importedName ?? call.callee.name;
   if (
     name !== "webhook" &&
