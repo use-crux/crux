@@ -18,6 +18,7 @@ import type {
   RuntimeTransportEnvelopeIdentity,
   RuntimeTransportEnvelopeRecord,
 } from "../../transport/records";
+import type { RuntimeTransportBindingCheckpoint } from "../../transport/binding-checkpoint";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 import {
@@ -286,7 +287,48 @@ export function createMemoryTransportStore(
       );
       return result;
     },
+
+    async getBindingCheckpoint(identity) {
+      const record = data.transportBindingCheckpoints.get(
+        bindingCheckpointKey(identity.namespace, identity.bindingId),
+      );
+      return record ? cloneBindingCheckpoint(record) : null;
+    },
+
+    async putBindingCheckpoint(checkpoint) {
+      recordWrite?.();
+      data.transportBindingCheckpoints.set(
+        bindingCheckpointKey(checkpoint.namespace, checkpoint.bindingId),
+        cloneBindingCheckpoint(checkpoint),
+      );
+    },
   };
+}
+
+function bindingCheckpointKey(namespace: string, bindingId: string): string {
+  return scopedKey(namespace, bindingId);
+}
+
+function cloneBindingCheckpoint(
+  checkpoint: RuntimeTransportBindingCheckpoint,
+): RuntimeTransportBindingCheckpoint {
+  return Object.freeze({
+    schemaVersion: 1 as const,
+    namespace: checkpoint.namespace,
+    bindingId: checkpoint.bindingId,
+    cursor: checkpoint.cursor,
+    updatedAt: checkpoint.updatedAt,
+    ...(checkpoint.lastPolledAt !== undefined
+      ? { lastPolledAt: checkpoint.lastPolledAt }
+      : {}),
+    ...(checkpoint.lastOwnerId !== undefined
+      ? { lastOwnerId: checkpoint.lastOwnerId }
+      : {}),
+    ...(checkpoint.lastErrorCode !== undefined
+      ? { lastErrorCode: checkpoint.lastErrorCode }
+      : {}),
+    ...(checkpoint.morePending === true ? { morePending: true as const } : {}),
+  });
 }
 
 function isClaimable(

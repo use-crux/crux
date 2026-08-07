@@ -12,6 +12,10 @@ import type {
   RuntimeTransportEnvelopeRecord,
 } from "./records";
 import type { RuntimeAcceptedTransportEnvelope } from "./contracts";
+import type {
+  RuntimeTransportBindingCheckpoint,
+  RuntimeTransportBindingCheckpointIdentity,
+} from "./binding-checkpoint";
 
 /** Input for first acceptance of one authenticated envelope. */
 export interface AcceptRuntimeTransportEnvelopeInput {
@@ -137,4 +141,23 @@ export interface RuntimeTransportStorePort {
    * accepted/claimed work is never removed by retention.
    */
   prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>;
+  /**
+   * Load the durable cursor checkpoint for one supervised binding.
+   *
+   * @remarks Optional for webhook-only adapters that never supervise polling.
+   * Memory and PostgreSQL implement this for #340 polling supervision.
+   */
+  getBindingCheckpoint?(
+    identity: RuntimeTransportBindingCheckpointIdentity,
+  ): Promise<RuntimeTransportBindingCheckpoint | null>;
+  /**
+   * Persist the durable cursor checkpoint for one supervised binding.
+   *
+   * @remarks Call only after every event from the poll batch was durably
+   * accepted or treated as a same-digest duplicate. Never write credentials,
+   * clients, sockets, or raw payloads.
+   */
+  putBindingCheckpoint?(
+    checkpoint: RuntimeTransportBindingCheckpoint,
+  ): Promise<void>;
 }

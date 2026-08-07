@@ -19,6 +19,8 @@ export type {
   RuntimeManagedTransportBinding,
   RuntimeSignalTransportTarget,
   RuntimeTransportConfigRef,
+  RuntimeTransportBindingCheckpoint,
+  RuntimeTransportBindingCheckpointIdentity,
   RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeFailure,
   RuntimeTransportEnvelopeIdentity,
@@ -69,6 +71,7 @@ export {
   transportStatisticsOwner,
   emptyTransportEnvelopeStats,
   MAX_TRANSPORT_LINEAGE_ENTRIES,
+  MAX_TRANSPORT_BINDING_CURSOR_BYTES,
 } from "./transport";
 
 export { createRuntimeProgram } from "./program";
@@ -93,6 +96,15 @@ export type {
   RuntimeWorker,
   RuntimeWorkerStopOptions,
 } from "./worker/create-runtime-worker";
+export {
+  bindingLeaseResource,
+  createWorkerTransportSupervision,
+} from "./worker/worker-transport-supervision";
+export type {
+  CreateWorkerTransportSupervisionOptions,
+  TransportSupervisionRunResult,
+  TransportSupervisionRunner,
+} from "./worker/worker-transport-supervision";
 export type * from "./ports/maintenance-ownership";
 
 export type {
