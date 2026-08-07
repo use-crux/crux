@@ -156,10 +156,8 @@ describe('connected knowledge derive batching', () => {
       second: z.object({ value: z.string() }),
     }
     const invalid = {
-      assertions: [
-        { type: 'first', data: { value: 1 }, evidence: [chunkRef('c1')], provenance: 'derived' },
-        { type: 'second', data: { value: 2 }, evidence: [chunkRef('c1')], provenance: 'derived' },
-      ],
+      type_0: [{ data: { value: 1 }, evidence: [chunkRef('c1')], provenance: 'derived' }],
+      type_1: [{ data: { value: 2 }, evidence: [chunkRef('c1')], provenance: 'derived' }],
     }
     const model = fixedAssertionModel([invalid, invalid])
     const stage = assertions({ id: 'facts', version: 1, types, model })
@@ -176,8 +174,8 @@ describe('connected knowledge derive batching', () => {
     expect(error).toBeInstanceOf(ValidationExhaustedError)
     expect(error).toMatchObject({ attempts: 1, maxAttempts: 1, promptId: 'facts' })
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'assertions.[0].data.value', depth: 4, code: 'invalid_type' },
-      { path: 'assertions.[1].data.value', depth: 4, code: 'invalid_type' },
+      { path: 'type_0.data.value', depth: 3, code: 'invalid_type' },
+      { path: 'type_1.data.value', depth: 3, code: 'invalid_type' },
     ])
   })
 
@@ -326,8 +324,8 @@ function fixedAssertionModel(objects?: readonly unknown[], prompts: string[] = [
       prompts.push(prompt)
       return {
         object: objects?.[index++] ?? {
-          assertions: chunkIdsFromPrompt(prompt).map((chunkId) =>
-            ({ type: 'fact', data: { value: chunkId }, evidence: [chunkRef(chunkId)], provenance: 'derived' })),
+          type_0: chunkIdsFromPrompt(prompt).map((chunkId) =>
+            ({ data: { value: chunkId }, evidence: [chunkRef(chunkId)], provenance: 'derived' })),
         },
       }
     }),

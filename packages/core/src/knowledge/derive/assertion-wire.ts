@@ -150,7 +150,8 @@ function portableSchemaIssue(root: Record<string, unknown>): string | undefined 
       if (!isRecord(value.properties) || value.additionalProperties !== false) return 'unconstrained objects and records are unsupported'
       const keys = Object.keys(value.properties)
       if (keys.length === 0) return 'empty objects are unsupported'
-      if (!Array.isArray(value.required) || keys.some((key) => !value.required!.includes(key))) {
+      const required = value.required
+      if (!Array.isArray(required) || keys.some((key) => !required.includes(key))) {
         return 'optional object properties are unsupported'
       }
     }

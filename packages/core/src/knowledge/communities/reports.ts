@@ -25,7 +25,12 @@ import {
   ASSERTION_REPORT_PROMPT_VERSION,
   boundedAssertionReportData,
   projectAssertionCommunities,
+  type CommunityAssertionRelationInput,
 } from './assertion-policy'
+
+type PresentedAssertionRelation = CommunityAssertionRelationInput & {
+  readonly presentation: 'internal' | 'boundary'
+}
 
 export interface GenerateCommunityReportsInput {
   readonly model: KnowledgeModel
@@ -305,7 +310,7 @@ function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphIn
     relations: graph.assertionRelations ?? [],
     leafByChunk: new Map(),
   }).assertions.map((assertion) => assertion.assertionId))
-  const relations = (graph.assertionRelations ?? []).flatMap((relation) => {
+  const relations = (graph.assertionRelations ?? []).flatMap((relation): PresentedAssertionRelation[] => {
     if (!visible.has(relation.fromAssertionId) || !visible.has(relation.toAssertionId)) return []
     const fromHere = available.has(relation.fromAssertionId)
     const toHere = available.has(relation.toAssertionId)

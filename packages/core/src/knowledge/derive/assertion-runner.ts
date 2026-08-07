@@ -141,8 +141,10 @@ async function runGeneratedBatch(
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
   if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
 
-  const invalidSlots = [...new Set(first.errors.map((error) => error.slot))]
-    .filter((slot) => manifestSlot(first.manifest, slot))
+  const invalidSlots = first.errors.some((error) => error.slot === '<root>')
+    ? first.manifest.slots.map((entry) => entry.slot)
+    : [...new Set(first.errors.map((error) => error.slot))]
+        .filter((slot) => manifestSlot(first.manifest, slot))
   const repairedPrompt = renderBoundedRepairPrompt({
     stageId: input.stage.id,
     sourceId: input.document.sourceId,
