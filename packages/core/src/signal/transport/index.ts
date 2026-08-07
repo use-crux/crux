@@ -51,6 +51,12 @@ export type {
 
 export { lowerSseItem, lowerSseOpen } from "./sse-lower";
 
+export {
+  classifySseHttpStatus,
+  sseHttpStatusErrorCode,
+} from "./sse-http-status";
+export type { SseHttpStatusKind } from "./sse-http-status";
+
 /** Live transport definitions accepted by {@link import("../provider").signalProvider}. */
 export type SignalProviderTransport =
   | WebhookTransport
