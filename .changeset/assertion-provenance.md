@@ -9,3 +9,5 @@ Generated assertion stages now send a provider-portable structured-output envelo
 Generated assertion stages now compile authored kinds into stable grouped slots with a portable typed profile and slot-local JSON fallback. Decoding revalidates authored schemas, retains valid slots during repair, and reports precise local compatibility failures.
 
 Assertion wire schemas now use a strict portable allowlist, isolate unsupported schemas to JSON-string slots, and target repair attempts at only invalid slots.
+
+Closed required Zod objects, arrays, primitives, and enums now retain typed wire data and authored descriptions, while unconstrained or unsupported schemas continue to use slot-local JSON strings.

@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 
-export const ASSERTION_WIRE_COMPILER_VERSION = 2
+export const ASSERTION_WIRE_COMPILER_VERSION = 3
 
 const MAX_SCHEMA_DEPTH = 8
 const MAX_SCHEMA_NODES = 128
@@ -70,13 +70,28 @@ function compileSlot(type: string, schema: z.ZodType<unknown>, index: number): A
   } catch {
     return fallbackSlot(slot, type, schema, 'schema conversion failed')
   }
+  closePlainObjects(json)
   const fallbackReason = portableSchemaIssue(json)
   if (fallbackReason !== undefined) return fallbackSlot(slot, type, schema, fallbackReason, describeShape(json))
   try {
-    return { slot, type, mode: 'typed', schema, dataSchema: z.fromJSONSchema(json as never), expectedShape: describeShape(json) }
+    const dataSchema = z.fromJSONSchema(json as never)
+    return {
+      slot, type, mode: 'typed', schema,
+      dataSchema: schema.description ? dataSchema.describe(schema.description) : dataSchema,
+      expectedShape: describeShape(json),
+    }
   } catch {
     return fallbackSlot(slot, type, schema, 'schema reconstruction failed', describeShape(json))
   }
+}
+
+function closePlainObjects(value: unknown): void {
+  if (!isRecord(value)) return
+  if (value.type === 'object' && value.additionalProperties === undefined) value.additionalProperties = false
+  if (isRecord(value.properties)) {
+    for (const child of Object.values(value.properties)) closePlainObjects(child)
+  }
+  if (value.items !== undefined) closePlainObjects(value.items)
 }
 
 function authoredSchemaIssue(schema: z.ZodType<unknown>): string | undefined {

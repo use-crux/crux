@@ -14,7 +14,7 @@ describe("generated assertion wire schema", () => {
   it("allocates deterministic grouped slots with a closed portable schema", () => {
     const compiled = compileAssertionWire({
       zebra: z.object({ count: z.number().int(), state: z.enum(["open", "closed"]).describe("Lifecycle state") }).strict(),
-      alpha: z.object({ enabled: z.boolean() }).describe("Alpha guidance").strict(),
+      alpha: z.object({ enabled: z.boolean() }).strict().describe("Alpha guidance"),
     });
     const json = z.toJSONSchema(compiled.schema) as Record<string, unknown>;
 
@@ -53,17 +53,33 @@ describe("generated assertion wire schema", () => {
       transformed: z.string().transform((value) => value.trim()),
       formatted: z.string().email(),
       empty: z.object({}).strict(),
+      loose: z.object({ value: z.string() }).loose(),
+      optional: z.object({ value: z.string().optional() }),
+      union: z.union([z.string(), z.number()]),
       date: z.date(),
+      array: z.array(z.string()),
+      boolean: z.boolean(),
+      enum: z.enum(["open", "closed"]),
+      number: z.number(),
       portable: z.object({ value: z.string() }).strict(),
+      string: z.string(),
     });
 
     expect(compiled.manifest.slots.map(({ type, mode }) => ({ type, mode }))).toEqual([
       { type: "any", mode: "json-string" },
+      { type: "array", mode: "typed" },
+      { type: "boolean", mode: "typed" },
       { type: "date", mode: "json-string" },
       { type: "empty", mode: "json-string" },
+      { type: "enum", mode: "typed" },
       { type: "formatted", mode: "json-string" },
+      { type: "loose", mode: "json-string" },
+      { type: "number", mode: "typed" },
+      { type: "optional", mode: "json-string" },
       { type: "portable", mode: "typed" },
+      { type: "string", mode: "typed" },
       { type: "transformed", mode: "json-string" },
+      { type: "union", mode: "json-string" },
       { type: "unknown", mode: "json-string" },
     ]);
   });
