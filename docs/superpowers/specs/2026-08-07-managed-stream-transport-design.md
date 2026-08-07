@@ -385,6 +385,8 @@ Fibers are **not** a second worker process or daemon. They are tasks owned by th
 ### Transitions
 
 1. **Acquire lease** → if durable status non-active under current config, skip open (may still hold or not hold lease; prefer skip claim when faulted/disabled to allow another operator process — implementation: do not claim, or claim only to refresh diagnostic `lastOwnerId`? **Decision: do not claim** when durable status is non-active under current config, so operators/tools are not blocked by a stuck lease. Record skip in run counters.)
+
+   **Lease-safe ordering (implementation note):** `getBindingCheckpoint` is unfenced and the skip path performs no status/cursor write, so reading durable status and skipping open **before claim** is correct with the existing store. Writes (`faulted`, successful cursor+configRef checkpoints) remain lease-fenced after claim. Do not invent a second store or lease for the skip decision.
 2. **Open** with `{ cursor: effectiveCursor, signal: leaseBoundSignal, configRef }`.
 3. **Consume** one item at a time under pull backpressure.
 4. **Clean EOF** → enter `reconnect_wait` with attempt++ and `retryDelayMs`-style full jitter; then open again from durable cursor (not from process-local memory of uncheckpointed progress).

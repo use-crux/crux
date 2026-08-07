@@ -235,8 +235,14 @@ git diff --check
 
 ### Production
 
-- Effective cursor/status resolution helper used before open.
+- Effective cursor/status resolution helper used before open
+  (`resolveStreamCheckpoint`: configRef id+revision equality; over-invalidate
+  cursor + non-active status on mismatch).
 - Supervision skip path without claiming lease when non-active (per design).
+  **Ordering correction/clarification:** unfenced `getBindingCheckpoint` + no
+  write on skip means pre-claim skip is lease-safe with the existing store;
+  keep all status/cursor writes lease-fenced after claim. Do not add a second
+  store or lease.
 
 ### Validation
 

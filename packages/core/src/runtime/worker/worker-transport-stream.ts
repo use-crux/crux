@@ -20,9 +20,9 @@ import {
 import {
   loadBindingCheckpoint,
   runStreamConnection,
-  sameTransportConfigRef,
   writeStreamCheckpoint,
 } from "./worker-transport-stream-connection";
+import { resolveStreamCheckpoint } from "./worker-transport-stream-resolve";
 
 export type {
   RunStreamConnectionOptions,
@@ -30,6 +30,10 @@ export type {
   StreamConnectionOutcome,
 } from "./worker-transport-stream-connection";
 export { runStreamConnection } from "./worker-transport-stream-connection";
+export {
+  resolveStreamCheckpoint,
+  type ResolvedStreamCheckpoint,
+} from "./worker-transport-stream-resolve";
 
 /** Default base delay for stream reconnect full-jitter backoff. */
 export const DEFAULT_STREAM_BASE_BACKOFF_MS = 1_000;
@@ -162,33 +166,30 @@ export async function runManagedStream(
       options.namespace,
       options.binding.id,
     );
+    const resolved = resolveStreamCheckpoint(
+      checkpoint,
+      options.binding.configRef,
+    );
 
     // Durable faulted/disabled under the live config identity: do not open.
-    // Config mismatch over-invalidation is applied by resolve helpers (stage 5).
-    if (
-      checkpoint &&
-      (checkpoint.status === "faulted" || checkpoint.status === "disabled") &&
-      (checkpoint.configRef === undefined ||
-        sameTransportConfigRef(
-          checkpoint.configRef,
-          options.binding.configRef,
-        ))
-    ) {
+    // Checkpoint get is unfenced, so supervision may make this skip decision
+    // before claiming a binding lease (no write on the skip path).
+    if (resolved.skipOpen) {
       return {
         accepted,
         duplicated,
         checkpointed,
-        failed: checkpoint.status === "faulted",
+        failed: resolved.status === "faulted",
         leaseLost: false,
         outcome:
-          checkpoint.status === "faulted"
+          resolved.status === "faulted"
             ? lastErrorCode === TRANSPORT_STREAM_EXHAUSTED ||
-              checkpoint.lastErrorCode === TRANSPORT_STREAM_EXHAUSTED
+              checkpoint?.lastErrorCode === TRANSPORT_STREAM_EXHAUSTED
               ? "exhausted"
               : "terminal"
             : "skipped",
         lastErrorCode:
-          lastErrorCode ?? checkpoint.lastErrorCode ?? undefined,
+          lastErrorCode ?? checkpoint?.lastErrorCode ?? undefined,
         opens,
         reconnects,
       };
@@ -204,7 +205,8 @@ export async function runManagedStream(
       provider: options.provider,
       transport: options.transport,
       checkpoint,
-      cursor: checkpoint?.cursor ?? null,
+      // Effective cursor after config over-invalidation (may be null).
+      cursor: resolved.cursor,
       lease: options.lease,
       signal: options.signal,
       now,
