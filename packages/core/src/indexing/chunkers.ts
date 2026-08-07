@@ -15,6 +15,7 @@ import {
   coarseProvenance,
   mergeProvenance,
   provenanceForPart,
+  sourceSpanForPartSlice,
 } from './provenance'
 import { sourceFactsWithLocations } from './source-facts'
 import { embeddingBoundaries, normalizeBoundaries, sentenceSegments, splitDocumentSlices } from './text-split'
@@ -25,6 +26,8 @@ import type {
   CruxChunk,
   CruxDocument,
   CruxIngestPart,
+  CruxIngestPageTableBlock,
+  CruxIngestPageTextBlock,
   CruxParentChunk,
   ParentChildChunkerOptions,
   SemanticBoundary,
@@ -66,6 +69,10 @@ export function chunkDocumentStructured(
       chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
       continue
     }
+    if (part.kind === 'page' && part.blocks?.length) {
+      chunks.push(...chunkPageNarrative(document, part, normalized, chunks.length))
+      continue
+    }
 
     const rawChunks = splitDocumentSlices(part.content, normalized)
     rawChunks.forEach((slice) => {
@@ -81,6 +88,167 @@ export function chunkDocumentStructured(
   }
 
   return { chunks }
+}
+
+/** Flat part/split chunking used by strategies that do not interpret page blocks. */
+export function chunkDocumentFlat(
+  document: CruxDocument,
+  ctx: ChunkerContext,
+  options: ChunkingOptions = {},
+): ChunkingResult {
+  const normalized = normalizeChunkingOptions({
+    maxChars: options.maxChars ?? ctx.chunking.maxChars,
+    overlapChars: options.overlapChars ?? ctx.chunking.overlapChars,
+  })
+  const parts = document.parts?.length
+    ? document.parts
+    : [{ id: 'text:1', kind: 'text' as const, content: document.content ?? '' }]
+  const chunks: CruxChunk[] = []
+
+  for (const part of parts) {
+    if (part.kind === 'media') {
+      chunks.push(createMediaPartChunk(document, part, chunks.length))
+      continue
+    }
+    if (part.kind === 'table') {
+      chunks.push(...chunkTablePart(document, part, 25))
+      continue
+    }
+    if (part.kind === 'json' || part.kind === 'sheet') {
+      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
+      continue
+    }
+    for (const slice of splitDocumentSlices(part.content, normalized)) {
+      chunks.push(createPartChunk(
+        document,
+        slice.content,
+        chunks.length,
+        provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+      ))
+    }
+  }
+
+  return { chunks }
+}
+
+function chunkPageNarrative(
+  document: CruxDocument,
+  page: Extract<CruxIngestPart, { kind: 'page' }>,
+  options: Required<ChunkingOptions>,
+  ordinalOffset: number,
+): CruxChunk[] {
+  const chunks: CruxChunk[] = []
+  let headingPath: readonly string[] = []
+  let headingIds: string[] = []
+  let body: Array<{ block: CruxIngestPageTextBlock; content: string; range?: { start: number; end: number } }> = []
+
+  for (const block of page.blocks ?? []) {
+    if (block.kind === 'table') {
+      flushSection(false)
+      emitTable(block)
+      continue
+    }
+    if (block.role === 'heading' && block.headingPath?.length) {
+      flushSection(true)
+      const common = commonPrefixLength(headingPath, block.headingPath ?? [])
+      const ancestorCount = Math.min(common, block.headingPath.length - 1)
+      headingIds = [...headingIds.slice(0, ancestorCount), block.id]
+      headingPath = block.headingPath ?? []
+      continue
+    }
+    addBody(block)
+  }
+  flushSection(true)
+  return chunks
+
+  function addBody(block: CruxIngestPageTextBlock): void {
+    const blockPath = block.role === 'heading' && !block.headingPath?.length
+      ? headingPath
+      : block.headingPath ?? []
+    if (!arraysEqual(headingPath, blockPath)) {
+      flushSection(true)
+      const common = commonPrefixLength(headingPath, blockPath)
+      headingPath = blockPath
+      headingIds = headingIds.slice(0, common)
+    }
+    const hasExactRange = block.sourceRange !== undefined &&
+      page.content.slice(block.sourceRange.start, block.sourceRange.end) === block.content
+    const pieces = block.content.length > options.maxChars
+      ? splitDocumentSlices(block.content, options)
+      : [{ content: block.content, start: 0, end: block.content.length }]
+    for (const piece of pieces) {
+      const candidate = body.length
+        ? `${body.map((item) => item.content).join('\n\n')}\n\n${piece.content}`
+        : piece.content
+      if (body.length && candidate.length > options.maxChars) flushBody()
+      body.push({
+        block,
+        content: piece.content,
+        ...(hasExactRange && block.sourceRange ? {
+          range: { start: block.sourceRange.start + piece.start, end: block.sourceRange.start + piece.end },
+        } : {}),
+      })
+      if (piece.content.length >= options.maxChars) flushBody()
+    }
+  }
+
+  function flushSection(headingBoundary: boolean): void {
+    if (body.length) flushBody()
+    else if (headingBoundary && headingPath.length) emit(headingPrefix(headingPath).trimEnd(), [], true)
+  }
+
+  function flushBody(): void {
+    const items = body
+    body = []
+    const prefix = headingPrefix(headingPath)
+    emit(`${prefix}${items.map((item) => item.content).join('\n\n')}`, items, prefix.length > 0)
+  }
+
+  function emitTable(block: CruxIngestPageTableBlock): void {
+    const blockIds = [...new Set([...headingIds, block.id])]
+    chunks.push(createPartChunk(document, block.content, ordinalOffset + chunks.length, {
+      partIds: [page.id],
+      blockIds,
+      pages: [page.pageNumber],
+      tables: [block.id],
+      ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
+      confidence: 'derived',
+    }))
+  }
+
+  function emit(
+    content: string,
+    items: Array<{ block: CruxIngestPageTextBlock; content: string; range?: { start: number; end: number } }>,
+    derived: boolean,
+  ): void {
+    const blockIds = [...new Set([...headingIds, ...items.map((item) => item.block.id)])]
+    const exactItem = !derived && items.length === 1 ? items[0] : undefined
+    const rangeMatches = exactItem?.range !== undefined &&
+      page.content.slice(exactItem.range.start, exactItem.range.end) === content
+    const sourceSpans = rangeMatches && exactItem?.range
+      ? sourceSpanForPartSlice(document, page, exactItem.range)
+      : []
+    chunks.push(createPartChunk(document, content, ordinalOffset + chunks.length, {
+      partIds: [page.id],
+      ...(blockIds.length ? { blockIds } : {}),
+      pages: [page.pageNumber],
+      ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
+      ...(sourceSpans.length ? { sourceSpans } : {}),
+      confidence: sourceSpans.length ? 'exact' : 'derived',
+    }))
+  }
+}
+
+function headingPrefix(path: readonly string[]): string {
+  return path.length
+    ? `${path.map((heading, index) => `${'#'.repeat(index + 1)} ${heading}`).join('\n')}\n\n`
+    : ''
+}
+
+function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
+  let index = 0
+  while (index < left.length && left[index] === right[index]) index++
+  return index
 }
 
 function chunkTablePart(
@@ -165,7 +333,7 @@ export function chunkDocumentParentChild(
   document: CruxDocument,
   options: Required<ParentChildChunkerOptions>,
 ): ChunkingResult {
-  const structured = chunkDocumentStructured(
+  const structured = chunkDocumentFlat(
     document,
     { chunking: { maxChars: options.parentMaxChars, overlapChars: 0 } },
     { maxChars: options.parentMaxChars, overlapChars: 0 },
@@ -320,6 +488,6 @@ export async function chunkDocumentSemantic(
   return { chunks }
 }
 
-function arraysEqual(a: string[], b: string[]): boolean {
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index])
 }
