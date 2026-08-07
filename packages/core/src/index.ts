@@ -1002,7 +1002,7 @@ export type {
 } from "./citations";
 
 // Indexing
-export { corpus, indexer } from "./indexing";
+export { corpus, indexer, IngestedDocumentContractError, validateIngestedDocument } from "./indexing";
 export type {
   Corpus,
   CorpusConfig,
@@ -1012,6 +1012,12 @@ export type {
   CorpusSyncResult,
   CruxDocument,
   CruxChunk,
+  IngestedDocument,
+  DocumentBlock,
+  SourceCoordinate,
+  ParserIdentity,
+  ApplicationOperationProducer,
+  DocumentProducer,
   CruxIngestPageBlock,
   CruxIngestPageBlockSourceRange,
   CruxIngestPageTableBlock,

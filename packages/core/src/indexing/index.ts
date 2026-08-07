@@ -17,6 +17,29 @@ export type { SparseVector } from '../storage'
 export { transform, chunker, indexingPipeline } from './pipeline'
 export { indexer } from './define-indexer'
 export { corpus } from './define-corpus'
+export { IngestedDocumentContractError, validateIngestedDocument } from './ingested-document'
+export type {
+  ApplicationOperationProducer,
+  DocumentAsset,
+  DocumentBlock,
+  DocumentProducer,
+  DocumentSource,
+  IngestDiagnostic,
+  IngestedDocument,
+  IngestFormat,
+  Inline,
+  ListBlock,
+  ListItem,
+  PageBlock,
+  ParserIdentity,
+  Scalar,
+  SheetBlock,
+  SlideBlock,
+  SourceCoordinate,
+  TableBlock,
+  TableCell,
+  TextBlock,
+} from './ingested-document'
 
 export type {
   // Documents, chunks, and provenance
