@@ -144,7 +144,7 @@ describe('streaming structured release cursor', () => {
 
   it('applies a guarded sentinel only on its union branch (discriminator first)', async () => {
     const manifest: StructuredOutputDecodeManifest = {
-      version: 1,
+      version: 2,
       operations: [
         {
           kind: 'delete-null-sentinel',
