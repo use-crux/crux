@@ -10,7 +10,7 @@ import { stableHash } from '../../indexing/hash'
 import type { JsonObject, RecordEntry, RecordStore } from '../../storage'
 import { knowledgeCurrentKey, knowledgeGenerationPrefix } from '../keys'
 import { asKnowledgeEdgeRecord, asKnowledgeEntityRecord } from '../records'
-import type { KnowledgeAssertionRecord } from '../assertions/identity'
+import { isKnowledgeAssertionRecord } from '../assertions/identity'
 import { isAssertionRelationRecord } from '../assertions/relations'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { ViewRevisionMember } from '../view/revision'
@@ -61,10 +61,8 @@ export async function buildCommunityGraphInput(
   })
   const assertions = indexedEntries.flatMap((entry) => {
     const value = entry.value
-    return value._cruxRecordType === 'knowledge-assertion' && value.namespace === config.namespace &&
-      value.generationId === generationId && typeof value.assertionId === 'string' && typeof value.type === 'string' &&
-      Array.isArray(value.evidence)
-      ? [value as unknown as KnowledgeAssertionRecord]
+    return isKnowledgeAssertionRecord(value) && value.namespace === config.namespace && value.generationId === generationId
+      ? [value]
       : []
   }).map((assertion) => ({
     assertionId: assertion.assertionId,

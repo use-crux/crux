@@ -121,6 +121,33 @@ describe('knowledge community clustering', () => {
     expect(related.leaves.filter((leaf) => leaf.entityIds.length > 0).map((leaf) => leaf.entityIds)).toEqual([['alpha', 'bravo']])
   })
 
+  it('clusters mention-free assertion nodes, supports, and relations without collapsing them into entity edges', () => {
+    const chunks = ['alpha', 'bravo', 'charlie'].map((id, ordinal) =>
+      chunkInput('source', id, ordinal, id[0]?.repeat(9_000) ?? ''))
+    const input: CommunityGraphInput = {
+      namespace, entities: [], edges: [], chunks, mentionWeights: [], residualChunks: chunks,
+      assertions: [
+        assertion('assertion:alpha', ['source:alpha']),
+        assertion('assertion:charlie', ['source:charlie']),
+      ],
+      assertionRelations: [{
+        relationId: 'relation:linked', type: 'supports',
+        fromAssertionId: 'assertion:alpha', toAssertionId: 'assertion:charlie',
+      }],
+    }
+
+    const clustered = clusterKnowledgeCommunities(input)
+    const paired = clustered.leaves.find((leaf) => leaf.chunkRefs.length === 2)
+    expect(paired?.chunkRefs.map((ref) => ref.chunkId)).toEqual(['alpha', 'charlie'])
+    expect(paired?.primaryAssertionIds).toEqual(['assertion:alpha', 'assertion:charlie'])
+    expect(signature(clusterKnowledgeCommunities({
+      ...input,
+      chunks: [...input.chunks].reverse(),
+      residualChunks: [...input.residualChunks].reverse(),
+      assertions: [...(input.assertions ?? [])].reverse(),
+    }))).toEqual(signature(clustered))
+  })
+
   it('is deterministic across identical and permuted graph inputs', () => {
     const input = graph({
       entities: ['charlie', 'alpha', 'bravo'],
@@ -256,6 +283,29 @@ describe('knowledge community clustering', () => {
 
     expect(result.leaves.flatMap((leaf) => leaf.primaryAssertionIds)).toEqual(['assertion:both'])
     expect(result.communities.flatMap((community) => community.primaryAssertionIds)).not.toContain('assertion:outside')
+  })
+
+  it('ignores malformed persisted assertion records', async () => {
+    const { records } = inMemoryStorage()
+    await persistChunks(records, namespace, [cruxChunk('member', 'm1', 1, 'member evidence')])
+    await publish(records, namespace, 'gen-malformed', [], [])
+    const base = {
+      _cruxRecordType: 'knowledge-assertion', type: 'fact', data: { value: 'bad' },
+      evidence: [support('member', 'm1')], provenance: 'exact', stageId: 'facts', stageVersion: 1,
+      stageFingerprint: 'facts-v1', generationId: 'gen-malformed', namespace, createdAt: 1, updatedAt: 1,
+    }
+    const { data: _data, ...withoutData } = base
+    await records.put(knowledgeAssertionsItemKey(indexerId, namespace, 'facts', 'gen-malformed', 'bad-data'), {
+      ...withoutData, assertionId: 'bad-data',
+    } as never)
+    await records.put(knowledgeAssertionsItemKey(indexerId, namespace, 'facts', 'gen-malformed', 'bad-support'), {
+      ...base, assertionId: 'bad-support', evidence: [{ sourceId: 'member', chunkRef: { kind: 'entity', entityId: 'x' }, provenance: 'exact' }],
+    } as never)
+    await records.put(knowledgeAssertionsItemKey(indexerId, namespace, 'facts', 'gen-malformed', 'bad-metadata'), {
+      ...base, assertionId: 'bad-metadata', stageVersion: '1',
+    } as never)
+
+    await expect(buildCommunityGraphInput({ records, indexerId, namespace })).resolves.toMatchObject({ assertions: [] })
   })
 
   it('splits oversized components deterministically by strongest valid merge', () => {

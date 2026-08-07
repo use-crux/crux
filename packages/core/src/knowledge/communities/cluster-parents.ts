@@ -8,11 +8,13 @@ import { createStableId } from '../../indexing/hash'
 import { encodeKnowledgeRef } from '../refs'
 import { agglomerateWithinBudget, type AgglomerationLink } from './cluster-split'
 import type { CommunityDraft, CommunityEntityEdgeInput } from './types'
+import type { CommunityAssertionRelationInput } from './assertion-policy'
 
 /** Build bounded parent communities above entity leaves. */
 export function buildParentTree(input: {
   readonly leaves: readonly CommunityDraft[]
   readonly edges: readonly CommunityEntityEdgeInput[]
+  readonly assertionRelations?: readonly (CommunityAssertionRelationInput & { readonly weight: number })[]
   readonly communities: Map<string, CommunityDraft>
   readonly parentBudget: number
 }): readonly string[] {
@@ -21,7 +23,7 @@ export function buildParentTree(input: {
   while (current.length > 1) {
     const groups = agglomerateWithinBudget({
       memberIds: current,
-      links: parentLinks(current, input.communities, input.edges),
+      links: parentLinks(current, input.communities, input.edges, input.assertionRelations ?? []),
       budget: input.parentBudget,
       estimate: (ids) => ids.reduce((total, id) => total + parentInputSize(input.communities.get(id)), 0),
     })
@@ -95,6 +97,7 @@ function parentLinks(
   currentIds: readonly string[],
   communities: ReadonlyMap<string, CommunityDraft>,
   edges: readonly CommunityEntityEdgeInput[],
+  assertionRelations: readonly (CommunityAssertionRelationInput & { readonly weight: number })[],
 ): readonly AgglomerationLink[] {
   const communityByEntity = new Map<string, string>()
   for (const id of currentIds) {
@@ -108,6 +111,18 @@ function parentLinks(
     if (!leftId || !rightId || leftId === rightId) continue
     const key = pairKey(leftId, rightId)
     weights.set(key, (weights.get(key) ?? 0) + edge.weight)
+  }
+  const communityByAssertion = new Map<string, string>()
+  for (const id of currentIds) {
+    const community = communities.get(id)
+    for (const assertionId of community?.primaryAssertionIds ?? []) communityByAssertion.set(assertionId, id)
+  }
+  for (const relation of assertionRelations) {
+    const leftId = communityByAssertion.get(relation.fromAssertionId)
+    const rightId = communityByAssertion.get(relation.toAssertionId)
+    if (!leftId || !rightId || leftId === rightId) continue
+    const key = pairKey(leftId, rightId)
+    weights.set(key, (weights.get(key) ?? 0) + relation.weight)
   }
   return [...weights.entries()].flatMap(([key, weight]) => {
     const [leftId, rightId] = key.split('\0')

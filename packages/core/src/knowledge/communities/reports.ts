@@ -19,7 +19,7 @@ import {
   type CommunityReportLineage,
 } from './records'
 import { communityReportOutputSchema, type CommunityReportOutput } from './report-schema'
-import { ASSERTION_MEMBERSHIP_POLICY_VERSION, ASSERTION_REPORT_PROMPT_VERSION } from './assertion-policy'
+import { ASSERTION_MEMBERSHIP_POLICY_VERSION, ASSERTION_REPORT_PROMPT_VERSION, projectAssertionCommunities } from './assertion-policy'
 
 const MAX_BOUNDARY_RELATIONS = 20
 
@@ -283,11 +283,17 @@ function countsFor(community: KnowledgeCommunity) {
 function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphInput) {
   const assertionIds = [...new Set([...community.primaryAssertionIds, ...community.secondaryAssertionIds])].sort()
   const available = new Set(assertionIds)
-  const visible = new Set((graph.assertions ?? []).map((assertion) => assertion.assertionId))
   const assertions = (graph.assertions ?? []).filter((assertion) => available.has(assertion.assertionId))
     .map((assertion) => ({ ...assertion, evidence: [...assertion.evidence].sort((left, right) =>
       encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))) }))
     .sort((left, right) => left.assertionId.localeCompare(right.assertionId))
+  const visible = new Set(projectAssertionCommunities({
+    chunks: graph.chunks,
+    mentionWeights: graph.mentionWeights,
+    assertions: graph.assertions ?? [],
+    relations: graph.assertionRelations ?? [],
+    leafByChunk: new Map(),
+  }).assertions.map((assertion) => assertion.assertionId))
   const relations = (graph.assertionRelations ?? []).flatMap((relation) => {
     if (!visible.has(relation.fromAssertionId) || !visible.has(relation.toAssertionId)) return []
     const fromHere = available.has(relation.fromAssertionId)

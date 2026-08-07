@@ -46,6 +46,20 @@ describe('assertion-aware community reports', () => {
       .toContain('findings.[0].assertionRefs.[0].assertionId: custom')
   })
 
+  it('omits relations unless both assertion endpoints remain visible after support filtering', async () => {
+    const graph = assertionGraph()
+    const filtered = { ...graph, chunks: graph.chunks.slice(0, 1) }
+    const prompts: string[] = []
+    await generateCommunityReports({
+      model: reportModel(prompts), generationId: 'community-generation', graph: filtered,
+      clustering: clusterKnowledgeCommunities(filtered),
+      lineage: { viewRevision: 'filtered', graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+    })
+
+    expect(prompts.join('\n')).not.toContain('assertion:remote')
+    expect(prompts.join('\n')).not.toContain('relation:boundary')
+  })
+
   it('reuses identical normalized assertion projections across input permutations', async () => {
     const graph = assertionGraph()
     const clustering = clusterKnowledgeCommunities(graph)
