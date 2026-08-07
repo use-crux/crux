@@ -26,6 +26,7 @@ const OWNER_KINDS = [
   "composition",
   "work",
   "media",
+  "transport",
 ] as const;
 const WORK_STATES = ["queued", "running", "suspended", "blocked"] as const;
 const TOKEN_KEYS = [
@@ -224,6 +225,24 @@ function readFact(value: unknown, strict: boolean): StatisticsFact {
         outcome: readLiteral(
           fact.outcome,
           ["accepted", "deduplicated", "delivered", "resumed", "dropped"],
+          "fact.outcome",
+        ),
+      };
+    case "transport-envelope":
+      keys(fact, ["kind", "identity", "outcome"], [], strict);
+      return {
+        kind,
+        identity: readString(fact.identity, "fact.identity"),
+        outcome: readLiteral(
+          fact.outcome,
+          [
+            "accepted",
+            "deduplicated",
+            "normalized",
+            "delivered",
+            "retried",
+            "dead-lettered",
+          ],
           "fact.outcome",
         ),
       };

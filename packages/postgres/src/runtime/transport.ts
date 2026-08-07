@@ -9,6 +9,10 @@ import type {
   RuntimeTransportEnvelopeRecord,
   RuntimeTransportStorePort,
 } from '@use-crux/core/runtime'
+
+type StatisticsLedgerExport = NonNullable<
+  Awaited<ReturnType<RuntimeTransportStorePort['getStatistics']>>
+>
 import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
@@ -22,6 +26,7 @@ export function createPostgresTransportStore(
   faults: PostgresStoreFaults,
 ): RuntimeTransportStorePort {
   const envelopes = table(schema, 'transport_envelopes')
+  const statistics = table(schema, 'transport_statistics')
 
   return {
     async get(identity) {
@@ -134,8 +139,15 @@ export function createPostgresTransportStore(
       input: CompleteRuntimeTransportNormalizationInput,
     ) {
       const existing = await getIdentity(db, envelopes, input.identity)
-      if (!existing) return null
-      if (existing.state === 'normalized') return existing
+
+      if (!existing) {
+        return null
+      }
+
+      if (existing.state === 'normalized') {
+        return existing
+      }
+
       if (
         existing.state !== 'claimed' ||
         existing.leaseToken !== input.leaseToken
@@ -149,7 +161,8 @@ export function createPostgresTransportStore(
               updated_at = $5::timestamptz,
               next_attempt_at = $5::timestamptz,
               lease_token = NULL,
-              lease_expires_at = NULL
+              lease_expires_at = NULL,
+              lineage = $7::jsonb
           WHERE namespace = $1 AND provider = $2 AND account_id = $3 AND event_id = $4
             AND state = 'claimed' AND lease_token = $6
           RETURNING *`,
@@ -160,6 +173,7 @@ export function createPostgresTransportStore(
           input.identity.eventId,
           input.now.toISOString(),
           input.leaseToken,
+          encodeJson(input.lineage ?? []),
         ],
       )
       return result.rows[0] ? decodeRecord(result.rows[0]) : null
@@ -216,7 +230,8 @@ export function createPostgresTransportStore(
               updated_at = $5::timestamptz,
               next_attempt_at = $5::timestamptz,
               lease_token = NULL,
-              lease_expires_at = NULL
+              lease_expires_at = NULL,
+              lineage = NULL
           WHERE namespace = $1 AND provider = $2 AND account_id = $3 AND event_id = $4
             AND state = 'dead-letter'
           RETURNING *`,
@@ -229,6 +244,62 @@ export function createPostgresTransportStore(
         ],
       )
       return result.rows[0] ? decodeRecord(result.rows[0]) : null
+    },
+
+    async getStatistics(namespace: string) {
+      const result = await db.query<Record<string, unknown>>(
+        `SELECT statistics FROM ${statistics} WHERE namespace = $1`,
+        [namespace],
+      )
+      const value = result.rows[0]?.statistics
+      return value ? (value as StatisticsLedgerExport) : null
+    },
+
+    async putStatistics(namespace: string, value: StatisticsLedgerExport) {
+      recordWrite(faults)
+      await db.query(
+        `INSERT INTO ${statistics} (namespace, statistics, updated_at)
+         VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (namespace) DO UPDATE
+         SET statistics = EXCLUDED.statistics,
+             updated_at = EXCLUDED.updated_at`,
+        [namespace, encodeJson(value)],
+      )
+    },
+
+    async prune(options) {
+      recordWrite(faults)
+      const result = await db.query<{ removed: string }>(
+        `WITH doomed AS (
+           SELECT namespace, provider, account_id, event_id
+           FROM ${envelopes}
+           WHERE ($1::text IS NULL OR namespace = $1)
+             AND state IN ('normalized', 'dead-letter')
+             AND updated_at < $2::timestamptz
+           ORDER BY updated_at ASC
+           LIMIT $3
+         ),
+         deleted AS (
+           DELETE FROM ${envelopes} AS target
+           USING doomed
+           WHERE target.namespace = doomed.namespace
+             AND target.provider = doomed.provider
+             AND target.account_id = doomed.account_id
+             AND target.event_id = doomed.event_id
+           RETURNING 1
+         )
+         SELECT count(*)::text AS removed FROM deleted`,
+        [
+          options.namespace ?? null,
+          options.before.toISOString(),
+          options.limit,
+        ],
+      )
+      const removed = Number(result.rows[0]?.removed ?? 0)
+      return {
+        removed,
+        truncated: removed >= options.limit,
+      }
     },
   }
 }
@@ -251,6 +322,20 @@ function decodeRecord(row: Record<string, unknown>): RuntimeTransportEnvelopeRec
     | { message?: string; code?: string }
     | null
     | undefined
+  const lineage = Array.isArray(row.lineage)
+    ? (row.lineage as ReadonlyArray<{ signalId?: string; occurrenceId?: string }>)
+        .filter(
+          (entry) =>
+            typeof entry?.signalId === 'string' &&
+            typeof entry?.occurrenceId === 'string',
+        )
+        .map((entry) =>
+          Object.freeze({
+            signalId: entry.signalId as string,
+            occurrenceId: entry.occurrenceId as string,
+          }),
+        )
+    : undefined
   return Object.freeze({
     schemaVersion: 1 as const,
     namespace: String(row.namespace),
@@ -281,6 +366,9 @@ function decodeRecord(row: Record<string, unknown>): RuntimeTransportEnvelopeRec
               : {}),
           }),
         }
+      : {}),
+    ...(lineage && lineage.length > 0
+      ? { lineage: Object.freeze(lineage) }
       : {}),
   })
 }

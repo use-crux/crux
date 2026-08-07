@@ -13,8 +13,14 @@ import {
   TransportStoreMissingError,
 } from "./lifecycle-errors";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
-import { retryDelayMs } from "../engine/retry";
 import { scopeProviderSignalsForEnvelope } from "./publication-scope";
+import {
+  appendTransportFacts,
+  failNormalizationAttempt,
+  instrumentSignalsForLineage,
+  statsIdentity,
+  type NormalizeClaimedTransportEnvelopeResult,
+} from "./normalize-helpers";
 
 /** Options for claiming accepted envelopes for normalization. */
 export interface ClaimTransportEnvelopesOptions {
@@ -35,23 +41,7 @@ export interface NormalizeClaimedTransportEnvelopeOptions {
   readonly rng?: () => number;
 }
 
-/** Outcome of one claimed-envelope normalization attempt. */
-export type NormalizeClaimedTransportEnvelopeResult =
-  | {
-      readonly kind: "normalized";
-      readonly record: RuntimeTransportEnvelopeRecord;
-    }
-  | {
-      readonly kind: "retried";
-      readonly record: RuntimeTransportEnvelopeRecord;
-    }
-  | {
-      readonly kind: "dead-lettered";
-      readonly record: RuntimeTransportEnvelopeRecord;
-    }
-  | {
-      readonly kind: "lost-lease";
-    };
+export type { NormalizeClaimedTransportEnvelopeResult };
 
 /** Options for explicit operator replay of a dead-lettered envelope. */
 export interface ReplayTransportEnvelopeOptions {
@@ -73,8 +63,12 @@ export async function claimTransportEnvelopes(
   const leaseToken =
     options.leaseToken ??
     `transport-lease:${now.toISOString()}:${Math.random().toString(36).slice(2)}`;
+
   return options.store.transact(async (tx) => {
-    if (!tx.transports) throw new TransportStoreMissingError();
+    if (!tx.transports) {
+      throw new TransportStoreMissingError();
+    }
+
     return tx.transports.claim({
       namespace: options.namespace,
       now,
@@ -88,11 +82,9 @@ export async function claimTransportEnvelopes(
 /**
  * Run provider `onEvent` for one claimed envelope and settle its lifecycle.
  *
- * @remarks Successful publication marks the envelope `normalized` idempotently.
- * Failures schedule bounded retry or transition to `dead-letter`. Provider
- * `signals` are scoped so omitted publish idempotency keys default to the
- * accepted provider/account/event identity; crash recovery after publication
- * but before envelope completion cannot create a second logical delivery.
+ * @remarks Successful publication marks the envelope `normalized` and records
+ * Signal occurrence lineage. Failures schedule bounded retry or dead-letter.
+ * Statistics update in the same store transaction as the lifecycle transition.
  */
 export async function normalizeClaimedTransportEnvelope(
   options: NormalizeClaimedTransportEnvelopeOptions,
@@ -105,56 +97,84 @@ export async function normalizeClaimedTransportEnvelope(
     eventId: options.record.eventId,
   };
   const leaseToken = options.record.leaseToken;
+
   if (!leaseToken) {
     return { kind: "lost-lease" };
   }
 
+  const lineage: Array<{ signalId: string; occurrenceId: string }> = [];
+
   try {
+    const scoped = scopeProviderSignalsForEnvelope(
+      options.provider.signals,
+      options.record.envelope,
+    );
+    const instrumented = instrumentSignalsForLineage(scoped, lineage);
+
     await options.provider.onEvent(options.record.envelope, {
-      signals: scopeProviderSignalsForEnvelope(
-        options.provider.signals,
-        options.record.envelope,
-      ),
+      signals: instrumented,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Transport normalization failed.";
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? String((error as { code: unknown }).code)
-        : undefined;
-    const delayMs = retryDelayMs({
-      attempt: options.record.attempts,
+    return failNormalizationAttempt({
+      store: options.store,
+      identity,
+      leaseToken,
+      now,
+      record: options.record,
+      error,
       rng: options.rng,
-    });
-    const nextAttemptAt = new Date(now.getTime() + delayMs);
-    const failed = await options.store.transact(async (tx) => {
-      if (!tx.transports) throw new TransportStoreMissingError();
-      return tx.transports.failNormalization({
-        identity,
-        leaseToken,
-        now,
-        nextAttemptAt,
-        message,
-        code,
-      });
-    });
-    if (!failed) return { kind: "lost-lease" };
-    return Object.freeze({
-      kind: failed.state === "dead-letter" ? "dead-lettered" : "retried",
-      record: failed,
     });
   }
 
   const completed = await options.store.transact(async (tx) => {
-    if (!tx.transports) throw new TransportStoreMissingError();
-    return tx.transports.completeNormalization({
+    if (!tx.transports) {
+      throw new TransportStoreMissingError();
+    }
+
+    const record = await tx.transports.completeNormalization({
       identity,
       leaseToken,
       now,
+      lineage,
     });
+
+    if (!record) {
+      return null;
+    }
+
+    // Credit stats only when this claim completed the transition. Idempotent
+    // re-complete of an already-normalized row must not double-count.
+    const transitioned =
+      record.state === "normalized" &&
+      options.record.state === "claimed" &&
+      record.updatedAt === now.toISOString();
+
+    if (transitioned) {
+      await appendTransportFacts(tx.transports, options.record, now, [
+        {
+          kind: "transport-envelope",
+          identity: statsIdentity(options.record),
+          outcome: "normalized",
+        },
+        ...(lineage.length > 0
+          ? [
+              {
+                kind: "transport-envelope" as const,
+                identity: statsIdentity(options.record),
+                outcome: "delivered" as const,
+              },
+            ]
+          : []),
+      ]);
+    }
+
+    return record;
   });
-  if (!completed) return { kind: "lost-lease" };
+
+  if (!completed) {
+    return { kind: "lost-lease" };
+  }
+
   return Object.freeze({ kind: "normalized", record: completed });
 }
 
@@ -173,9 +193,14 @@ export async function replayTransportEnvelope(
     accountId: options.accountId,
     eventId: options.eventId,
   };
+
   const record = await options.store.transact(async (tx) => {
-    if (!tx.transports) throw new TransportStoreMissingError();
+    if (!tx.transports) {
+      throw new TransportStoreMissingError();
+    }
+
     const existing = await tx.transports.get(identity);
+
     if (!existing) {
       throw new TransportEnvelopeNotFoundError(
         identity.provider,
@@ -183,6 +208,7 @@ export async function replayTransportEnvelope(
         identity.eventId,
       );
     }
+
     if (existing.state !== "dead-letter") {
       throw new TransportEnvelopeNotReplayableError(
         identity.provider,
@@ -191,8 +217,10 @@ export async function replayTransportEnvelope(
         existing.state,
       );
     }
+
     return tx.transports.replay({ identity, now });
   });
+
   if (!record) {
     throw new TransportEnvelopeNotFoundError(
       identity.provider,
@@ -200,6 +228,7 @@ export async function replayTransportEnvelope(
       identity.eventId,
     );
   }
+
   return record;
 }
 

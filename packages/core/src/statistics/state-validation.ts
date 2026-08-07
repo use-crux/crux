@@ -7,7 +7,9 @@ import type {
 import { decodeRecordFingerprint, readOwner } from "./record";
 import {
   emptySessionInputOutcome,
+  emptyTransportEnvelopeOutcome,
   type MutableSessionInputOutcome,
+  type MutableTransportEnvelopeOutcome,
 } from "./internal";
 import {
   readApprovals,
@@ -17,6 +19,7 @@ import {
   readModelCalls,
   readSessionInputOutcome,
   readTool,
+  readTransportEnvelopeOutcome,
   readUsage,
   readWork,
   USAGE_KEYS,
@@ -74,6 +77,9 @@ export function decodeState(value: unknown): OwnerState {
       "inputs",
       "inputsByIdentity",
       "otherInputs",
+      "transport",
+      "transportByIdentity",
+      "otherTransport",
     ],
     "state",
   );
@@ -131,11 +137,36 @@ export function decodeState(value: unknown): OwnerState {
     state.otherInputs === undefined
       ? undefined
       : readSessionInputOutcome(state.otherInputs, "state.otherInputs");
+  const transport =
+    state.transport === undefined
+      ? emptyTransportEnvelopeOutcome()
+      : readTransportEnvelopeOutcome(state.transport, "state.transport");
+  const transportByIdentity =
+    state.transportByIdentity === undefined
+      ? new Map<string, MutableTransportEnvelopeOutcome>()
+      : readMap(
+          state.transportByIdentity,
+          "state.transportByIdentity",
+          readTransportEnvelopeOutcome,
+        );
+  const otherTransport =
+    state.otherTransport === undefined
+      ? undefined
+      : readTransportEnvelopeOutcome(
+          state.otherTransport,
+          "state.otherTransport",
+        );
 
   validateOverflow(models, otherModels, hasUsage, "models");
   validateOverflow(toolsByName, otherTools, hasCounts, "tools");
   validateOverflow(workByTarget, otherWork, hasWork, "work");
   validateOverflow(inputsByIdentity, otherInputs, hasSessionInput, "inputs");
+  validateOverflow(
+    transportByIdentity,
+    otherTransport,
+    hasTransportEnvelope,
+    "transport",
+  );
   if (!equalUsage(usage, sumUsage(models.values(), otherModels))) {
     invalid("usage totals");
   }
@@ -159,6 +190,14 @@ export function decodeState(value: unknown): OwnerState {
     )
   ) {
     invalid("Session input totals");
+  }
+  if (
+    !sameRecord(
+      transport,
+      sumTransportEnvelopes(transportByIdentity.values(), otherTransport),
+    )
+  ) {
+    invalid("Transport envelope totals");
   }
 
   return {
@@ -189,6 +228,9 @@ export function decodeState(value: unknown): OwnerState {
     inputs,
     inputsByIdentity,
     ...(otherInputs ? { otherInputs } : {}),
+    transport,
+    transportByIdentity,
+    ...(otherTransport ? { otherTransport } : {}),
   };
 }
 
@@ -220,6 +262,10 @@ function hasSessionInput(value: MutableSessionInputOutcome): boolean {
   return Object.values(value).some((count) => count > 0);
 }
 
+function hasTransportEnvelope(value: MutableTransportEnvelopeOutcome): boolean {
+  return Object.values(value).some((count) => count > 0);
+}
+
 function sumSessionInputs(
   values: Iterable<MutableSessionInputOutcome>,
   overflow?: MutableSessionInputOutcome,
@@ -233,6 +279,23 @@ function sumSessionInputs(
     delivered: total("delivered"),
     resumed: total("resumed"),
     dropped: total("dropped"),
+  };
+}
+
+function sumTransportEnvelopes(
+  values: Iterable<MutableTransportEnvelopeOutcome>,
+  overflow?: MutableTransportEnvelopeOutcome,
+): MutableTransportEnvelopeOutcome {
+  const all = overflow ? [...values, overflow] : [...values];
+  const total = (key: keyof MutableTransportEnvelopeOutcome) =>
+    all.reduce((sum, value) => sum + value[key], 0);
+  return {
+    accepted: total("accepted"),
+    deduplicated: total("deduplicated"),
+    normalized: total("normalized"),
+    delivered: total("delivered"),
+    retried: total("retried"),
+    deadLettered: total("deadLettered"),
   };
 }
 

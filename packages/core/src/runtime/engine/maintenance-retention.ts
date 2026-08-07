@@ -73,6 +73,13 @@ export async function pruneRetainedRecords(
           ),
         )
       : { removed: 0, truncated: false },
+    deps.store.transports
+      ? pruneIfEnabled(retention.transportEnvelopes, options.now, (before) =>
+          deps.store.transact(async (tx) =>
+            tx.transports!.prune({ namespace, before, limit }),
+          ),
+        )
+      : { removed: 0, truncated: false },
   ]);
 
   return results.reduce(

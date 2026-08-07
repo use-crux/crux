@@ -22,10 +22,25 @@ export interface RuntimeTransportEnvelopeFailure {
 }
 
 /**
+ * Signal publication linked from one accepted transport envelope.
+ *
+ * @remarks Uses existing Signal occurrence identities. Never stores payloads.
+ */
+export interface RuntimeTransportDeliveryLineageEntry {
+  /** Published Signal definition identity. */
+  readonly signalId: string;
+  /** Canonical occurrence identity returned by Signal publish. */
+  readonly occurrenceId: string;
+}
+
+/**
  * Durable store record for one provider event identity.
  *
  * @remarks Identity is `(namespace, provider, accountId, eventId)`. The
  * envelope digest detects conflicting authenticated payloads for that identity.
+ * `lineage` records Signal occurrences published during normalization so
+ * observability can join envelope → occurrence → Work/Session/Flow without a
+ * parallel execution registry.
  */
 export interface RuntimeTransportEnvelopeRecord {
   /** Record schema version. */
@@ -62,6 +77,13 @@ export interface RuntimeTransportEnvelopeRecord {
   readonly leaseExpiresAt?: string;
   /** Latest safe failure diagnostic. */
   readonly lastFailure?: RuntimeTransportEnvelopeFailure;
+  /**
+   * Signal publications produced by the latest successful normalization.
+   *
+   * @remarks Bounded to the publications from one `onEvent` pass. Empty when
+   * normalization has not completed or published nothing.
+   */
+  readonly lineage?: readonly RuntimeTransportDeliveryLineageEntry[];
 }
 
 /** Identity used for idempotent acceptance lookup. */
