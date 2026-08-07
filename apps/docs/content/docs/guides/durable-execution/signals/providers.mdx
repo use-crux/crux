@@ -1,12 +1,22 @@
 ---
 title: Signal providers
-description: Accept authenticated provider webhooks, acknowledge only after durable acceptance, and fan out through ordinary Signals.
+description: Accept authenticated provider webhooks or poll provider pages, acknowledge only after durable acceptance, and fan out through ordinary Signals.
 ---
 
-A Signal provider turns an external webhook into the ordinary Signal path your
-application already understands. Use one when a third-party system must push
-events into Crux, you need accept-before-ack durability, and retries must not
-create a second logical delivery for the same provider event ID.
+A Signal provider turns an external webhook or polled provider page into the
+ordinary Signal path your application already understands. Use one when a
+third-party system must push or expose events into Crux, you need
+accept-before-ack durability, and retries must not create a second logical
+delivery for the same provider event ID.
+
+## Transport status
+
+| Transport | Status |
+| --- | --- |
+| `webhook()` | Existing production path (#337 edge accept + worker normalize) |
+| `polling()` | This slice: one Runtime worker leases, polls, accepts, checkpoints |
+| SSE / WebSocket / generic async stream | Not implemented; follow-on [#340](https://github.com/use-crux/crux/issues/340) children |
+| Channel exclusive conversation ownership | Not on this path; remains [#302](https://github.com/use-crux/crux/issues/302) |
 
 ## Why providers exist
 
@@ -95,9 +105,54 @@ Do not use it when:
 
 - one conversation owner must exclusively claim the event — that is Channel
   work under related RFC tracks, not this Signal path;
-- you need polling, SSE, or WebSocket supervision — that remains issue
-  [#340](https://github.com/use-crux/crux/issues/340) and is not part of this
-  closeout.
+- you need SSE or WebSocket stream adapters — those remain follow-on
+  [#340](https://github.com/use-crux/crux/issues/340) children on the same
+  supervision seam.
+
+## Minimal polling path
+
+```ts
+import { polling } from "@use-crux/core/signal/transport";
+
+export const ordersPoll = signalProvider({
+  id: "orders.poll",
+  transport: polling({
+    intervalMs: 5_000,
+    async poll({ cursor, signal }) {
+      const page = await fetchProviderPage(cursor, signal);
+      return {
+        events: page.events.map((event) => ({
+          accountId: event.accountId,
+          eventId: event.eventId,
+          authenticatedRouting: { source: "polling" },
+          payload: encodeInlinePayload(event.body),
+        })),
+        nextCursor: page.cursor,
+      };
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+```
+
+The single Runtime worker leases the binding, polls, durably accepts each event,
+and writes `nextCursor` only after the full batch is accepted. Restart resumes
+from the durable checkpoint. No second transport daemon is required.
+
+### Polling cursor, more, errors, and shutdown
+
+| Concern | Behavior |
+| --- | --- |
+| Cursor | Opaque `nextCursor` is written only after every event in the poll batch is durably accepted or a same-digest duplicate. Failure or abort leaves the previous cursor so restart redelivers without loss; #337 event IDs dedupe redelivery. |
+| `more` | Optional `PollResult.more: true` means more pages are available immediately. After a successful batch, the next worker tick may skip `intervalMs` once. |
+| Interval / backoff | Optional `intervalMs` is a minimum between poll starts when `more` is not pending. Poll failures store a safe `lastErrorCode` and do not advance the cursor. There is no automatic exponential backoff beyond `intervalMs` and the worker cadence. |
+| Shutdown / restart | Worker stop aborts in-flight `poll` via `AbortSignal`, releases binding leases, and preserves the last durable checkpoint. A replacement worker resumes from that cursor. |
+| Deployment | Declare providers + inert bindings on `createRuntimeProgram({ providers, transports })`, run `createRuntimeWorker({ runtime, program })` against Memory or PostgreSQL Runtime storage that implements the transports port (including binding checkpoints). Live `poll` / `onEvent` stay in process code; they never enter generated program JSON. |
 
 ## Guarantees
 

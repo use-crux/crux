@@ -258,8 +258,21 @@ terminal envelope retention through existing Runtime maintenance
 and lineage with the transport port; PostgreSQL serializes namespace statistics
 updates and reports prune `truncated` only when eligible rows remain. Document
 the webhook path with a progressive provider guide, operator recipes, exact
-providers/transports reference, and ARCHITECTURE internals. Polling, SSE, and
-WebSocket supervision remain issue #340.
+providers/transports reference, and ARCHITECTURE internals.
+
+Add the first managed-transport supervision vertical for polling: `polling()`
+authoring beside `webhook()`, `signalProvider` transport union, durable binding
+cursor checkpoints on the transport store (Memory + PostgreSQL), and single
+Runtime worker acquisition that leases each polling binding, polls once per
+tick, accepts events through the existing envelope kernel, and checkpoints
+`nextCursor` only after the full batch is durably accepted. Optional
+`PollResult.more` skips `intervalMs` once after acceptance; poll failures keep
+the previous cursor and a safe `lastErrorCode`. Competing supervisors
+coordinate through Runtime leases; worker stop aborts in-flight polls and
+releases binding leases. Project Index discovers `polling()` with static/native
+parity and rejects live `poll` fields on inert bindings. SSE, WebSocket, and
+generic stream adapters remain follow-on #340 children on the same lifecycle
+seam. Channel exclusive conversation ownership remains #302.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
