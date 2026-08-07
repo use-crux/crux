@@ -225,8 +225,26 @@ rejects live `open` on inert bindings. Devtools Catalog surfaces transport kind
 through the existing generic provider projection; live reconnect phase is
 process-local and not a separate Devtools bus in this slice.
 
-Optional post-accept notification/ack is reserved for later protocol adapters
-and is not required API.
+### Post-accept acknowledgement seam (smallest exact)
+
+Optional process-local `acknowledge?: () => void | Promise<void>` may appear on
+a `StreamEnvelopeItem` (and on WebSocket authoring items that lower onto it).
+
+**Why this shape:** the item is still process-local when the fiber pulls it, so
+a per-item closure needs no ack-token map or transport-level callback registry.
+Receive-only streams and SSE simply omit the field. The function never enters
+inert bindings, checkpoints, or program JSON.
+
+**When Runtime invokes it:** only after durable #337 accept **or** same-digest
+duplicate, and when the item carries a `cursor`, only after that cursor is
+successfully checkpointed (or checkpoint is skipped because the store port is
+absent). Never before accept.
+
+**Ack failure law:** acceptance and cursor remain durable; Runtime writes a
+safe `lastErrorCode` (`TRANSPORT_ACK_FAILED` or a safe provider code) on an
+**active** checkpoint and treats the connection as **transient** so reconnect
+resumes from the durable cursor. #337 dedupe keeps redelivery safe. Ack failure
+must not pretend acceptance failed and must not clear the cursor.
 
 ### Managed SSE supervision (thin lowerer)
 
@@ -236,9 +254,9 @@ HTTP client:
 
 1. Authoring freezes `_tag: "SseTransport"`, `kind: "sse"`, with SSE-shaped
    `open` yielding `SseItem`s that use `lastEventId` instead of `cursor`.
-2. Worker supervision recognizes managed-stream transports (`stream` **or**
-   `sse`). For SSE it wraps `open` with pure `lowerSseOpen` so the existing
-   stream fiber still receives `StreamItem`s.
+2. Worker supervision recognizes managed-stream transports (`stream`, `sse`,
+   or `websocket`). For SSE it wraps `open` with pure `lowerSseOpen` so the
+   existing stream fiber still receives `StreamItem`s.
 3. Durable checkpoints, lease fencing, accept-before-cursor, EOF reconnect,
    transient backoff, terminal fault, abort, and config invalidation are
    unchanged stream laws.
@@ -253,14 +271,30 @@ Project Index discovers `sse()` with `transportKind: "sse"` and `hasOpen`. Live
 `open` on inert bindings remains `signal.transportBinding.live_value`. Catalog
 renders the generic transport kind; no SSE-specific stats/read model is added.
 
-WebSocket remains a follow-on thin adapter over `stream({ open })`.
+### Managed WebSocket supervision (thin lowerer)
+
+`websocket({ open })` is the same thin-adapter pattern for provider-ingress
+WebSocket:
+
+1. Authoring freezes `_tag: "WebSocketTransport"`, `kind: "websocket"`.
+2. Supervision lowers with `lowerWebSocketOpen` onto the existing stream fiber
+   (no second reconnect loop). Optional `acknowledge` is preserved through
+   validation for the post-accept seam above.
+3. Adapters own connect/subscribe/ping-pong/close cleanup and honor `signal`.
+4. Push sockets must use a **bounded** buffer (`createBoundedPushBuffer`);
+   overflow fails the connection (transient reconnect from durable cursor) and
+   never silently drops messages.
+5. Pure `classifyWebSocketCloseCode` / `webSocketCloseErrorCode` map close
+   codes without Core owning socket APIs.
+
+Project Index discovers `websocket()` with `transportKind: "websocket"` and
+`hasOpen`. Live `open` on inert bindings remains rejected.
 
 ## Deliberate limits
 
 This slice owns no historical replay for later local subscribers, consumer
-completion acknowledgment, or cross-process callback bus. Webhook edge
-acceptance remains the host-driven path from #337. Polling, managed stream, and
-managed SSE share the #340 lifecycle seam on one worker. WebSocket authoring
-helpers remain a follow-on child that must compile to `stream({ open })` and must
-not invent a second worker or Channel claim policy. Channel exclusive
-conversation ownership remains #302.
+completion acknowledgment outside the optional post-accept seam, or
+cross-process callback bus. Webhook edge acceptance remains the host-driven path
+from #337. Polling, managed stream, managed SSE, and managed WebSocket share the
+#340 lifecycle seam on one worker. Channel exclusive conversation ownership
+remains #302.
