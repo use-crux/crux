@@ -35,6 +35,7 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   vi.doUnmock('@firecrawl/pdf-inspector')
+  vi.doUnmock('pdfjs-dist/legacy/build/pdf.mjs')
   resetHooks()
   while (tempDirs.length > 0) {
     const path = tempDirs.pop()!
@@ -487,9 +488,29 @@ describe('@use-crux/ingest structured sources', () => {
     expect(allBlocks).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'text', role: 'heading', content: '# Firecrawl API Documentation', headingPath: ['Firecrawl API Documentation'] }),
       expect.objectContaining({ kind: 'text', role: 'paragraph' }),
-      expect.objectContaining({ kind: 'text', role: 'list' }),
       expect.objectContaining({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) }),
     ]))
+    expect(allBlocks.every((block) => block.content.trim().length > 0)).toBe(true)
+    expect(allBlocks.some((block) => (block.headingPath?.length ?? 0) >= 2)).toBe(true)
+    expect(allBlocks.some((block) => {
+      if (block.kind !== 'text' || block.role !== 'heading') return false
+      const depth = /^(#+)\s/.exec(block.content)?.[1]?.length
+      return depth !== undefined && depth > (block.headingPath?.length ?? 0)
+    })).toBe(true)
+    const table = allBlocks.find((block) => block.kind === 'table')
+    expect(table).toMatchObject({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) })
+    if (!table || table.kind !== 'table') throw new Error('expected a table block')
+    expect(table.columns).toEqual(['Parameter', 'Type', 'Default', 'Description'])
+    expect(table.rows[0]).toEqual(['url', 'string', 'required', 'The URL to scrape'])
+    expect([...(table.columns ?? []), ...table.rows.flat()].every((cell) => typeof cell === 'string')).toBe(true)
+    const exactBlocks = allBlocks.filter((block) => block.sourceRange !== undefined)
+    expect(exactBlocks.length).toBeGreaterThan(0)
+    for (const block of exactBlocks) {
+      const page = document.parts.find((part) => part.kind === 'page' && block.id.startsWith(`${part.id}/block:`))
+      if (!page || page.kind !== 'page' || !block.sourceRange) throw new Error('expected ranged block page')
+      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
+      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
+    }
     for (const block of first.blocks ?? []) {
       if (block.sourceRange) {
         expect(first.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
@@ -500,6 +521,61 @@ describe('@use-crux/ingest structured sources', () => {
     })
     expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
     expect(document.warnings).toBeUndefined()
+  })
+
+  it('exposes every text block role, compact decoded paths, and only provable ranges through fileSource', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'markdown-blocks.pdf')
+    await writeFile(path, makePdf('placeholder'))
+    const markdown = [
+      '# Root *visible*',
+      '',
+      'Opening paragraph.',
+      '',
+      '### Deep [link](https://example.com)',
+      '',
+      '- first item',
+      '- second item',
+      '',
+      '```ts',
+      'const answer = 42',
+      '```',
+      '',
+      '# []()',
+      '',
+      '| Name | Value |',
+      '| --- | --- |',
+      '| alpha | one |',
+    ].join('\n')
+    vi.doMock('@firecrawl/pdf-inspector', () => ({
+      extractPagesMarkdown: () => ({ pages: [{ page: 0, markdown, needsOcr: false }] }),
+    }))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const page = document.parts[0]
+    if (!page || page.kind !== 'page' || !page.blocks) throw new Error('expected blocked page')
+
+    expect(page.content).toBe(markdown)
+    expect(page.blocks.map((block) => block.id)).toEqual(page.blocks.map((_, index) => `pdf:page:1/block:${index}`))
+    expect(page.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Root *visible*', headingPath: ['Root visible'] }),
+      expect.objectContaining({ kind: 'text', role: 'paragraph', content: 'Opening paragraph.', headingPath: ['Root visible'] }),
+      expect.objectContaining({ kind: 'text', role: 'heading', content: '### Deep [link](https://example.com)', headingPath: ['Root visible', 'Deep link'] }),
+      expect.objectContaining({ kind: 'text', role: 'list', content: 'first item\nsecond item', headingPath: ['Root visible', 'Deep link'] }),
+      expect.objectContaining({ kind: 'text', role: 'code', content: '```ts\nconst answer = 42\n```', headingPath: ['Root visible', 'Deep link'] }),
+      expect.objectContaining({ kind: 'text', role: 'other', content: '# []()', headingPath: ['Root visible', 'Deep link'] }),
+      expect.objectContaining({ kind: 'table', columns: ['Name', 'Value'], rows: [['alpha', 'one']], headingPath: ['Root visible', 'Deep link'] }),
+    ]))
+    expect(page.blocks.every((block) => block.content.length > 0)).toBe(true)
+    const list = page.blocks.find((block) => block.kind === 'text' && block.role === 'list')
+    expect(list?.sourceRange).toBeUndefined()
+    const exact = page.blocks.filter((block) => block.sourceRange !== undefined)
+    expect(exact.length).toBeGreaterThan(0)
+    for (const block of exact) {
+      if (!block.sourceRange) throw new Error('expected exact range')
+      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
+      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
+    }
   })
 
   it('uses the same real native PDF path for URL and Asset-backed sources', async () => {
@@ -529,6 +605,7 @@ describe('@use-crux/ingest structured sources', () => {
     ['too few pages', { pages: [] }, ['Fallback text']],
     ['too many pages', { pages: [nativePage(0), nativePage(1)] }, ['Fallback text']],
     ['non-object page', { pages: [null] }, ['Fallback text']],
+    ['array page', { pages: [[0, 'Native text', false]] }, ['Fallback text']],
     ['duplicate page', { pages: [nativePage(0), nativePage(0)] }, ['Fallback text', 'Second fallback']],
     ['missing page value', { pages: [{ markdown: 'x', needsOcr: false }] }, ['Fallback text']],
     ['unordered page', { pages: [nativePage(1), nativePage(0)] }, ['Fallback text', 'Second fallback']],
@@ -563,18 +640,112 @@ describe('@use-crux/ingest structured sources', () => {
 
     vi.doMock('@firecrawl/pdf-inspector', () => { throw new Error('missing platform binary') })
     const [unavailable] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    expect(unavailable.warnings?.[0]?.metadata).toEqual({
-      primaryParser: 'pdf-inspector', fallbackParser: 'pdfjs-dist', reason: 'backend_unavailable',
-    })
+    expect(unavailable.warnings).toEqual([fallbackWarning(path, 'backend_unavailable')])
     vi.doUnmock('@firecrawl/pdf-inspector')
 
     vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => { throw new Error('native secret') } }))
     const [failed] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    expect(failed.warnings?.[0]?.metadata).toEqual({
-      primaryParser: 'pdf-inspector', fallbackParser: 'pdfjs-dist', reason: 'extraction_failed',
-    })
+    expect(failed.warnings).toEqual([fallbackWarning(path, 'extraction_failed')])
     expect(JSON.stringify(failed.warnings)).not.toContain('native secret')
     vi.doUnmock('@firecrawl/pdf-inspector')
+  })
+
+  it('keeps native pages when metadata fails and destroys the loading task', async () => {
+    const fixture = join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')
+    const destroy = vi.fn(async () => undefined)
+    mockPdfJs({ numPages: 8, getMetadata: async () => { throw new Error('metadata unavailable') } }, destroy)
+    const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
+
+    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
+
+    expect(document.title).toBe('layout-aware-mixed.pdf')
+    expect(document.parts).toHaveLength(8)
+    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves fallback failure as parse_failed, emits no downgrade, and destroys the loading task', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'broken-fallback.pdf')
+    await writeFile(path, makePdf('Unreadable fallback'))
+    const destroy = vi.fn(async () => undefined)
+    mockPdfJs({
+      numPages: 1,
+      getMetadata: async () => ({ info: { Title: 'Ignored' } }),
+      getPage: async () => { throw new Error('fallback extraction failed') },
+    }, destroy)
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => { throw new Error('native extraction failed') } }))
+
+    const results = await collect(fileSource(path, { namespace: 'kb' }).load())
+
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      ok: false,
+      sourceId: path,
+      error: { code: 'parse_failed', parser: 'pdf', message: 'fallback extraction failed' },
+    })
+    expect(JSON.stringify(results)).not.toContain('document structure may be reduced')
+    expect(JSON.stringify(results)).not.toContain('native extraction failed')
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('destroys the loading task after a successful document-wide fallback', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'fallback-cleanup.pdf')
+    await writeFile(path, makePdf('placeholder'))
+    const destroy = vi.fn(async () => undefined)
+    mockPdfJs({
+      numPages: 1,
+      getMetadata: async () => ({ info: { Title: 'Fallback title' } }),
+      getPage: async () => ({ getTextContent: async () => ({ items: [{ str: 'Fallback text', hasEOL: false }] }) }),
+    }, destroy)
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+
+    expect(document.title).toBe('Fallback title')
+    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Fallback text' }])
+    expect(document.warnings).toEqual([fallbackWarning(path, 'invalid_result')])
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('destroys the loading task when opening the PDF fails', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'open-failure.pdf')
+    await writeFile(path, makePdf('placeholder'))
+    const destroy = vi.fn(async () => undefined)
+    vi.doMock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
+      getDocument: () => ({ promise: Promise.reject(new Error('PDF open failed')), destroy }),
+    }))
+
+    const results = await collect(fileSource(path, { namespace: 'kb' }).load())
+
+    expect(results[0]).toMatchObject({
+      ok: false,
+      error: { code: 'parse_failed', parser: 'pdf', message: 'PDF open failed' },
+    })
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('provides URL and Asset fallback evidence with every physical page and one exact warning', async () => {
+    const bytes = makePdf(['First fallback', 'Second fallback'])
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
+    const [urlDocument] = await collect(urlSource('https://example.com/fallback.pdf', {
+      namespace: 'kb',
+      fetch: async () => new Response(new Uint8Array(bytes), { headers: { 'content-type': 'application/pdf' } }),
+    }).documents())
+    const [assetDocument] = await collect(fileSource({
+      type: 'data', data: new Uint8Array(bytes), mediaType: 'application/pdf', filename: 'fallback.pdf',
+    }, { namespace: 'kb', sourceId: 'asset:fallback' }).documents())
+
+    expect(urlDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
+      [1, 'First fallback'], [2, 'Second fallback'],
+    ])
+    expect(assetDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
+      [1, 'First fallback'], [2, 'Second fallback'],
+    ])
+    expect(urlDocument.warnings).toEqual([fallbackWarning('https://example.com/fallback.pdf', 'invalid_result')])
+    expect(assetDocument.warnings).toEqual([fallbackWarning('asset:fallback', 'invalid_result')])
   })
 
   it('retains textless physical PDF pages without media description', async () => {
@@ -1449,6 +1620,27 @@ function makePdf(text: string | string[]): Buffer {
 
 function nativePage(page: number): { page: number; markdown: string; needsOcr: boolean } {
   return { page, markdown: 'Native text', needsOcr: false }
+}
+
+function fallbackWarning(sourceId: string, reason: 'backend_unavailable' | 'extraction_failed' | 'invalid_result') {
+  return {
+    code: 'parser_warning',
+    message: `PDF source "${sourceId}" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`,
+    metadata: { primaryParser: 'pdf-inspector', fallbackParser: 'pdfjs-dist', reason },
+  }
+}
+
+function mockPdfJs(
+  document: {
+    readonly numPages: number
+    readonly getMetadata: () => Promise<unknown>
+    readonly getPage?: (pageNumber: number) => Promise<unknown>
+  },
+  destroy: () => Promise<unknown>,
+): void {
+  vi.doMock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
+    getDocument: () => ({ promise: Promise.resolve(document), destroy }),
+  }))
 }
 
 async function makeDocx(): Promise<Buffer> {

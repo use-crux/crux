@@ -204,7 +204,10 @@ function parsePageBlocks(markdown: string, pageId: string): IngestPageBlock[] {
       : node.type === 'list' ? 'list'
         : node.type === 'code' ? 'code'
           : 'other'
-    blocks.push(textBlock(id, role, raw, headingPath, range, markdown))
+    const content = node.type === 'list'
+      ? node.children.map((item) => mdastToString(item).trim()).filter(Boolean).join('\n')
+      : raw
+    blocks.push(textBlock(id, role, content, headingPath, range, markdown))
   }
   return blocks
 }
@@ -276,7 +279,7 @@ function readMetadataTitle(info: unknown): unknown {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function toPlainUint8Array(bytes: Uint8Array): Uint8Array {
