@@ -43,10 +43,10 @@ describe('connected knowledge context vs target chunks', () => {
 
     const schema = schemas[0]!
     expect(schema.safeParse({
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }],
+      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }],
     }).success).toBe(true)
     expect(schema.safeParse({
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
+      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
     }).success).toBe(true)
   })
 
@@ -99,7 +99,7 @@ describe('connected knowledge context vs target chunks', () => {
   it('generated context-only citation repairs once then exhausts with local validation', async () => {
     const prompts: string[] = []
     const invalid = {
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
+      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
     }
     const model = fixedAssertionModel([invalid, invalid], prompts)
     const stage = assertions({
@@ -125,14 +125,14 @@ describe('connected knowledge context vs target chunks', () => {
     // The authored diagnostic reaches the repair prompt so the model can self-correct.
     expect(prompts[1]).toContain('invalid evidence — context-only chunk')
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'assertions.[0].evidence', depth: 3, code: 'custom' },
+      { path: 'type_0.evidence', depth: 2, code: 'custom' },
     ])
   })
 
   it('generated citation of a target chunk passes validation', async () => {
     const prompts: string[] = []
     const model = fixedAssertionModel([
-      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',
@@ -167,7 +167,7 @@ describe('connected knowledge context vs target chunks', () => {
         prompts.push(prompt)
         const object = [
           null,
-          { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
+          { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
         ][index++]
         return { object }
       }),
@@ -198,8 +198,7 @@ describe('connected knowledge context vs target chunks', () => {
   it('reports malformed structure through Zod before local evidence validation', async () => {
     const prompts: string[] = []
     const invalid = {
-      assertions: [{
-        type: 'fact',
+      type_0: [{
         data: { value: 'x' },
         evidence: [chunkRef('c2')],
         provenance: 'derived',
@@ -207,8 +206,7 @@ describe('connected knowledge context vs target chunks', () => {
       }],
     }
     const fixed = {
-      assertions: [{
-        type: 'fact',
+      type_0: [{
         data: { value: 'x' },
         evidence: [chunkRef('c1')],
         provenance: 'derived',
@@ -234,26 +232,24 @@ describe('connected knowledge context vs target chunks', () => {
       chunks: sourceChunks,
     }).catch((cause: unknown) => cause)
 
-    // A malformed envelope does not reach the local evidence validator.
-    expect(prompts[1]).toContain('assertions.0')
+    // A malformed grouped item is reported against its authored slot.
+    expect(prompts[1]).toContain('type_0[0]')
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'assertions.[0]', depth: 2, code: 'unrecognized_keys' },
+      { path: 'type_0', depth: 1, code: 'custom' },
     ])
   })
 
   it('reports malformed evidence structure through Zod', async () => {
     const prompts: string[] = []
     const invalid = {
-      assertions: [{
-        type: 'fact',
+      type_0: [{
         data: { value: 'x' },
         evidence: [{ kind: 'chunk', sourceId, chunkId: 'c2', stray: true }],
         provenance: 'derived',
       }],
     }
     const fixed = {
-      assertions: [{
-        type: 'fact',
+      type_0: [{
         data: { value: 'x' },
         evidence: [{ kind: 'chunk', sourceId, chunkId: 'c1', stray: true }],
         provenance: 'derived',
@@ -278,10 +274,10 @@ describe('connected knowledge context vs target chunks', () => {
       chunks: sourceChunks,
     }).catch((cause: unknown) => cause)
 
-    // The evidence slot's strictness defect is reported directly.
-    expect(prompts[1]).toContain('assertions.0.evidence.0')
+    // The evidence defect is explained in repair feedback and attributed to its slot.
+    expect(prompts[1]).toContain('type_0[0]: evidence.0')
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'assertions.[0].evidence.[0]', depth: 4, code: 'unrecognized_keys' },
+      { path: 'type_0', depth: 1, code: 'custom' },
     ])
   })
 
@@ -467,7 +463,7 @@ describe('connected knowledge context vs target chunks', () => {
     const prompts: string[] = []
     // Model cites the (truncated) target chunk t1 — must remain admissible evidence.
     const model = fixedAssertionModel([
-      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('t1')], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('t1')], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',
@@ -501,8 +497,8 @@ describe('connected knowledge context vs target chunks', () => {
     const sourceChunks = [chunk('c1', 0, 'alpha'), chunk('c2', 1, 'beta')]
     const selectC1 = (chunks: readonly CruxChunk[]) => chunks.filter((c) => c.chunkId === 'c1')
     const selectC2 = (chunks: readonly CruxChunk[]) => chunks.filter((c) => c.chunkId === 'c2')
-    const modelA = fixedAssertionModel([{ assertions: [] }])
-    const modelB = fixedAssertionModel([{ assertions: [] }])
+    const modelA = fixedAssertionModel([{ type_0: [] }])
+    const modelB = fixedAssertionModel([{ type_0: [] }])
     const stageA = (targets: (chunks: readonly CruxChunk[]) => readonly CruxChunk[]) =>
       assertions({ id: 'facts-a', version: 1, types: assertionTypes, model: modelA, targets })
     const stageB = assertions({ id: 'facts-b', version: 1, types: assertionTypes, model: modelB, targets: selectC1 })
@@ -526,7 +522,7 @@ describe('connected knowledge context vs target chunks', () => {
   })
 
   it('skips generation with a warning when the selector yields no target chunks (model mode)', async () => {
-    const model = fixedAssertionModel([{ assertions: [] }])
+    const model = fixedAssertionModel([{ type_0: [] }])
     const stage = assertions({
       id: 'facts',
       version: 1,
@@ -580,14 +576,14 @@ describe('connected knowledge context vs target chunks', () => {
       for (const part of args.parts) {
         if (part.kind === 'text') partLabels.push(part.text)
       }
-      return { object: { assertions: [] } }
+      return { object: { type_0: [] } }
     })
     const model = knowledgeModel({
       name: 'media-assertions',
       version: '1',
       modalities: ['text', 'image'],
       generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
-      generateObject: vi.fn(async () => ({ object: { assertions: [] } })),
+      generateObject: vi.fn(async () => ({ object: { type_0: [] } })),
       generateObjectFromParts,
     })
     const stage = assertions({
@@ -621,7 +617,7 @@ describe('connected knowledge context vs target chunks', () => {
       name: 'text-only',
       version: '1',
       generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
-      generateObject: vi.fn(async () => ({ object: { assertions: [] } })),
+      generateObject: vi.fn(async () => ({ object: { type_0: [] } })),
     })
     const stage = assertions({
       id: 'facts',
@@ -651,7 +647,7 @@ describe('connected knowledge context vs target chunks', () => {
       name: 'text-only',
       version: '1',
       generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
-      generateObject: vi.fn(async () => ({ object: { assertions: [] } })),
+      generateObject: vi.fn(async () => ({ object: { type_0: [] } })),
     })
     const stage = assertions({
       id: 'facts',
@@ -677,7 +673,7 @@ describe('connected knowledge context vs target chunks', () => {
       id: 'facts',
       version: 1,
       types: assertionTypes,
-      model: fixedAssertionModel([{ assertions: [] }]),
+      model: fixedAssertionModel([{ type_0: [] }]),
       targets: () => [chunk('nope', 99, 'ghost')],
     })
     await expect(runDeriveStages({
@@ -738,7 +734,7 @@ function assertionModel(prompts: string[], schemas: z.ZodType<unknown>[]): Knowl
     generateObject: vi.fn(async ({ prompt, schema }) => {
       prompts.push(prompt)
       schemas.push(schema)
-      return { object: { assertions: [] } }
+      return { object: { type_0: [] } }
     }),
   }
 }
@@ -751,7 +747,7 @@ function fixedAssertionModel(objects: readonly unknown[], prompts: string[] = []
     generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
     generateObject: vi.fn(async ({ prompt }) => {
       prompts.push(prompt)
-      return { object: objects[index++] ?? { assertions: [] } }
+      return { object: objects[index++] ?? { type_0: [] } }
     }),
   }
 }

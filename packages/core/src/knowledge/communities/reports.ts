@@ -5,6 +5,7 @@
  */
 
 import { stableHash } from '../../indexing/hash'
+import { z } from 'zod'
 import type { CruxChunk } from '../../indexing'
 import type { AssetStore } from '../../storage'
 import { generateObjectWithEvidence } from '../derive/modality-validation'
@@ -12,12 +13,28 @@ import type { KnowledgeModel } from '../model'
 import { generateObjectWithDomainRepair } from '../structured-domain-repair'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { CommunityGraphInput, KnowledgeCommunity, KnowledgeCommunityClustering } from './cluster'
+import { normalizeCommunityGraphInput } from './cluster-normalize'
 import {
   createCommunityReportRecord,
   type CommunityReport,
   type CommunityReportLineage,
 } from './records'
 import { communityReportOutputSchema, type CommunityReportOutput } from './report-schema'
+import {
+  ASSERTION_MEMBERSHIP_POLICY_VERSION,
+  ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT,
+  ASSERTION_REPORT_INTERNAL_RELATION_LIMIT,
+  ASSERTION_REPORT_PROMPT_VERSION,
+  boundedAssertionReportData,
+  projectAssertionCommunities,
+  type CommunityAssertionRelationInput,
+} from './assertion-policy'
+
+type PresentedAssertionRelation = CommunityAssertionRelationInput & {
+  readonly presentation: 'internal' | 'boundary'
+}
+
+type ReportProjection = ReturnType<typeof reportProjection>
 
 export interface GenerateCommunityReportsInput {
   readonly model: KnowledgeModel
@@ -39,13 +56,22 @@ export async function generateCommunityReports(
 ): Promise<readonly CommunityReport[]> {
   const reports = new Map<string, CommunityReport>()
   const communities = [...input.clustering.communities].sort(compareBottomUp)
+  const graph = normalizeCommunityGraphInput(input.graph)
+  const visibleAssertionIds = new Set(projectAssertionCommunities({
+    chunks: graph.chunks,
+    mentionWeights: graph.mentionWeights,
+    assertions: graph.assertions ?? [],
+    relations: graph.assertionRelations ?? [],
+    leafByChunk: new Map(),
+  }).assertions.map((assertion) => assertion.assertionId))
 
   for (const community of communities) {
     const children = community.childCommunityIds.flatMap((id) => {
       const child = reports.get(id)
       return child ? [child] : []
     })
-    const memberHash = memberHashFor(community, input.graph, children)
+    const projection = reportProjection(community, graph, visibleAssertionIds)
+    const memberHash = memberHashFor(community, graph, children, projection)
     const reusable = await input.findReusable?.(
       community.communityId,
       memberHash,
@@ -59,8 +85,9 @@ export async function generateCommunityReports(
     const output = await readReportOutput({
       model: input.model,
       community,
-      graph: input.graph,
+      graph,
       children,
+      projection,
       ...(input.assets ? { assets: input.assets } : {}),
     })
     reports.set(community.communityId, toReport(input, community, output, children, memberHash))
@@ -74,9 +101,11 @@ async function readReportOutput(input: {
   readonly community: KnowledgeCommunity
   readonly graph: CommunityGraphInput
   readonly children: readonly CommunityReport[]
+  readonly projection: ReportProjection
   readonly assets?: AssetStore
 }): Promise<CommunityReportOutput> {
-  const prompt = renderReportPrompt(input.community, input.graph, input.children)
+  const projection = input.projection
+  const prompt = renderReportPrompt(input.community, input.graph, input.children, projection)
   const chunks = reportChunks(input.community, input.graph, input.children)
   const sourceId = sourceIdsFor(chunks).join(', ')
   const subject = `community "${input.community.communityId}"`
@@ -106,6 +135,18 @@ async function readReportOutput(input: {
     }),
     accept: (object) => {
       const parsed = communityReportOutputSchema.safeParse(object)
+      if (parsed.success) {
+        const available = new Set(projection.assertionIds)
+        const unknown = parsed.data.findings.flatMap((finding, findingIndex) =>
+          (finding.assertionRefs ?? []).flatMap((ref, refIndex) => available.has(ref.assertionId) ? [] : [{ findingIndex, refIndex, id: ref.assertionId }]))
+        if (unknown.length > 0) {
+          return { ok: false, zodErrors: new z.ZodError(unknown.map((item) => ({
+            code: 'custom' as const,
+            path: ['findings', item.findingIndex, 'assertionRefs', item.refIndex, 'assertionId'],
+            message: `Unknown report assertion reference: ${item.id}`,
+          }))) }
+        }
+      }
       return parsed.success
         ? { ok: true, data: parsed.data }
         : { ok: false, zodErrors: parsed.error }
@@ -138,7 +179,7 @@ function toReport(
       ...input.lineage,
       memberHash,
     },
-    counts: countsFor(community, children),
+    counts: countsFor(community),
   })
 }
 
@@ -146,23 +187,33 @@ function memberHashFor(
   community: KnowledgeCommunity,
   graph: CommunityGraphInput,
   children: readonly CommunityReport[],
+  projection: ReportProjection,
 ): string {
   if (children.length > 0) {
-    return stableHash(children.map((child) => ({
+    return stableHash([...children].sort((left, right) => left.communityId.localeCompare(right.communityId)).map((child) => ({
       communityId: child.communityId,
       memberHash: child.lineage.memberHash,
-      findings: child.findings.map((finding) => finding.statement),
+      findings: [...child.findings].map((finding) => ({
+        id: finding.id,
+        statement: finding.statement,
+        evidence: [...finding.evidence].map(encodeKnowledgeRef).sort(),
+        assertionRefs: [...(finding.assertionRefs ?? [])].map((ref) => ref.assertionId).sort(),
+      })).sort((left, right) => left.id.localeCompare(right.id)),
     })))
   }
   const chunkByKey = new Map(graph.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
   const entityById = new Map(graph.entities.map((entity) => [entity.entityId, entity]))
   return stableHash({
+    policy: ASSERTION_MEMBERSHIP_POLICY_VERSION,
+    reportPrompt: ASSERTION_REPORT_PROMPT_VERSION,
     members: community.memberIdentities,
     entities: community.entityIds.map((id) => entityById.get(id) ?? { entityId: id }),
     chunks: community.chunkRefs.map((ref) => {
       const chunk = chunkByKey.get(encodeKnowledgeRef(ref))
       return chunk ? { ref, content: chunk.content } : { ref }
     }),
+    assertions: projection.assertions,
+    relations: projection.relations,
   })
 }
 
@@ -170,13 +221,14 @@ function renderReportPrompt(
   community: KnowledgeCommunity,
   graph: CommunityGraphInput,
   children: readonly CommunityReport[],
+  projection: ReturnType<typeof reportProjection>,
 ): string {
   if (children.length > 0) {
     return [
       `Community: ${community.communityId}`,
       'Use only these child findings as evidence.',
       children.flatMap((child) => child.findings.map((finding) =>
-        `- ${finding.statement}\n  evidence: ${finding.evidence.map(encodeKnowledgeRef).join(', ')}`,
+        `- ${finding.statement}\n  evidence: ${finding.evidence.map(encodeKnowledgeRef).join(', ')}\n  assertions: ${(finding.assertionRefs ?? []).map((ref) => ref.assertionId).join(', ')}`,
       )).join('\n'),
     ].join('\n\n')
   }
@@ -191,9 +243,13 @@ function renderReportPrompt(
   })
   return [
     `Community: ${community.communityId}`,
-    'Write findings supported only by the listed evidence refs.',
+    'Canonical assertions are validated claims; raw evidence chunks are source text. Write findings supported only by the listed evidence refs and cite relevant assertion IDs in assertionRefs.',
     entities.length ? `Entities:\n${entities.join('\n')}` : '',
     chunks.length ? `Evidence:\n${chunks.join('\n')}` : '',
+    projection.assertions.length ? `Assertions:\n${projection.assertions.map((assertion) =>
+      `[${assertion.assertionId}] ${assertion.type}: ${boundedAssertionReportData(assertion.data)}`).join('\n')}` : '',
+    projection.relations.length ? `Assertion relations:\n${projection.relations.map((relation) =>
+      `${relation.presentation}: ${relation.type} ${relation.fromAssertionId} -> ${relation.toAssertionId}`).join('\n')}` : '',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -204,7 +260,8 @@ function reportChunks(
 ): readonly CruxChunk[] {
   if (children.length > 0) return []
   const chunkByKey = new Map(graph.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
-  return community.chunkRefs.flatMap((ref) => {
+  const refs = community.chunkRefs
+  return refs.flatMap((ref) => {
     const chunk = chunkByKey.get(encodeKnowledgeRef(ref))
     return chunk
       ? [{
@@ -241,15 +298,37 @@ function defaultEvidence(community: KnowledgeCommunity, children: readonly Commu
   return childEvidence.length > 0 ? dedupeRefs(childEvidence) : community.chunkRefs
 }
 
-function countsFor(community: KnowledgeCommunity, children: readonly CommunityReport[]) {
-  if (children.length > 0) {
-    return {
-      entities: children.reduce((sum, child) => sum + child.counts.entities, 0),
-      chunks: children.reduce((sum, child) => sum + child.counts.chunks, 0),
-      assertions: children.reduce((sum, child) => sum + child.counts.assertions, 0),
-    }
+function countsFor(community: KnowledgeCommunity) {
+  return {
+    entities: new Set(community.entityIds).size,
+    chunks: new Set(community.chunkRefs.map(encodeKnowledgeRef)).size,
+    assertions: new Set([...community.primaryAssertionIds, ...community.secondaryAssertionIds]).size,
   }
-  return { entities: community.entityIds.length, chunks: community.chunkRefs.length, assertions: 0 }
+}
+
+function reportProjection(
+  community: KnowledgeCommunity,
+  graph: CommunityGraphInput,
+  visible: ReadonlySet<string>,
+) {
+  const assertionIds = [...new Set([...community.primaryAssertionIds, ...community.secondaryAssertionIds])].sort()
+  const available = new Set(assertionIds)
+  const visibleChunks = new Set(graph.chunks.map((chunk) => encodeKnowledgeRef(chunk.ref)))
+  const assertions = (graph.assertions ?? []).filter((assertion) => available.has(assertion.assertionId))
+    .map((assertion) => ({ ...assertion, evidence: [...assertion.evidence]
+      .filter((support) => visibleChunks.has(encodeKnowledgeRef(support.chunkRef)))
+      .sort((left, right) => encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))) }))
+    .sort((left, right) => left.assertionId.localeCompare(right.assertionId))
+  const relations = (graph.assertionRelations ?? []).flatMap((relation): PresentedAssertionRelation[] => {
+    if (!visible.has(relation.fromAssertionId) || !visible.has(relation.toAssertionId)) return []
+    const fromHere = available.has(relation.fromAssertionId)
+    const toHere = available.has(relation.toAssertionId)
+    if (fromHere && toHere) return [{ ...relation, presentation: 'internal' as const }]
+    return fromHere || toHere ? [{ ...relation, presentation: 'boundary' as const }] : []
+  }).sort((left, right) => left.relationId.localeCompare(right.relationId))
+  const internal = relations.filter((relation) => relation.presentation === 'internal').slice(0, ASSERTION_REPORT_INTERNAL_RELATION_LIMIT)
+  const boundary = relations.filter((relation) => relation.presentation === 'boundary').slice(0, ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT)
+  return { assertionIds, assertions, relations: [...internal, ...boundary] }
 }
 
 function dedupeRefs(refs: readonly KnowledgeRef[]): readonly KnowledgeRef[] {

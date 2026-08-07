@@ -37,6 +37,19 @@ export interface KnowledgeAssertionRecord {
   readonly updatedAt: number
 }
 
+/** Validate an assertion record read from untrusted storage. */
+export function isKnowledgeAssertionRecord(value: unknown): value is KnowledgeAssertionRecord {
+  if (!isRecord(value)) return false
+  return value._cruxRecordType === 'knowledge-assertion' &&
+    isNonEmptyString(value.assertionId) && isNonEmptyString(value.type) && isJsonValue(value.data) &&
+    Array.isArray(value.evidence) && value.evidence.every(isAssertionSupport) &&
+    isProvenance(value.provenance) && isNonEmptyString(value.stageId) &&
+    typeof value.stageVersion === 'number' && Number.isFinite(value.stageVersion) &&
+    isNonEmptyString(value.stageFingerprint) && isNonEmptyString(value.generationId) &&
+    isNonEmptyString(value.namespace) && typeof value.createdAt === 'number' && Number.isFinite(value.createdAt) &&
+    typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
+}
+
 /** Inputs that define one canonical assertion proposition. */
 export interface AssertionIdentityInput {
   readonly stageId: string
@@ -101,4 +114,25 @@ export function hashAssertionData(data: JsonValue): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isAssertionSupport(value: unknown): value is AssertionSupport {
+  if (!isRecord(value) || !isNonEmptyString(value.sourceId) || !isProvenance(value.provenance) || !isRecord(value.chunkRef)) return false
+  return value.chunkRef.kind === 'chunk' && isNonEmptyString(value.chunkRef.sourceId) &&
+    value.chunkRef.sourceId === value.sourceId && isNonEmptyString(value.chunkRef.chunkId)
+}
+
+function isProvenance(value: unknown): value is KnowledgeEvidenceProvenance {
+  return value === 'exact' || value === 'derived'
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(isJsonValue)
+  return isRecord(value) && Object.values(value).every(isJsonValue)
 }

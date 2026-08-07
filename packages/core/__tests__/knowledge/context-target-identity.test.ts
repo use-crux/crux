@@ -8,7 +8,7 @@ describe('context-target identity stability (selector-less)', () => {
     name: 'assertion-extractor',
     fingerprint: 'assertion-fp',
     generateText: async () => ({ text: '', usage: undefined, response: undefined }) as never,
-    generateObject: async () => ({ object: { assertions: [] } }),
+    generateObject: async () => ({ object: { type_0: [] } }),
   }
 
   const stage = assertions({ id: 'facts', version: 1, types: { fact: z.object({ value: z.string() }) }, model })

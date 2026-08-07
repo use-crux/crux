@@ -4,12 +4,136 @@ import { ValidationExhaustedError } from "../../src/generation/validation-retry"
 import type { CruxChunk, CruxDocument } from "../../src/indexing/types";
 import { assertions, type KnowledgeModel } from "../../src/knowledge";
 import { runDeriveStages } from "../../src/knowledge/derive/runner";
+import { compileAssertionWire } from "../../src/knowledge/derive/assertion-wire";
 import { inMemoryRecordStore } from "../../src/storage";
 
 const sourceId = "doc-1";
 const types = { fact: z.object({ value: z.string() }) };
 
 describe("generated assertion wire schema", () => {
+  it("allocates deterministic grouped slots with a closed portable schema", () => {
+    const compiled = compileAssertionWire({
+      zebra: z.object({ count: z.number().int(), state: z.enum(["open", "closed"]).describe("Lifecycle state") }).strict(),
+      alpha: z.object({ enabled: z.boolean() }).strict().describe("Alpha guidance"),
+    });
+    const json = z.toJSONSchema(compiled.schema) as Record<string, unknown>;
+
+    expect(compiled.manifest.slots.map(({ slot, type, mode }) => ({ slot, type, mode }))).toEqual([
+      { slot: "type_0", type: "alpha", mode: "typed" },
+      { slot: "type_1", type: "zebra", mode: "typed" },
+    ]);
+    expect(Object.keys(json.properties as object)).toEqual(["type_0", "type_1"]);
+    expect(json.required).toEqual(["type_0", "type_1"]);
+    expect(json.additionalProperties).toBe(false);
+    expect(JSON.stringify(json)).not.toMatch(/oneOf|anyOf|allOf|nullable/);
+    expect(JSON.stringify(json)).toContain("Alpha guidance");
+    expect(JSON.stringify(json)).toContain("Lifecycle state");
+  });
+
+  it("falls back unsupported kinds without degrading portable neighbors", () => {
+    const compiled = compileAssertionWire({
+      portable: z.object({ value: z.string() }).strict(),
+      union: z.union([z.string(), z.number()]).describe("String or numeric identifier"),
+    });
+
+    expect(compiled.manifest.slots.map(({ type, mode, fallbackReason }) => ({ type, mode, fallbackReason }))).toEqual([
+      { type: "portable", mode: "typed", fallbackReason: undefined },
+      { type: "union", mode: "json-string", fallbackReason: "unsupported keyword anyOf" },
+    ]);
+    const json = JSON.stringify(z.toJSONSchema(compiled.schema));
+    expect(json).toContain("dataJson");
+    expect(json).toContain("String or numeric identifier");
+    expect(json).not.toContain("anyOf");
+  });
+
+  it("uses JSON strings for unconstrained, transformed, and unapproved schemas", () => {
+    const compiled = compileAssertionWire({
+      any: z.any(),
+      unknown: z.unknown(),
+      transformed: z.string().transform((value) => value.trim()),
+      formatted: z.string().email(),
+      empty: z.object({}).strict(),
+      loose: z.object({ value: z.string() }).loose(),
+      optional: z.object({ value: z.string().optional() }),
+      union: z.union([z.string(), z.number()]),
+      date: z.date(),
+      array: z.array(z.string()),
+      boolean: z.boolean(),
+      enum: z.enum(["open", "closed"]),
+      number: z.number(),
+      portable: z.object({ value: z.string() }).strict(),
+      string: z.string(),
+    });
+
+    expect(compiled.manifest.slots.map(({ type, mode }) => ({ type, mode }))).toEqual([
+      { type: "any", mode: "json-string" },
+      { type: "array", mode: "typed" },
+      { type: "boolean", mode: "typed" },
+      { type: "date", mode: "json-string" },
+      { type: "empty", mode: "json-string" },
+      { type: "enum", mode: "typed" },
+      { type: "formatted", mode: "json-string" },
+      { type: "loose", mode: "json-string" },
+      { type: "number", mode: "typed" },
+      { type: "optional", mode: "json-string" },
+      { type: "portable", mode: "typed" },
+      { type: "string", mode: "typed" },
+      { type: "transformed", mode: "json-string" },
+      { type: "union", mode: "json-string" },
+      { type: "unknown", mode: "json-string" },
+    ]);
+  });
+
+  it("decodes typed and JSON-string slots together", async () => {
+    const model = fixedModel([{
+      type_0: [{ dataJson: '{"value":"fallback"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      type_1: [{ data: { value: "typed" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+    }]);
+    const stage = assertions({
+      id: "facts", version: 1, model,
+      types: { fallback: z.union([z.object({ value: z.string() }), z.string()]), portable: z.object({ value: z.string() }) },
+    });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 2 }]);
+  });
+
+  it("repairs only invalid slots and preserves claims from retained slots", async () => {
+    const prompts: string[] = [];
+    const model = fixedModel([
+      {
+        type_0: [{ data: { value: "keep" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+        type_1: [{ data: { count: "bad" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      },
+      {
+        type_0: [],
+        type_1: [{ data: { count: 2 }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      },
+    ], prompts);
+    const stage = assertions({ id: "facts", version: 1, model, types: {
+      alpha: z.object({ value: z.string() }), beta: z.object({ count: z.number() }),
+    } });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 2 }]);
+    expect(prompts[1]).toContain("Repair only these invalid slots: type_1");
+    expect(prompts[1]).toContain("Return [] for every retained slot");
+  });
+
+  it("repairs malformed JSON and unknown slots locally", async () => {
+    const prompts: string[] = [];
+    const model = fixedModel([
+      { type_0: [{ dataJson: "{bad", evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }], unexpected: [] },
+      { type_0: [{ dataJson: '{"value":"fixed"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }] },
+    ], prompts);
+    const stage = assertions({ id: "facts", version: 1, model, types: { fact: z.union([z.object({ value: z.string() }), z.string()]) } });
+
+    await expect(runDeriveStages({ records: inMemoryRecordStore(), indexerId: "kb", namespace: "wire-schema", stages: [stage], document: document(), chunks: [chunk("target", 0)] }))
+      .resolves.toMatchObject([{ status: "ran", claims: 1 }]);
+    expect(prompts[1]).toContain("type_0[0]: malformed dataJson");
+    expect(prompts[1]).toContain("unexpected: unknown assertion slot");
+  });
+
   it("is constant in chunk count and uses generic evidence references", async () => {
     const small = await captureSchema(chunks(2));
     const large = await captureSchema(chunks(40));
@@ -69,7 +193,7 @@ describe("generated assertion wire schema", () => {
       expect(model.generateObject).toHaveBeenCalledTimes(2);
       expect(prompts[1]).toContain(message);
       expect((error as ValidationExhaustedError).issues).toEqual([
-        { path: "assertions.[0].evidence", depth: 3, code: "custom" },
+        { path: "type_0.evidence", depth: 2, code: "custom" },
       ]);
     },
   );
@@ -103,7 +227,7 @@ async function captureSchema(
       ({ text: "", usage: undefined, response: undefined }) as never,
     generateObject: vi.fn(async ({ schema }) => {
       captured = schema;
-      return { object: { assertions: [] } };
+      return { object: { type_0: [] } };
     }),
   };
   const stage = assertions({ id: "facts", version: 1, types, model });
@@ -138,9 +262,8 @@ function fixedModel(
 
 function generatedClaim(chunkId: string) {
   return {
-    assertions: [
+    type_0: [
       {
-        type: "fact",
         data: { value: "fact" },
         evidence: [{ kind: "chunk" as const, sourceId, chunkId }],
         provenance: "derived" as const,

@@ -4,8 +4,7 @@
  * @module
  */
 
-import { defer } from '../../defer'
-import { onDeferDrainSettled } from '../../defer/internal/context'
+import { tryScheduleDiagnosticsOnlyDeferredCallback } from '../../defer/internal/port'
 import type { AssetStore, JsonObject, RecordStore } from '../../storage'
 import { knowledgeCurrentKey } from '../keys'
 import type { ViewRevision } from '../view/revision'
@@ -49,33 +48,19 @@ export function createRetainedCommunityRefreshHost(
   function schedule(descriptor: CommunityBuildDescriptor): void {
     const key = keyOf(descriptor)
     if (pending.has(key)) return
-    let resolvePending: (() => void) | undefined
-    let rejectPending: ((error: unknown) => void) | undefined
-    const promise = new Promise<void>((resolve, reject) => {
-      resolvePending = resolve
-      rejectPending = reject
-    }).finally(() => {
-      pending.delete(key)
-    })
-    promise.catch(() => {})
-    pending.set(key, promise)
 
     try {
-      defer(async () => {
-        try {
-          await buildIfStale(input, descriptor)
-          resolvePending?.()
-        } catch (error) {
-          rejectPending?.(error)
-          throw error
-        }
+      const scheduled = tryScheduleDiagnosticsOnlyDeferredCallback(() =>
+        buildIfStale(input, descriptor),
+      )
+      if (!scheduled || scheduled.status === 'captured') return
+      const promise = scheduled.settled.finally(() => {
+        if (pending.get(key) === promise) pending.delete(key)
       })
-      onDeferDrainSettled(() => {
-        if (pending.get(key) === promise) resolvePending?.()
-      })
+      promise.catch(() => {})
+      pending.set(key, promise)
     } catch {
       pending.delete(key)
-      resolvePending?.()
     }
   }
 

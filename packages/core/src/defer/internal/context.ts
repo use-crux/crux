@@ -38,6 +38,8 @@ export interface DeferRegistrationContext {
   readonly phase: DeferRegistrationPhase;
   readonly depth: number;
   readonly evidence?: DeferEvidencePolicy;
+  /** Settle source-internal work when an accepted callback is never invoked. */
+  readonly onSkipped?: () => void;
 }
 
 const deferRegistrationSlot =

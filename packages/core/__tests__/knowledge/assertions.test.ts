@@ -77,6 +77,42 @@ describe('assertions', () => {
     expect(first.fingerprint()).not.toBe(changed.fingerprint())
   })
 
+  it('keeps unrepresentable provider schemas out of deterministic run setup', async () => {
+    const transformed = z.string().transform((value) => value.trim()).meta({ cruxFingerprint: 'trim-v1' })
+    const stage = assertions({
+      id: 'facts', version: 1, types: { fact: transformed },
+      run: (_input, api) => { api.emit('fact', ' fact ', { evidence: chunkRef }) },
+    })
+
+    await expect(runDeriveStages({
+      records: inMemoryStorage().records, indexerId, namespace, stages: [stage], document: document('doc-1'),
+      chunks: [chunk('doc-1', 'c1', 'Fact')],
+    })).resolves.toMatchObject([{ status: 'ran', claims: 1 }])
+  })
+
+  it('distinguishes unrepresentable schemas with different validation semantics', () => {
+    const transformed = (suffix: string, fingerprint: string) =>
+      z.string().transform((value) => value + suffix).meta({ cruxFingerprint: fingerprint })
+    const first = assertions({ id: 'facts', version: 1, types: { fact: transformed('a', 'suffix-a') }, run: () => {} })
+    const second = assertions({ id: 'facts', version: 1, types: { fact: transformed('b', 'suffix-b') }, run: () => {} })
+
+    expect(first.fingerprint()).not.toBe(second.fingerprint())
+    expect(() => assertions({
+      id: 'facts', version: 1, types: { fact: z.string().transform((value) => value) }, run: () => {},
+    })).toThrow(/cruxFingerprint/)
+  })
+
+  it('fingerprints model wire fallback behavior', () => {
+    const portable = assertions({ id: 'facts', version: 1, types: { fact: z.string() }, model: retrievalModel() })
+    const fallback = assertions({
+      id: 'facts', version: 1,
+      types: { fact: z.string().transform((value) => value).meta({ cruxFingerprint: 'identity-v1' }) },
+      model: retrievalModel(),
+    })
+
+    expect(portable.fingerprint()).not.toBe(fallback.fingerprint())
+  })
+
   it('persists deterministic assertions under exact claim and generation keys', async () => {
     const { records } = inMemoryStorage()
     await persistChunks(records, [chunk('doc-1', 'c1', 'Price is 12 EUR')])
@@ -166,14 +202,12 @@ describe('assertions', () => {
     const { records } = inMemoryStorage()
     await persistChunks(records, [chunk('doc-1', 'c1', 'Fact')])
     const model = countingModel([
-      { assertions: [
-        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
-        { type: 'fact', data: { value: 12 }, evidence: [chunkRef], provenance: 'derived' },
-        { type: 'fact', data: { value: 'missing evidence' }, provenance: 'derived' },
-      ] },
-      { assertions: [
-        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
-      ] },
+      { type_0: [
+        { data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
+        { data: { value: 12 }, evidence: [chunkRef], provenance: 'derived' },
+        { data: { value: 'missing evidence' }, evidence: [], provenance: 'derived' },
+      ], type_1: [] },
+      { type_0: [{ data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' }], type_1: [] },
     ])
     const stage = assertions({ id: 'facts', version: 1, types: schemas, model })
     const args = { records, indexerId, namespace, stages: [stage], document: document('doc-1'), chunks: [
@@ -202,8 +236,8 @@ describe('assertions', () => {
     ]
     await persistChunks(records, chunks)
     const valid = {
-      assertions: [{
-        type: 'price',
+      type_0: [],
+      type_1: [{
         data: { amount: 12, currency: 'EUR' },
         evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
         provenance: 'exact',
@@ -211,23 +245,20 @@ describe('assertions', () => {
     }
     const generateObject = vi.fn(async ({ schema }: Parameters<NonNullable<KnowledgeModel['generateObject']>>[0]) => {
       expect(schema.safeParse(valid).success).toBe(true)
-      expect(schema.safeParse({ assertions: [{
-        type: 'price',
+      expect(schema.safeParse({ type_0: [], type_1: [{
         data: { value: 'wrong schema' },
         evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
         provenance: 'derived',
       }] }).success).toBe(false)
-      expect(schema.safeParse({ assertions: [{
-        type: 'fact',
+      expect(schema.safeParse({ type_0: [{
         data: { value: 'unoffered evidence' },
         evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'not-offered' }],
         provenance: 'derived',
-      }] }).success).toBe(true)
-      expect(schema.safeParse({ assertions: [{
-        type: 'fact',
+      }], type_1: [] }).success).toBe(true)
+      expect(schema.safeParse({ type_0: [{
         data: { value: 'missing evidence' },
         provenance: 'derived',
-      }] }).success).toBe(false)
+      }], type_1: [] }).success).toBe(false)
       return { object: valid } as never
     })
     const stage = assertions({

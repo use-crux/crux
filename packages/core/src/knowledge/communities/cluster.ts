@@ -6,9 +6,16 @@
 
 import { createStableId } from '../../indexing/hash'
 import { encodeKnowledgeRef } from '../refs'
-import { agglomerateWithinBudget } from './cluster-split'
+import { agglomerateWithinBudget, type AgglomerationLink } from './cluster-split'
 import { buildParentTree, finalizeRoot } from './cluster-parents'
 import { normalizeCommunityGraphInput } from './cluster-normalize'
+import {
+  ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT,
+  ASSERTION_REPORT_INTERNAL_RELATION_LIMIT,
+  boundedAssertionReportData,
+  projectAssertionCommunities,
+  projectAssertionMemberships,
+} from './assertion-policy'
 import type {
   CommunityChunkInput,
   CommunityChunkRef,
@@ -47,15 +54,24 @@ export function clusterKnowledgeCommunities(
   budget = COMMUNITY_INPUT_BUDGET,
 ): KnowledgeCommunityClustering {
   const normalized = normalizeCommunityGraphInput(input)
-  const entityLeaves = entityLeafDrafts(normalized, budget)
-  assignMentionedChunks(entityLeaves, normalized)
-  const fallbackLeaves = fallbackLeafDrafts(normalized.residualChunks, budget)
+  const assertionProjection = projectAssertionCommunities({
+    chunks: normalized.chunks, mentionWeights: normalized.mentionWeights,
+    assertions: normalized.assertions ?? [], relations: normalized.assertionRelations ?? [], leafByChunk: new Map(),
+  })
+  const heterogeneous = heterogeneousGraph(normalized, assertionProjection)
+  const estimation = createEstimationIndex(normalized, assertionProjection)
+  const graphLeaves = heterogeneousLeafDrafts(normalized, heterogeneous, estimation, budget)
+  const includedChunks = new Set(graphLeaves.flatMap((leaf) => leaf.chunkRefs.map(encodeKnowledgeRef)))
+  const fallbackLeaves = fallbackLeafDrafts(normalized.residualChunks.filter((chunk) => !includedChunks.has(encodeKnowledgeRef(chunk.ref))), budget)
+  const leaves = [...graphLeaves, ...fallbackLeaves]
+  assignAssertions(leaves, assertionProjection)
   const communities = new Map<string, CommunityDraft>()
-  for (const leaf of [...entityLeaves, ...fallbackLeaves]) communities.set(leaf.communityId, leaf)
+  for (const leaf of leaves) communities.set(leaf.communityId, leaf)
 
   const entityRoots = buildParentTree({
-    leaves: entityLeaves,
+    leaves: graphLeaves,
     edges: normalized.edges,
+    assertionRelations: assertionProjection.relations,
     communities,
     parentBudget: PARENT_INPUT_BUDGET,
   })
@@ -72,52 +88,195 @@ export function clusterKnowledgeCommunities(
   }
 }
 
-function entityLeafDrafts(input: CommunityGraphInput, budget: number): CommunityDraft[] {
-  const links = input.edges.map((edge) => ({
-    leftId: edge.leftEntityId,
-    rightId: edge.rightEntityId,
-    weight: edge.weight,
+function heterogeneousGraph(
+  input: CommunityGraphInput,
+  assertions: ReturnType<typeof projectAssertionCommunities>,
+): { readonly memberIds: readonly string[]; readonly links: readonly AgglomerationLink[]; readonly componentLinks: readonly AgglomerationLink[] } {
+  const entityIds = input.entities.map((entity) => entityNode(entity.entityId))
+  const chunkIds = new Set(input.mentionWeights.map((mention) => chunkNode(mention.chunkRef)))
+  for (const chunk of input.residualChunks) chunkIds.add(chunkNode(chunk.ref))
+  const assertionIds = assertions.assertions.map((assertion) => assertionNode(assertion.assertionId))
+  const links: AgglomerationLink[] = input.edges.map((edge) => ({
+    leftId: entityNode(edge.leftEntityId), rightId: entityNode(edge.rightEntityId), weight: edge.weight,
   }))
-  return connectedComponents(input.entities.map((entity) => entity.entityId), input.edges).flatMap((component) =>
-    agglomerateWithinBudget({
-      memberIds: component,
-      links,
-      budget,
-      estimate: (entityIds) => estimateEntityMembers(entityIds, input),
-    }).map((entityIds) => entityLeaf(entityIds, input)),
-  ).sort(compareDrafts)
+  const componentLinks = [...links]
+  const residualBySource = new Map<string, CommunityChunkInput[]>()
+  for (const chunk of [...input.residualChunks].sort(compareChunks)) {
+    const source = residualBySource.get(chunk.sourceId) ?? []
+    source.push(chunk)
+    residualBySource.set(chunk.sourceId, source)
+  }
+  for (const chunks of residualBySource.values()) {
+    for (let index = 1; index < chunks.length; index += 1) componentLinks.push({
+      leftId: chunkNode(chunks[index - 1]?.ref ?? chunks[0]!.ref), rightId: chunkNode(chunks[index]!.ref), weight: 0,
+    })
+  }
+  for (const mention of input.mentionWeights) {
+    const chunkId = chunkNode(mention.chunkRef)
+    chunkIds.add(chunkId)
+    const link = { leftId: chunkId, rightId: entityNode(mention.entityId), weight: mention.weight }
+    links.push(link)
+    componentLinks.push(link)
+  }
+  for (const support of assertions.supports) {
+    const chunkId = chunkNode(support.chunkRef)
+    chunkIds.add(chunkId)
+    const link = { leftId: assertionNode(support.assertionId), rightId: chunkId, weight: support.weight }
+    links.push(link)
+    componentLinks.push(link)
+  }
+  for (const affinity of assertions.entityAffinities) {
+    const link = {
+      leftId: assertionNode(affinity.assertionId), rightId: entityNode(affinity.entityId), weight: affinity.weight,
+    }
+    links.push(link)
+    componentLinks.push(link)
+  }
+  for (const relation of assertions.relations) {
+    const link = {
+      leftId: assertionNode(relation.fromAssertionId), rightId: assertionNode(relation.toAssertionId), weight: relation.weight,
+    }
+    links.push(link)
+    componentLinks.push(link)
+  }
+  return { memberIds: [...entityIds, ...chunkIds, ...assertionIds].sort(), links, componentLinks }
 }
 
-function entityLeaf(entityIds: readonly string[], input: CommunityGraphInput): CommunityDraft {
-  const ids = [...entityIds].sort()
-  const memberIdentities = ids.map((id) => `entity:${id}`)
+function heterogeneousLeafDrafts(
+  input: CommunityGraphInput,
+  graph: ReturnType<typeof heterogeneousGraph>,
+  estimation: EstimationIndex,
+  budget: number,
+): CommunityDraft[] {
+  const components = connectedNodeComponents(graph.memberIds, graph.componentLinks)
+  return components.flatMap((component) => agglomerateWithinBudget({
+    memberIds: component,
+    links: graph.links,
+    budget,
+    estimate: (ids) => estimateHeterogeneousMembers(ids, estimation),
+  }).map((ids) => heterogeneousLeaf(ids, input, estimation))).sort(compareDrafts)
+}
+
+function heterogeneousLeaf(
+  memberIds: readonly string[],
+  input: CommunityGraphInput,
+  estimation: EstimationIndex,
+): CommunityDraft {
+  const entities = memberIds.filter((id) => id.startsWith('entity:')).map((id) => id.slice('entity:'.length)).sort()
+  const chunkKeys = new Set(memberIds.filter((id) => id.startsWith('chunk:')))
+  const chunkRefs = input.chunks.filter((chunk) => chunkKeys.has(encodeKnowledgeRef(chunk.ref))).map((chunk) => chunk.ref).sort(compareChunkRefs)
+  const assertionIds = memberIds.filter((id) => id.startsWith('assertion:'))
+  const identities = [...entities.map((id) => `entity:${id}`), ...chunkRefs.map((ref) => `chunk:${encodeKnowledgeRef(ref)}`), ...assertionIds].sort()
   return {
-    communityId: communityId(memberIdentities),
-    level: 0,
-    kind: 'entity',
-    childCommunityIds: [],
-    entityIds: ids,
-    chunkRefs: [],
-    estimatedInputChars: estimateEntityMembers(ids, input),
-    memberIdentities,
+    communityId: communityId(identities), level: 0, kind: entities.length ? 'entity' : 'fallback', childCommunityIds: [],
+    entityIds: entities, chunkRefs, estimatedInputChars: estimateHeterogeneousMembers(memberIds, estimation), memberIdentities: identities,
+    primaryAssertionIds: [], secondaryAssertionIds: [],
   }
 }
 
-function assignMentionedChunks(leaves: readonly CommunityDraft[], input: CommunityGraphInput): void {
-  const leafByEntity = new Map(leaves.flatMap((leaf) => leaf.entityIds.map((id) => [id, leaf])))
-  const chunkByKey = new Map(input.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
-  for (const [chunkKey, mentions] of groupMentions(input.mentionWeights)) {
-    const chunk = chunkByKey.get(chunkKey)
-    if (!chunk) continue
-    const target = mentions.flatMap((mention) => {
-      const leaf = leafByEntity.get(mention.entityId)
-      return leaf ? [{ ...mention, communityId: leaf.communityId, leaf }] : []
-    }).sort(compareMentionChoice)[0]?.leaf
-    if (!target) continue
-    target.chunkRefs = [...target.chunkRefs, chunk.ref].sort(compareChunkRefs)
-    target.estimatedInputChars = estimateLeafInput(target, input)
+function estimateHeterogeneousMembers(
+  memberIds: readonly string[],
+  index: EstimationIndex,
+): number {
+  const entities = memberIds.flatMap((id) => {
+    const entity = index.entityByNode.get(id)
+    return entity ? [entity] : []
+  })
+  const selectedChunks = new Set(memberIds.filter((id) => index.chunkByKey.has(id)))
+  for (const entity of entities) {
+    for (const chunkKey of index.chunkKeysByEntity.get(entity.entityId) ?? []) selectedChunks.add(chunkKey)
+  }
+  const assertionIds = new Set(memberIds.filter((id) => id.startsWith('assertion:')).map((id) => id.slice('assertion:'.length)))
+  for (const chunkKey of selectedChunks) {
+    for (const assertionId of index.assertionIdsByChunk.get(chunkKey) ?? []) assertionIds.add(assertionId)
+  }
+  const internalRelations = index.relations.filter((relation) =>
+    assertionIds.has(relation.fromAssertionId) && assertionIds.has(relation.toAssertionId))
+    .slice(0, ASSERTION_REPORT_INTERNAL_RELATION_LIMIT)
+  const boundaryRelations = index.relations.filter((relation) =>
+    assertionIds.has(relation.fromAssertionId) !== assertionIds.has(relation.toAssertionId))
+    .slice(0, ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT)
+  const chunks = [...selectedChunks].flatMap((key) => {
+    const chunk = index.chunkByKey.get(key)
+    return chunk ? [chunk] : []
+  })
+  const assertions = [...assertionIds].flatMap((id) => {
+    const assertion = index.assertionById.get(id)
+    return assertion ? [assertion] : []
+  })
+  const relations = [...internalRelations, ...boundaryRelations]
+  return 320 +
+    entities.reduce((sum, entity) => sum + entityInputSize(entity) + 2, 0) +
+    chunks.reduce((sum, chunk) => sum + chunk.content.length + encodeKnowledgeRef(chunk.ref).length + 4, 0) +
+    assertions.reduce((sum, assertion) => sum + assertion.assertionId.length + assertion.type.length + boundedAssertionReportData(assertion.data).length + 5, 0) +
+    relations.reduce((sum, relation) => sum + relation.relationId.length + relation.type.length +
+      relation.fromAssertionId.length + relation.toAssertionId.length + 16, 0)
+}
+
+interface EstimationIndex {
+  readonly entityByNode: ReadonlyMap<string, CommunityEntityInput>
+  readonly chunkByKey: ReadonlyMap<string, CommunityChunkInput>
+  readonly chunkKeysByEntity: ReadonlyMap<string, readonly string[]>
+  readonly assertionById: ReadonlyMap<string, ReturnType<typeof projectAssertionCommunities>['assertions'][number]>
+  readonly assertionIdsByChunk: ReadonlyMap<string, readonly string[]>
+  readonly relations: ReturnType<typeof projectAssertionCommunities>['relations']
+}
+
+function createEstimationIndex(
+  input: CommunityGraphInput,
+  projection: ReturnType<typeof projectAssertionCommunities>,
+): EstimationIndex {
+  const chunkKeysByEntity = new Map<string, string[]>()
+  for (const mention of input.mentionWeights) {
+    const keys = chunkKeysByEntity.get(mention.entityId) ?? []
+    keys.push(encodeKnowledgeRef(mention.chunkRef))
+    chunkKeysByEntity.set(mention.entityId, keys)
+  }
+  const assertionIdsByChunk = new Map<string, string[]>()
+  for (const assertion of projection.assertions) {
+    for (const support of assertion.evidence) {
+      const key = encodeKnowledgeRef(support.chunkRef)
+      const ids = assertionIdsByChunk.get(key) ?? []
+      ids.push(assertion.assertionId)
+      assertionIdsByChunk.set(key, ids)
+    }
+  }
+  return {
+    entityByNode: new Map(input.entities.map((entity) => [entityNode(entity.entityId), entity])),
+    chunkByKey: new Map(input.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk])),
+    chunkKeysByEntity,
+    assertionById: new Map(projection.assertions.map((assertion) => [assertion.assertionId, assertion])),
+    assertionIdsByChunk,
+    relations: projection.relations,
   }
 }
+
+function connectedNodeComponents(memberIds: readonly string[], links: readonly AgglomerationLink[]): readonly (readonly string[])[] {
+  const adjacency = new Map(memberIds.map((id) => [id, new Set<string>()]))
+  for (const link of links) {
+    if (!adjacency.has(link.leftId) || !adjacency.has(link.rightId)) continue
+    adjacency.get(link.leftId)?.add(link.rightId)
+    adjacency.get(link.rightId)?.add(link.leftId)
+  }
+  const seen = new Set<string>()
+  return [...adjacency.keys()].sort().flatMap((start) => {
+    if (seen.has(start)) return []
+    const pending = [start]
+    const component: string[] = []
+    while (pending.length) {
+      const id = pending.pop()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      component.push(id)
+      pending.push(...[...(adjacency.get(id) ?? [])].filter((next) => !seen.has(next)).sort().reverse())
+    }
+    return [component.sort()]
+  })
+}
+
+function entityNode(entityId: string): string { return `entity:${entityId}` }
+function assertionNode(assertionId: string): string { return `assertion:${assertionId}` }
+function chunkNode(ref: CommunityChunkRef): string { return encodeKnowledgeRef(ref) }
 
 function fallbackLeafDrafts(chunks: readonly CommunityChunkInput[], budget: number): readonly CommunityDraft[] {
   const groups = new Map<string, CommunityChunkInput[]>()
@@ -159,65 +318,14 @@ function fallbackLeaf(chunks: readonly CommunityChunkInput[]): CommunityDraft {
     chunkRefs,
     estimatedInputChars: chunks.reduce((total, chunk) => total + chunk.content.length, 0),
     memberIdentities,
+    primaryAssertionIds: [],
+    secondaryAssertionIds: [],
   }
-}
-
-function connectedComponents(entityIds: readonly string[], edges: readonly CommunityEntityEdgeInput[]): readonly (readonly string[])[] {
-  const adjacency = new Map(entityIds.map((id) => [id, new Set<string>()]))
-  for (const edge of edges) {
-    if (!adjacency.has(edge.leftEntityId) || !adjacency.has(edge.rightEntityId)) continue
-    adjacency.get(edge.leftEntityId)?.add(edge.rightEntityId)
-    adjacency.get(edge.rightEntityId)?.add(edge.leftEntityId)
-  }
-  const seen = new Set<string>()
-  return [...adjacency.keys()].sort().flatMap((start) => {
-    if (seen.has(start)) return []
-    const stack = [start]
-    const component: string[] = []
-    while (stack.length > 0) {
-      const id = stack.pop() ?? ''
-      if (!id || seen.has(id)) continue
-      seen.add(id)
-      component.push(id)
-      for (const next of [...(adjacency.get(id) ?? [])].sort().reverse()) {
-        if (!seen.has(next)) stack.push(next)
-      }
-    }
-    return [component.sort()]
-  })
-}
-
-function estimateEntityMembers(entityIds: readonly string[], input: CommunityGraphInput): number {
-  const entitySet = new Set(entityIds)
-  const chunks = new Set<string>()
-  for (const mention of input.mentionWeights) {
-    if (entitySet.has(mention.entityId)) chunks.add(encodeKnowledgeRef(mention.chunkRef))
-  }
-  const chunkByKey = new Map(input.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
-  return entityIds.reduce((total, id) => total + entityInputSize(input.entities.find((entity) => entity.entityId === id)), 0) +
-    [...chunks].reduce((total, key) => total + (chunkByKey.get(key)?.content.length ?? 0), 0)
-}
-
-function estimateLeafInput(leaf: CommunityDraft, input: CommunityGraphInput): number {
-  const chunkByKey = new Map(input.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
-  return leaf.entityIds.reduce((total, id) => total + entityInputSize(input.entities.find((entity) => entity.entityId === id)), 0) +
-    leaf.chunkRefs.reduce((total, ref) => total + (chunkByKey.get(encodeKnowledgeRef(ref))?.content.length ?? 0), 0)
 }
 
 function entityInputSize(entity: CommunityEntityInput | undefined): number {
   if (!entity) return 0
   return [entity.canonicalName, entity.description ?? '', ...(entity.aliases ?? [])].join('\n').length
-}
-
-function groupMentions(mentionWeights: readonly CommunityMentionWeightInput[]): ReadonlyMap<string, readonly MentionChoice[]> {
-  const byChunk = new Map<string, MentionChoice[]>()
-  for (const mention of mentionWeights) {
-    const key = encodeKnowledgeRef(mention.chunkRef)
-    const group = byChunk.get(key) ?? []
-    group.push({ entityId: mention.entityId, weight: mention.weight, communityId: '' })
-    byChunk.set(key, group)
-  }
-  return byChunk
 }
 
 function freezeCommunity(draft: CommunityDraft): KnowledgeCommunity {
@@ -231,14 +339,40 @@ function freezeCommunity(draft: CommunityDraft): KnowledgeCommunity {
     chunkRefs: [...draft.chunkRefs].sort(compareChunkRefs),
     estimatedInputChars: draft.estimatedInputChars,
     memberIdentities: [...draft.memberIdentities].sort(),
+    primaryAssertionIds: [...draft.primaryAssertionIds].sort(),
+    secondaryAssertionIds: [...draft.secondaryAssertionIds].sort(),
   })
 }
 
-interface MentionChoice {
-  readonly entityId: string
-  readonly weight: number
-  readonly communityId: string
-  readonly leaf?: CommunityDraft
+function assignAssertions(
+  leaves: readonly CommunityDraft[],
+  projection: ReturnType<typeof projectAssertionCommunities>,
+): void {
+  const leafByChunk = new Map<string, string>()
+  const leafById = new Map<string, CommunityDraft>()
+  for (const leaf of leaves) {
+    leafById.set(leaf.communityId, leaf)
+    for (const ref of leaf.chunkRefs) leafByChunk.set(encodeKnowledgeRef(ref), leaf.communityId)
+  }
+  for (const membership of projectAssertionMemberships(projection.assertions, leafByChunk)) {
+    const primary = leafById.get(membership.primaryCommunityId)
+    if (primary && !primary.primaryAssertionIds.includes(membership.assertionId)) {
+      primary.primaryAssertionIds.push(membership.assertionId)
+      primary.memberIdentities.push(`assertion:${membership.assertionId}`)
+    }
+    for (const id of membership.secondaryCommunityIds) leafById.get(id)?.secondaryAssertionIds.push(membership.assertionId)
+  }
+  for (const leaf of leaves) {
+    replaceWithUniqueSorted(leaf.memberIdentities)
+    replaceWithUniqueSorted(leaf.primaryAssertionIds)
+    replaceWithUniqueSorted(leaf.secondaryAssertionIds)
+    leaf.communityId = communityId(leaf.memberIdentities)
+  }
+}
+
+function replaceWithUniqueSorted(values: string[]): void {
+  values.splice(0, values.length, ...new Set(values))
+  values.sort()
 }
 
 function assertChunkWithinBudget(chunk: CommunityChunkInput, budget: number): void {
@@ -255,10 +389,6 @@ function assertLeafBudgets(communities: readonly KnowledgeCommunity[], budget: n
 
 function communityId(memberIdentities: readonly string[]): string {
   return createStableId('community', [...memberIdentities].sort())
-}
-
-function compareMentionChoice(left: MentionChoice, right: MentionChoice): number {
-  return right.weight - left.weight || left.entityId.localeCompare(right.entityId) || left.communityId.localeCompare(right.communityId)
 }
 
 function compareChunks(left: CommunityChunkInput, right: CommunityChunkInput): number {

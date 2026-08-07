@@ -25,6 +25,7 @@ export async function drainInlineCallbacks(
     number,
     { readonly outcome: "completed" | "failed"; readonly error?: unknown }
   >();
+  const started = new Set<number>();
   let nextIndex = 0;
   let closed = false;
 
@@ -34,6 +35,7 @@ export async function drainInlineCallbacks(
       nextIndex += 1;
       const registration = registrations[index];
       if (!registration) continue;
+      started.add(registration.sequence);
 
       try {
         await options.evidence.runInline(registration.observation, () =>
@@ -85,6 +87,9 @@ export async function drainInlineCallbacks(
     options.abortController.abort(
       new Error("Deferred callback drain exceeded its host deadline."),
     );
+  }
+  for (const registration of registrations) {
+    if (!started.has(registration.sequence)) registration.onSkipped?.();
   }
 
   return {
