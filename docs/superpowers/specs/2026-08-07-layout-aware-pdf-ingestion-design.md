@@ -160,14 +160,21 @@ Markdown tables to cell rows. This parser is internal and does not add a
 general Markdown AST contract to Core.
 
 Heading blocks retain the complete source heading slice in `content`, including
-its Markdown heading markers. A `headingPath` entry is only the normalized
-visible inline heading text: trim outer whitespace, collapse internal
-whitespace to one ASCII space, and omit Markdown heading markers. On a heading
-of source level `L`, discard active headings at level `L` or deeper and append
-the new heading. A jump in levels adds no placeholder, so `H1 -> H3` produces
-the compact path `[H1, H3]`. Content before the first heading has no
-`headingPath`. Heading blocks include the path containing themselves; other
-blocks receive the active path at their source position.
+its Markdown heading markers. A `headingPath` entry is derived by applying the
+already-owned `mdast-util-to-string` projection to the heading node, then
+collapsing every run of CR, LF, or other whitespace to one ASCII space and
+trimming. Links, emphasis, and inline code therefore contribute their visible
+text, Markdown markup is omitted, and escapes have the value decoded by the
+Markdown parser. On a non-empty visible heading of source level `L`, discard
+active headings at level `L` or deeper and append the projected entry. A jump
+in levels adds no placeholder, so `H1 -> H3` produces the compact path
+`[H1, H3]`. A heading whose projected entry is empty is instead emitted as a
+narrative `other` block retaining its complete raw source slice; it does not
+update heading ancestry, start a section, or create an empty path entry.
+Content before the first non-empty visible heading has no `headingPath`.
+Heading blocks include the path containing themselves; other blocks, including
+an empty-visible-heading `other` block, receive the active path at their source
+position.
 
 Whenever chunk content needs heading context, it uses one normalized prefix,
 never the source heading slice: render the compact path as ATX lines whose
@@ -275,10 +282,12 @@ Within a blocked page it processes blocks in source order:
 
 1. A heading starts a new section and updates the active heading path.
 2. Narrative blocks are packed within that section up to `maxChars`; a chunk
-   never crosses the next heading or physical page.
-3. Paragraph, list, and code blocks remain whole when they fit. An individual
-   oversized block uses the existing paragraph, sentence, then hard-limit
-   splitter.
+   never crosses the next heading or physical page. `role: "other"` is
+   narrative and follows exactly the same packing, splitting, heading-context,
+   and provenance rules as `role: "paragraph"`; it is never dropped.
+3. Paragraph, other, list, and code blocks remain whole when they fit. An
+   individual oversized block uses the existing paragraph, sentence, then
+   hard-limit splitter.
 4. Every narrative chunk carries exactly the normalized heading prefix defined
    above. Source heading blocks establish boundaries and ancestry but are not
    also copied into a narrative body, so blocks are never rendered twice.
@@ -297,23 +306,44 @@ does not reduce that budget: a prefixed output is bounded by
 whole; it is not split or truncated. A heading-only chunk likewise remains
 whole. This is the only heading-related exception to the configured limit.
 
-For table blocks, `columns`, when present, is the single parsed header row and
-`rows` contains body rows only; the header is never duplicated in `rows`.
-Tables without a recognized header omit `columns`. A header-only table has
-`columns` and an empty `rows` array and emits exactly one header-only chunk. A
-table with neither a header nor body rows is not emitted as a block.
+For tables produced by the internal GFM Markdown parser, the first mdast table
+row is always `columns` and every remaining row is a body entry in `rows`;
+Crux performs no header heuristic. Optional `columns` remains supported for
+externally authored page blocks, where absence means a headerless table. The
+header is never duplicated in `rows`. A header-only table has `columns` and an
+empty `rows` array and emits exactly one header-only chunk. A table with
+neither a header nor body rows is not emitted as a block.
+
+Canonical table rendering preserves every cell without truncation. Project a
+cell with `mdast-util-to-string`, normalize each CRLF, lone CR, or lone LF to
+the literal string `<br>`, trim outer whitespace, then escape existing
+backslashes as `\\` and, in a second pass, escape `|` as `\|`. Backslash
+escaping happens first so the backslash introduced for a pipe is not escaped
+again. For externally authored string cells, apply the same normalization and
+escaping starting from that string. For an emitted window, its width is the
+maximum cell count among its header, when present, and its included body rows.
+Right-pad every shorter row to that width with empty cells; ragged input is
+otherwise preserved. Render each padded row as `| `, its cells joined by
+` | `, then ` |`. When a header is present, follow it with a delimiter row of
+exactly `width` cells, each `---`, rendered by the same row rule. Join the
+header, delimiter, and body rows with exactly one `\n`, with no leading or
+trailing newline. Headerless output contains only body rows and no delimiter.
+Header-only output contains exactly the header and delimiter rows.
+
 `tableRowsPerChunk` counts body rows. Each table chunk renders the normalized
-heading prefix, then the header when present, then a consecutive body-row
-window. It starts with at most `tableRowsPerChunk` body rows and repeatedly
-removes the last row until the rendered table payload (header, separator,
-rows, and newlines, but excluding heading-prefix soft overhead) is at most
-`maxChars`. A single body row that still exceeds `maxChars` is emitted whole
-with its header and is never text-split. Missing-header windows repeat no
-synthetic header. A header-only table, or a header that exceeds `maxChars`
-before any body row is added, also remains whole. Table output is therefore
-bounded by `prefix.length + maxChars` except for exactly one indivisible
-header/body-row payload when that payload itself exceeds `maxChars`. This gives
-exactly one partition for a given block and options.
+heading prefix followed immediately by the canonical table payload. It starts
+with at most `tableRowsPerChunk` consecutive body rows and repeatedly removes
+the last row until the exact canonical table payload string just defined
+(including header, delimiter, row syntax, padding, escapes, and inter-row
+newlines, but excluding heading-prefix soft overhead) satisfies
+`payload.length <= maxChars`. Width and padding are recalculated for each
+candidate emitted window. A single body row that still exceeds `maxChars` is
+emitted whole with its header and is never text-split. Missing-header windows
+repeat no synthetic header. A header-only table, or a header that exceeds
+`maxChars` before any body row is added, also remains whole. Table output is
+therefore bounded by `prefix.length + maxChars` except for exactly one
+indivisible header/body-row payload when that payload itself exceeds
+`maxChars`. This gives exactly one partition for a given block and options.
 
 Every block-aware chunk carries its page part ID, physical page location, and
 the contributing `blockIds`. A heading prefix contributes the IDs of the
@@ -446,17 +476,22 @@ whether a paid/model operation occurs is observable behavior.
 
 ## Verification
 
-Run at minimum:
+No test, typecheck, build, packaging, or other verification command may
+overlap. Run the focused package checks sequentially, one worker at a time, in
+exactly this order:
 
 ```sh
-pnpm --filter @use-crux/ingest test
+pnpm --filter @use-crux/ingest test -- --maxWorkers=1 --no-file-parallelism
 pnpm --filter @use-crux/ingest typecheck
-pnpm --filter @use-crux/core test
+pnpm --filter @use-crux/core test -- --maxWorkers=1 --no-file-parallelism
 pnpm --filter @use-crux/core typecheck
 ```
 
-Also verify the package lockfile and package build/type resolution with the
-repository's normal package workflow as appropriate. Pack
+Vitest's `--maxWorkers=1` and `--no-file-parallelism` flags are mandatory for
+these test invocations. Also verify the package lockfile and package build/type
+resolution with the repository's normal package workflow as appropriate, with
+each package-level and full-repository check run sequentially and only after
+the preceding command exits. Pack
 `@use-crux/ingest`, install the tarball in a temporary Node 22 project through
 the package manager, and load a PDF without workspace resolution. This must
 prove that the wrapper package and selected optional platform binary resolve
@@ -487,12 +522,16 @@ This changes published runtime behavior and install behavior for
 - Structured chunks do not cross PDF headings or physical pages, retain active
   heading context through the single normalized prefix, deterministically
   collapse skipped levels, and keep fitting list/code/paragraph blocks whole.
+- Heading paths use the parser-decoded visible inline-text projection; headings
+  with no visible text remain narrative `other` content without changing
+  ancestry, and all `other` blocks follow paragraph behavior and are retained.
 - Heading-only, missing-heading, nested-heading, over-limit-prefix, and
   body-limit cases have one deterministic output under the specified
   soft-overhead rule.
 - PDF table blocks use row windows with repeated headers and derived span
   provenance; missing-header, header-only, max-limited, and oversized-row cases
-  follow the declared row convention without splitting a row.
+  follow the declared parser-header and canonical-rendering conventions without
+  dropping cells or splitting a row.
 - Exact global spans require a provable page-relative mapping and unique page
   occurrence; repeated block text is resolved by its range, while repeated
   complete page content produces derived provenance without guessed spans.
