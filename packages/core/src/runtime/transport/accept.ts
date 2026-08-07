@@ -4,6 +4,7 @@
  * @module
  */
 
+import type { StatisticsFact } from "../../statistics";
 import type { RuntimeStoreAdapter } from "../store";
 import type { RuntimeAcceptedTransportEnvelope } from "./contracts";
 import { validateRuntimeAcceptedTransportEnvelope } from "./validation";
@@ -14,6 +15,11 @@ import {
   TransportStoreMissingError,
 } from "./lifecycle-errors";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
+import {
+  initialTransportStatistics,
+  recordTransportStatistics,
+  transportStatisticsIdentity,
+} from "./statistics";
 
 /** Options for durable transport envelope acceptance. */
 export interface AcceptTransportEnvelopeOptions {
@@ -57,7 +63,8 @@ export type AcceptTransportEnvelopeResult =
  *
  * @remarks Call only after edge authentication and request validation complete.
  * The Promise resolves after the accept transaction commits. Hosts must send
- * the provider acknowledgment only when `acknowledge` is `true`.
+ * the provider acknowledgment only when `acknowledge` is `true`. Bounded
+ * accepted/deduplicated statistics update in the same transaction.
  */
 export async function acceptTransportEnvelope(
   options: AcceptTransportEnvelopeOptions,
@@ -68,24 +75,49 @@ export async function acceptTransportEnvelope(
   const digest = transportEnvelopeDigest(envelope);
 
   const result = await options.store.transact(async (tx) => {
-    if (!tx.transports) throw new TransportStoreMissingError();
-    return tx.transports.accept({
+    if (!tx.transports) {
+      throw new TransportStoreMissingError();
+    }
+
+    const accepted = await tx.transports.accept({
       namespace: options.namespace,
       envelope,
       envelopeDigest: digest,
       maxAttempts,
       now,
     });
+
+    if (accepted.kind === "conflict") {
+      return accepted;
+    }
+
+    const fact: StatisticsFact = {
+      kind: "transport-envelope",
+      identity: transportStatisticsIdentity(
+        envelope.adapterId,
+        envelope.bindingId,
+      ),
+      outcome: accepted.kind === "accepted" ? "accepted" : "deduplicated",
+    };
+    const previous =
+      (await tx.transports.getStatistics(options.namespace)) ??
+      initialTransportStatistics(options.namespace, now);
+
+    await tx.transports.putStatistics(
+      options.namespace,
+      recordTransportStatistics(previous, options.namespace, now, [fact]),
+    );
+
+    return accepted;
   });
 
   if (result.kind === "conflict") {
-    // Surface a typed conflict while preserving the structured accept result
-    // for hosts that prefer result matching.
     const error = new TransportEnvelopeConflictError(
       envelope.provider,
       envelope.accountId,
       envelope.eventId,
     );
+
     Object.defineProperty(error, "result", {
       value: Object.freeze({
         kind: "conflict",
@@ -94,6 +126,7 @@ export async function acceptTransportEnvelope(
       } satisfies AcceptTransportEnvelopeResult),
       enumerable: false,
     });
+
     throw error;
   }
 

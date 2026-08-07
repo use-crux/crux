@@ -4,6 +4,7 @@
  * @module
  */
 
+import type { StatisticsLedgerExport } from "../../../statistics";
 import type {
   AcceptRuntimeTransportEnvelopeInput,
   AcceptRuntimeTransportEnvelopeResult,
@@ -19,6 +20,11 @@ import type {
 } from "../../transport/records";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
+import {
+  matchesPruneNamespace,
+  olderThan,
+  pruneMapValues,
+} from "./retention";
 
 export function createMemoryTransportStore(
   data: MemoryRuntimeData,
@@ -41,6 +47,7 @@ export function createMemoryTransportStore(
       };
       const key = identityKey(identity);
       const existing = data.transportEnvelopes.get(key);
+
       if (existing) {
         if (existing.envelopeDigest !== input.envelopeDigest) {
           return Object.freeze({
@@ -48,6 +55,7 @@ export function createMemoryTransportStore(
             record: cloneRecord(existing),
           });
         }
+
         return Object.freeze({
           kind: "duplicate" as const,
           record: cloneRecord(existing),
@@ -72,8 +80,13 @@ export function createMemoryTransportStore(
         updatedAt: now,
         nextAttemptAt: now,
       });
+
       data.transportEnvelopes.set(key, record);
-      return Object.freeze({ kind: "accepted" as const, record: cloneRecord(record) });
+
+      return Object.freeze({
+        kind: "accepted" as const,
+        record: cloneRecord(record),
+      });
     },
 
     async claim(options: ClaimRuntimeTransportEnvelopesOptions) {
@@ -107,6 +120,7 @@ export function createMemoryTransportStore(
           leaseToken: options.leaseToken,
           leaseExpiresAt,
           lastFailure: record.lastFailure,
+          lineage: record.lineage,
         });
         data.transportEnvelopes.set(identityKey(next), next);
         claimed.push(cloneRecord(next));
@@ -119,16 +133,22 @@ export function createMemoryTransportStore(
     ) {
       const key = identityKey(input.identity);
       const existing = data.transportEnvelopes.get(key);
-      if (!existing) return null;
+
+      if (!existing) {
+        return null;
+      }
+
       if (existing.state === "normalized") {
         return cloneRecord(existing);
       }
+
       if (
         existing.state !== "claimed" ||
         existing.leaseToken !== input.leaseToken
       ) {
         return null;
       }
+
       recordWrite?.();
       const next: RuntimeTransportEnvelopeRecord = Object.freeze({
         schemaVersion: existing.schemaVersion,
@@ -145,14 +165,27 @@ export function createMemoryTransportStore(
         acceptedAt: existing.acceptedAt,
         updatedAt: input.now.toISOString(),
         nextAttemptAt: input.now.toISOString(),
+        ...(input.lineage
+          ? {
+              lineage: Object.freeze(
+                input.lineage.map((entry) => Object.freeze({ ...entry })),
+              ),
+            }
+          : {}),
+        ...(input.lineageTruncated === true
+          ? { lineageTruncated: true as const }
+          : {}),
       });
+
       data.transportEnvelopes.set(key, next);
+
       return cloneRecord(next);
     },
 
     async failNormalization(input: FailRuntimeTransportNormalizationInput) {
       const key = identityKey(input.identity);
       const existing = data.transportEnvelopes.get(key);
+
       if (
         !existing ||
         existing.state !== "claimed" ||
@@ -160,6 +193,7 @@ export function createMemoryTransportStore(
       ) {
         return null;
       }
+
       recordWrite?.();
       const deadLetter = existing.attempts >= existing.maxAttempts;
       const next: RuntimeTransportEnvelopeRecord = Object.freeze({
@@ -183,15 +217,22 @@ export function createMemoryTransportStore(
           message: input.message,
           ...(input.code === undefined ? {} : { code: input.code }),
         }),
+        lineage: existing.lineage,
       });
+
       data.transportEnvelopes.set(key, next);
+
       return cloneRecord(next);
     },
 
     async replay(input: ReplayRuntimeTransportEnvelopeInput) {
       const key = identityKey(input.identity);
       const existing = data.transportEnvelopes.get(key);
-      if (!existing || existing.state !== "dead-letter") return null;
+
+      if (!existing || existing.state !== "dead-letter") {
+        return null;
+      }
+
       recordWrite?.();
       const next: RuntimeTransportEnvelopeRecord = Object.freeze({
         schemaVersion: existing.schemaVersion,
@@ -210,8 +251,40 @@ export function createMemoryTransportStore(
         nextAttemptAt: input.now.toISOString(),
         lastFailure: existing.lastFailure,
       });
+
       data.transportEnvelopes.set(key, next);
+
       return cloneRecord(next);
+    },
+
+    async getStatistics(namespace: string) {
+      const value = data.transportStatistics.get(namespace);
+
+      if (!value) {
+        return null;
+      }
+
+      return cloneStatistics(value);
+    },
+
+    async putStatistics(namespace: string, statistics: StatisticsLedgerExport) {
+      recordWrite?.();
+      data.transportStatistics.set(namespace, cloneStatistics(statistics));
+    },
+
+    async prune(options) {
+      const result = pruneMapValues(
+        data.transportEnvelopes,
+        options,
+        (record) =>
+          matchesPruneNamespace(record, options.namespace) &&
+          (record.state === "normalized" || record.state === "dead-letter") &&
+          olderThan(new Date(record.updatedAt), options.before),
+        () => {
+          recordWrite?.();
+        },
+      );
+      return result;
     },
   };
 }
@@ -223,9 +296,11 @@ function isClaimable(
   if (record.state === "accepted") {
     return Date.parse(record.nextAttemptAt) <= nowMs;
   }
+
   if (record.state === "claimed" && record.leaseExpiresAt) {
     return Date.parse(record.leaseExpiresAt) <= nowMs;
   }
+
   return false;
 }
 
@@ -254,5 +329,22 @@ function cloneRecord(
     lastFailure: record.lastFailure
       ? Object.freeze({ ...record.lastFailure })
       : undefined,
+    lineage: record.lineage
+      ? Object.freeze(record.lineage.map((entry) => Object.freeze({ ...entry })))
+      : undefined,
+    ...(record.lineageTruncated === true
+      ? { lineageTruncated: true as const }
+      : {}),
+  });
+}
+
+function cloneStatistics(
+  value: StatisticsLedgerExport,
+): StatisticsLedgerExport {
+  return Object.freeze({
+    version: value.version,
+    owner: Object.freeze({ ...value.owner }),
+    cursor: value.cursor,
+    state: value.state,
   });
 }

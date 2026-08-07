@@ -8,6 +8,10 @@ Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and 
 
 - Always strive for concise, simple solutions
 - If a problem can be solved in a simpler way, propose it.
+- Hard maximum is 1,000 lines per file. Prefer small files focused on one concern, but do not split a cohesive file when splitting would hurt clarity.
+- Add blank lines between clear logical blocks.
+- Always use braces for every `if` statement, including single-line branches.
+- Human readability is a primary requirement; do not optimize for terseness.
 
 ## Subagents
 

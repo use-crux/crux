@@ -38,6 +38,12 @@ interface EncodedOwnerState {
     OwnerState["inputs"],
   ])[];
   readonly otherInputs?: OwnerState["inputs"];
+  readonly transport: OwnerState["transport"];
+  readonly transportByIdentity: readonly (readonly [
+    string,
+    OwnerState["transport"],
+  ])[];
+  readonly otherTransport?: OwnerState["transport"];
 }
 
 /** Encode one validated owner read model for host persistence. @internal */
@@ -69,6 +75,9 @@ export function encodeOwnerState(state: OwnerState): StatisticsLedgerExport {
     inputs: state.inputs,
     inputsByIdentity: [...state.inputsByIdentity],
     ...(state.otherInputs ? { otherInputs: state.otherInputs } : {}),
+    transport: state.transport,
+    transportByIdentity: [...state.transportByIdentity],
+    ...(state.otherTransport ? { otherTransport: state.otherTransport } : {}),
   };
   return {
     version: 1,

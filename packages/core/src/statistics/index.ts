@@ -23,6 +23,8 @@ export type {
   TimingStats,
   ToolOutcomeStats,
   ToolStats,
+  TransportEnvelopeOutcomeStats,
+  TransportEnvelopeStats,
   UsageStats,
   WorkCurrentState,
   WorkOutcomeStats,

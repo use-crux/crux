@@ -19,8 +19,10 @@ export type {
   RuntimeManagedTransportBinding,
   RuntimeSignalTransportTarget,
   RuntimeTransportConfigRef,
+  RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeFailure,
   RuntimeTransportEnvelopeIdentity,
+  RuntimeTransportEnvelopeProjection,
   RuntimeTransportEnvelopeRecord,
   RuntimeTransportEnvelopeState,
   RuntimeTransportStorePort,
@@ -40,7 +42,12 @@ export type {
   TransportNormalizationRunOnceOptions,
   TransportNormalizationRunResult,
   TransportNormalizationRunner,
+  TransportStatisticsOptions,
 } from "./transport";
+export type {
+  TransportEnvelopeOutcomeStats,
+  TransportEnvelopeStats,
+} from "../statistics";
 export {
   RuntimeManagedTransportContractError,
   TransportEnvelopeConflictError,
@@ -56,6 +63,12 @@ export {
   normalizeClaimedTransportEnvelope,
   replayTransportEnvelope,
   createTransportNormalizationRunner,
+  projectTransportEnvelope,
+  transportStatistics,
+  transportStatisticsIdentity,
+  transportStatisticsOwner,
+  emptyTransportEnvelopeStats,
+  MAX_TRANSPORT_LINEAGE_ENTRIES,
 } from "./transport";
 
 export { createRuntimeProgram } from "./program";

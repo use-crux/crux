@@ -20,11 +20,13 @@ export {
 } from "./validation";
 
 export type {
+  RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeFailure,
   RuntimeTransportEnvelopeIdentity,
   RuntimeTransportEnvelopeRecord,
   RuntimeTransportEnvelopeState,
 } from "./records";
+export { MAX_TRANSPORT_LINEAGE_ENTRIES } from "./records";
 export type {
   AcceptRuntimeTransportEnvelopeInput,
   AcceptRuntimeTransportEnvelopeResult,
@@ -66,3 +68,18 @@ export {
   type TransportNormalizationRunResult,
   type TransportNormalizationRunner,
 } from "./runner";
+export {
+  emptyTransportEnvelopeStats,
+  initialTransportStatistics,
+  recordTransportStatistics,
+  transportScopeStatsFromExport,
+  transportStatistics,
+  transportStatisticsFromExport,
+  transportStatisticsIdentity,
+  transportStatisticsOwner,
+  type TransportStatisticsOptions,
+} from "./statistics";
+export {
+  projectTransportEnvelope,
+  type RuntimeTransportEnvelopeProjection,
+} from "./projection";

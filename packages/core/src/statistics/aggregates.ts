@@ -210,6 +210,44 @@ export interface SessionInputStats {
   readonly identityAttribution: AttributionCoverage;
 }
 
+/** Managed-transport envelope lifecycle counters for one owner or identity. */
+export interface TransportEnvelopeOutcomeStats {
+  /** First durable acceptance of a provider event identity. */
+  readonly accepted: number;
+  /** Same provider event accepted again with a matching digest. */
+  readonly deduplicated: number;
+  /** Envelope reached the normalized lifecycle state. */
+  readonly normalized: number;
+  /** At least one Signal occurrence published from the envelope. */
+  readonly delivered: number;
+  /** Failed normalization that scheduled another attempt. */
+  readonly retried: number;
+  /** Failed normalization that entered dead-letter. */
+  readonly deadLettered: number;
+}
+
+/**
+ * Bounded managed-transport aggregates with first-64 identity attribution.
+ *
+ * @remarks Totals are exact. Identity keys are structured adapter/binding
+ * pairs (see `transportStatisticsIdentity`), never per-event secrets or raw
+ * payloads. Later identities roll into `otherIdentities`.
+ */
+export interface TransportEnvelopeStats {
+  /** Exact totals across every adapter/transport identity. */
+  readonly total: TransportEnvelopeOutcomeStats;
+  /**
+   * Outcomes for the first 64 structured adapter/transport identities.
+   *
+   * @remarks Keys come from `transportStatisticsIdentity(adapterId, bindingId)`.
+   */
+  readonly byIdentity: Readonly<Record<string, TransportEnvelopeOutcomeStats>>;
+  /** Outcomes for identities beyond the fixed attribution bound. */
+  readonly otherIdentities?: TransportEnvelopeOutcomeStats;
+  /** Whether all adapter/transport identities have explicit entries. */
+  readonly identityAttribution: AttributionCoverage;
+}
+
 /** Complete mechanical aggregate for one statistics owner. */
 export interface ScopeStats {
   /** Provider-reported usage and bounded model attribution. */
@@ -230,4 +268,6 @@ export interface ScopeStats {
   readonly lifecycle: LifecycleStats;
   /** Session ingress outcomes with bounded identity attribution. */
   readonly inputs: SessionInputStats;
+  /** Managed-transport envelope outcomes with bounded identity attribution. */
+  readonly transport: TransportEnvelopeStats;
 }

@@ -4,7 +4,10 @@
  * @module
  */
 
+import type { StatisticsLedgerExport } from "../../statistics";
+import type { RuntimePruneOptions, RuntimePruneResult } from "../ports/retention";
 import type {
+  RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeIdentity,
   RuntimeTransportEnvelopeRecord,
 } from "./records";
@@ -48,6 +51,19 @@ export interface CompleteRuntimeTransportNormalizationInput {
   readonly identity: RuntimeTransportEnvelopeIdentity;
   readonly leaseToken: string;
   readonly now: Date;
+  /**
+   * Signal publications produced by this normalization pass.
+   *
+   * @remarks Occurrence ids only, already bounded by the caller to
+   * {@link import("./records").MAX_TRANSPORT_LINEAGE_ENTRIES}. Never include
+   * payloads or credentials.
+   */
+  readonly lineage?: readonly RuntimeTransportDeliveryLineageEntry[];
+  /**
+   * True when publications beyond the lineage bound were omitted from
+   * {@link lineage}.
+   */
+  readonly lineageTruncated?: boolean;
 }
 
 /** Input for recording a failed normalization attempt. */
@@ -69,8 +85,9 @@ export interface ReplayRuntimeTransportEnvelopeInput {
 /**
  * Transactional store operations for managed-transport envelopes.
  *
- * @remarks Implementations must keep accept, claim, complete, fail, and replay
- * transitions atomic with the surrounding Runtime transaction.
+ * @remarks Implementations must keep accept, claim, complete, fail, replay, and
+ * statistics updates atomic with the surrounding Runtime transaction. Statistics
+ * use the shared statistics ledger export, not a second metrics store.
  */
 export interface RuntimeTransportStorePort {
   /** Load one envelope by provider/account/event identity. */
@@ -106,4 +123,18 @@ export interface RuntimeTransportStorePort {
   replay(
     input: ReplayRuntimeTransportEnvelopeInput,
   ): Promise<RuntimeTransportEnvelopeRecord | null>;
+  /** Load the restart-safe namespace transport statistics ledger export. */
+  getStatistics(namespace: string): Promise<StatisticsLedgerExport | null>;
+  /** Persist the namespace transport statistics ledger export. */
+  putStatistics(
+    namespace: string,
+    statistics: StatisticsLedgerExport,
+  ): Promise<void>;
+  /**
+   * Prune terminal envelopes older than the retention cutoff.
+   *
+   * @remarks Only `normalized` and `dead-letter` rows are eligible. Active
+   * accepted/claimed work is never removed by retention.
+   */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>;
 }

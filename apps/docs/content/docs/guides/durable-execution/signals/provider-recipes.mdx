@@ -1,0 +1,234 @@
+---
+title: Provider recipes
+description: Authentication, idempotency, retries, dead letters, replay, and operator deployment for Signal providers.
+---
+
+These recipes assume you already know the
+[Signal provider guide](/docs/guides/durable-execution/signals/providers).
+Copy the current public API only.
+
+## Authenticate and size-check at the edge
+
+```ts
+import { createHash } from "node:crypto";
+import { webhook } from "@use-crux/core/signal/transport";
+import { z } from "zod";
+
+const MAX_BYTES = 64 * 1024;
+
+const ProviderBodySchema = z.object({
+  accountId: z.string().min(1),
+  eventId: z.string().min(1),
+  topic: z.string().min(1),
+});
+
+/** Reject oversized trusted Content-Length before any body read. */
+function assertContentLengthBudget(request: Request, maxBytes: number): void {
+  const header = request.headers.get("content-length");
+  if (header === null) {
+    return;
+  }
+
+  const length = Number(header);
+  if (!Number.isFinite(length) || length < 0 || length > maxBytes) {
+    throw new Error("payload too large");
+  }
+}
+
+/**
+ * Single bounded accumulation from the request stream.
+ * Aborts as soon as total bytes would exceed `maxBytes`.
+ */
+async function readBoundedBody(
+  request: Request,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  if (!request.body) {
+    return new Uint8Array(0);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value || value.byteLength === 0) {
+        continue;
+      }
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        throw new Error("payload too large");
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const raw = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    raw.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return raw;
+}
+
+function sha256Hex(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export const ingress = webhook({
+  async handle(request) {
+    assertContentLengthBudget(request, MAX_BYTES);
+
+    const raw = await readBoundedBody(request, MAX_BYTES);
+    const signature = request.headers.get("x-signature");
+    if (!verify(signature, raw)) {
+      throw new Error("unauthenticated");
+    }
+
+    const body = ProviderBodySchema.parse(
+      JSON.parse(new TextDecoder().decode(raw)),
+    );
+
+    return {
+      accountId: body.accountId,
+      eventId: body.eventId,
+      authenticatedRouting: { source: "webhook", topic: body.topic },
+      payload: {
+        kind: "inline-base64url",
+        value: Buffer.from(raw).toString("base64url"),
+        byteLength: raw.byteLength,
+        sha256: sha256Hex(raw),
+      },
+    };
+  },
+});
+```
+
+Throw or reject before returning whenever authentication or validation fails.
+The host must not call `acceptTransportEnvelope()` for failed handles.
+
+## Accept before acknowledge
+
+```ts
+import {
+  acceptTransportEnvelope,
+  TransportEnvelopeConflictError,
+  type RuntimeAcceptedTransportEnvelope,
+} from "@use-crux/core/runtime";
+
+export async function postWebhook(request: Request, store: RuntimeStore) {
+  const handled = await ingress.handle(request);
+  const envelope: RuntimeAcceptedTransportEnvelope = {
+    _tag: "RuntimeAcceptedTransportEnvelope",
+    schemaVersion: 1,
+    bindingId: "binding.orders",
+    adapterId: "orders.webhook",
+    provider: "orders",
+    accountId: handled.accountId,
+    eventId: handled.eventId,
+    receivedAt: new Date().toISOString(),
+    authenticatedRouting: handled.authenticatedRouting,
+    payload: handled.payload,
+    configRef: { id: "config.orders", revision: "1" },
+    target: { kind: "signal", signalId: "order.submitted" },
+  };
+
+  try {
+    // Accepted and duplicate both resolve with acknowledge: true.
+    await acceptTransportEnvelope({
+      store,
+      namespace: "prod",
+      envelope,
+    });
+    return new Response("ok", { status: 200 });
+  } catch (error) {
+    if (error instanceof TransportEnvelopeConflictError) {
+      // Conflict throws; do not acknowledge as success.
+      return new Response("conflict", { status: 409 });
+    }
+
+    throw error;
+  }
+}
+```
+
+## Idempotent provider event IDs
+
+Use the provider's stable event ID as the envelope `eventId`. On redelivery:
+
+- matching digest → `kind: "duplicate"`, `acknowledge: true`
+- different authenticated payload → conflict error, do not ack as success
+
+Inside `onEvent`, prefer the accepted event identity for Signal publish
+idempotency. When `idempotencyKey` is omitted, the transport runner defaults to
+the provider/account/event identity so crash recovery cannot create a second
+logical delivery for the same envelope.
+
+## Retries, dead letters, and explicit replay
+
+```ts
+import {
+  createTransportNormalizationRunner,
+  replayTransportEnvelope,
+  transportStatistics,
+  projectTransportEnvelope,
+} from "@use-crux/core/runtime";
+
+const runner = createTransportNormalizationRunner({
+  store,
+  namespace: "prod",
+  providers: [orders],
+});
+
+// Runtime maintenance / worker cadence normally calls this.
+await runner.runOnce();
+
+const stats = await transportStatistics({ store, namespace: "prod" });
+console.log(stats.total.retried, stats.total.deadLettered);
+
+// Operators requeue dead letters explicitly — workers never invent replay.
+const revived = await replayTransportEnvelope({
+  store,
+  namespace: "prod",
+  provider: "orders",
+  accountId: "acct_1",
+  eventId: "evt_poison",
+});
+
+const view = projectTransportEnvelope(revived);
+// view.lineage is occurrence identities only; no payload bytes.
+```
+
+Bounded retry metadata lives on the envelope record. After `maxAttempts`, the
+record becomes `dead-letter` and stays until retention or explicit replay.
+
+## Deploy with inert bindings and one worker
+
+1. Export `signalProvider(...)` definitions and
+   `managedTransportBinding(...)` projections from application modules.
+2. Generate or hand-write a Runtime program that includes those providers and
+   inert transports.
+3. Run one configured Runtime worker. It drains accepted envelopes on the
+   existing maintenance cadence; do not start a second transport daemon.
+4. Configure retention with `transportEnvelopes` (default `7d`) when terminal
+   envelope rows should expire.
+
+Inert bindings hold only stable ids, config refs, and Signal targets. They must
+never capture credentials, `Request` objects, live clients, or `onEvent`
+closures.
+
+## Out of scope
+
+Polling, SSE, WebSocket, and generic stream supervision remain
+[#340](https://github.com/use-crux/crux/issues/340). This closeout covers
+webhook Signal providers only.

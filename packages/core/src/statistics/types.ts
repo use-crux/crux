@@ -9,8 +9,20 @@ export type * from "./aggregates";
 
 /** Stable identity for one statistics-owning execution scope. @internal */
 export interface StatisticsOwner {
-  /** Kind of execution scope that owns the aggregate. */
-  readonly kind: "run" | "flow" | "session" | "composition" | "work" | "media";
+  /**
+   * Kind of execution scope that owns the aggregate.
+   *
+   * `transport` owns managed-transport envelope lifecycle counters for one
+   * Runtime namespace (or other stable transport owner id).
+   */
+  readonly kind:
+    | "run"
+    | "flow"
+    | "session"
+    | "composition"
+    | "work"
+    | "media"
+    | "transport";
   /** Stable owner identifier within its kind. */
   readonly id: string;
 }
@@ -93,6 +105,23 @@ export type StatisticsFact =
         | "delivered"
         | "resumed"
         | "dropped";
+    }
+  | {
+      readonly kind: "transport-envelope";
+      /**
+       * Bounded adapter/transport attribution key.
+       *
+       * Prefer `transportStatisticsIdentity(adapterId, bindingId)`. Never a
+       * raw payload, credential, or per-event secret.
+       */
+      readonly identity: string;
+      readonly outcome:
+        | "accepted"
+        | "deduplicated"
+        | "normalized"
+        | "delivered"
+        | "retried"
+        | "dead-lettered";
     }
   | {
       readonly kind: "timing";

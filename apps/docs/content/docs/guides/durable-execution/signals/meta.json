@@ -1,11 +1,13 @@
 {
   "title": "Signals",
-  "description": "Typed process-local events and durable Flow waits.",
+  "description": "Typed process-local events, durable Flow waits, and Signal providers.",
   "pages": [
     "index",
     "publish-and-subscribe",
     "filters-and-idempotency",
     "durable-flow-waits",
+    "providers",
+    "provider-recipes",
     "retries-effects-and-evals",
     "operations-and-errors",
     "recipes"

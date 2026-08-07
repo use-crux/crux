@@ -28,6 +28,14 @@ export type MutableWorkOutcome = Omit<Mutable<WorkOutcomeStats>, "current"> & {
 export type MutableApprovals = Mutable<ApprovalStats>;
 export type MutableLifecycle = Mutable<LifecycleStats>;
 export type MutableSessionInputOutcome = Mutable<SessionInputOutcomeStats>;
+export type MutableTransportEnvelopeOutcome = Mutable<{
+  accepted: number;
+  deduplicated: number;
+  delivered: number;
+  normalized: number;
+  retried: number;
+  deadLettered: number;
+}>;
 
 export interface OwnerState {
   readonly owner: StatisticsOwner;
@@ -54,6 +62,9 @@ export interface OwnerState {
   readonly inputs: MutableSessionInputOutcome;
   readonly inputsByIdentity: Map<string, MutableSessionInputOutcome>;
   otherInputs?: MutableSessionInputOutcome;
+  readonly transport: MutableTransportEnvelopeOutcome;
+  readonly transportByIdentity: Map<string, MutableTransportEnvelopeOutcome>;
+  otherTransport?: MutableTransportEnvelopeOutcome;
 }
 
 export function createOwnerState(
@@ -104,6 +115,8 @@ export function createOwnerState(
     },
     inputs: emptySessionInputOutcome(),
     inputsByIdentity: new Map(),
+    transport: emptyTransportEnvelopeOutcome(),
+    transportByIdentity: new Map(),
   };
 }
 
@@ -118,6 +131,17 @@ export function emptySessionInputOutcome(): MutableSessionInputOutcome {
     delivered: 0,
     resumed: 0,
     dropped: 0,
+  };
+}
+
+export function emptyTransportEnvelopeOutcome(): MutableTransportEnvelopeOutcome {
+  return {
+    accepted: 0,
+    deduplicated: 0,
+    normalized: 0,
+    delivered: 0,
+    retried: 0,
+    deadLettered: 0,
   };
 }
 

@@ -4,6 +4,7 @@ import type {
   MutableModelCalls,
   MutableSessionInputOutcome,
   MutableToolOutcome,
+  MutableTransportEnvelopeOutcome,
   MutableUsage,
   MutableWorkOutcome,
 } from "./internal";
@@ -187,6 +188,21 @@ export function readSessionInputOutcome(
     "delivered",
     "resumed",
     "dropped",
+  ]);
+  return { ...object };
+}
+
+export function readTransportEnvelopeOutcome(
+  value: unknown,
+  label: string,
+): MutableTransportEnvelopeOutcome {
+  const object = counts(value, label, [
+    "accepted",
+    "deduplicated",
+    "normalized",
+    "delivered",
+    "retried",
+    "deadLettered",
   ]);
   return { ...object };
 }

@@ -22,10 +22,35 @@ export interface RuntimeTransportEnvelopeFailure {
 }
 
 /**
+ * Maximum Signal publications retained on one envelope after normalization.
+ *
+ * @remarks Matches the statistics first-64 attribution bound. Provider
+ * `onEvent` may publish more Signals; only the first
+ * {@link MAX_TRANSPORT_LINEAGE_ENTRIES} occurrence identities are persisted
+ * and `lineageTruncated` becomes true when additional publications succeed.
+ */
+export const MAX_TRANSPORT_LINEAGE_ENTRIES = 64;
+
+/**
+ * Signal publication linked from one accepted transport envelope.
+ *
+ * @remarks Uses existing Signal occurrence identities. Never stores payloads.
+ */
+export interface RuntimeTransportDeliveryLineageEntry {
+  /** Published Signal definition identity. */
+  readonly signalId: string;
+  /** Canonical occurrence identity returned by Signal publish. */
+  readonly occurrenceId: string;
+}
+
+/**
  * Durable store record for one provider event identity.
  *
  * @remarks Identity is `(namespace, provider, accountId, eventId)`. The
  * envelope digest detects conflicting authenticated payloads for that identity.
+ * `lineage` records Signal occurrences published during normalization so
+ * observability can join envelope → occurrence → Work/Session/Flow without a
+ * parallel execution registry.
  */
 export interface RuntimeTransportEnvelopeRecord {
   /** Record schema version. */
@@ -62,6 +87,22 @@ export interface RuntimeTransportEnvelopeRecord {
   readonly leaseExpiresAt?: string;
   /** Latest safe failure diagnostic. */
   readonly lastFailure?: RuntimeTransportEnvelopeFailure;
+  /**
+   * Signal publications produced by the latest successful normalization.
+   *
+   * @remarks Bounded to at most {@link MAX_TRANSPORT_LINEAGE_ENTRIES}
+   * publications from one `onEvent` pass. Empty when normalization has not
+   * completed or published nothing. Never stores payloads.
+   */
+  readonly lineage?: readonly RuntimeTransportDeliveryLineageEntry[];
+  /**
+   * True when successful `onEvent` publications exceeded
+   * {@link MAX_TRANSPORT_LINEAGE_ENTRIES} and later entries were dropped.
+   *
+   * @remarks Payload-free aggregate indicator only. Omitted or false when the
+   * retained lineage is complete for that normalization pass.
+   */
+  readonly lineageTruncated?: boolean;
 }
 
 /** Identity used for idempotent acceptance lookup. */

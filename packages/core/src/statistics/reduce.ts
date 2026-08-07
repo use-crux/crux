@@ -1,9 +1,11 @@
 import {
   emptySessionInputOutcome,
   emptyToolOutcome,
+  emptyTransportEnvelopeOutcome,
   emptyWorkOutcome,
   type MutableSessionInputOutcome,
   type MutableToolOutcome,
+  type MutableTransportEnvelopeOutcome,
   type MutableUsage,
   type MutableWorkOutcome,
   type OwnerState,
@@ -52,6 +54,13 @@ export function applyFact(
       increment(state.inputs, fact.outcome);
       increment(sessionInputTarget(state, fact.identity), fact.outcome);
       return;
+    case "transport-envelope":
+      increment(state.transport, transportOutcomeKey(fact.outcome));
+      increment(
+        transportTarget(state, fact.identity),
+        transportOutcomeKey(fact.outcome),
+      );
+      return;
     case "timing":
       state.activeTimeMs += fact.activeTimeMs;
       state.suspendedTimeMs += fact.suspendedTimeMs;
@@ -69,6 +78,37 @@ function sessionInputTarget(
     return mapValue(state.inputsByIdentity, identity, emptySessionInputOutcome);
   }
   return (state.otherInputs ??= emptySessionInputOutcome());
+}
+
+function transportTarget(
+  state: OwnerState,
+  identity: string,
+): MutableTransportEnvelopeOutcome {
+  const current = state.transportByIdentity.get(identity);
+
+  if (current) {
+    return current;
+  }
+
+  if (state.transportByIdentity.size < 64) {
+    return mapValue(
+      state.transportByIdentity,
+      identity,
+      emptyTransportEnvelopeOutcome,
+    );
+  }
+
+  return (state.otherTransport ??= emptyTransportEnvelopeOutcome());
+}
+
+function transportOutcomeKey(
+  outcome: Extract<StatisticsFact, { kind: "transport-envelope" }>["outcome"],
+): keyof MutableTransportEnvelopeOutcome {
+  if (outcome === "dead-lettered") {
+    return "deadLettered";
+  }
+
+  return outcome;
 }
 
 function applyTransportRetry(
