@@ -19,9 +19,13 @@ import {
   type CommunityReportLineage,
 } from './records'
 import { communityReportOutputSchema, type CommunityReportOutput } from './report-schema'
-import { ASSERTION_MEMBERSHIP_POLICY_VERSION, ASSERTION_REPORT_PROMPT_VERSION, projectAssertionCommunities } from './assertion-policy'
-
-const MAX_BOUNDARY_RELATIONS = 20
+import {
+  ASSERTION_MEMBERSHIP_POLICY_VERSION,
+  ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT,
+  ASSERTION_REPORT_PROMPT_VERSION,
+  boundedAssertionReportData,
+  projectAssertionCommunities,
+} from './assertion-policy'
 
 export interface GenerateCommunityReportsInput {
   readonly model: KnowledgeModel
@@ -165,10 +169,15 @@ function memberHashFor(
   children: readonly CommunityReport[],
 ): string {
   if (children.length > 0) {
-    return stableHash(children.map((child) => ({
+    return stableHash([...children].sort((left, right) => left.communityId.localeCompare(right.communityId)).map((child) => ({
       communityId: child.communityId,
       memberHash: child.lineage.memberHash,
-      findings: child.findings.map((finding) => finding.statement),
+      findings: [...child.findings].map((finding) => ({
+        id: finding.id,
+        statement: finding.statement,
+        evidence: [...finding.evidence].map(encodeKnowledgeRef).sort(),
+        assertionRefs: [...(finding.assertionRefs ?? [])].map((ref) => ref.assertionId).sort(),
+      })).sort((left, right) => left.id.localeCompare(right.id)),
     })))
   }
   const chunkByKey = new Map(graph.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
@@ -217,7 +226,7 @@ function renderReportPrompt(
     entities.length ? `Entities:\n${entities.join('\n')}` : '',
     chunks.length ? `Evidence:\n${chunks.join('\n')}` : '',
     projection.assertions.length ? `Assertions:\n${projection.assertions.map((assertion) =>
-      `[${assertion.assertionId}] ${assertion.type}: ${JSON.stringify(assertion.data)}`).join('\n')}` : '',
+      `[${assertion.assertionId}] ${assertion.type}: ${boundedAssertionReportData(assertion.data)}`).join('\n')}` : '',
     projection.relations.length ? `Assertion relations:\n${projection.relations.map((relation) =>
       `${relation.presentation}: ${relation.type} ${relation.fromAssertionId} -> ${relation.toAssertionId}`).join('\n')}` : '',
   ].filter(Boolean).join('\n\n')
@@ -283,9 +292,11 @@ function countsFor(community: KnowledgeCommunity) {
 function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphInput) {
   const assertionIds = [...new Set([...community.primaryAssertionIds, ...community.secondaryAssertionIds])].sort()
   const available = new Set(assertionIds)
+  const visibleChunks = new Set(graph.chunks.map((chunk) => encodeKnowledgeRef(chunk.ref)))
   const assertions = (graph.assertions ?? []).filter((assertion) => available.has(assertion.assertionId))
-    .map((assertion) => ({ ...assertion, evidence: [...assertion.evidence].sort((left, right) =>
-      encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))) }))
+    .map((assertion) => ({ ...assertion, evidence: [...assertion.evidence]
+      .filter((support) => visibleChunks.has(encodeKnowledgeRef(support.chunkRef)))
+      .sort((left, right) => encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))) }))
     .sort((left, right) => left.assertionId.localeCompare(right.assertionId))
   const visible = new Set(projectAssertionCommunities({
     chunks: graph.chunks,
@@ -302,7 +313,7 @@ function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphIn
     return fromHere || toHere ? [{ ...relation, presentation: 'boundary' as const }] : []
   }).sort((left, right) => left.relationId.localeCompare(right.relationId))
   const internal = relations.filter((relation) => relation.presentation === 'internal')
-  const boundary = relations.filter((relation) => relation.presentation === 'boundary').slice(0, MAX_BOUNDARY_RELATIONS)
+  const boundary = relations.filter((relation) => relation.presentation === 'boundary').slice(0, ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT)
   return { assertionIds, assertions, relations: [...internal, ...boundary] }
 }
 

@@ -7,7 +7,14 @@ import type { CommunityChunkInput, CommunityMentionWeightInput } from './types'
 import type { CommunityEntityEdgeInput } from './types'
 
 export const ASSERTION_MEMBERSHIP_POLICY_VERSION = 'assertion-community-v1'
-export const ASSERTION_REPORT_PROMPT_VERSION = 'assertion-report-v1'
+export const ASSERTION_REPORT_PROMPT_VERSION = 'assertion-report-v2'
+export const ASSERTION_REPORT_DATA_LIMIT = 1_200
+export const ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT = 20
+
+export function boundedAssertionReportData(data: JsonValue): string {
+  const value = JSON.stringify(data)
+  return value.length <= ASSERTION_REPORT_DATA_LIMIT ? value : value.slice(0, ASSERTION_REPORT_DATA_LIMIT)
+}
 
 const relationWeights = {
   supports: 1,

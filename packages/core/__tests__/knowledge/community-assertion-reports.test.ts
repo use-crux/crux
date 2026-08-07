@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clusterKnowledgeCommunities, type CommunityGraphInput } from '../../src/knowledge/communities/cluster'
+import { COMMUNITY_INPUT_BUDGET, clusterKnowledgeCommunities, type CommunityGraphInput } from '../../src/knowledge/communities/cluster'
 import { generateCommunityReports } from '../../src/knowledge/communities/reports'
 import type { KnowledgeModel } from '../../src/knowledge/model'
 import { ValidationExhaustedError } from '../../src/generation/validation-retry'
@@ -88,6 +88,115 @@ describe('assertion-aware community reports', () => {
     expect(prompts).toEqual([])
     expect(second.map((report) => report.title)).toEqual(first.map((report) => report.title))
   })
+
+  it('keeps generated leaf prompts within the input budget after assertion projection', async () => {
+    const chunks = ['left', 'right'].map((sourceId) => ({
+      ref: chunkRef(sourceId, 'evidence'), sourceId, chunkId: 'evidence', ordinal: 0, content: sourceId,
+    }))
+    const graph: CommunityGraphInput = {
+      namespace: 'docs', entities: [], edges: [], chunks, mentionWeights: [], residualChunks: chunks,
+      assertions: Array.from({ length: 20 }, (_, index) => ({
+        assertionId: `assertion:${index.toString().padStart(2, '0')}`, type: 'fact',
+        data: { statement: String(index).repeat(1_200) },
+        evidence: [support(chunks[index % 2]!.ref)],
+      })),
+      assertionRelations: Array.from({ length: 19 }, (_, index) => ({
+        relationId: `relation:${index.toString().padStart(2, '0')}`, type: 'supports' as const,
+        fromAssertionId: `assertion:${index.toString().padStart(2, '0')}`,
+        toAssertionId: `assertion:${(index + 1).toString().padStart(2, '0')}`,
+      })),
+    }
+    const prompts: string[] = []
+
+    const clustering = clusterKnowledgeCommunities(graph)
+    await generateCommunityReports({
+      model: reportModel(prompts), generationId: 'bounded', graph,
+      clustering,
+      lineage: { viewRevision: null, graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+    })
+
+    expect(clustering.leaves.length).toBeGreaterThan(1)
+    expect(prompts.filter((prompt) => prompt.includes('Canonical assertions')).every((prompt) =>
+      prompt.length <= COMMUNITY_INPUT_BUDGET)).toBe(true)
+  })
+
+  it('reuses a view report when only filtered-out assertion supports change', async () => {
+    const visible = chunkRef('visible', 'one')
+    const hidden = chunkRef('hidden', 'two')
+    const graph: CommunityGraphInput = {
+      namespace: 'docs', entities: [], edges: [],
+      chunks: [{ ref: visible, sourceId: 'visible', chunkId: 'one', ordinal: 0, content: 'Visible.' }],
+      mentionWeights: [], residualChunks: [],
+      assertions: [{
+        assertionId: 'assertion:view', type: 'fact', data: { statement: 'Visible' },
+        evidence: [support(visible), support(hidden)],
+      }],
+      assertionRelations: [],
+    }
+    const clustering = clusterKnowledgeCommunities(graph)
+    const first = await generateCommunityReports({
+      model: reportModel([]), generationId: 'first', graph, clustering,
+      lineage: { viewRevision: 'view', graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+    })
+    const prior = new Map(first.map((report) => [report.communityId, report]))
+    const prompts: string[] = []
+    const changed = {
+      ...graph,
+      assertions: graph.assertions?.map((assertion) => ({
+        ...assertion,
+        evidence: [support(visible), { ...support(hidden), provenance: 'derived' as const }],
+      })),
+    }
+
+    await generateCommunityReports({
+      model: reportModel(prompts), generationId: 'second', graph: changed, clustering,
+      lineage: { viewRevision: 'view', graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+      findReusable: async (communityId, memberHash) => {
+        const report = prior.get(communityId)
+        return report?.lineage.memberHash === memberHash ? report : null
+      },
+    })
+
+    expect(prompts).toEqual([])
+  })
+
+  it('invalidates parent reuse when normalized child evidence or assertion refs change', async () => {
+    const graph = assertionGraph()
+    const clustering = clusterKnowledgeCommunities(graph)
+    const first = await generateCommunityReports({
+      model: reportModel([]), generationId: 'first', graph, clustering,
+      lineage: { viewRevision: null, graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+    })
+    const prior = new Map(first.map((report) => [report.communityId, report]))
+    const parentHashWith = async (change: 'evidence' | 'assertionRefs') => {
+      let parentHash = ''
+      await generateCommunityReports({
+        model: reportModel([]), generationId: change, graph, clustering,
+        lineage: { viewRevision: null, graphGeneration: 'graph-generation', strategyFingerprint: 'strategy' },
+        findReusable: async (communityId, memberHash) => {
+          const report = prior.get(communityId)
+          if (!report) return null
+          if (report.level > 0) {
+            if (communityId === clustering.rootCommunityId) parentHash = memberHash
+            return null
+          }
+          return {
+            ...report,
+            findings: report.findings.map((finding) => ({
+              ...finding,
+              ...(change === 'evidence' ? { evidence: [chunkRef('changed', 'evidence')] } : {}),
+              ...(change === 'assertionRefs' ? { assertionRefs: [{ assertionId: 'assertion:changed' }] } : {}),
+            })),
+          }
+        },
+      })
+      return parentHash
+    }
+
+    const priorHash = prior.get(clustering.rootCommunityId)?.lineage.memberHash
+    await expect(parentHashWith('evidence')).resolves.not.toBe(priorHash)
+    await expect(parentHashWith('assertionRefs')).resolves.not.toBe(priorHash)
+  })
 })
 
 function assertionGraph(): CommunityGraphInput {
@@ -98,8 +207,8 @@ function assertionGraph(): CommunityGraphInput {
     entities: [],
     edges: [],
     chunks: [
-      { ref: left, sourceId: 'left', chunkId: 'one', ordinal: 0, content: 'Left evidence.' },
-      { ref: right, sourceId: 'right', chunkId: 'two', ordinal: 0, content: 'Right evidence.' },
+      { ref: left, sourceId: 'left', chunkId: 'one', ordinal: 0, content: 'Left evidence.'.repeat(1_100) },
+      { ref: right, sourceId: 'right', chunkId: 'two', ordinal: 0, content: 'Right evidence.'.repeat(1_100) },
     ],
     mentionWeights: [],
     residualChunks: [],
@@ -114,7 +223,7 @@ function assertionGraph(): CommunityGraphInput {
   }
 }
 
-function reportModel(prompts: string[], assertionId = 'assertion:shared') {
+function reportModel(prompts: string[], assertionId?: string) {
   return {
     name: 'assertion-report-test',
     fingerprint: 'assertion-report-test-v1',
@@ -122,11 +231,12 @@ function reportModel(prompts: string[], assertionId = 'assertion:shared') {
     generateObject: vi.fn(async (args: { readonly prompt: string }) => {
       prompts.push(args.prompt)
       const match = args.prompt.match(/chunk:([^:\s,\]]+):([^,\]\s]+)/)
+      const visibleAssertionId = assertionId ?? args.prompt.match(/\[(assertion:[^\]]+)\]/)?.[1]
       return { object: {
         title: 'Community', summary: 'Summary', findings: match ? [{
           statement: 'Finding',
           evidence: [{ kind: 'chunk', sourceId: match[1], chunkId: match[2] }],
-          assertionRefs: [{ assertionId }],
+          ...(visibleAssertionId ? { assertionRefs: [{ assertionId: visibleAssertionId }] } : {}),
         }] : [],
       } }
     }),

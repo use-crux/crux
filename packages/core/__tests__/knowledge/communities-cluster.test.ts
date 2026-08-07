@@ -75,7 +75,7 @@ describe('knowledge community clustering', () => {
     const base: CommunityGraphInput = {
       ...graph({
         entities: [],
-        chunks: [chunkInput('a', 'one', 1, 'one'), chunkInput('b', 'two', 1, 'two')],
+        chunks: [chunkInput('a', 'one', 1, 'a'.repeat(13_000)), chunkInput('b', 'two', 1, 'b'.repeat(13_000))],
         mentions: [], edges: [],
       }),
       assertions: [
@@ -146,6 +146,42 @@ describe('knowledge community clustering', () => {
       residualChunks: [...input.residualChunks].reverse(),
       assertions: [...(input.assertions ?? [])].reverse(),
     }))).toEqual(signature(clustered))
+  })
+
+  it('uses every assertion support when splitting bounded leaf components', () => {
+    const chunks = ['alpha', 'bravo', 'charlie'].map((id) =>
+      chunkInput(id, 'evidence', 0, id.repeat(1_800)))
+    const result = clusterKnowledgeCommunities({
+      namespace, entities: [], edges: [], chunks, mentionWeights: [], residualChunks: chunks,
+      assertions: [assertion('assertion:shared', chunks.map((chunk) => `${chunk.sourceId}:${chunk.chunkId}`))],
+      assertionRelations: [],
+    }, 20_000)
+
+    expect(result.leaves.map((leaf) => leaf.chunkRefs.map((ref) => ref.sourceId)).sort()).toEqual([
+      ['alpha', 'bravo'],
+      ['charlie'],
+    ])
+  })
+
+  it('connects bounded leaf components through cross-source assertion relations', () => {
+    const chunks = [
+      chunkInput('left', 'evidence', 0, 'left'),
+      chunkInput('right', 'evidence', 0, 'right'),
+    ]
+    const result = clusterKnowledgeCommunities({
+      namespace, entities: [], edges: [], chunks, mentionWeights: [], residualChunks: chunks,
+      assertions: [
+        assertion('assertion:left', ['left:evidence']),
+        assertion('assertion:right', ['right:evidence']),
+      ],
+      assertionRelations: [{
+        relationId: 'relation:cross-source', type: 'supports',
+        fromAssertionId: 'assertion:left', toAssertionId: 'assertion:right',
+      }],
+    })
+
+    expect(result.leaves).toHaveLength(1)
+    expect(result.leaves[0]?.chunkRefs.map((ref) => ref.sourceId)).toEqual(['left', 'right'])
   })
 
   it('is deterministic across identical and permuted graph inputs', () => {
