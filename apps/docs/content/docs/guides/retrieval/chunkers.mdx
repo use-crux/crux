@@ -54,7 +54,11 @@ indexingPipeline({
 });
 ```
 
-`chunker.structured()` is the best default for `@use-crux/ingest` output. PDF pages keep page provenance, tables are chunked by row windows with headers repeated, spreadsheets preserve sheet names, and JSON parts preserve paths.
+`chunker.structured()` is the best default for `@use-crux/ingest` output. On layout-aware PDF pages it treats headings and physical pages as hard boundaries, keeps fitting narrative/list/code blocks whole, and repeats one normalized ATX heading-path prefix when a section spans chunks. PDF table blocks become deterministic row windows: a real header is repeated, rows are never split or truncated, and an indivisible oversized row remains whole. Pages without blocks, including `pdfjs-dist` fallback and visually described pages, keep the flat page splitter.
+
+PDF chunks retain the page part ID, physical page location, and contributing `blockIds`. Exact source spans are emitted only for a provable unchanged page-relative slice in a uniquely occurring page. Heading prefixes, packed blocks, tables, and ambiguous repeated pages use derived provenance without guessed spans.
+
+`chunker.text()` deliberately ignores page blocks and preserves its flat splitting behavior. `chunker.semantic()` keeps its configured semantic boundary behavior. Use `structured()` or `parentChild()` when you want the PDF block interpretation.
 
 ## Parent / child
 
@@ -70,7 +74,7 @@ indexingPipeline({
 });
 ```
 
-The retriever searches child chunks. Each child stores a parent reference; `expandParents({ records })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation.
+The retriever searches child chunks. Each child stores a parent reference; `expandParents({ records })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation. For blocked PDF pages, parents and children never cross a physical page or heading path. Narrative and table units do not join, and each rendered table window remains one identical, indivisible parent and child even when it exceeds the configured character limits.
 
 ```ts
 import {

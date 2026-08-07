@@ -1,6 +1,15 @@
 ---
+"@use-crux/core": minor
 "@use-crux/ingest": minor
 ---
+
+Add provider-neutral page blocks and block provenance to Core. Structured and
+parent-child chunking now preserve PDF page and heading boundaries, repeat
+heading context, window tables without splitting rows, and retain block IDs.
+
+Prefer native layout-aware PDF extraction in Ingest, route only unreliable
+pages through visual description, and safely fall back document-wide to
+`pdfjs-dist` with a bounded downgrade warning.
 
 Expose provider-neutral XLSX row, cell, formula, and exact worksheet/row-range
 source coordinates alongside the `rows` compatibility view, including sparse

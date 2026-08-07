@@ -68,7 +68,7 @@ Parsers turn bytes into structured `parts`. The source decides the format from f
 | `text`     | `txt`, `unknown` | `text` part            | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them.      |
 | `markdown` | `md`             | `text`, `table` parts  | Parses Markdown + GFM. Preserves heading paths and table rows.                                          |
 | `html`     | `html`           | `text`, `table` parts  | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables.                          |
-| `pdf`      | `pdf`            | `page` parts           | Uses `pdfjs-dist`; retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails. |
+| `pdf`      | `pdf`            | `page` parts           | Uses native layout-aware extraction when available, retains every physical page, and falls back document-wide to `pdfjs-dist`. |
 | `image`    | `image`          | `text` parts           | Uses the explicitly bound `media.describe` operation.                                                   |
 | `audio`    | `audio`          | `text` parts           | Uses `media.transcribe` and preserves measured seconds intervals.                                       |
 | `video`    | `video`          | `text` parts           | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly.   |
@@ -123,6 +123,7 @@ type IngestPart =
       pageNumber: number;
       content: string;
       sourceLocation?: { type: "page"; pageNumber: number };
+      blocks?: IngestPageBlock[];
     }
   | {
       kind: "table";
@@ -277,6 +278,51 @@ type IngestParser = {
   ): Promise<ParseResult> | ParseResult;
 };
 ```
+
+Reliable native PDF pages expose ordered `IngestPageTextBlock` and `IngestPageTableBlock` values:
+
+```ts
+type IngestPageBlock =
+  | {
+      id: string;
+      kind: "text";
+      role: "heading" | "paragraph" | "list" | "code" | "other";
+      content: string;
+      headingPath?: string[];
+      sourceRange?: { start: number; end: number };
+    }
+  | {
+      id: string;
+      kind: "table";
+      content: string;
+      rows: string[][];
+      columns?: string[];
+      headingPath?: string[];
+      sourceRange?: { start: number; end: number };
+    };
+```
+
+Block IDs are `<pageId>/block:<ordinal>`. A `sourceRange` is present only when it is an exact half-open UTF-16 range into the page `content`.
+
+Pages marked `needsOcr` discard unreliable native Markdown and invoke `media.describe` only when that operation is bound. Their model-derived content has no blocks. An unavailable, throwing, or invalid native backend triggers an all-pages `pdfjs-dist` fallback and exactly one bounded `parser_warning`:
+
+```ts
+{
+  code: "parser_warning",
+  message:
+    'PDF source "<sourceId>" used the pdfjs-dist fallback because ' +
+    'layout-aware extraction was unavailable; document structure may be reduced.',
+  metadata: {
+    primaryParser: "pdf-inspector",
+    fallbackParser: "pdfjs-dist",
+    reason: "backend_unavailable" | "extraction_failed" | "invalid_result",
+  },
+}
+```
+
+The warning never includes native diagnostics, bytes, or stacks. A fallback textless page can also receive its located `partial_extraction` warning. If fallback extraction fails, loading returns `parse_failed` and no document-level downgrade warning.
+
+PDF ingestion supports Node 22 on the native package's supported platforms. It is not supported in browser or Edge runtimes. Bundlers must externalize `@firecrawl/pdf-inspector` and its selected N-API platform package rather than folding the binary into a single-file bundle. Unsupported native platforms downgrade safely to `pdfjs-dist`.
 
 Built-in parsers cover `txt`, `md`, `html`, `pdf`, `image`, `audio`, `video`, `csv`, `json`, `docx`, and `xlsx`. Pass `parsers` to a source to override a built-in parser or add a source-local parser. Custom parsers win over built-ins for matching formats.
 

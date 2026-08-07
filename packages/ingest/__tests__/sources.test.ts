@@ -562,6 +562,11 @@ describe('@use-crux/ingest structured sources', () => {
 
   it('uses the same real native PDF path for URL and Asset-backed sources', async () => {
     const bytes = await readFile(join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf'))
+    const destroy = vi.fn(async () => { throw new Error('cleanup failed') })
+    mockPdfJs({
+      numPages: 8,
+      getMetadata: async () => ({ info: { Title: 'Parity title' } }),
+    }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
     const [urlDocument] = await collect(urlSource('https://example.com/layout.pdf', {
       namespace: 'kb', media: { describe },
@@ -574,11 +579,19 @@ describe('@use-crux/ingest structured sources', () => {
 
     expect(describe).toHaveBeenCalledTimes(2)
     for (const document of [urlDocument, assetDocument]) {
-      expect(document.title).toBe('Firecrawl Documentation - API Reference')
+      expect(document.title).toBe('Parity title')
       expect(document.parts).toHaveLength(8)
-      expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
-      expect(document.parts[7]).toMatchObject({ kind: 'page', pageNumber: 8, content: 'Visual appendix.' })
+      expect(document.parts.map((part) => part.kind === 'page' ? part.pageNumber : undefined)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+      expect(document.parts[0]).toMatchObject({
+        kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, blocks: expect.any(Array),
+      })
+      expect(document.parts[7]).toMatchObject({
+        kind: 'page', pageNumber: 8, sourceLocation: { type: 'page', pageNumber: 8 }, content: 'Visual appendix.',
+      })
+      expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
+      expect(document.warnings).toBeUndefined()
     }
+    expect(destroy).toHaveBeenCalledTimes(2)
   })
 
   it.each([
@@ -766,6 +779,14 @@ describe('@use-crux/ingest structured sources', () => {
 
   it('provides URL and Asset fallback evidence with every physical page and one exact warning', async () => {
     const bytes = makePdf(['First fallback', 'Second fallback'])
+    const destroy = vi.fn(async () => undefined)
+    mockPdfJs({
+      numPages: 2,
+      getMetadata: async () => ({ info: { Title: 'Fallback parity title' } }),
+      getPage: async (pageNumber) => ({
+        getTextContent: async () => ({ items: [{ str: pageNumber === 1 ? 'First fallback' : 'Second fallback', hasEOL: false }] }),
+      }),
+    }, destroy)
     vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
     const [urlDocument] = await collect(urlSource('https://example.com/fallback.pdf', {
       namespace: 'kb',
@@ -781,8 +802,11 @@ describe('@use-crux/ingest structured sources', () => {
     expect(assetDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
       [1, 'First fallback'], [2, 'Second fallback'],
     ])
+    expect(urlDocument.title).toBe('Fallback parity title')
+    expect(assetDocument.title).toBe('Fallback parity title')
     expect(urlDocument.warnings).toEqual([fallbackWarning('https://example.com/fallback.pdf', 'invalid_result')])
     expect(assetDocument.warnings).toEqual([fallbackWarning('asset:fallback', 'invalid_result')])
+    expect(destroy).toHaveBeenCalledTimes(2)
   })
 
   it('retains textless physical PDF pages without media description', async () => {

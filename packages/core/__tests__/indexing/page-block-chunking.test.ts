@@ -122,6 +122,33 @@ describe('structured page block chunking', () => {
     ])
   })
 
+  it('ignores whitespace-only narrative blocks without hiding empty sections', async () => {
+    const result = await chunker.structured({ maxChars: 100, overlapChars: 0 })
+      .chunkDocument({
+        namespace: 'kb',
+        sourceId: 'whitespace-only-blocks',
+        content: ' \n\t\n# Heading\n\n  \n',
+        parts: [
+          {
+            id: 'page:1', kind: 'page', pageNumber: 1, content: ' \n\t\n',
+            blocks: [
+              { id: 'blank-1', kind: 'text', role: 'paragraph', content: ' \n\t' },
+              { id: 'blank-2', kind: 'text', role: 'other', content: '\n  ' },
+            ],
+          },
+          {
+            id: 'page:2', kind: 'page', pageNumber: 2, content: '# Heading\n\n  \n',
+            blocks: [
+              { id: 'heading', kind: 'text', role: 'heading', content: '# Heading', headingPath: ['Heading'] },
+              { id: 'blank-after-heading', kind: 'text', role: 'paragraph', content: '  \n', headingPath: ['Heading'] },
+            ],
+          },
+        ],
+      }, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(result.chunks.map((chunk) => chunk.content)).toEqual(['# Heading'])
+  })
+
   it('retains authored heading-role blocks without usable heading ancestry as narrative', async () => {
     const content = '# Missing\n\n# Empty'
     const document: CruxDocument = {

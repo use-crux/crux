@@ -194,6 +194,7 @@ function chunkPageNarrative(
       headingPath = block.headingPath ?? []
       continue
     }
+    if (!block.content.trim()) continue
     addBody(block)
   }
   flushSection(true)
