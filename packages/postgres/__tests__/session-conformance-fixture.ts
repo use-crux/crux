@@ -15,10 +15,11 @@ import {
   type RuntimeStoreTransaction,
 } from '@use-crux/core/runtime'
 import type { SessionConformanceHarness } from '@use-crux/core/runtime/testing'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
 import { postgresRecordStore, type PostgresRecordStore } from '../src'
 import { postgres, type PostgresRuntimeStore } from '../src/runtime'
 import { createConformanceProgramFixture } from './session-conformance-model'
+import { createPostgresTestPool } from './test-database'
 
 let nextSchema = 0
 
@@ -49,7 +50,7 @@ export async function createPostgresSessionConformanceHarness(
   let fault: 'after-checkpoint' | 'after-thread-publication' | undefined
 
   function newPool(): Pool {
-    const pool = new Pool({ connectionString: url })
+    const pool = createPostgresTestPool(url)
     pools.push(pool)
     return pool
   }
@@ -151,7 +152,7 @@ export async function createPostgresSessionConformanceHarness(
       }),
     dispose: async () => {
       for (const current of hosts) current.dispose()
-      const cleanup = new Pool({ connectionString: url })
+      const cleanup = createPostgresTestPool(url)
       try {
         await cleanup.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`)
       } finally {

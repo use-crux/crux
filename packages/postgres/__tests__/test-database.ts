@@ -51,8 +51,20 @@ export async function startPostgresTestDatabase(): Promise<PostgresTestDatabase>
   }
 }
 
+/**
+ * Shared test pool factory.
+ *
+ * Cap below pg's default max of 10 so idle connections from many short-lived
+ * test pools cannot exhaust the CI Postgres budget (~100 connections) if a
+ * worker bound is ever raised. Keep max high enough for:
+ * - Runtime maintenance ownership (requires max >= 2)
+ * - Dual-client READ COMMITTED interleaving tests that hold two clients and
+ *   still issue pool queries (needs >= 3)
+ */
+export const POSTGRES_TEST_POOL_MAX = 4
+
 export function createPostgresTestPool(url: string): Pool {
-  const pool = new Pool({ connectionString: url })
+  const pool = new Pool({ connectionString: url, max: POSTGRES_TEST_POOL_MAX })
   pool.on('error', (error: unknown) => {
     if (isExpectedPoolShutdown(error)) return
     queueMicrotask(() => {
