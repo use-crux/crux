@@ -3,10 +3,10 @@ import { chunker } from '../../src/indexing'
 import type { CruxDocument } from '../../src/indexing'
 
 describe('structured page block chunking', () => {
-  it('bumps only the structured strategy identity', () => {
+  it('bumps only page-block-aware strategy identities', () => {
     expect(chunker.structured().version).toBe('3')
     expect(chunker.text().version).toBe('2')
-    expect(chunker.parentChild().version).toBe('2')
+    expect(chunker.parentChild().version).toBe('3')
     expect(chunker.semantic({ strategy: 'custom', segment: () => [] }).version).toBe('2')
   })
 
@@ -328,33 +328,234 @@ describe('structured page block chunking', () => {
     expect(result.chunks.every((chunk) => chunk.provenance?.blockIds === undefined)).toBe(true)
   })
 
-  it('keeps parent-child materialization flat and its version-2 fingerprint unchanged', async () => {
-    const content = '# Results\n\nBefore\n\n| Name | Score |\n| --- | --- |\n| Ada | 10 |\n\nAfter'
+  it('keeps parent-child pages, sections, and table windows structurally separate', async () => {
+    const table = '| Name | Score |\n| --- | --- |\n| Ada Lovelace | 100 |'
+    const content = `# Results\n\nBefore table\n\n${table}\n\nAfter table\n\n# Notes\n\nPage one notes\n\n# Results\n\nPage two results`
     const document: CruxDocument = {
-      namespace: 'kb', sourceId: 'flat-parent-child', content,
+      namespace: 'kb', sourceId: 'structured-parent-child', content,
       parts: [{
-        id: 'page:1', kind: 'page', pageNumber: 1, content,
+        id: 'page:1', kind: 'page', pageNumber: 1, content: content.slice(0, content.indexOf('\n\n# Results', 20)),
+        sourceLocation: { type: 'page', pageNumber: 1 },
         blocks: [
           { id: 'heading', kind: 'text', role: 'heading', content: '# Results', headingPath: ['Results'] },
-          { id: 'before', kind: 'text', role: 'paragraph', content: 'Before', headingPath: ['Results'] },
+          { id: 'before', kind: 'text', role: 'paragraph', content: 'Before table', headingPath: ['Results'] },
           {
             id: 'scores', kind: 'table', headingPath: ['Results'],
-            content: '| Name | Score |\n| --- | --- |\n| Ada | 10 |',
-            columns: ['Name', 'Score'], rows: [['Ada', '10']],
+            content: table, columns: ['Name', 'Score'], rows: [['Ada Lovelace', '100']],
           },
-          { id: 'after', kind: 'text', role: 'paragraph', content: 'After', headingPath: ['Results'] },
+          { id: 'after', kind: 'text', role: 'paragraph', content: 'After table', headingPath: ['Results'] },
+          { id: 'notes-heading', kind: 'text', role: 'heading', content: '# Notes', headingPath: ['Notes'] },
+          { id: 'notes', kind: 'text', role: 'paragraph', content: 'Page one notes', headingPath: ['Notes'] },
+        ],
+      }, {
+        id: 'page:2', kind: 'page', pageNumber: 2, content: '# Results\n\nPage two results',
+        sourceLocation: { type: 'page', pageNumber: 2 },
+        blocks: [
+          { id: 'page-two-heading', kind: 'text', role: 'heading', content: '# Results', headingPath: ['Results'] },
+          { id: 'page-two-body', kind: 'text', role: 'paragraph', content: 'Page two results', headingPath: ['Results'] },
         ],
       }],
     }
     const strategy = chunker.parentChild({
-      parentMaxChars: 100, childMaxChars: 100, childOverlapChars: 0,
+      parentMaxChars: 40, childMaxChars: 12, childOverlapChars: 3,
     })
     const result = await strategy.chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
 
-    expect(strategy.version).toBe('2')
-    expect(strategy.fingerprint()).toBe('62963a73')
-    expect(result.parents?.map((parent) => parent.content)).toEqual([content])
-    expect(result.chunks.map((chunk) => chunk.content)).toEqual([content])
-    expect(result.parents?.[0]?.provenance?.blockIds).toEqual(['heading', 'before', 'scores', 'after'])
+    expect(result.parents?.map((parent) => parent.content)).toEqual([
+      '# Results\n\nBefore table',
+      `# Results\n\n${table}`,
+      '# Results\n\nAfter table',
+      '# Notes\n\nPage one notes',
+      '# Results\n\nPage two results',
+    ])
+    expect(result.chunks.filter((child) => child.content.includes('| Name |')).map((child) => child.content))
+      .toEqual([`# Results\n\n${table}`])
+    expect(result.parents?.[1]?.content.length).toBeGreaterThan(40)
+    expect(result.chunks.find((child) => child.content.includes('| Name |'))?.content.length).toBeGreaterThan(12)
+    expect(result.parents?.map((parent) => parent.provenance?.pages)).toEqual([[1], [1], [1], [1], [2]])
+    expect(result.parents?.[1]?.provenance).toEqual(expect.objectContaining({
+      partIds: ['page:1'], blockIds: ['heading', 'scores'], pages: [1], tables: ['scores'],
+      sourceLocations: [{ type: 'page', pageNumber: 1 }], confidence: 'derived',
+    }))
+    expect(result.chunks.find((child) => child.content.includes('| Name |'))?.provenance)
+      .toEqual(result.parents?.[1]?.provenance)
+  })
+
+  it('keeps distinct same-page heading instances with the same compact path separate', async () => {
+    const content = '# Results\n\nFirst body\n\n## Results\n\nSecond body'
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'repeated-compact-path', content,
+      parts: [{
+        id: 'page:1', kind: 'page', pageNumber: 1, content,
+        blocks: [
+          { id: 'h1', kind: 'text', role: 'heading', content: '# Results', headingPath: ['Results'] },
+          { id: 'first', kind: 'text', role: 'paragraph', content: 'First body', headingPath: ['Results'] },
+          { id: 'h2', kind: 'text', role: 'heading', content: '## Results', headingPath: ['Results'] },
+          { id: 'second', kind: 'text', role: 'paragraph', content: 'Second body', headingPath: ['Results'] },
+        ],
+      }],
+    }
+
+    const result = await chunker.parentChild({
+      parentMaxChars: 1_000, childMaxChars: 1_000, childOverlapChars: 0,
+    }).chunkDocument(document, { chunking: { maxChars: 1_000, overlapChars: 0 } })
+
+    expect(result.parents?.map((parent) => ({
+      content: parent.content,
+      blockIds: parent.provenance?.blockIds,
+    }))).toEqual([
+      { content: '# Results\n\nFirst body', blockIds: ['h1', 'first'] },
+      { content: '# Results\n\nSecond body', blockIds: ['h2', 'second'] },
+    ])
+    expect(result.chunks.map((child) => ({
+      content: child.content,
+      blockIds: child.provenance?.blockIds,
+    }))).toEqual([
+      { content: '# Results\n\nFirst body', blockIds: ['h1', 'first'] },
+      { content: '# Results\n\nSecond body', blockIds: ['h2', 'second'] },
+    ])
+  })
+
+  it('keeps an oversized top-level typed table window indivisible', async () => {
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'typed-table', content: 'ignored',
+      parts: [{
+        id: 'table:1', kind: 'table', content: 'Name | Score\nAda Lovelace | 100',
+        columns: ['Name', 'Score'], rows: [['Ada Lovelace', '100']], pageNumber: 4,
+      }],
+    }
+    const result = await chunker.parentChild({
+      parentMaxChars: 10, childMaxChars: 5, childOverlapChars: 0,
+    }).chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(result.parents).toHaveLength(1)
+    expect(result.chunks).toHaveLength(1)
+    expect(result.parents?.[0]?.content).toBe('Name | Score\nAda Lovelace | 100')
+    expect(result.chunks[0]?.content).toBe(result.parents?.[0]?.content)
+    expect(result.parents?.[0]?.content.length).toBeGreaterThan(10)
+    expect(result.chunks[0]?.content.length).toBeGreaterThan(5)
+    expect(result.parents?.[0]?.provenance).toEqual(expect.objectContaining({
+      partIds: ['table:1'], pages: [4], tables: ['table:1'], confidence: 'derived',
+    }))
+    expect(result.chunks[0]?.provenance).toEqual(result.parents?.[0]?.provenance)
+  })
+
+  it('does not carry empty page provenance across media into later text parents', async () => {
+    const result = await chunker.parentChild({
+      parentMaxChars: 100, childMaxChars: 100, childOverlapChars: 0,
+    }).chunkDocument({
+      namespace: 'kb', sourceId: 'empty-page-media-text',
+      parts: [
+        {
+          id: 'page:1', kind: 'page', pageNumber: 1, content: '',
+          sourceLocation: { type: 'page', pageNumber: 1 },
+          blocks: [{ id: 'empty', kind: 'text', role: 'paragraph', content: '' }],
+        },
+        {
+          id: 'image:1', kind: 'media', modality: 'image',
+          asset: {
+            type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png',
+            sha256: '00'.repeat(32),
+          },
+        },
+        { id: 'text:1', kind: 'text', content: 'Ordinary text' },
+      ],
+    }, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(result.parents).toHaveLength(1)
+    expect(result.parents?.[0]).toMatchObject({
+      content: 'Ordinary text',
+      provenance: { partIds: ['text:1'] },
+    })
+    expect(result.parents?.[0]?.provenance?.blockIds ?? []).not.toContain('empty')
+    expect(result.parents?.[0]?.provenance?.pages ?? []).not.toContain(1)
+    expect(result.chunks).toHaveLength(2)
+    expect(result.chunks[0]).toMatchObject({
+      content: '', media: { modality: 'image' }, provenance: { partIds: ['image:1'] },
+    })
+    expect(result.chunks[0]?.parent).toBeUndefined()
+    expect(result.chunks[1]).toMatchObject({
+      content: 'Ordinary text', parent: { parentId: result.parents?.[0]?.parentId },
+    })
+  })
+
+  it('keeps every canonical page-block table window as its own parent and child', async () => {
+    const content = '# Results\n\nName | Score\nAda Lovelace | 100\nGrace Hopper | 99\nKatherine Johnson | 98'
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'windowed-page-table', content,
+      parts: [{
+        id: 'page:3', kind: 'page', pageNumber: 3,
+        sourceLocation: { type: 'page', pageNumber: 3 }, content,
+        blocks: [
+          { id: 'heading', kind: 'text', role: 'heading', content: '# Results', headingPath: ['Results'] },
+          {
+            id: 'scores', kind: 'table', headingPath: ['Results'], content: content.slice(11),
+            columns: ['Name', 'Score'],
+            rows: [['Ada Lovelace', '100'], ['Grace Hopper', '99'], ['Katherine Johnson', '98']],
+          },
+        ],
+      }],
+    }
+    const result = await chunker.parentChild({
+      parentMaxChars: 55, childMaxChars: 8, childOverlapChars: 0,
+    }).chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(result.parents).toHaveLength(3)
+    expect(result.chunks).toHaveLength(3)
+    expect(result.chunks.map((child) => child.content)).toEqual(result.parents?.map((parent) => parent.content))
+    result.parents?.forEach((parent, index) => {
+      expect(parent.content).toContain('# Results\n\n| Name | Score |')
+      expect(result.chunks[index]?.parent?.parentId).toBe(parent.parentId)
+      expect(parent.provenance).toEqual(expect.objectContaining({
+        partIds: ['page:3'], blockIds: ['heading', 'scores'], pages: [3], tables: ['scores'],
+        sourceLocations: [{ type: 'page', pageNumber: 3 }], confidence: 'derived',
+      }))
+      expect(result.chunks[index]?.provenance).toEqual(parent.provenance)
+    })
+  })
+
+  it('separates blockless physical pages without changing ordinary part compatibility', async () => {
+    const strategy = chunker.parentChild({
+      parentMaxChars: 100, childMaxChars: 7, childOverlapChars: 0,
+    })
+    const pages = await strategy.chunkDocument({
+      namespace: 'kb', sourceId: 'blockless-pages', content: 'Alpha page\n\nBeta page',
+      parts: [
+        {
+          id: 'page:1', kind: 'page', pageNumber: 1, content: 'Alpha page',
+          sourceLocation: { type: 'page', pageNumber: 1 },
+        },
+        {
+          id: 'page:2', kind: 'page', pageNumber: 2, content: 'Beta page',
+          sourceLocation: { type: 'page', pageNumber: 2 },
+        },
+      ],
+    }, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(pages.parents?.map((parent) => parent.content)).toEqual(['Alpha page', 'Beta page'])
+    expect(pages.parents?.map((parent) => parent.provenance)).toEqual([
+      expect.objectContaining({
+        partIds: ['page:1'], pages: [1], sourceLocations: [{ type: 'page', pageNumber: 1 }],
+      }),
+      expect.objectContaining({
+        partIds: ['page:2'], pages: [2], sourceLocations: [{ type: 'page', pageNumber: 2 }],
+      }),
+    ])
+    pages.chunks.forEach((child) => {
+      const parent = pages.parents?.find((candidate) => candidate.parentId === child.parent?.parentId)
+      expect(child.provenance?.pages).toEqual(parent?.provenance?.pages)
+      expect(child.provenance?.partIds).toEqual(parent?.provenance?.partIds)
+      expect(child.provenance?.sourceLocations).toEqual(parent?.provenance?.sourceLocations)
+    })
+
+    const ordinary = await strategy.chunkDocument({
+      namespace: 'kb', sourceId: 'ordinary-parts', content: 'Alpha\n\nBeta',
+      parts: [
+        { id: 'text:1', kind: 'text', content: 'Alpha' },
+        { id: 'text:2', kind: 'text', content: 'Beta' },
+      ],
+    }, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+    expect(ordinary.parents?.map((parent) => parent.content)).toEqual(['Alpha\n\nBeta'])
   })
 })

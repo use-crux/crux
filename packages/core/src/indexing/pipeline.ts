@@ -84,7 +84,7 @@ export const chunker = Object.freeze({
       childMaxChars: options.childMaxChars ?? 900,
       childOverlapChars: options.childOverlapChars ?? 120,
     }
-    return createChunker('parent-child', '2', normalizedOptions, async (document) =>
+    return createChunker('parent-child', '3', normalizedOptions, async (document) =>
       chunkDocumentParentChild(document, normalizedOptions),
     )
   },

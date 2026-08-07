@@ -42,6 +42,22 @@ export function chunkDocumentStructured(
   ctx: ChunkerContext,
   options: StructuredChunkerOptions | ChunkingOptions = {},
 ): ChunkingResult {
+  return { chunks: chunkDocumentStructuredUnits(document, ctx, options).map((unit) => unit.chunk) }
+}
+
+interface StructuredUnit {
+  readonly chunk: CruxChunk
+  readonly pageId?: string
+  readonly headingPath: readonly string[]
+  readonly headingInstanceIds: readonly string[]
+  readonly kind: 'narrative' | 'table' | 'media'
+}
+
+function chunkDocumentStructuredUnits(
+  document: CruxDocument,
+  ctx: ChunkerContext,
+  options: StructuredChunkerOptions | ChunkingOptions = {},
+): StructuredUnit[] {
   const normalized = normalizeChunkingOptions({
     maxChars: options.maxChars ?? ctx.chunking.maxChars,
     overlapChars: options.overlapChars ?? ctx.chunking.overlapChars,
@@ -49,7 +65,7 @@ export function chunkDocumentStructured(
   const parts = document.parts?.length
     ? document.parts
     : [{ id: 'text:1', kind: 'text' as const, content: document.content ?? '' }]
-  const chunks: CruxChunk[] = []
+  const units: StructuredUnit[] = []
   const requestedTableRows = 'tableRowsPerChunk' in options ? (options.tableRowsPerChunk ?? 25) : 25
   const tableRowsPerChunk = Number.isFinite(requestedTableRows) && requestedTableRows > 0
     ? Math.max(1, Math.floor(requestedTableRows))
@@ -57,40 +73,55 @@ export function chunkDocumentStructured(
 
   for (const part of parts) {
     if (part.kind === 'media') {
-      chunks.push(createMediaPartChunk(document, part, chunks.length))
+      units.push({
+        chunk: createMediaPartChunk(document, part, units.length),
+        headingPath: [], headingInstanceIds: [], kind: 'media',
+      })
       continue
     }
     if (part.kind === 'table') {
-      chunks.push(...chunkTablePart(document, part, tableRowsPerChunk))
+      units.push(...chunkTablePart(document, part, tableRowsPerChunk).map((chunk) => ({
+        chunk, headingPath: [], headingInstanceIds: [], kind: 'table' as const,
+      })))
       continue
     }
     if (part.kind === 'json') {
-      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
+      units.push({
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        headingPath: [], headingInstanceIds: [], kind: 'narrative',
+      })
       continue
     }
     if (part.kind === 'sheet') {
-      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
+      units.push({
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        headingPath: [], headingInstanceIds: [], kind: 'narrative',
+      })
       continue
     }
     if (part.kind === 'page' && part.blocks?.length) {
-      chunks.push(...chunkPageNarrative(document, part, normalized, tableRowsPerChunk, chunks.length))
+      units.push(...chunkPageNarrative(document, part, normalized, tableRowsPerChunk, units.length))
       continue
     }
 
     const rawChunks = splitDocumentSlices(part.content, normalized)
     rawChunks.forEach((slice) => {
-      chunks.push(
-        createPartChunk(
+      units.push({
+        chunk: createPartChunk(
           document,
           slice.content,
-          chunks.length,
+          units.length,
           provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
         ),
-      )
+        ...(part.kind === 'page' ? { pageId: part.id } : {}),
+        headingPath: [],
+        headingInstanceIds: [],
+        kind: 'narrative',
+      })
     })
   }
 
-  return { chunks }
+  return units
 }
 
 /** Flat part/split chunking used by strategies that do not interpret page blocks. */
@@ -140,8 +171,8 @@ function chunkPageNarrative(
   options: Required<ChunkingOptions>,
   tableRowsPerChunk: number,
   ordinalOffset: number,
-): CruxChunk[] {
-  const chunks: CruxChunk[] = []
+): StructuredUnit[] {
+  const units: StructuredUnit[] = []
   let headingPath: readonly string[] = []
   let headingIds: string[] = []
   let sectionHasContent = false
@@ -166,7 +197,7 @@ function chunkPageNarrative(
     addBody(block)
   }
   flushSection(true)
-  return chunks
+  return units
 
   function addBody(block: CruxIngestPageTextBlock): void {
     const blockPath = block.role === 'heading' && !block.headingPath?.length
@@ -222,14 +253,20 @@ function chunkPageNarrative(
     const blockIds = [...new Set([...headingIds, block.id])]
     const prefix = headingPrefix(headingPath)
     for (const payload of tableWindows(block, tableRowsPerChunk, options.maxChars)) {
-      chunks.push(createPartChunk(document, `${prefix}${payload}`, ordinalOffset + chunks.length, {
-        partIds: [page.id],
-        blockIds,
-        pages: [page.pageNumber],
-        tables: [block.id],
-        ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
-        confidence: 'derived',
-      }))
+      units.push({
+        chunk: createPartChunk(document, `${prefix}${payload}`, ordinalOffset + units.length, {
+          partIds: [page.id],
+          blockIds,
+          pages: [page.pageNumber],
+          tables: [block.id],
+          ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
+          confidence: 'derived',
+        }),
+        pageId: page.id,
+        headingPath: [...headingPath],
+        headingInstanceIds: [...headingIds],
+        kind: 'table',
+      })
       sectionHasContent = true
     }
   }
@@ -246,14 +283,20 @@ function chunkPageNarrative(
     const sourceSpans = rangeMatches && exactItem?.range
       ? sourceSpanForPartSlice(document, page, exactItem.range)
       : []
-    chunks.push(createPartChunk(document, content, ordinalOffset + chunks.length, {
-      partIds: [page.id],
-      ...(blockIds.length ? { blockIds } : {}),
-      pages: [page.pageNumber],
-      ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
-      ...(sourceSpans.length ? { sourceSpans } : {}),
-      confidence: sourceSpans.length ? 'exact' : 'derived',
-    }))
+    units.push({
+      chunk: createPartChunk(document, content, ordinalOffset + units.length, {
+        partIds: [page.id],
+        ...(blockIds.length ? { blockIds } : {}),
+        pages: [page.pageNumber],
+        ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
+        ...(sourceSpans.length ? { sourceSpans } : {}),
+        confidence: sourceSpans.length ? 'exact' : 'derived',
+      }),
+      pageId: page.id,
+      headingPath: [...headingPath],
+      headingInstanceIds: [...headingIds],
+      kind: 'narrative',
+    })
   }
 }
 
@@ -386,7 +429,7 @@ export function chunkDocumentParentChild(
   document: CruxDocument,
   options: Required<ParentChildChunkerOptions>,
 ): ChunkingResult {
-  const structured = chunkDocumentFlat(
+  const structured = chunkDocumentStructuredUnits(
     document,
     { chunking: { maxChars: options.parentMaxChars, overlapChars: 0 } },
     { maxChars: options.parentMaxChars, overlapChars: 0 },
@@ -395,29 +438,53 @@ export function chunkDocumentParentChild(
   const children: CruxChunk[] = []
   let currentParentContent = ''
   let currentParentChunks: CruxChunk[] = []
+  let currentBoundary: Pick<StructuredUnit, 'pageId' | 'headingPath' | 'headingInstanceIds'> | undefined
 
-  for (const sourceChunk of structured.chunks) {
-    if (sourceChunk.media) {
+  for (const unit of structured) {
+    const sourceChunk = unit.chunk
+    if (unit.kind === 'media') {
       flushParent()
       children.push({ ...sourceChunk, ordinal: children.length })
       continue
+    }
+    if (unit.kind === 'table') {
+      flushParent()
+      currentParentContent = sourceChunk.content
+      currentParentChunks = [sourceChunk]
+      currentBoundary = unit
+      flushParent(true)
+      continue
+    }
+    if (!sourceChunk.content) continue
+    if (currentBoundary &&
+      (currentBoundary.pageId !== unit.pageId ||
+        !arraysEqual(currentBoundary.headingPath, unit.headingPath) ||
+        !arraysEqual(currentBoundary.headingInstanceIds, unit.headingInstanceIds))) {
+      flushParent()
     }
     const candidate = currentParentContent ? `${currentParentContent}\n\n${sourceChunk.content}` : sourceChunk.content
     if (candidate.length > options.parentMaxChars && currentParentChunks.length > 0) {
       flushParent()
       currentParentContent = sourceChunk.content
       currentParentChunks = [sourceChunk]
+      currentBoundary = unit
       continue
     }
     currentParentContent = candidate
     currentParentChunks.push(sourceChunk)
+    currentBoundary = unit
   }
   flushParent()
 
   return { chunks: children, parents }
 
-  function flushParent(): void {
-    if (!currentParentContent) return
+  function flushParent(indivisible = false): void {
+    if (!currentParentContent) {
+      currentParentContent = ''
+      currentParentChunks = []
+      currentBoundary = undefined
+      return
+    }
     const parentOrdinal = parents.length
     const parentId = createStableId('parent', {
       sourceId: document.sourceId,
@@ -438,12 +505,16 @@ export function chunkDocumentParentChild(
       ...(source ? { source } : {}),
       ...(provenance ? { provenance } : {}),
     })
-    const rawChildren = splitDocumentSlices(currentParentContent, {
-      maxChars: options.childMaxChars,
-      overlapChars: options.childOverlapChars,
-    })
+    const rawChildren = indivisible
+      ? [{ content: currentParentContent, start: 0, end: currentParentContent.length }]
+      : splitDocumentSlices(currentParentContent, {
+          maxChars: options.childMaxChars,
+          overlapChars: options.childOverlapChars,
+        })
     rawChildren.forEach((slice) => {
-      const childProvenance = provenanceForChildSlice(document, currentParentContent, provenance, slice)
+      const childProvenance = indivisible
+        ? provenance
+        : provenanceForChildSlice(document, currentParentContent, provenance, slice)
       const childSource = sourceFactsWithLocations(document.source, childProvenance?.sourceLocations ?? [])
       children.push({
         namespace: document.namespace,
@@ -467,6 +538,7 @@ export function chunkDocumentParentChild(
     })
     currentParentContent = ''
     currentParentChunks = []
+    currentBoundary = undefined
   }
 }
 

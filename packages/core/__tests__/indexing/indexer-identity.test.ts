@@ -38,10 +38,11 @@ describe('indexer embedding identity', () => {
 })
 
 describe('built-in chunker strategy identity', () => {
-  it('changes only structured identity for page-block behavior', () => {
+  it('changes only page-block-aware strategy identities', () => {
     const text = chunker.text()
     const semantic = chunker.semantic({ strategy: 'custom', segment: () => [] })
     const structured = chunker.structured()
+    const parentChild = chunker.parentChild()
 
     expect({ version: text.version, fingerprint: text.fingerprint() }).toEqual({
       version: '2', fingerprint: '0850091b',
@@ -51,6 +52,9 @@ describe('built-in chunker strategy identity', () => {
     })
     expect({ version: structured.version, fingerprint: structured.fingerprint() }).toEqual({
       version: '3', fingerprint: 'baafb216',
+    })
+    expect({ version: parentChild.version, fingerprint: parentChild.fingerprint() }).toEqual({
+      version: '3', fingerprint: '3cef88ce',
     })
     expect(structured.fingerprint()).not.toBe(text.fingerprint())
     expect(structured.fingerprint()).not.toBe(semantic.fingerprint())
