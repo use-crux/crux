@@ -21,6 +21,7 @@ export type {
   RuntimeTransportConfigRef,
   RuntimeTransportBindingCheckpoint,
   RuntimeTransportBindingCheckpointIdentity,
+  RuntimeTransportBindingStatus,
   RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeFailure,
   RuntimeTransportEnvelopeIdentity,
