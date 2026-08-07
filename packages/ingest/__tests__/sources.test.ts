@@ -705,6 +705,47 @@ describe('@use-crux/ingest structured sources', () => {
     expect(destroy).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves a successful parse when loading-task cleanup rejects', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'cleanup-failure.pdf')
+    await writeFile(path, makePdf('placeholder'))
+    const destroy = vi.fn(async () => { throw new Error('cleanup failed') })
+    mockPdfJs({
+      numPages: 1,
+      getMetadata: async () => ({ info: { Title: 'Parsed title' } }),
+      getPage: async () => ({ getTextContent: async () => ({ items: [{ str: 'Parsed text', hasEOL: false }] }) }),
+    }, destroy)
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+
+    expect(document.title).toBe('Parsed title')
+    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Parsed text' }])
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves the primary parse failure when loading-task cleanup rejects', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'parse-and-cleanup-failure.pdf')
+    await writeFile(path, makePdf('placeholder'))
+    const destroy = vi.fn(async () => { throw new Error('cleanup failed') })
+    mockPdfJs({
+      numPages: 1,
+      getMetadata: async () => ({ info: {} }),
+      getPage: async () => { throw new Error('primary parse failed') },
+    }, destroy)
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => { throw new Error('native extraction failed') } }))
+
+    const results = await collect(fileSource(path, { namespace: 'kb' }).load())
+
+    expect(results[0]).toMatchObject({
+      ok: false,
+      error: { code: 'parse_failed', parser: 'pdf', message: 'primary parse failed' },
+    })
+    expect(JSON.stringify(results)).not.toContain('cleanup failed')
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
   it('destroys the loading task when opening the PDF fails', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'open-failure.pdf')
@@ -783,8 +824,9 @@ describe('@use-crux/ingest structured sources', () => {
     const dir = await makeTempDir()
     const path = join(dir, 'visual-throws.pdf')
     await writeFile(path, makePdf(['First page', '', 'Third page']))
+    const providerError = `provider-secret-${'x'.repeat(20_000)}`
     const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => {
-      throw new Error('vision unavailable')
+      throw new Error(providerError)
     })
 
     const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
@@ -798,7 +840,11 @@ describe('@use-crux/ingest structured sources', () => {
     expect(document.warnings).toMatchObject([
       { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
     ])
-    expect(document.warnings?.[0]?.message).toContain('media.describe failed: vision unavailable')
+    expect(document.warnings?.[0]?.message).toBe(
+      `PDF source "${path}" page 2 was retained without content because media.describe failed.`,
+    )
+    expect(JSON.stringify(document.warnings)).not.toContain('provider-secret')
+    expect(JSON.stringify(document.warnings)).not.toContain('x'.repeat(1_000))
   })
 
   it('urlSource extracts page parts from pdf responses', async () => {

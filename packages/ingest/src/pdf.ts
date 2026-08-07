@@ -82,7 +82,7 @@ export async function parsePdf(input: ParseInput, ctx: PdfContext): Promise<Pars
     warnFallback(ctx, input.sourceId, fallbackReason ?? 'invalid_result')
     return { ...(title ? { title } : {}), parts }
   } finally {
-    await loadingTask.destroy()
+    await loadingTask.destroy().catch(() => undefined)
   }
 }
 
@@ -149,10 +149,9 @@ async function materializeTextlessPage(input: ParseInput, ctx: PdfContext, pageN
       const part = emptyPagePart(pageNumber)
       warnTextlessPage(ctx, input.sourceId, part, 'media.describe returned empty text')
       return part
-    } catch (error) {
+    } catch {
       const part = emptyPagePart(pageNumber)
-      const reason = error instanceof Error ? error.message : String(error)
-      warnTextlessPage(ctx, input.sourceId, part, `media.describe failed: ${reason}`)
+      warnTextlessPage(ctx, input.sourceId, part, 'media.describe failed')
       return part
     }
   }
