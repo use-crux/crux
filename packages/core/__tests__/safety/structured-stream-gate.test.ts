@@ -142,6 +142,49 @@ describe('streaming structured release cursor', () => {
     expect(run1).not.toHaveBeenCalled()
   })
 
+  it('applies a guarded sentinel only on its union branch (discriminator first)', async () => {
+    const manifest: StructuredOutputDecodeManifest = {
+      version: 1,
+      operations: [
+        {
+          kind: 'delete-null-sentinel',
+          path: ['x'],
+          guards: [{ depth: 0, key: 'status', value: 'a' }],
+        },
+      ],
+    }
+    // Branch "a": null is a transport sentinel and is deleted from the canonical.
+    const sentinel = await run([], ['{"status":"a","x":null}'], manifest)
+    assertSealInvariants(sentinel)
+    expect(sentinel.parsed).toEqual({ status: 'a' })
+    // Branch "b": the same path holds a genuine authored null that must survive.
+    const genuine = await run([], ['{"status":"b","x":null}'], manifest)
+    assertSealInvariants(genuine)
+    expect(genuine.parsed).toEqual({ status: 'b', x: null })
+  })
+
+  it('holds a guarded sentinel decision until a late discriminator arrives', async () => {
+    const manifest: StructuredOutputDecodeManifest = {
+      version: 1,
+      operations: [
+        {
+          kind: 'delete-null-sentinel',
+          path: ['x'],
+          guards: [{ depth: 0, key: 'status', value: 'a' }],
+        },
+      ],
+    }
+    // The null streams before its discriminator; the genuine branch-"b" null is
+    // restored to the canonical tree once the enclosing object closes.
+    const genuine = await run([], ['{"x":null,', '"status":"b"}'], manifest)
+    assertSealInvariants(genuine)
+    expect(genuine.parsed).toEqual({ status: 'b', x: null })
+    // Same ordering on branch "a": the sentinel stays deleted.
+    const sentinel = await run([], ['{"x":null,', '"status":"a"}'], manifest)
+    assertSealInvariants(sentinel)
+    expect(sentinel.parsed).toEqual({ status: 'a' })
+  })
+
   it('preserves a genuine null value as an occurrence', async () => {
     const seen: unknown[] = []
     const result = await run(

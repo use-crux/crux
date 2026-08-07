@@ -17,7 +17,7 @@ import type { JsonSchemaObject, StructuredOutputDecodeManifest } from "./plan";
 export const STRUCTURED_OUTPUT_COMPILER_VERSION = 1;
 
 /** Decode manifest version; bump when the operation set changes shape. */
-export const STRUCTURED_OUTPUT_MANIFEST_VERSION = 1;
+export const STRUCTURED_OUTPUT_MANIFEST_VERSION = 2;
 
 /** Inputs that define a compilation's stable identity. */
 export interface StructuredOutputFingerprintInput {

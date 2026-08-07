@@ -16,16 +16,35 @@ import type { StructuredOutputDiagnostic } from "./diagnostics";
 export type JsonSchemaObject = Record<string, unknown>;
 
 /**
+ * A branch condition on a decode operation recorded inside a discriminated
+ * union.
+ *
+ * `depth` indexes into the operation's own `path`: the node reached after
+ * consuming `depth` segments (the union's position, so guards stay correct
+ * under array wildcards) must be an object whose `key` property equals
+ * `value`, or the operation is a no-op for that value.
+ */
+export type StructuredOutputDecodeGuard = Readonly<{
+  depth: number;
+  key: string;
+  value: string | number | boolean;
+}>;
+
+/**
  * A single reversible decode operation applied to a provider value before
  * Safety and original Zod parsing.
  *
  * `delete-null-sentinel` removes a property whose provider value is exactly
  * `null`, reversing the required+nullable lowering used for optional-only
  * properties. `'*'` in a path denotes every element of the current array.
+ * `guards` (present for operations recorded inside discriminated-union
+ * branches, ordered by ascending depth) restrict the operation to values that
+ * selected that branch.
  */
 export type StructuredOutputDecodeOperation = Readonly<{
   kind: "delete-null-sentinel";
   path: readonly (string | number | "*")[];
+  guards?: readonly StructuredOutputDecodeGuard[];
 }>;
 
 /**

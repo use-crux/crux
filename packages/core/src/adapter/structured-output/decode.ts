@@ -45,19 +45,32 @@ function applyOperation(
   root: unknown,
   operation: StructuredOutputDecodeOperation,
 ): unknown {
-  return descend(root, operation.path, 0, operation.path);
+  return descend(root, operation.path, 0, operation);
 }
 
 /**
  * Walk `path` from index `i`, deleting an exactly-null leaf. Returns the same
  * reference when nothing changed, or a shallow-cloned chain when it did.
+ *
+ * A guard at the current depth makes the operation conditional: when the node
+ * here is not an object whose guard key equals the guard value, the value
+ * selected a different union branch and the operation is a no-op.
  */
 function descend(
   node: unknown,
   path: readonly (string | number | "*")[],
   index: number,
-  fullPath: readonly (string | number | "*")[],
+  operation: StructuredOutputDecodeOperation,
 ): unknown {
+  const guard = operation.guards?.find((candidate) => candidate.depth === index);
+  if (guard) {
+    if (node === null || typeof node !== "object" || Array.isArray(node)) {
+      return node;
+    }
+    if (ownDataValue(node, guard.key) !== guard.value) return node;
+  }
+
+  const fullPath = operation.path;
   const segment = path[index]!;
   const isLeaf = index === path.length - 1;
 
@@ -71,7 +84,7 @@ function descend(
     }
     let changed = false;
     const next = node.map((element) => {
-      const decoded = descend(element, path, index + 1, fullPath);
+      const decoded = descend(element, path, index + 1, operation);
       if (decoded !== element) changed = true;
       return decoded;
     });
@@ -96,7 +109,7 @@ function descend(
     return clone;
   }
 
-  const decodedChild = descend(value, path, index + 1, fullPath);
+  const decodedChild = descend(value, path, index + 1, operation);
   if (decodedChild === value) return node;
   const clone = cloneObject(node);
   clone[segment] = decodedChild;

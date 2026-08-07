@@ -2,11 +2,11 @@
  * Union lowering is branch-safe, and `oneOf` nullability is not mistaken for a
  * transport sentinel.
  *
- * The decode manifest is a flat, branch-unaware path list. An operation recorded
- * while lowering one union branch would be applied unconditionally at decode
- * time and could reject a valid value that selected a different branch. So any
- * union branch whose lowering emits a decode operation is rejected before
- * transport — the same conservative rule already used for recursive schemas. A
+ * An operation recorded while lowering one union branch must not fire on a
+ * value that selected a different branch. Discriminated unions get per-branch
+ * guards (see union-branch-guards.test.ts); a *non-discriminated* union branch
+ * whose lowering emits a decode operation is rejected before transport — the
+ * same conservative rule already used for recursive schemas. A
  * decode operation *outside* a union (e.g. an optional property whose value
  * happens to be a union) stays supported. Separately, a genuine `null` branch in
  * a `oneOf` is real nullability, not an optional sentinel.

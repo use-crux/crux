@@ -166,11 +166,12 @@ function lowerNode(
  * Lower a union keyword (`anyOf`/`oneOf`), rejecting a real multi-branch union
  * the profile cannot represent and lowering each branch in place.
  *
- * The decode manifest is a flat, branch-unaware path list: an operation recorded
- * while lowering one branch would be applied unconditionally at decode time and
- * could reject a valid value that selected a different branch. So, as with
- * recursive schemas, a branch whose lowering emits any decode operation cannot be
- * reversibly encoded and is rejected before transport.
+ * An operation recorded while lowering one branch must not fire on a value that
+ * selected a different branch. When the union is discriminated — every real
+ * branch requires a shared literal property with a distinct value — each
+ * branch's operations gain a guard on that discriminator and stay reversible.
+ * Otherwise the branch cannot be reversibly encoded and, as with recursive
+ * schemas, is rejected before transport.
  */
 function lowerUnion(
   result: JsonSchemaObject,
@@ -190,19 +191,92 @@ function lowerUnion(
       path,
     );
   }
-  const operationsBefore = context.operations.length;
-  const lowered = {
-    ...result,
-    [keyword]: branches.map((branch) => lowerNode(branch, path, context)),
-  };
-  if (context.operations.length > operationsBefore) {
-    throw new CruxUnsupportedSchemaError(
-      context.capabilities.id,
-      "an optional property inside a union branch cannot be reversibly encoded",
-      path,
-    );
+  const discriminator = detectDiscriminator(realBranches);
+  const loweredBranches = branches.map((branch) => {
+    const operationsBefore = context.operations.length;
+    const lowered = lowerNode(branch, path, context);
+    if (context.operations.length > operationsBefore) {
+      const value = discriminator?.values.get(branch);
+      if (discriminator === undefined || value === undefined) {
+        throw new CruxUnsupportedSchemaError(
+          context.capabilities.id,
+          "an optional property inside a union branch cannot be reversibly encoded",
+          path,
+        );
+      }
+      // Guard this branch's new operations on its discriminator. Prepending
+      // keeps guards ordered by ascending depth when branches nest unions.
+      const guard = { depth: path.length, key: discriminator.key, value };
+      for (let i = operationsBefore; i < context.operations.length; i++) {
+        const operation = context.operations[i]!;
+        context.operations[i] = {
+          ...operation,
+          guards: [guard, ...(operation.guards ?? [])],
+        };
+      }
+      context.decisions.push(
+        `union-guard:${[...path, discriminator.key].join(".")}:${String(value)}`,
+      );
+    }
+    return lowered;
+  });
+  return { ...result, [keyword]: loweredBranches };
+}
+
+/** A detected union discriminator: the shared key and each branch's literal value. */
+interface UnionDiscriminator {
+  readonly key: string;
+  readonly values: ReadonlyMap<unknown, string | number | boolean>;
+}
+
+/**
+ * Detect a discriminator over a union's real branches: a property key required
+ * by every branch whose schema is a single non-null literal (`const` or a
+ * one-value `enum`), with pairwise-distinct values. Detection runs on the
+ * canonical (pre-lowering) branch schemas, so an authored-optional discriminator
+ * never qualifies. Returns `undefined` when no key qualifies.
+ */
+function detectDiscriminator(
+  branches: readonly unknown[],
+): UnionDiscriminator | undefined {
+  if (branches.length === 0) return undefined;
+  const first = asRecord(branches[0]);
+  const firstProperties = asRecord(first?.properties);
+  if (!firstProperties) return undefined;
+
+  for (const key of Object.keys(firstProperties)) {
+    const values = new Map<unknown, string | number | boolean>();
+    const seen = new Set<string | number | boolean>();
+    for (const branch of branches) {
+      const record = asRecord(branch);
+      const properties = asRecord(record?.properties);
+      const required = Array.isArray(record?.required) ? record.required : [];
+      if (!properties || !required.includes(key)) break;
+      const value = literalValue(properties[key]);
+      if (value === undefined || seen.has(value)) break;
+      seen.add(value);
+      values.set(branch, value);
+    }
+    if (values.size === branches.length) return { key, values };
   }
-  return lowered;
+  return undefined;
+}
+
+/** The single non-null literal a schema pins, via `const` or a one-value `enum`. */
+function literalValue(node: unknown): string | number | boolean | undefined {
+  const record = asRecord(node);
+  if (!record) return undefined;
+  const candidate =
+    "const" in record
+      ? record.const
+      : Array.isArray(record.enum) && record.enum.length === 1
+        ? record.enum[0]
+        : undefined;
+  return typeof candidate === "string" ||
+    typeof candidate === "number" ||
+    typeof candidate === "boolean"
+    ? candidate
+    : undefined;
 }
 
 function lowerObject(
