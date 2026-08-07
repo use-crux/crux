@@ -12,10 +12,11 @@ import {
   staticReferenceName,
   staticStringValue,
 } from "../static-index/syntax/record/value";
-import { signalMapEntries, webhookTransportKind } from "./binding-values";
+import { authoredTransportKind, signalMapEntries } from "./binding-values";
 import { providerModules, transportModules } from "./modules";
 
 export { extractManagedTransportBindingStaticFacts } from "./binding-static-facts";
+export { extractPollingStaticFacts } from "./polling-static-facts";
 
 /** Projects canonical exported Signal definitions and their authored schema. */
 export function extractSignalStaticFacts(ctx: ExtractContext) {
@@ -146,7 +147,7 @@ export function extractSignalProviderStaticFacts(ctx: ExtractContext) {
     transportValue?.kind === "property-access"
       ? staticReferenceName(transportValue)
       : undefined;
-  const transportKind = webhookTransportKind(transportResolved, transportValue);
+  const transportKind = authoredTransportKind(transportResolved, transportValue);
   const inlineTransportDefinitionId =
     transportKind && transportValue?.kind === "call"
       ? `signal.transport:${ctx.source.safeId(`${native.record.relativePath}:${transportValue.source.line}:${transportValue.source.column}`)}`

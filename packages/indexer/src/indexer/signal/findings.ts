@@ -39,7 +39,7 @@ export function signalProviderFindings(
         "signal.transportBinding.live_value",
         definition,
         `Managed transport binding declares live value field(s): ${facts.liveFields.join(", ")}.`,
-        "Remove Request, client, credential, socket, callback, handle, and onEvent fields from managedTransportBinding() options. Keep only id, configRef, signalId, and optional adapter/provider identities.",
+        "Remove Request, client, credential, socket, callback, handle, poll, and onEvent fields from managedTransportBinding() options. Keep only id, configRef, signalId, and optional adapter/provider identities.",
       ),
     );
   }

@@ -33,7 +33,8 @@ use crate::{
     scorer::facts::scorer_facts,
     session::facts::session_facts,
     signal::{
-        managed_transport_binding_facts, signal_facts, signal_provider_facts, webhook_facts,
+        managed_transport_binding_facts, polling_facts, signal_facts, signal_provider_facts,
+        webhook_facts,
     },
     storage::facts::storage_native_facts,
     thread::facts::thread_facts,
@@ -238,6 +239,17 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &["handle"],
         LOCAL_REFERENCE_FORMS,
         Projector::CallParts(webhook_facts),
+        false,
+    ),
+    first_party(
+        "signal.transport.polling",
+        &["polling"],
+        &[],
+        &["signal.transport"],
+        &["signal.transport:"],
+        &["poll", "intervalMs"],
+        LOCAL_REFERENCE_FORMS,
+        Projector::CallParts(polling_facts),
         false,
     ),
     first_party(
