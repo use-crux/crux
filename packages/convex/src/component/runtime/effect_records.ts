@@ -66,6 +66,19 @@ export async function listEffectRecords<T extends ComponentEffectRecord>(
     .map((document) => document.record as T)
 }
 
+export async function listEffectDocuments(
+  ctx: MutationCtx,
+  namespace: string,
+  boundaryId: string,
+): Promise<readonly Doc<'runtimeEffectRecords'>[]> {
+  return await ctx.db
+    .query('runtimeEffectRecords')
+    .withIndex('by_boundary_kind', (q) =>
+      q.eq('namespace', namespace).eq('boundaryId', boundaryId),
+    )
+    .collect()
+}
+
 export async function insertEffectRecord(
   ctx: MutationCtx,
   kind: EffectRecordKind,
@@ -84,6 +97,7 @@ export async function insertEffectRecord(
     ...('fenceToken' in value && value.fenceToken
       ? { fenceToken: value.fenceToken }
       : {}),
+    ...effectRecoveryFields(kind, value),
     ...effectRetentionFields(kind, value),
   })
   return true
@@ -106,9 +120,22 @@ export async function replaceEffectRecord(
     ...('fenceToken' in value && value.fenceToken
       ? { fenceToken: value.fenceToken }
       : {}),
+    ...effectRecoveryFields(current.kind, value),
     ...effectRetentionFields(current.kind, value),
   })
   return true
+}
+
+function effectRecoveryFields(
+  kind: string,
+  value: ComponentEffectRecord,
+): { readonly recoveryStatus?: string; readonly recoveryLeaseExpiresAt?: number } {
+  if (kind !== 'scope') return {}
+  const scope = value as DurableEffectScopeRecord
+  return {
+    recoveryStatus: scope.scope.status,
+    recoveryLeaseExpiresAt: scope.recoveryLeaseExpiresAt ?? 0,
+  }
 }
 
 function effectRetentionFields(

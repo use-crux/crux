@@ -175,4 +175,36 @@ describe('loadGeneratedRuntimeProgram', () => {
     })
   })
 
+  it('rejects Effect recovery targets that disagree with the manifest', async () => {
+    const manifest = `${JSON.stringify({
+      version: 3,
+      evalPrivacyFingerprint: 'safe',
+      targets: [],
+      effectTargets: [{
+        id: 'customer.update',
+        version: 1,
+        module: './effects.ts',
+        export: 'updateCustomer',
+      }],
+      providers: [],
+      transports: [],
+      evals: [],
+    })}\n`
+    const { createHash } = await import('node:crypto')
+    const hash = createHash('sha256').update(manifest).digest('hex')
+    const root = await fixture({
+      '.crux/generated/runtime/manifest.json': manifest,
+      '.crux/generated/runtime/program.ts': [
+        `export const runtimeArtifactManifestHash = '${hash}'`,
+        "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [{ id: 'customer.update', version: 2 }], providers: [], transports: [] }",
+      ].join('\n'),
+    })
+
+    await expect(loadGeneratedRuntimeProgram(root)).rejects.toMatchObject({
+      code: 'ARTIFACTS_STALE',
+      whatFailed: expect.stringContaining('targets'),
+    })
+  })
+
 })

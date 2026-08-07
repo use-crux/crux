@@ -41,20 +41,29 @@ export async function prepareDurableRecoveryAttempt(
         originalReceiptId: original.id,
         unitId: unit.id,
         revision: 1,
+        ...(binding.fenceToken ? { fenceToken: binding.fenceToken } : {}),
       },
-      receipt: durableReceiptRecord(
-        binding.namespace,
-        attempt,
-        unit.idempotencyKey,
-        1,
-      ),
-      unit: durableUnitRecord(
-        binding.namespace,
-        unit,
-        currentUnit.effectVersion ?? original.effectVersion,
-        currentUnit.revision + 1,
-        currentUnit.appendOrder,
-      ),
+      receipt: {
+        ...durableReceiptRecord(
+          binding.namespace,
+          attempt,
+          unit.idempotencyKey,
+          1,
+        ),
+        ...(binding.fenceToken ? { fenceToken: binding.fenceToken } : {}),
+      },
+      unit: {
+        ...durableUnitRecord(
+          binding.namespace,
+          unit,
+          currentUnit.effectVersion ?? original.effectVersion,
+          currentUnit.revision + 1,
+          currentUnit.appendOrder,
+        ),
+        ...(currentUnit.fenceToken
+          ? { fenceToken: currentUnit.fenceToken }
+          : {}),
+      },
     };
     if (!(await effects.prepareRecovery(prepared))) {
       throw new TypeError(`Durable recovery attempt \`${attempt.id}\` was rejected.`);
@@ -116,7 +125,28 @@ export async function settleDurableRecoveryAttempt(
         currentUnit.appendOrder,
       ),
     };
-    if (!(await effects.settleRecovery(settled))) {
+    const fenced = {
+      ...settled,
+      attemptReceipt: {
+        ...settled.attemptReceipt,
+        ...(currentAttempt.fenceToken
+          ? { fenceToken: currentAttempt.fenceToken }
+          : {}),
+      },
+      originalReceipt: {
+        ...settled.originalReceipt,
+        ...(currentOriginal.fenceToken
+          ? { fenceToken: currentOriginal.fenceToken }
+          : {}),
+      },
+      unit: {
+        ...settled.unit,
+        ...(currentUnit.fenceToken
+          ? { fenceToken: currentUnit.fenceToken }
+          : {}),
+      },
+    };
+    if (!(await effects.settleRecovery(fenced))) {
       throw new TypeError(`Durable recovery attempt \`${attempt.id}\` rejected settlement.`);
     }
   });

@@ -289,13 +289,16 @@ export async function persistDurableUnitTransition(
       snapshot.units.find((record) => record.unit.id === unitId),
       "durable recovery unit",
     );
-    const next = durableUnitRecord(
-      binding.namespace,
-      unit,
-      current.effectVersion ?? 1,
-      current.revision + 1,
-      current.appendOrder,
-    );
+    const next = {
+      ...durableUnitRecord(
+        binding.namespace,
+        unit,
+        current.effectVersion ?? 1,
+        current.revision + 1,
+        current.appendOrder,
+      ),
+      ...(current.fenceToken ? { fenceToken: current.fenceToken } : {}),
+    };
     if (!(await effects.transitionUnit({ next }))) {
       throw new TypeError(`Durable recovery unit \`${unitId}\` rejected its transition.`);
     }

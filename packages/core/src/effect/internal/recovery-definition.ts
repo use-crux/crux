@@ -16,7 +16,7 @@ type EffectRecovery =
     };
 
 /** Non-enumerable definition-owned recovery binding. */
-export const effectRecoveryDefinition = Symbol("effect.recovery-definition");
+export const effectRecoveryDefinition = "__cruxEffectRecoveryDefinition" as const;
 
 /** Recoverable Effect definition with its private authored binding. */
 export interface RuntimeAddressableEffectDefinition {

@@ -19,6 +19,10 @@ import {
   prepareDurableRecoveryAttempt as prepareRecovery,
   settleDurableRecoveryAttempt as settleRecovery,
 } from "./durable-recovery";
+import {
+  settleDurableRecoveryFailure as settleRecoveryFailure,
+  settleDurableRecoveryUnavailable as settleRecoveryUnavailable,
+} from "./durable-recovery-terminal";
 
 const cache: DurableLedgerCache = {
   getReceipt: effectLedger.getReceipt,
@@ -93,6 +97,22 @@ export function settleDurableEffectRecovery(input: {
   readonly unitId: string;
 }): Promise<void> {
   return settleRecovery(cache, input);
+}
+
+/** Atomically settle a known failed recovery attempt. */
+export function settleDurableEffectRecoveryFailure(input: {
+  readonly attemptReceiptId: string;
+  readonly unitId: string;
+}): Promise<void> {
+  return settleRecoveryFailure(cache, input);
+}
+
+/** Atomically persist an unavailable Runtime recovery target. */
+export function settleDurableEffectRecoveryUnavailable(input: {
+  readonly receiptId: string;
+  readonly unitId: string;
+}): Promise<void> {
+  return settleRecoveryUnavailable(cache, input);
 }
 
 /** Persist one rollback-scope lifecycle transition. */

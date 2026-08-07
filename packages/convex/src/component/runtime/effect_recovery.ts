@@ -4,7 +4,9 @@ import type {
   DurableEffectReconciliationRecord,
   DurableEffectReconciliationSettlement,
   DurableEffectRecoveryPreparation,
+  DurableEffectRecoveryFailureSettlement,
   DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnavailableSettlement,
   DurableEffectRecoveryUnitRecord,
 } from '@use-crux/core/runtime'
 import {
@@ -12,6 +14,8 @@ import {
   isDurableReceiptTransition,
   isDurableReconciliationReceiptTransition,
   isDurableReconciliationUnitTransition,
+  isDurableRecoveryUnavailableReceiptTransition,
+  isDurableRecoveryUnavailableUnitTransition,
   isDurableUnitTransition,
 } from '@use-crux/core/runtime/internal/effects-store'
 import type { MutationCtx } from '../_generated/server.js'
@@ -86,6 +90,73 @@ export async function settleEffectRecovery(
   if (!(await replaceEffectRecord(
     ctx, originalDocument, settlement.originalReceipt.receipt.boundaryId,
     settlement.originalReceipt,
+  ))) return null
+  if (!(await replaceEffectRecord(
+    ctx, unitDocument, settlement.unit.unit.boundaryId, settlement.unit,
+  ))) return null
+  return settlement
+}
+
+export async function settleEffectRecoveryFailure(
+  ctx: MutationCtx,
+  settlement: DurableEffectRecoveryFailureSettlement,
+): Promise<DurableEffectRecoveryFailureSettlement | null> {
+  const attemptDocument = await getEffectDocument(
+    ctx, 'receipt', settlement.attemptReceipt.namespace,
+    settlement.attemptReceipt.receipt.id,
+  )
+  const unitDocument = await getEffectDocument(
+    ctx, 'unit', settlement.unit.namespace, settlement.unit.unit.id,
+  )
+  const attempt = attemptDocument?.record as DurableEffectReceiptRecord | undefined
+  const unit = unitDocument?.record as DurableEffectRecoveryUnitRecord | undefined
+  if (
+    !attemptDocument || !unitDocument || !attempt || !unit ||
+    !durableTransitionMatches(attempt, settlement.attemptReceipt) ||
+    !durableTransitionMatches(unit, settlement.unit) ||
+    !isDurableReceiptTransition(
+      attempt.receipt.outcome,
+      settlement.attemptReceipt.receipt.outcome,
+    ) ||
+    !isDurableUnitTransition(unit.unit.status, settlement.unit.unit.status)
+  ) return null
+  if (!(await replaceEffectRecord(
+    ctx, attemptDocument, settlement.attemptReceipt.receipt.boundaryId,
+    settlement.attemptReceipt,
+  ))) return null
+  if (!(await replaceEffectRecord(
+    ctx, unitDocument, settlement.unit.unit.boundaryId, settlement.unit,
+  ))) return null
+  return settlement
+}
+
+export async function settleEffectRecoveryUnavailable(
+  ctx: MutationCtx,
+  settlement: DurableEffectRecoveryUnavailableSettlement,
+): Promise<DurableEffectRecoveryUnavailableSettlement | null> {
+  const receiptDocument = await getEffectDocument(
+    ctx, 'receipt', settlement.receipt.namespace,
+    settlement.receipt.receipt.id,
+  )
+  const unitDocument = await getEffectDocument(
+    ctx, 'unit', settlement.unit.namespace, settlement.unit.unit.id,
+  )
+  const receipt = receiptDocument?.record as DurableEffectReceiptRecord | undefined
+  const unit = unitDocument?.record as DurableEffectRecoveryUnitRecord | undefined
+  if (
+    !receiptDocument || !unitDocument || !receipt || !unit ||
+    !durableTransitionMatches(receipt, settlement.receipt) ||
+    !durableTransitionMatches(unit, settlement.unit) ||
+    !isDurableRecoveryUnavailableReceiptTransition(
+      receipt.receipt, settlement.receipt.receipt,
+    ) ||
+    !isDurableRecoveryUnavailableUnitTransition(
+      unit.unit.status, settlement.unit.unit.status,
+    )
+  ) return null
+  if (!(await replaceEffectRecord(
+    ctx, receiptDocument, settlement.receipt.receipt.boundaryId,
+    settlement.receipt,
   ))) return null
   if (!(await replaceEffectRecord(
     ctx, unitDocument, settlement.unit.unit.boundaryId, settlement.unit,

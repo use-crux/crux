@@ -31,8 +31,14 @@ import {
   preparePostgresEffectRecovery,
   reconcilePostgresEffects,
   settlePostgresEffectRecovery,
+  settlePostgresEffectRecoveryFailure,
+  settlePostgresEffectRecoveryUnavailable,
 } from './effect-recovery'
 import { prunePostgresEffectEnvelopes } from './effect-retention'
+import {
+  claimPostgresEffectRecovery,
+  releasePostgresEffectRecovery,
+} from './effect-claims'
 
 /** Create the PostgreSQL durable Effects record port. */
 export function createPostgresEffectStore(
@@ -42,6 +48,10 @@ export function createPostgresEffectStore(
 ): RuntimeEffectStorePort {
   const records = table(schema, 'effect_records')
   return {
+    claimRecoveryScopes: (options) =>
+      claimPostgresEffectRecovery(db, records, faults, options),
+    releaseRecoveryScope: (release) =>
+      releasePostgresEffectRecovery(db, records, faults, release),
     getReceipt: (receiptId, options) =>
       getEffectRecord(db, records, 'receipt', options.namespace, receiptId),
 
@@ -259,6 +269,10 @@ export function createPostgresEffectStore(
       preparePostgresEffectRecovery(db, records, faults, preparation),
     settleRecovery: (settlement) =>
       settlePostgresEffectRecovery(db, records, faults, settlement),
+    settleRecoveryFailure: (settlement) =>
+      settlePostgresEffectRecoveryFailure(db, records, faults, settlement),
+    settleRecoveryUnavailable: (settlement) =>
+      settlePostgresEffectRecoveryUnavailable(db, records, faults, settlement),
     reconcile: (settlement) =>
       reconcilePostgresEffects(db, records, faults, settlement),
 

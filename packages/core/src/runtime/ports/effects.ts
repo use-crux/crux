@@ -16,9 +16,12 @@ import type {
   DurableEffectExecutionSettlement,
   DurableEffectPreparation,
   DurableEffectReceiptRecord,
+  DurableEffectRecoveryClaim,
+  DurableEffectRecoveryFailureSettlement,
   DurableEffectReconciliationSettlement,
   DurableEffectRecoveryPreparation,
   DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnavailableSettlement,
   DurableEffectRecoveryUnitRecord,
   DurableEffectScopeRecord,
   DurableEffectScopeSnapshot,
@@ -33,17 +36,48 @@ export type {
   DurableEffectPlanStep,
   DurableEffectPreparation,
   DurableEffectReceiptRecord,
+  DurableEffectRecoveryClaim,
+  DurableEffectRecoveryFailureSettlement,
   DurableEffectReconciliationRequirement,
   DurableEffectReconciliationRecord,
   DurableEffectReconciliationSettlement,
   DurableEffectRecoveryAttemptRecord,
   DurableEffectRecoveryPreparation,
   DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnavailableSettlement,
   DurableEffectRecoveryUnitRecord,
   DurableEffectScopeRecord,
   DurableEffectScopeSnapshot,
   DurableEffectScopeSynchronization,
 } from "../../effect/internal/durable-records";
+
+/** Options for atomically discovering and claiming pending rollback scopes. */
+export interface RuntimeEffectRecoveryClaimOptions {
+  /** Runtime namespace scanned for interrupted rollback scopes. */
+  readonly namespace: string;
+  /** Stable clock value used for eligibility and expiry. */
+  readonly now: Date;
+  /** Maximum scopes claimed in one bounded pass. */
+  readonly limit: number;
+  /** Claim lifetime in milliseconds. */
+  readonly leaseMs: number;
+  /** Opaque token installed as the store fence. */
+  readonly leaseToken: string;
+  /** Optional process identity retained for diagnostics. */
+  readonly ownerId?: string;
+}
+
+/** Input for making one owned recovery scope immediately reclaimable. */
+export interface RuntimeEffectRecoveryRelease {
+  /** Runtime namespace that owns the scope. */
+  readonly namespace: string;
+  /** Claimed rollback scope. */
+  readonly scope: EffectScopeRef;
+  /** Current opaque claim fence. */
+  readonly leaseToken: string;
+  /** Stable clock value recorded as the claim expiry. */
+  readonly now: Date;
+}
 
 /** Runtime partition used for one durable Effect read. */
 export interface RuntimeEffectReadOptions {
@@ -91,6 +125,14 @@ export interface RuntimeEffectUnitTransition {
 
 /** Transaction-bound durable Effect record operations. */
 export interface RuntimeEffectStorePort {
+  /** Discover and atomically fence eligible interrupted rollback scopes. */
+  claimRecoveryScopes(
+    options: RuntimeEffectRecoveryClaimOptions,
+  ): Promise<readonly DurableEffectRecoveryClaim[]>;
+  /** Release an owned idle claim while retaining its stale-writer fence. */
+  releaseRecoveryScope(
+    release: RuntimeEffectRecoveryRelease,
+  ): Promise<boolean>;
   /** Load one receipt from its Runtime namespace. */
   getReceipt(
     receiptId: string,
@@ -132,6 +174,14 @@ export interface RuntimeEffectStorePort {
   settleRecovery(
     settlement: DurableEffectRecoverySettlement,
   ): Promise<DurableEffectRecoverySettlement | null>;
+  /** Settle a known failed attempt and recovery unit atomically. */
+  settleRecoveryFailure(
+    settlement: DurableEffectRecoveryFailureSettlement,
+  ): Promise<DurableEffectRecoveryFailureSettlement | null>;
+  /** Settle a missing or version-mismatched program target without invocation. */
+  settleRecoveryUnavailable(
+    settlement: DurableEffectRecoveryUnavailableSettlement,
+  ): Promise<DurableEffectRecoveryUnavailableSettlement | null>;
   /** Atomically settle ambiguous work and append its reconciliation audit. */
   reconcile(
     settlement: DurableEffectReconciliationSettlement,

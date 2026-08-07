@@ -19,6 +19,8 @@ const modules = {
     import('../src/component/runtime/composite_effects'),
   '../src/component/runtime/effect_lifecycle.ts': () =>
     import('../src/component/runtime/effect_lifecycle'),
+  '../src/component/runtime/effect_claims.ts': () =>
+    import('../src/component/runtime/effect_claims'),
   '../src/component/runtime/effect_records.ts': () =>
     import('../src/component/runtime/effect_records'),
   '../src/component/runtime/effect_recovery.ts': () =>
@@ -66,6 +68,7 @@ const options: RunStoreEffectAdapterTestsOptions<EffectsStore> = {
     },
     crashFencing: { support: 'supported' },
     reconstruction: { support: 'supported' },
+    recoveryClaims: { support: 'supported' },
   },
 }
 

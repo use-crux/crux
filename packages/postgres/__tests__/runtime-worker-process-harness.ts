@@ -9,6 +9,20 @@ export interface RuntimeWorkerProjectFixture {
   readonly schema: string;
   readonly url: string;
   readonly executionMarker: string;
+  readonly recoveryReadyMarker: string;
+  readonly recoveryCallsMarker: string;
+  readonly recoveryEffectMarker: string;
+  readonly recoveryScopeMarker: string;
+}
+
+export interface ApplicationProcess {
+  readonly child: ChildProcess;
+  readonly exited: Promise<{
+    readonly code: number | null;
+    readonly signal: NodeJS.Signals | null;
+  }>;
+  readonly stdout: () => string;
+  readonly stderr: () => string;
 }
 
 export interface WorkerProcess {
@@ -92,6 +106,25 @@ export async function runApplication(
   operation: string,
   input: Readonly<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> {
+  const application = startApplication(fixture, operation, input);
+  const exit = await application.exited;
+  if (exit.code !== 0) {
+    throw new Error(
+      `Application process exited ${String(exit.code)} (${String(exit.signal)}): ${application.stderr()}`,
+    );
+  }
+  const line = application.stdout().trim().split("\n").at(-1);
+  if (!line) {
+    throw new Error(`Application process returned no JSON: ${application.stderr()}`);
+  }
+  return JSON.parse(line) as Record<string, unknown>;
+}
+
+export function startApplication(
+  fixture: RuntimeWorkerProjectFixture,
+  operation: string,
+  input: Readonly<Record<string, unknown>>,
+): ApplicationProcess {
   const child = spawn(
     process.execPath,
     [
@@ -111,20 +144,18 @@ export async function runApplication(
   child.stderr?.on("data", (chunk: string) => {
     stderr += chunk;
   });
-  const exit = await new Promise<{
+  const exited = new Promise<{
     code: number | null;
     signal: NodeJS.Signals | null;
   }>((resolveExit) =>
     child.once("exit", (code, signal) => resolveExit({ code, signal })),
   );
-  if (exit.code !== 0) {
-    throw new Error(
-      `Application process exited ${String(exit.code)} (${String(exit.signal)}): ${stderr}`,
-    );
-  }
-  const line = stdout.trim().split("\n").at(-1);
-  if (!line) throw new Error(`Application process returned no JSON: ${stderr}`);
-  return JSON.parse(line) as Record<string, unknown>;
+  return {
+    child,
+    exited,
+    stdout: () => stdout,
+    stderr: () => stderr,
+  };
 }
 
 export async function expireWorkLease(

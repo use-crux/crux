@@ -26,10 +26,18 @@ export interface DurableEffectReceiptRecord {
 
 /** Store-owned rollback-scope row. */
 export interface DurableEffectScopeRecord {
+  /** Runtime namespace that owns the scope. */
   readonly namespace: string;
+  /** Persisted public scope state. */
   readonly scope: EffectScopeRecord;
+  /** Monotonic optimistic revision. */
   readonly revision: number;
+  /** Latest store fence installed for recovery writes. */
   readonly fenceToken?: string;
+  /** Wall-clock claim expiry in epoch milliseconds. */
+  readonly recoveryLeaseExpiresAt?: number;
+  /** Optional worker identity retained for diagnostics. */
+  readonly recoveryOwnerId?: string;
 }
 
 /** Store-owned recovery unit without an executable handler closure. */
@@ -108,6 +116,22 @@ export interface DurableEffectRecoverySettlement {
   readonly unit: DurableEffectRecoveryUnitRecord;
 }
 
+/** Atomic known-failure recovery settlement. */
+export interface DurableEffectRecoveryFailureSettlement {
+  /** Failed recovery-attempt receipt. */
+  readonly attemptReceipt: DurableEffectReceiptRecord;
+  /** Recovery unit returned to a known failed state. */
+  readonly unit: DurableEffectRecoveryUnitRecord;
+}
+
+/** Atomic settlement when the active Runtime program cannot resolve a handler. */
+export interface DurableEffectRecoveryUnavailableSettlement {
+  /** Original receipt settled with unavailable recovery. */
+  readonly receipt: DurableEffectReceiptRecord;
+  /** Recovery unit terminalized without handler invocation. */
+  readonly unit: DurableEffectRecoveryUnitRecord;
+}
+
 /** Atomic operator-authorized settlement of ambiguous durable work. */
 export interface DurableEffectReconciliationSettlement {
   readonly reconciliation: DurableEffectReconciliationRecord;
@@ -163,4 +187,18 @@ export interface DurableEffectScopeSnapshot {
   readonly reconciliations: readonly DurableEffectReconciliationRecord[];
   readonly plan: readonly DurableEffectPlanStep[];
   readonly reconciliationRequired: readonly DurableEffectReconciliationRequirement[];
+}
+
+/** Time-bounded fenced ownership of one reconstructed recovery plan. */
+export interface DurableEffectRecoveryClaim {
+  /** Claimed rollback scope. */
+  readonly scope: EffectScopeRef;
+  /** Opaque fence required by every owned write. */
+  readonly leaseToken: string;
+  /** Claim expiry in epoch milliseconds. */
+  readonly expiresAt: number;
+  /** Optional worker identity retained for diagnostics. */
+  readonly ownerId?: string;
+  /** Exact reconstructed plan after fencing. */
+  readonly snapshot: DurableEffectScopeSnapshot;
 }

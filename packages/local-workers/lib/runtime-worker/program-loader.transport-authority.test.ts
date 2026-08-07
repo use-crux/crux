@@ -7,6 +7,7 @@ const manifest = `${JSON.stringify({
   version: 3,
   evalPrivacyFingerprint: "safe",
   targets: [],
+  effectTargets: [],
   providers: [
     {
       id: "orders.webhook",
@@ -35,7 +36,7 @@ function program(providers: string, transports: string): string {
   return [
     `export const runtimeArtifactManifestHash = '${hash}'`,
     "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-    `export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], providers: ${providers}, transports: ${transports} }`,
+    `export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [], providers: ${providers}, transports: ${transports} }`,
   ].join("\n");
 }
 
@@ -96,7 +97,7 @@ describe("generated runtime program transport authority", () => {
       ".crux/generated/runtime/program.ts": [
         `export const runtimeArtifactManifestHash = '${transportOnlyHash}'`,
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], providers: [{ id: 'orders.webhook' }], transports: [{ id: 'binding.orders', adapter: { id: 'adapter.alias', provider: 'orders.webhook' }, target: { signalId: 'order.submitted' } }] }",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [], providers: [{ id: 'orders.webhook' }], transports: [{ id: 'binding.orders', adapter: { id: 'adapter.alias', provider: 'orders.webhook' }, target: { signalId: 'order.submitted' } }] }",
       ].join("\n"),
     });
 

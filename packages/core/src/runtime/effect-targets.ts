@@ -30,7 +30,7 @@ type RuntimeEffectTargetTable = Readonly<
 >;
 
 /** Program-owned table of authored definitions, hidden from manifest identity. */
-export const runtimeEffectTargetTable = Symbol("runtime.effect-target-table");
+export const runtimeEffectTargetTable = "__cruxRuntimeEffectTargetTable" as const;
 
 /** Internal Runtime program capability for exact Effect target resolution. */
 export interface RuntimeEffectTargetProgram {

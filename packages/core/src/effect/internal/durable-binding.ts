@@ -19,6 +19,7 @@ export interface DurableEffectLedgerBinding {
   readonly namespace: string;
   readonly store: RuntimeStoreAdapter;
   readonly program?: RuntimeProgram;
+  readonly fenceToken?: string;
 }
 
 const durableEffectLedgerSlot =

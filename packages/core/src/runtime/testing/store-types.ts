@@ -15,6 +15,8 @@ export interface StoreEffectConformanceCapabilities {
   readonly crashFencing: StoreEffectCapability
   /** Scope records reconstruct exact rollback and reconciliation state. */
   readonly reconstruction: StoreEffectCapability
+  /** Interrupted rollback scopes support expiring, fenced worker claims. */
+  readonly recoveryClaims: StoreEffectCapability
 }
 
 /** Options for {@link runStoreAdapterTests}. */

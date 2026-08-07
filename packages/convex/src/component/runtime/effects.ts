@@ -30,14 +30,19 @@ import {
   prepareEffectRecovery,
   reconcileEffects,
   settleEffectRecovery,
+  settleEffectRecoveryFailure,
+  settleEffectRecoveryUnavailable,
 } from './effect_recovery'
 import { pruneEffectEnvelopes } from './effect_retention'
+import { claimEffectRecovery, releaseEffectRecovery } from './effect_claims'
 
 /** Construct the durable Effects port inside one Convex component mutation. */
 export function createComponentEffectStore(
   ctx: MutationCtx,
 ): RuntimeEffectStorePort {
   return {
+    claimRecoveryScopes: (options) => claimEffectRecovery(ctx, options),
+    releaseRecoveryScope: (release) => releaseEffectRecovery(ctx, release),
     getReceipt: (receiptId, options) =>
       getEffectRecord(ctx, 'receipt', options.namespace, receiptId),
 
@@ -201,6 +206,9 @@ export function createComponentEffectStore(
     transitionUnit: (transition) => transitionEffectUnit(ctx, transition),
     prepareRecovery: (value) => prepareEffectRecovery(ctx, value),
     settleRecovery: (value) => settleEffectRecovery(ctx, value),
+    settleRecoveryFailure: (value) => settleEffectRecoveryFailure(ctx, value),
+    settleRecoveryUnavailable: (value) =>
+      settleEffectRecoveryUnavailable(ctx, value),
     reconcile: (value) => reconcileEffects(ctx, value),
 
     async reconstructScope(scope, options) {

@@ -22,6 +22,7 @@ runStoreEffectAdapterTests({
     multiOperationTransactions: { support: "supported" },
     crashFencing: { support: "supported" },
     reconstruction: { support: "supported" },
+    recoveryClaims: { support: "supported" },
   },
 });
 

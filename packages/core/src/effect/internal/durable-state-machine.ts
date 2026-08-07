@@ -69,6 +69,26 @@ export function isDurableUnitTransition(
     (from === "recovering" && (to === "recovered" || to === "failed"))
   );
 }
+/** Whether a program-resolution miss may settle an otherwise runnable receipt. */
+export function isDurableRecoveryUnavailableReceiptTransition(
+  from: DurableEffectReceiptRecord["receipt"],
+  to: DurableEffectReceiptRecord["receipt"],
+): boolean {
+  return (
+    from.outcome === "succeeded" &&
+    to.outcome === "succeeded" &&
+    from.recovery === "available" &&
+    to.recovery === "handler_unavailable"
+  );
+}
+
+/** Whether a program-resolution miss may terminalize a runnable unit. */
+export function isDurableRecoveryUnavailableUnitTransition(
+  from: RecoveryUnitLifecycle,
+  to: RecoveryUnitLifecycle,
+): boolean {
+  return (from === "active" || from === "failed") && to === "failed";
+}
 /** Whether a rollback-scope transition is monotonic and store-admissible. */
 export function isDurableScopeTransition(
   from: EffectScopeLifecycle,

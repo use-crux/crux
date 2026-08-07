@@ -21,6 +21,8 @@ import {
   prepareDurableEffectRecovery,
   restoreDurableEffectReceiptScope,
   settleDurableEffectRecovery,
+  settleDurableEffectRecoveryFailure,
+  settleDurableEffectRecoveryUnavailable,
 } from "./internal/ledger-durable";
 import { createRecoveryAttemptReceiptId } from "./internal/occurrence";
 import { reconcileEffectReceipt } from "./internal/reconcile";
@@ -189,6 +191,12 @@ export async function recoverEffectReceiptAttempt(
         `Recovery handler for Effect \`${storedReceipt.effectId}\` version ` +
         `${storedReceipt.effectVersion} is unavailable in the active Runtime program.`,
     });
+    effectLedger.markReceiptRecovery(storedReceipt.id, "handler_unavailable");
+    effectLedger.markUnit(unit.id, "failed");
+    await settleDurableEffectRecoveryUnavailable({
+      receiptId: storedReceipt.id,
+      unitId: unit.id,
+    });
     return Object.freeze({
       result: Object.freeze({
         ...createRecoveryUnitResult(
@@ -307,6 +315,10 @@ export async function recoverEffectReceiptAttempt(
           error: summarizeEffectError(error),
         });
         effectLedger.markUnit(unit.id, "failed");
+        await settleDurableEffectRecoveryFailure({
+          attemptReceiptId: attempt.id,
+          unitId: unit.id,
+        });
         recordEffectRecoveryAttempt(storedReceipt, settledAttempt);
         observation.settle(settledAttempt);
         return Object.freeze({

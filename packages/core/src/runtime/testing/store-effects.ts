@@ -48,6 +48,10 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       "Effect reconstruction",
       options.effectCapabilities.reconstruction,
     );
+    registerCapabilityDeclaration(
+      "Effect recovery claims",
+      options.effectCapabilities.recoveryClaims,
+    );
 
     it.runIf(isSupported(options.effectCapabilities.atomicOperations))(
       "persists atomic preparation and guarded settlement",
@@ -208,7 +212,10 @@ export function runStoreEffectAdapterTests<TStore extends EffectsStore>(
       },
     );
 
-    if (isSupported(options.effectCapabilities.crashFencing)) {
+    if (
+      isSupported(options.effectCapabilities.crashFencing) &&
+      isSupported(options.effectCapabilities.recoveryClaims)
+    ) {
       runStoreEffectCrashTests(options, preparation);
     }
     if (isSupported(options.effectCapabilities.atomicOperations)) {

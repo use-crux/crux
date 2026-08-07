@@ -108,10 +108,10 @@ the original callback error as `cause` and the honest per-unit result in
   Without a Runtime store, Effect recovery is process-local: receipts, captured
   state, and ledger rows live only for the current process. Configure a Runtime
   store that implements the Effects port to persist those records and rebuild
-  the exact reverse recovery plan after a restart. Recovery still runs only when
-  your process calls `recover()`, `rollback()`, or `reconcileEffect()` with a
-  matching Runtime program. An external worker that claims and drives Effect
-  recovery after a kill is not part of this release. See
+  the exact reverse recovery plan after a restart. Application code can call
+  `recover()`, `rollback()`, or `reconcileEffect()` with a matching Runtime
+  program. A self-hosted `crux runtime worker` can also claim and drive
+  interrupted rollback scopes after process loss. See
   [Durability and restarts](/docs/guides/effects/durability-and-restarts).
 </Callout>
 

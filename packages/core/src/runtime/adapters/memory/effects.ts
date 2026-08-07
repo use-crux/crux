@@ -3,9 +3,10 @@
 import {
   durableTransitionMatches,
   isDurableReceiptTransition,
+  isDurableRecoveryUnavailableReceiptTransition,
+  isDurableRecoveryUnavailableUnitTransition,
   isDurableScopeTransition,
   isDurableUnitTransition,
-  reconstructDurableEffectScope,
 } from "../../../effect/internal/durable-state-machine";
 import type { RuntimeEffectStorePort } from "../../ports/effects";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
@@ -17,9 +18,13 @@ import {
   put,
   reconcileMemoryEffects,
   synchronizeMemoryEffectScope,
-  valuesForNamespace,
 } from "./effect-records";
 import { pruneMemoryEffectEnvelopes } from "./effect-retention";
+import {
+  claimMemoryEffectRecovery,
+  reconstructMemoryEffectScope,
+  releaseMemoryEffectRecovery,
+} from "./effect-claims";
 
 /** Construct the transaction-bound Effects port over one memory data view. */
 export function createMemoryEffectStore(
@@ -27,6 +32,12 @@ export function createMemoryEffectStore(
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeEffectStorePort {
   return {
+    claimRecoveryScopes: (options) =>
+      Promise.resolve(claimMemoryEffectRecovery(data, options, recordWrite)),
+
+    releaseRecoveryScope: (release) =>
+      Promise.resolve(releaseMemoryEffectRecovery(data, release, recordWrite)),
+
     async getReceipt(receiptId, options) {
       return cloneOptional(
         data.effectReceipts.get(scopedKey(options.namespace, receiptId)),
@@ -307,40 +318,71 @@ export function createMemoryEffectStore(
       return cloneRecord(stored);
     },
 
+    async settleRecoveryFailure(settlement) {
+      const attemptKey = scopedKey(
+        settlement.attemptReceipt.namespace,
+        settlement.attemptReceipt.receipt.id,
+      );
+      const unitKey = scopedKey(
+        settlement.unit.namespace,
+        settlement.unit.unit.id,
+      );
+      const attempt = data.effectReceipts.get(attemptKey);
+      const unit = data.effectUnits.get(unitKey);
+      if (
+        !attempt ||
+        !unit ||
+        !durableTransitionMatches(attempt, settlement.attemptReceipt) ||
+        !durableTransitionMatches(unit, settlement.unit) ||
+        !isDurableReceiptTransition(
+          attempt.receipt.outcome,
+          settlement.attemptReceipt.receipt.outcome,
+        ) ||
+        !isDurableUnitTransition(unit.unit.status, settlement.unit.unit.status)
+      ) return null;
+      const stored = cloneRecord(settlement);
+      put(data.effectReceipts, attemptKey, stored.attemptReceipt, recordWrite);
+      put(data.effectUnits, unitKey, stored.unit, recordWrite);
+      return cloneRecord(stored);
+    },
+
+    async settleRecoveryUnavailable(settlement) {
+      const receiptKey = scopedKey(
+        settlement.receipt.namespace,
+        settlement.receipt.receipt.id,
+      );
+      const unitKey = scopedKey(
+        settlement.unit.namespace,
+        settlement.unit.unit.id,
+      );
+      const receipt = data.effectReceipts.get(receiptKey);
+      const unit = data.effectUnits.get(unitKey);
+      if (
+        !receipt ||
+        !unit ||
+        !durableTransitionMatches(receipt, settlement.receipt) ||
+        !durableTransitionMatches(unit, settlement.unit) ||
+        !isDurableRecoveryUnavailableReceiptTransition(
+          receipt.receipt,
+          settlement.receipt.receipt,
+        ) ||
+        !isDurableRecoveryUnavailableUnitTransition(
+          unit.unit.status,
+          settlement.unit.unit.status,
+        )
+      ) return null;
+      const stored = cloneRecord(settlement);
+      put(data.effectReceipts, receiptKey, stored.receipt, recordWrite);
+      put(data.effectUnits, unitKey, stored.unit, recordWrite);
+      return stored;
+    },
+
     async reconcile(settlement) {
       return reconcileMemoryEffects(data, settlement, recordWrite);
     },
 
     async reconstructScope(scope, options) {
-      const scopeRecord = data.effectScopes.get(
-        scopedKey(options.namespace, scope.id),
-      );
-      if (!scopeRecord || scopeRecord.scope.ref.runId !== scope.runId) {
-        return null;
-      }
-      const receipts = valuesForNamespace(data.effectReceipts, options.namespace)
-        .filter((record) => record.receipt.boundaryId === scope.id);
-      const units = valuesForNamespace(data.effectUnits, options.namespace)
-        .filter((record) => record.unit.boundaryId === scope.id);
-      const receiptIds = new Set(receipts.map((record) => record.receipt.id));
-      const unitIds = new Set(units.map((record) => record.unit.id));
-      return reconstructDurableEffectScope(scope, {
-        scope: cloneRecord(scopeRecord),
-        receipts: receipts.map(cloneRecord),
-        units: units.map(cloneRecord),
-        envelopes: valuesForNamespace(
-          data.effectEnvelopes,
-          options.namespace,
-        ).filter((record) => receiptIds.has(record.receiptId)).map(cloneRecord),
-        attempts: valuesForNamespace(data.effectAttempts, options.namespace)
-          .filter((record) => unitIds.has(record.unitId))
-          .map(cloneRecord),
-        reconciliations: [...receiptIds].flatMap((receiptId) =>
-          (data.effectReconciliations.get(
-            scopedKey(options.namespace, receiptId),
-          ) ?? []).map(cloneRecord),
-        ),
-      });
+      return reconstructMemoryEffectScope(data, scope, options.namespace);
     },
 
     async prune(options) {

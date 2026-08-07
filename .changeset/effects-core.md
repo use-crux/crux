@@ -17,14 +17,19 @@ a Runtime store Effects port. Restart-safe reconstruction rebuilds the exact
 reverse recovery plan and stable recovery idempotency keys. Crash windows
 surface prepared work for reconciliation, project interrupted running work as
 unknown, and reject stale fenced writers so only one concurrent terminal
-transition commits. Recovery remains application-driven: an external worker that
-claims and re-drives Effect recovery after process kill is not included.
+transition commits. The external Runtime worker now discovers interrupted
+rollback scopes, acquires expiring fenced claims, and executes the exact
+store-reconstructed plan with stable recovery idempotency keys. A replacement
+worker can reclaim work after process loss without allowing a superseded holder
+to settle stale writes.
 
 Declare immutable Effect recovery targets on `createRuntimeProgram({
 effectTargets })`. Generated Next, Convex, and Cloudflare hosts bind those
 targets. Missing or version-mismatched cold targets settle as
 `handler_unavailable`. A recoverable Effect without a program declaration stays
 callable and recovers through its live definition in the same process.
+Worker recovery resolves handlers only from this immutable program table and
+does not silently retry crash-ambiguous recovery attempts.
 
 Ship PostgreSQL and Convex durable Effects adapters behind a shared conformance
 matrix. Convex supports per-operation atomicity, crash fencing, and

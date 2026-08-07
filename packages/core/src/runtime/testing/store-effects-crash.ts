@@ -17,6 +17,129 @@ export function runStoreEffectCrashTests<TStore extends EffectsStore>(
   options: RunStoreAdapterTestsOptions<TStore>,
   preparation: () => DurableEffectPreparation,
 ): void {
+  it("reclaims expired recovery work and fences the superseded holder", async () => {
+    const store = await options.createStore();
+    const prepared = preparation();
+    await makeRecoveryPending(store, prepared);
+
+    const first = await store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(100),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-a",
+      ownerId: "worker-a",
+    }));
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      scope: prepared.scope.scope.ref,
+      leaseToken: "effect-lease-a",
+      ownerId: "worker-a",
+    });
+
+    await expect(store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(149),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-b",
+    }))).resolves.toEqual([]);
+
+    const reclaimed = await store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(150),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-b",
+      ownerId: "worker-b",
+    }));
+    expect(reclaimed).toHaveLength(1);
+    expect(reclaimed[0]).toMatchObject({
+      leaseToken: "effect-lease-b",
+      ownerId: "worker-b",
+    });
+
+    const staleUnit = first[0]!.snapshot.units[0]!;
+    await expect(store.effects.transitionUnit({
+      next: {
+        ...staleUnit,
+        unit: { ...staleUnit.unit, status: "recovering" },
+        revision: staleUnit.revision + 1,
+      },
+    })).resolves.toBeNull();
+  });
+
+  it("does not discover a rolling-back scope whose plan is fully recovered", async () => {
+    const store = await options.createStore();
+    const prepared = preparation();
+    await makeRecoveryPending(store, prepared);
+    const [claim] = await store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(100),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-a",
+    }));
+    const active = claim!.snapshot.units[0]!;
+    const recovering = {
+      ...active,
+      unit: { ...active.unit, status: "recovering" as const },
+      revision: active.revision + 1,
+    };
+    await expect(store.effects.transitionUnit({ next: recovering }))
+      .resolves.toMatchObject({ unit: { status: "recovering" } });
+    await expect(store.effects.transitionUnit({
+      next: {
+        ...recovering,
+        unit: { ...recovering.unit, status: "recovered" },
+        revision: recovering.revision + 1,
+      },
+    })).resolves.toMatchObject({ unit: { status: "recovered" } });
+
+    await expect(store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(150),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-b",
+    }))).resolves.toEqual([]);
+  });
+
+  it("releases an idle claim without removing its write fence", async () => {
+    const store = await options.createStore();
+    const prepared = preparation();
+    await makeRecoveryPending(store, prepared);
+    const [claim] = await store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(100),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-a",
+    }));
+    await expect(store.transact((tx) => requireEffects(tx.effects).releaseRecoveryScope({
+      namespace: "tenant-a",
+      scope: prepared.scope.scope.ref,
+      leaseToken: "effect-lease-a",
+      now: new Date(101),
+    }))).resolves.toBe(true);
+    await expect(store.transact((tx) => requireEffects(tx.effects).claimRecoveryScopes({
+      namespace: "tenant-a",
+      now: new Date(101),
+      limit: 1,
+      leaseMs: 50,
+      leaseToken: "effect-lease-b",
+    }))).resolves.toHaveLength(1);
+
+    const staleUnit = claim!.snapshot.units[0]!;
+    await expect(store.effects.transitionUnit({
+      next: {
+        ...staleUnit,
+        unit: { ...staleUnit.unit, status: "recovering" },
+        revision: staleUnit.revision + 1,
+      },
+    })).resolves.toBeNull();
+  });
+
   it("rejects writes from a stale persisted fence", async () => {
     const store = await options.createStore();
     const prepared = preparation();
@@ -151,6 +274,48 @@ export function runStoreEffectCrashTests<TStore extends EffectsStore>(
       receipt: { outcome: results.find(Boolean)?.receipt.outcome },
     });
   });
+}
+
+async function makeRecoveryPending(
+  store: EffectsStore,
+  prepared: DurableEffectPreparation,
+): Promise<void> {
+  const running = runningReceipt(prepared);
+  await store.transact((tx) => requireEffects(tx.effects).prepare(prepared));
+  await store.transact((tx) => requireEffects(tx.effects).transitionReceipt({
+    next: running,
+  }));
+  await store.transact((tx) => requireEffects(tx.effects).settleExecution({
+    receipt: {
+      ...running,
+      receipt: {
+        ...running.receipt,
+        outcome: "succeeded",
+        recovery: "available",
+        recoveryUnitId: prepared.unit!.unit.id,
+        completedAt: 2,
+      },
+      appendOrder: 1,
+      revision: 3,
+    },
+    unit: {
+      ...prepared.unit!,
+      unit: { ...prepared.unit!.unit, status: "active" },
+      appendOrder: 1,
+      revision: 2,
+    },
+    envelope: {
+      ...prepared.envelope!,
+      revision: 2,
+    },
+  }));
+  await store.transact((tx) => requireEffects(tx.effects).transitionScope({
+    next: {
+      ...prepared.scope,
+      scope: { ...prepared.scope.scope, status: "rolling_back" },
+      revision: 2,
+    },
+  }));
 }
 
 function runningReceipt(prepared: DurableEffectPreparation) {

@@ -29,6 +29,12 @@ export function createConvexEffectStore(
     }),
   )
   return {
+    claimRecoveryScopes: (value) => run('claimRecoveryScopes', {
+      value: { ...value, now: value.now.getTime() },
+    }),
+    releaseRecoveryScope: (value) => run('releaseRecoveryScope', {
+      value: { ...value, now: value.now.getTime() },
+    }),
     getReceipt: (receiptId, read) =>
       run('getReceipt', { receiptId, options: read }),
     linkReceiptEvidence: (value) => run('linkReceiptEvidence', { value }),
@@ -40,6 +46,9 @@ export function createConvexEffectStore(
     transitionUnit: (value) => run('transitionUnit', { value }),
     prepareRecovery: (value) => run('prepareRecovery', { value }),
     settleRecovery: (value) => run('settleRecovery', { value }),
+    settleRecoveryFailure: (value) => run('settleRecoveryFailure', { value }),
+    settleRecoveryUnavailable: (value) =>
+      run('settleRecoveryUnavailable', { value }),
     reconcile: (value) => run('reconcile', { value }),
     reconstructScope: (scope, read) =>
       run('reconstructScope', { scope, options: read }),

@@ -5,6 +5,8 @@ export {
   isDurableReceiptTransition,
   isDurableReconciliationReceiptTransition,
   isDurableReconciliationUnitTransition,
+  isDurableRecoveryUnavailableReceiptTransition,
+  isDurableRecoveryUnavailableUnitTransition,
   isDurableScopeSynchronization,
   isDurableScopeTransition,
   isDurableUnitRegistration,

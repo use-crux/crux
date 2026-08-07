@@ -8,9 +8,8 @@ you configure a Runtime store that implements the Effects port, those records
 also survive process loss so a later process can reconstruct the same reverse
 recovery plan and settle work that finished while the first process was gone.
 
-This page documents what a configured store adds **now**, and what still
-requires an external Runtime worker. Read it before treating any Effect as
-restart-safe.
+This page documents what a configured store adds and when to run the external
+Runtime worker. Read it before treating any Effect as restart-safe.
 
 ## Mode table
 
@@ -19,7 +18,7 @@ restart-safe.
 | No Runtime store | Callable Effects, receipts, `rollbackOnError()`, delayed `rollback()`, and `reconcileEffect()` in the current process. Ledger state is process-local. | Any recovery after the process exits. |
 | Runtime store with an Effects port (memory for tests; PostgreSQL or Convex in deployment) | Durable receipt, scope, recovery-unit, attempt, and envelope rows. Restart-safe reconstruction of the exact reverse recovery plan and stable recovery idempotency keys. Honest crash-window projection and store-fenced terminal transitions. Bounded envelope retention. | Automatic background recovery in another process. An external worker that claims recovery work after a kill, restarts the handler, and drives recovery without your call. |
 | Runtime store plus `RuntimeProgram` Effect targets | The same durable records, plus exact `(id, version)` resolution of recovery handlers after restart when the restarted program declares them. | A global Effect registry, stored execution closures, or silent import of packages from receipt-controlled data. |
-| External Runtime worker (not this release) | Deferred. See the worker roadmap for external-process execution and kill-and-restart recovery through a self-hosted worker. | Not available yet. Do not document or assume it. |
+| Runtime store, `RuntimeProgram` Effect targets, and `crux runtime worker` | The worker discovers interrupted rollback scopes, acquires expiring fenced claims, and executes each store-reconstructed plan in causal reverse order. Recovery uses only exact `(id, version)` targets from the worker's immutable program. SIGINT and SIGTERM stop new admission, bound in-flight settlement, and release idle claims for restart. | Ambiguous attempts are not silently retried. Confirm the external outcome and use `reconcileEffect()` before recovery can continue. Initial worker ownership allows one execution worker per store namespace. |
 
 `effect()` itself does not require Runtime. Configure Runtime only when you need
 records or recovery to outlive the process that started the work.
@@ -188,19 +187,33 @@ intent/change/recovery roles reconstruct from the store, and sealed request or
 canonical tool-outcome refs attach only when the Effect ran inside a journaled
 request context. Effects never invent request-plan facts.
 
-## What the external worker will add later
+## Run recovery in the external worker
 
-An external-process Runtime worker is intentionally deferred. Until that ships:
+Generate the Runtime artifacts, then run the worker against the same configured
+store and namespace as the application:
 
-- your application or host must call `recover()`, `rollback()`, or
-  `reconcileEffect()` in a process that has the store and the matching program;
-- killing a worker does not automatically re-drive unfinished Effect recovery;
-- there is no lease-claimed recovery work item for Effects comparable to durable
-  Flow/task wake.
+```bash
+crux runtime generate
+crux runtime worker
+```
 
-Design recovery so operators and application code can finish the loop with the
-APIs above. When the worker lands, the durable records and recovery targets you
-configure here remain the input, not a second parallel model.
+The worker's maintenance loop discovers only `rolling_back` scopes whose
+reconstructed aggregate plan still has runnable work. It claims a bounded batch
+with an expiring lease, fences the scope and its nested recovery records, and
+executes the exact persisted plan with its stable recovery idempotency keys. A
+replacement worker can reclaim the scope after lease expiry if the process is
+killed. Writes from the superseded holder then lose at the store fence.
+
+Keep every required historical `(id, version)` definition in the generated
+program while its receipts may still need recovery. Missing and mismatched
+targets settle as `handler_unavailable`; the worker never imports code named by
+a receipt and never consults a global handler registry.
+
+If a process dies after a recovery handler may have produced an external
+effect, reconstruction records the attempt as `unknown`. The worker leaves that
+outcome ambiguous instead of invoking the handler again. Confirm the provider
+outcome and call `reconcileEffect()` with an audit reason. Once reconciled, the
+remaining durable plan can proceed.
 
 ## Related
 

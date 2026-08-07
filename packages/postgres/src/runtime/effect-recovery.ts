@@ -4,7 +4,9 @@ import type {
   DurableEffectReconciliationRecord,
   DurableEffectReconciliationSettlement,
   DurableEffectRecoveryPreparation,
+  DurableEffectRecoveryFailureSettlement,
   DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnavailableSettlement,
   DurableEffectRecoveryUnitRecord,
 } from '@use-crux/core/runtime'
 import {
@@ -12,6 +14,8 @@ import {
   isDurableReceiptTransition,
   isDurableReconciliationReceiptTransition,
   isDurableReconciliationUnitTransition,
+  isDurableRecoveryUnavailableReceiptTransition,
+  isDurableRecoveryUnavailableUnitTransition,
   isDurableUnitTransition,
 } from '@use-crux/core/runtime/internal/effects-store'
 import type { PostgresStoreFaults } from './faults'
@@ -95,6 +99,79 @@ export async function settlePostgresEffectRecovery(
     db, records, 'receipt', settlement.originalReceipt.receipt.id,
     settlement.originalReceipt.receipt.boundaryId, original.revision,
     settlement.originalReceipt, faults,
+  ))) return null
+  if (!(await replaceEffectRecord(
+    db, records, 'unit', settlement.unit.unit.id,
+    settlement.unit.unit.boundaryId, unit.revision, settlement.unit, faults,
+  ))) return null
+  return settlement
+}
+
+export async function settlePostgresEffectRecoveryFailure(
+  db: PgExecutor,
+  records: string,
+  faults: PostgresStoreFaults,
+  settlement: DurableEffectRecoveryFailureSettlement,
+): Promise<DurableEffectRecoveryFailureSettlement | null> {
+  const attempt = await getEffectRecord<DurableEffectReceiptRecord>(
+    db, records, 'receipt', settlement.attemptReceipt.namespace,
+    settlement.attemptReceipt.receipt.id, true,
+  )
+  const unit = await getEffectRecord<DurableEffectRecoveryUnitRecord>(
+    db, records, 'unit', settlement.unit.namespace,
+    settlement.unit.unit.id, true,
+  )
+  if (
+    !attempt || !unit ||
+    !durableTransitionMatches(attempt, settlement.attemptReceipt) ||
+    !durableTransitionMatches(unit, settlement.unit) ||
+    !isDurableReceiptTransition(
+      attempt.receipt.outcome,
+      settlement.attemptReceipt.receipt.outcome,
+    ) ||
+    !isDurableUnitTransition(unit.unit.status, settlement.unit.unit.status)
+  ) return null
+  if (!(await replaceEffectRecord(
+    db, records, 'receipt', settlement.attemptReceipt.receipt.id,
+    settlement.attemptReceipt.receipt.boundaryId, attempt.revision,
+    settlement.attemptReceipt, faults,
+  ))) return null
+  if (!(await replaceEffectRecord(
+    db, records, 'unit', settlement.unit.unit.id,
+    settlement.unit.unit.boundaryId, unit.revision, settlement.unit, faults,
+  ))) return null
+  return settlement
+}
+
+export async function settlePostgresEffectRecoveryUnavailable(
+  db: PgExecutor,
+  records: string,
+  faults: PostgresStoreFaults,
+  settlement: DurableEffectRecoveryUnavailableSettlement,
+): Promise<DurableEffectRecoveryUnavailableSettlement | null> {
+  const receipt = await getEffectRecord<DurableEffectReceiptRecord>(
+    db, records, 'receipt', settlement.receipt.namespace,
+    settlement.receipt.receipt.id, true,
+  )
+  const unit = await getEffectRecord<DurableEffectRecoveryUnitRecord>(
+    db, records, 'unit', settlement.unit.namespace,
+    settlement.unit.unit.id, true,
+  )
+  if (
+    !receipt || !unit ||
+    !durableTransitionMatches(receipt, settlement.receipt) ||
+    !durableTransitionMatches(unit, settlement.unit) ||
+    !isDurableRecoveryUnavailableReceiptTransition(
+      receipt.receipt, settlement.receipt.receipt,
+    ) ||
+    !isDurableRecoveryUnavailableUnitTransition(
+      unit.unit.status, settlement.unit.unit.status,
+    )
+  ) return null
+  if (!(await replaceEffectRecord(
+    db, records, 'receipt', settlement.receipt.receipt.id,
+    settlement.receipt.receipt.boundaryId, receipt.revision,
+    settlement.receipt, faults,
   ))) return null
   if (!(await replaceEffectRecord(
     db, records, 'unit', settlement.unit.unit.id,
