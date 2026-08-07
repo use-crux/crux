@@ -263,9 +263,14 @@ function schemaFingerprintValue(schema: z.ZodType<unknown>): unknown {
   try {
     return zodSchemaFingerprintValue(schema)
   } catch {
+    const explicitFingerprint = schema.meta()?.cruxFingerprint
+    if (typeof explicitFingerprint !== 'string' || !explicitFingerprint.trim()) {
+      throw new Error('Unrepresentable assertion schemas require meta({ cruxFingerprint: "..." }).')
+    }
     return {
       unrepresentable: (schema as { _zod?: { def?: { type?: unknown } } })._zod?.def?.type ?? 'schema',
       description: schema.description ?? null,
+      explicitFingerprint,
     }
   }
 }

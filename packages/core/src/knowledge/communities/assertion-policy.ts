@@ -9,6 +9,7 @@ import type { CommunityEntityEdgeInput } from './types'
 export const ASSERTION_MEMBERSHIP_POLICY_VERSION = 'assertion-community-v1'
 export const ASSERTION_REPORT_PROMPT_VERSION = 'assertion-report-v2'
 export const ASSERTION_REPORT_DATA_LIMIT = 1_200
+export const ASSERTION_REPORT_INTERNAL_RELATION_LIMIT = 40
 export const ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT = 20
 
 export function boundedAssertionReportData(data: JsonValue): string {
@@ -107,7 +108,7 @@ export function projectAssertionCommunities(input: {
   const assertionById = new Map(visible.map((assertion) => [assertion.assertionId, assertion]))
   const degrees = new Map<string, number>()
   const visibleRelations = input.relations.filter((relation) =>
-    assertionById.has(relation.fromAssertionId) && assertionById.has(relation.toAssertionId))
+    relation.type in relationWeights && assertionById.has(relation.fromAssertionId) && assertionById.has(relation.toAssertionId))
   for (const relation of visibleRelations) {
     degrees.set(relation.fromAssertionId, (degrees.get(relation.fromAssertionId) ?? 0) + 1)
     degrees.set(relation.toAssertionId, (degrees.get(relation.toAssertionId) ?? 0) + 1)
@@ -124,10 +125,28 @@ export function projectAssertionCommunities(input: {
     }
   }).sort((left, right) => left.relationId.localeCompare(right.relationId))
 
-  const memberships = visible.flatMap((assertion): AssertionCommunityMembership[] => {
+  const memberships = projectAssertionMemberships(visible, input.leafByChunk)
+
+  return { assertions: visible, supports, entityAffinities, relations, memberships }
+}
+
+export function projectAssertionMemberships(
+  assertions: readonly CommunityAssertionInput[],
+  leafByChunk: ReadonlyMap<string, string>,
+): readonly AssertionCommunityMembership[] {
+  const assertionsPerSource = new Map<string, Set<string>>()
+  for (const assertion of assertions) {
+    for (const sourceId of new Set(assertion.evidence.map((support) => support.sourceId))) {
+      const ids = assertionsPerSource.get(sourceId) ?? new Set<string>()
+      ids.add(assertion.assertionId)
+      assertionsPerSource.set(sourceId, ids)
+    }
+  }
+  const sourceScale = (sourceId: string) => 1 / Math.sqrt(Math.max(1, assertionsPerSource.get(sourceId)?.size ?? 1))
+  return assertions.flatMap((assertion): AssertionCommunityMembership[] => {
     const candidates = assertion.evidence.flatMap((support) => {
       const chunkKey = encodeKnowledgeRef(support.chunkRef)
-      const communityId = input.leafByChunk.get(chunkKey)
+      const communityId = leafByChunk.get(chunkKey)
       return communityId ? [{ communityId, chunkKey, weight: 1 / assertion.evidence.length * sourceScale(support.sourceId) }] : []
     }).sort((left, right) => right.weight - left.weight || left.communityId.localeCompare(right.communityId) ||
       left.chunkKey.localeCompare(right.chunkKey))
@@ -140,18 +159,20 @@ export function projectAssertionCommunities(input: {
         .filter((communityId) => communityId !== primary.communityId).sort(),
     }]
   })
-
-  return { assertions: visible, supports, entityAffinities, relations, memberships }
 }
 
 /** Collapse the heterogeneous assertion projection into entity links consumed by the existing clusterer. */
 export function assertionEntityEdges(input: Parameters<typeof projectAssertionCommunities>[0]): readonly CommunityEntityEdgeInput[] {
   const projection = projectAssertionCommunities(input)
   const entitiesByAssertion = new Map<string, string[]>()
+  const affinitiesByAssertion = new Map<string, typeof projection.entityAffinities[number][]>()
   for (const affinity of projection.entityAffinities) {
     const ids = entitiesByAssertion.get(affinity.assertionId) ?? []
     ids.push(affinity.entityId)
     entitiesByAssertion.set(affinity.assertionId, ids)
+    const affinities = affinitiesByAssertion.get(affinity.assertionId) ?? []
+    affinities.push(affinity)
+    affinitiesByAssertion.set(affinity.assertionId, affinities)
   }
   const weights = new Map<string, number>()
   const add = (left: string, right: string, weight: number) => {
@@ -160,7 +181,7 @@ export function assertionEntityEdges(input: Parameters<typeof projectAssertionCo
     weights.set(key, (weights.get(key) ?? 0) + weight)
   }
   for (const assertion of projection.assertions) {
-    const affinities = projection.entityAffinities.filter((item) => item.assertionId === assertion.assertionId)
+    const affinities = affinitiesByAssertion.get(assertion.assertionId) ?? []
     for (let left = 0; left < affinities.length; left += 1) {
       for (let right = left + 1; right < affinities.length; right += 1) {
         add(affinities[left]?.entityId ?? '', affinities[right]?.entityId ?? '',

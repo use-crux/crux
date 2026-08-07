@@ -13,6 +13,7 @@ import type { KnowledgeModel } from '../model'
 import { generateObjectWithDomainRepair } from '../structured-domain-repair'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../refs'
 import type { CommunityGraphInput, KnowledgeCommunity, KnowledgeCommunityClustering } from './cluster'
+import { normalizeCommunityGraphInput } from './cluster-normalize'
 import {
   createCommunityReportRecord,
   type CommunityReport,
@@ -22,6 +23,7 @@ import { communityReportOutputSchema, type CommunityReportOutput } from './repor
 import {
   ASSERTION_MEMBERSHIP_POLICY_VERSION,
   ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT,
+  ASSERTION_REPORT_INTERNAL_RELATION_LIMIT,
   ASSERTION_REPORT_PROMPT_VERSION,
   boundedAssertionReportData,
   projectAssertionCommunities,
@@ -31,6 +33,8 @@ import {
 type PresentedAssertionRelation = CommunityAssertionRelationInput & {
   readonly presentation: 'internal' | 'boundary'
 }
+
+type ReportProjection = ReturnType<typeof reportProjection>
 
 export interface GenerateCommunityReportsInput {
   readonly model: KnowledgeModel
@@ -52,13 +56,22 @@ export async function generateCommunityReports(
 ): Promise<readonly CommunityReport[]> {
   const reports = new Map<string, CommunityReport>()
   const communities = [...input.clustering.communities].sort(compareBottomUp)
+  const graph = normalizeCommunityGraphInput(input.graph)
+  const visibleAssertionIds = new Set(projectAssertionCommunities({
+    chunks: graph.chunks,
+    mentionWeights: graph.mentionWeights,
+    assertions: graph.assertions ?? [],
+    relations: graph.assertionRelations ?? [],
+    leafByChunk: new Map(),
+  }).assertions.map((assertion) => assertion.assertionId))
 
   for (const community of communities) {
     const children = community.childCommunityIds.flatMap((id) => {
       const child = reports.get(id)
       return child ? [child] : []
     })
-    const memberHash = memberHashFor(community, input.graph, children)
+    const projection = reportProjection(community, graph, visibleAssertionIds)
+    const memberHash = memberHashFor(community, graph, children, projection)
     const reusable = await input.findReusable?.(
       community.communityId,
       memberHash,
@@ -72,8 +85,9 @@ export async function generateCommunityReports(
     const output = await readReportOutput({
       model: input.model,
       community,
-      graph: input.graph,
+      graph,
       children,
+      projection,
       ...(input.assets ? { assets: input.assets } : {}),
     })
     reports.set(community.communityId, toReport(input, community, output, children, memberHash))
@@ -87,11 +101,12 @@ async function readReportOutput(input: {
   readonly community: KnowledgeCommunity
   readonly graph: CommunityGraphInput
   readonly children: readonly CommunityReport[]
+  readonly projection: ReportProjection
   readonly assets?: AssetStore
 }): Promise<CommunityReportOutput> {
-  const projection = reportProjection(input.community, input.graph)
+  const projection = input.projection
   const prompt = renderReportPrompt(input.community, input.graph, input.children, projection)
-  const chunks = reportChunks(input.community, input.graph, input.children, projection.assertionIds)
+  const chunks = reportChunks(input.community, input.graph, input.children)
   const sourceId = sourceIdsFor(chunks).join(', ')
   const subject = `community "${input.community.communityId}"`
   const promptId = `community:${input.community.communityId}`
@@ -172,6 +187,7 @@ function memberHashFor(
   community: KnowledgeCommunity,
   graph: CommunityGraphInput,
   children: readonly CommunityReport[],
+  projection: ReportProjection,
 ): string {
   if (children.length > 0) {
     return stableHash([...children].sort((left, right) => left.communityId.localeCompare(right.communityId)).map((child) => ({
@@ -196,8 +212,8 @@ function memberHashFor(
       const chunk = chunkByKey.get(encodeKnowledgeRef(ref))
       return chunk ? { ref, content: chunk.content } : { ref }
     }),
-    assertions: reportProjection(community, graph).assertions,
-    relations: reportProjection(community, graph).relations,
+    assertions: projection.assertions,
+    relations: projection.relations,
   })
 }
 
@@ -241,14 +257,10 @@ function reportChunks(
   community: KnowledgeCommunity,
   graph: CommunityGraphInput,
   children: readonly CommunityReport[],
-  assertionIds: readonly string[],
 ): readonly CruxChunk[] {
   if (children.length > 0) return []
   const chunkByKey = new Map(graph.chunks.map((chunk) => [encodeKnowledgeRef(chunk.ref), chunk]))
-  const assertionSet = new Set(assertionIds)
-  const assertionRefs = (graph.assertions ?? []).filter((assertion) => assertionSet.has(assertion.assertionId))
-    .flatMap((assertion) => assertion.evidence.map((support) => support.chunkRef))
-  const refs = dedupeRefs([...community.chunkRefs, ...assertionRefs]).filter((ref): ref is Extract<KnowledgeRef, { kind: 'chunk' }> => ref.kind === 'chunk')
+  const refs = community.chunkRefs
   return refs.flatMap((ref) => {
     const chunk = chunkByKey.get(encodeKnowledgeRef(ref))
     return chunk
@@ -294,7 +306,11 @@ function countsFor(community: KnowledgeCommunity) {
   }
 }
 
-function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphInput) {
+function reportProjection(
+  community: KnowledgeCommunity,
+  graph: CommunityGraphInput,
+  visible: ReadonlySet<string>,
+) {
   const assertionIds = [...new Set([...community.primaryAssertionIds, ...community.secondaryAssertionIds])].sort()
   const available = new Set(assertionIds)
   const visibleChunks = new Set(graph.chunks.map((chunk) => encodeKnowledgeRef(chunk.ref)))
@@ -303,13 +319,6 @@ function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphIn
       .filter((support) => visibleChunks.has(encodeKnowledgeRef(support.chunkRef)))
       .sort((left, right) => encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))) }))
     .sort((left, right) => left.assertionId.localeCompare(right.assertionId))
-  const visible = new Set(projectAssertionCommunities({
-    chunks: graph.chunks,
-    mentionWeights: graph.mentionWeights,
-    assertions: graph.assertions ?? [],
-    relations: graph.assertionRelations ?? [],
-    leafByChunk: new Map(),
-  }).assertions.map((assertion) => assertion.assertionId))
   const relations = (graph.assertionRelations ?? []).flatMap((relation): PresentedAssertionRelation[] => {
     if (!visible.has(relation.fromAssertionId) || !visible.has(relation.toAssertionId)) return []
     const fromHere = available.has(relation.fromAssertionId)
@@ -317,7 +326,7 @@ function reportProjection(community: KnowledgeCommunity, graph: CommunityGraphIn
     if (fromHere && toHere) return [{ ...relation, presentation: 'internal' as const }]
     return fromHere || toHere ? [{ ...relation, presentation: 'boundary' as const }] : []
   }).sort((left, right) => left.relationId.localeCompare(right.relationId))
-  const internal = relations.filter((relation) => relation.presentation === 'internal')
+  const internal = relations.filter((relation) => relation.presentation === 'internal').slice(0, ASSERTION_REPORT_INTERNAL_RELATION_LIMIT)
   const boundary = relations.filter((relation) => relation.presentation === 'boundary').slice(0, ASSERTION_REPORT_BOUNDARY_RELATION_LIMIT)
   return { assertionIds, assertions, relations: [...internal, ...boundary] }
 }

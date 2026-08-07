@@ -78,7 +78,7 @@ describe('assertions', () => {
   })
 
   it('keeps unrepresentable provider schemas out of deterministic run setup', async () => {
-    const transformed = z.string().transform((value) => value.trim())
+    const transformed = z.string().transform((value) => value.trim()).meta({ cruxFingerprint: 'trim-v1' })
     const stage = assertions({
       id: 'facts', version: 1, types: { fact: transformed },
       run: (_input, api) => { api.emit('fact', ' fact ', { evidence: chunkRef }) },
@@ -90,9 +90,25 @@ describe('assertions', () => {
     })).resolves.toMatchObject([{ status: 'ran', claims: 1 }])
   })
 
+  it('distinguishes unrepresentable schemas with different validation semantics', () => {
+    const transformed = (suffix: string, fingerprint: string) =>
+      z.string().transform((value) => value + suffix).meta({ cruxFingerprint: fingerprint })
+    const first = assertions({ id: 'facts', version: 1, types: { fact: transformed('a', 'suffix-a') }, run: () => {} })
+    const second = assertions({ id: 'facts', version: 1, types: { fact: transformed('b', 'suffix-b') }, run: () => {} })
+
+    expect(first.fingerprint()).not.toBe(second.fingerprint())
+    expect(() => assertions({
+      id: 'facts', version: 1, types: { fact: z.string().transform((value) => value) }, run: () => {},
+    })).toThrow(/cruxFingerprint/)
+  })
+
   it('fingerprints model wire fallback behavior', () => {
     const portable = assertions({ id: 'facts', version: 1, types: { fact: z.string() }, model: retrievalModel() })
-    const fallback = assertions({ id: 'facts', version: 1, types: { fact: z.string().transform((value) => value) }, model: retrievalModel() })
+    const fallback = assertions({
+      id: 'facts', version: 1,
+      types: { fact: z.string().transform((value) => value).meta({ cruxFingerprint: 'identity-v1' }) },
+      model: retrievalModel(),
+    })
 
     expect(portable.fingerprint()).not.toBe(fallback.fingerprint())
   })

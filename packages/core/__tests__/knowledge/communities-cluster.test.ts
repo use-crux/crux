@@ -344,6 +344,46 @@ describe('knowledge community clustering', () => {
     await expect(buildCommunityGraphInput({ records, indexerId, namespace })).resolves.toMatchObject({ assertions: [] })
   })
 
+  it('ignores malformed relation types and deduplicates assertion identities', () => {
+    const evidence = chunkInput('member', 'm1', 1, 'member evidence')
+    const valid = assertion('assertion:duplicate', ['member:m1'])
+    const base: CommunityGraphInput = {
+      ...graph({ entities: [], chunks: [evidence], mentions: [], edges: [] }),
+      assertions: [valid],
+      assertionRelations: [],
+    }
+    const duplicated = {
+      ...base,
+      assertions: [valid, { ...valid }],
+      assertionRelations: [{
+        relationId: 'relation:bad', type: 'unknown',
+        fromAssertionId: valid.assertionId, toAssertionId: valid.assertionId,
+      } as never],
+    }
+
+    expect(assertionMembershipSignature(clusterKnowledgeCommunities(duplicated)))
+      .toEqual(assertionMembershipSignature(clusterKnowledgeCommunities(base)))
+  })
+
+  it('gives assertion-only leaves distinct identities', () => {
+    const ids = ['one', 'two', 'three', 'four']
+    const chunks = ids.map((id, index) => chunkInput('source', id, index + 1, id))
+    const result = clusterKnowledgeCommunities({
+      ...graph({ entities: [], chunks, mentions: [], edges: [] }),
+      assertions: ids.map((id) => assertion(`assertion:${id}`, [`source:${id}`])),
+      assertionRelations: [['one', 'two'], ['three', 'four']].map(([from, to]) => ({
+        relationId: `relation:${from}-${to}`, type: 'supersedes' as const,
+        fromAssertionId: `assertion:${from}`, toAssertionId: `assertion:${to}`,
+      })),
+    }, 500)
+    const assertionLeaves = result.leaves.filter((leaf) => leaf.entityIds.length === 0 && leaf.chunkRefs.length === 0)
+
+    expect(assertionLeaves.length).toBeGreaterThan(0)
+    expect(assertionLeaves.map((leaf) => leaf.communityId)).not.toContain(`community_${stableHash({ members: [] })}`)
+    expect(new Set(assertionLeaves.map((leaf) => leaf.communityId)).size).toBe(assertionLeaves.length)
+    expect(assertionLeaves.every((leaf) => leaf.memberIdentities.some((id) => id.startsWith('assertion:')))).toBe(true)
+  })
+
   it('splits oversized components deterministically by strongest valid merge', () => {
     const input = graph({
       entities: ['alpha', 'bravo', 'charlie'],

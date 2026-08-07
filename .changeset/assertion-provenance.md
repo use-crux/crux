@@ -11,3 +11,5 @@ Generated assertion stages now compile authored kinds into stable grouped slots 
 Assertion wire schemas now use a strict portable allowlist, isolate unsupported schemas to JSON-string slots, and target repair attempts at only invalid slots.
 
 Closed required Zod objects, arrays, primitives, and enums now retain typed wire data and authored descriptions, while unconstrained or unsupported schemas continue to use slot-local JSON strings.
+
+Unrepresentable assertion schemas now require a non-empty `schema.meta().cruxFingerprint` so validation semantics remain part of assertion cache identity.

@@ -5,6 +5,8 @@
  */
 
 import { encodeKnowledgeRef } from '../refs'
+import { stableHash } from '../../indexing/hash'
+import type { CommunityAssertionInput, CommunityAssertionRelationInput } from './assertion-policy'
 import type {
   CommunityChunkInput,
   CommunityEntityEdgeInput,
@@ -29,13 +31,31 @@ export function normalizeCommunityGraphInput(input: CommunityGraphInput): Commun
     mentionWeights,
     residualChunks: chunks.filter((chunk) => !mentionedChunks.has(encodeKnowledgeRef(chunk.ref))),
     edges: coalesceEdges(input.edges, entityIds),
-    assertions: [...(input.assertions ?? [])].map((assertion) => ({
+    assertions: dedupeAssertions(input.assertions ?? []).map((assertion) => ({
       ...assertion,
       evidence: [...new Map(assertion.evidence.map((support) => [encodeKnowledgeRef(support.chunkRef), support])).values()]
         .sort((left, right) => encodeKnowledgeRef(left.chunkRef).localeCompare(encodeKnowledgeRef(right.chunkRef))),
     })).sort((left, right) => left.assertionId.localeCompare(right.assertionId)),
-    assertionRelations: [...(input.assertionRelations ?? [])].sort((left, right) => left.relationId.localeCompare(right.relationId)),
+    assertionRelations: dedupeAssertionRelations(input.assertionRelations ?? []),
   }
+}
+
+function dedupeAssertions(assertions: readonly CommunityAssertionInput[]): readonly CommunityAssertionInput[] {
+  return dedupeByStableIdentity(assertions, (assertion) => assertion.assertionId)
+}
+
+function dedupeAssertionRelations(relations: readonly CommunityAssertionRelationInput[]): readonly CommunityAssertionRelationInput[] {
+  const validTypes = new Set(['supports', 'conflictsWith', 'amends', 'narrows', 'supersedes'])
+  return dedupeByStableIdentity(relations.filter((relation) => validTypes.has(relation.type)), (relation) => relation.relationId)
+}
+
+function dedupeByStableIdentity<T>(items: readonly T[], identity: (item: T) => string): readonly T[] {
+  const byId = new Map<string, T>()
+  for (const item of [...items].sort((left, right) =>
+    identity(left).localeCompare(identity(right)) || stableHash(left).localeCompare(stableHash(right)))) {
+    if (!byId.has(identity(item))) byId.set(identity(item), item)
+  }
+  return [...byId.values()]
 }
 
 function dedupeEntities(entities: readonly CommunityEntityInput[]): readonly CommunityEntityInput[] {

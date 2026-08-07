@@ -57,7 +57,7 @@ describe('assertion-aware community reports', () => {
     })
 
     expect(prompts.join('\n')).not.toContain('assertion:remote')
-    expect(prompts.join('\n')).not.toContain('relation:boundary')
+    expect(prompts.join('\n')).not.toContain('supports assertion:shared -> assertion:remote')
   })
 
   it('reuses identical normalized assertion projections across input permutations', async () => {
@@ -116,8 +116,9 @@ describe('assertion-aware community reports', () => {
     })
 
     expect(clustering.leaves.length).toBeGreaterThan(1)
-    expect(prompts.filter((prompt) => prompt.includes('Canonical assertions')).every((prompt) =>
-      prompt.length <= COMMUNITY_INPUT_BUDGET)).toBe(true)
+    const leafPrompts = prompts.filter((prompt) => prompt.includes('Canonical assertions'))
+    expect(leafPrompts.length).toBeGreaterThan(0)
+    expect(leafPrompts.every((prompt) => prompt.length <= COMMUNITY_INPUT_BUDGET)).toBe(true)
   })
 
   it('reuses a view report when only filtered-out assertion supports change', async () => {
