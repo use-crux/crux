@@ -491,12 +491,12 @@ describe('@use-crux/ingest structured sources', () => {
       expect.objectContaining({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) }),
     ]))
     expect(allBlocks.every((block) => block.content.trim().length > 0)).toBe(true)
-    expect(allBlocks.some((block) => (block.headingPath?.length ?? 0) >= 2)).toBe(true)
-    expect(allBlocks.some((block) => {
-      if (block.kind !== 'text' || block.role !== 'heading') return false
-      const depth = /^(#+)\s/.exec(block.content)?.[1]?.length
-      return depth !== undefined && depth > (block.headingPath?.length ?? 0)
-    })).toBe(true)
+    expect(allBlocks).toContainEqual(expect.objectContaining({
+      kind: 'text',
+      role: 'heading',
+      content: '### app = Firecrawl(api_key="fc-YOUR-API-KEY")',
+      headingPath: ['Async Crawl with Polling', 'app = Firecrawl(api_key="fc-YOUR-API-KEY")'],
+    }))
     const table = allBlocks.find((block) => block.kind === 'table')
     expect(table).toMatchObject({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) })
     if (!table || table.kind !== 'table') throw new Error('expected a table block')
@@ -636,6 +636,20 @@ describe('@use-crux/ingest structured sources', () => {
     const fixture = join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')
     const destroy = vi.fn(async () => undefined)
     mockPdfJs({ numPages: 8, getMetadata: () => { throw new Error('metadata unavailable') } }, destroy)
+    const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
+
+    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
+
+    expect(document.title).toBe('layout-aware-mixed.pdf')
+    expect(document.parts).toHaveLength(8)
+    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps native pages when metadata rejects asynchronously and destroys the loading task', async () => {
+    const fixture = join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')
+    const destroy = vi.fn(async () => undefined)
+    mockPdfJs({ numPages: 8, getMetadata: async () => { throw new Error('metadata unavailable') } }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
 
     const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
