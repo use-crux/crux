@@ -35,7 +35,7 @@ export async function parsePdf(input: ParseInput, ctx: PdfContext): Promise<Pars
 
   try {
     const document = await loadingTask.promise
-    const metadata = await document.getMetadata().catch(() => undefined)
+    const metadata = await Promise.resolve().then(() => document.getMetadata()).catch(() => undefined)
     const title = normalizeOptionalString(readMetadataTitle(metadata?.info))
     let fallbackReason: FallbackReason | undefined
     let nativePages: readonly NativePage[] | undefined

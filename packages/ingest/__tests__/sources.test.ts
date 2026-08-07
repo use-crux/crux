@@ -524,48 +524,30 @@ describe('@use-crux/ingest structured sources', () => {
   })
 
   it('exposes every text block role, compact decoded paths, and only provable ranges through fileSource', async () => {
-    const dir = await makeTempDir()
-    const path = join(dir, 'markdown-blocks.pdf')
-    await writeFile(path, makePdf('placeholder'))
-    const markdown = [
-      '# Root *visible*',
-      '',
-      'Opening paragraph.',
-      '',
-      '### Deep [link](https://example.com)',
-      '',
-      '- first item',
-      '- second item',
-      '',
-      '```ts',
-      'const answer = 42',
-      '```',
-      '',
-      '# []()',
-      '',
-      '| Name | Value |',
-      '| --- | --- |',
-      '| alpha | one |',
-    ].join('\n')
-    vi.doMock('@firecrawl/pdf-inspector', () => ({
-      extractPagesMarkdown: () => ({ pages: [{ page: 0, markdown, needsOcr: false }] }),
-    }))
+    const path = join(import.meta.dirname, 'fixtures', 'native-block-roles.pdf')
+    const native = await import('@firecrawl/pdf-inspector')
+    const expected = native.extractPagesMarkdown(await readFile(path))
+    const describe = vi.fn(async () => ({ text: 'Cover page.' }))
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const page = document.parts[0]
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
+    const page = document.parts[1]
     if (!page || page.kind !== 'page' || !page.blocks) throw new Error('expected blocked page')
 
-    expect(page.content).toBe(markdown)
-    expect(page.blocks.map((block) => block.id)).toEqual(page.blocks.map((_, index) => `pdf:page:1/block:${index}`))
+    expect(expected.pages).toMatchObject([
+      { page: 0, markdown: '', needsOcr: true },
+      { page: 1, needsOcr: false },
+    ])
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(page.content).toBe(expected.pages[1]?.markdown.trim())
+    expect(page.blocks.map((block) => block.id)).toEqual(page.blocks.map((_, index) => `pdf:page:2/block:${index}`))
     expect(page.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Root *visible*', headingPath: ['Root visible'] }),
-      expect.objectContaining({ kind: 'text', role: 'paragraph', content: 'Opening paragraph.', headingPath: ['Root visible'] }),
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '### Deep [link](https://example.com)', headingPath: ['Root visible', 'Deep link'] }),
-      expect.objectContaining({ kind: 'text', role: 'list', content: 'first item\nsecond item', headingPath: ['Root visible', 'Deep link'] }),
-      expect.objectContaining({ kind: 'text', role: 'code', content: '```ts\nconst answer = 42\n```', headingPath: ['Root visible', 'Deep link'] }),
-      expect.objectContaining({ kind: 'text', role: 'other', content: '# []()', headingPath: ['Root visible', 'Deep link'] }),
-      expect.objectContaining({ kind: 'table', columns: ['Name', 'Value'], rows: [['alpha', 'one']], headingPath: ['Root visible', 'Deep link'] }),
+      expect.objectContaining({ kind: 'text', role: 'paragraph', content: 'Opening paragraph.', sourceRange: { start: 0, end: 18 } }),
+      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Deep *link*', headingPath: ['Deep link'], sourceRange: { start: 20, end: 33 } }),
+      expect.objectContaining({ kind: 'text', role: 'list', content: 'first item\nsecond item', headingPath: ['Deep link'] }),
+      expect.objectContaining({ kind: 'text', role: 'code', content: '```ts\n\n## const answer = 42\n\n```', headingPath: ['Deep link'], sourceRange: { start: 62, end: 94 } }),
+      expect.objectContaining({ kind: 'text', role: 'other', content: '<aside>Retained other</aside>', headingPath: ['Deep link'], sourceRange: { start: 96, end: 125 } }),
     ]))
+    expect(page.blocks).toHaveLength(5)
     expect(page.blocks.every((block) => block.content.length > 0)).toBe(true)
     const list = page.blocks.find((block) => block.kind === 'text' && block.role === 'list')
     expect(list?.sourceRange).toBeUndefined()
@@ -650,10 +632,10 @@ describe('@use-crux/ingest structured sources', () => {
     vi.doUnmock('@firecrawl/pdf-inspector')
   })
 
-  it('keeps native pages when metadata fails and destroys the loading task', async () => {
+  it('keeps native pages when metadata throws synchronously and destroys the loading task', async () => {
     const fixture = join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')
     const destroy = vi.fn(async () => undefined)
-    mockPdfJs({ numPages: 8, getMetadata: async () => { throw new Error('metadata unavailable') } }, destroy)
+    mockPdfJs({ numPages: 8, getMetadata: () => { throw new Error('metadata unavailable') } }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
 
     const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
@@ -1633,7 +1615,7 @@ function fallbackWarning(sourceId: string, reason: 'backend_unavailable' | 'extr
 function mockPdfJs(
   document: {
     readonly numPages: number
-    readonly getMetadata: () => Promise<unknown>
+    readonly getMetadata: () => unknown
     readonly getPage?: (pageNumber: number) => Promise<unknown>
   },
   destroy: () => Promise<unknown>,
