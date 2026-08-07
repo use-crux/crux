@@ -26,6 +26,7 @@ export function createConvexSessionStore(options: ConvexSessionStoreOptions): Se
     inspectInputs: (namespace, sessionId, limit) => call('inspectInputs', [namespace, sessionId, limit]),
     markReady: (namespace, sessionId, now) => call('markReady', [namespace, sessionId, now]),
     acceptInputs: (input) => call('acceptInputs', input),
+    appendStatistics: (input) => call('appendStatistics', input),
     reserveTurn: (input) => call('reserveTurn', input),
     startTurn: (input) => call('startTurn', input),
     getTurnInputs: (namespace, sessionId, workId) => call('getTurnInputs', [namespace, sessionId, workId]),
@@ -46,5 +47,10 @@ export function createConvexSessionStore(options: ConvexSessionStoreOptions): Se
       call('listActiveSubscriptionsForSignal', [namespace, signalId]),
     unsubscribe: (namespace, sessionId, subscriptionId, now) =>
       call('unsubscribe', [namespace, sessionId, subscriptionId, now]),
+    close: (input) => call('close', input),
+    kill: (input) => call('kill', input),
+    delete: (input) => call('delete', input),
+    fork: (input) => call('fork', input),
+    listForks: (namespace, sessionId) => call('listForks', [namespace, sessionId]),
   }
 }

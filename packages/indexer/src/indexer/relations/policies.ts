@@ -90,6 +90,22 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'session.targets_flow',
+    fromKinds: ['session'],
+    toKinds: ['flow'],
+    presentation: 'both',
+    partial: false,
+    runtimeJoin: true,
+  },
+  {
+    type: 'session.subscribes_to_signal',
+    fromKinds: ['session'],
+    toKinds: ['signal'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
     type: 'agent.uses_tool',
     fromKinds: ['agent'],
     toKinds: ['tool'],

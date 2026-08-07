@@ -7,12 +7,19 @@ import type { SessionTurnHandle } from "./types";
 import { durableWorkHandle } from "../work/internal/durable-handle";
 import { waitForDurableWorkChange } from "../work/internal/durable-wait";
 
+import { assertSessionAcceptsIngress } from "./lifecycle";
+
 /** Accept validated inputs and reserve at most one runnable activation Work. */
 export async function acceptSessionTurns<TOutput>(
   runtime: ResolvedRuntimeEngine,
   record: RuntimeSessionRecord,
   inputs: readonly JsonValue[],
 ): Promise<readonly SessionTurnHandle<TOutput>[]> {
+  const sessions = runtime.store.sessions;
+  const latest = sessions
+    ? await sessions.get(runtime.namespace, record.sessionId)
+    : null;
+  assertSessionAcceptsIngress(latest ?? record);
   const accepted = await runtime.kernel.acceptSessionInputs({
     namespace: runtime.namespace,
     session: {

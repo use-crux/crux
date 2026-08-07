@@ -116,6 +116,91 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "authored-flow-session-targets-shared-analyzer",
+      workspacePackages: ["core"],
+      files: {
+        "src/flows.ts": `
+          import { flow } from '@use-crux/core/flow'
+          export const checkout = flow('checkout', async () => ({ ok: true }))
+        `,
+        "src/flow-sessions.ts": `
+          import { session } from '@use-crux/core/session'
+          import { checkout } from './flows'
+          export const order = session(checkout, { key: 'order-a' })
+        `,
+      },
+      expect: {
+        definitionIds: ["session:checkout:order-a"],
+        definitionFacts: {
+          "session:checkout:order-a": {
+            operation: "create",
+            targetDefinitionId: "flow:checkout",
+            target: { kind: "flow" },
+            key: { kind: "literal", value: "order-a" },
+            identity: "static",
+          },
+        },
+        relationTypes: ["session.targets_flow"],
+        sourceRefRoles: ["config"],
+      },
+    },
+    {
+      // Local helpers named `flow` must not be treated as Crux Flow Session targets.
+      name: "local-non-crux-flow-is-not-session-flow-target",
+      workspacePackages: ["core"],
+      files: {
+        "src/local-flow-session.ts": `
+          import { session } from '@use-crux/core/session'
+
+          function flow(name: string, handler: () => Promise<{ ok: boolean }>) {
+            return { name, run: handler }
+          }
+
+          export const localHelper = flow('local-helper', async () => ({ ok: true }))
+          export const order = session(localHelper, { key: 'order-a' })
+        `,
+      },
+      expect: {
+        // Coverage assertions are empty; the fixture name has dedicated absence checks.
+      },
+    },
+    {
+      name: "session-subscribe-usage-shared-analyzer",
+      workspacePackages: ["core"],
+      files: {
+        "src/session-subscribe.ts": `
+          import { agent } from '@use-crux/core/agent'
+          import { session } from '@use-crux/core/session'
+          import { signal } from '@use-crux/core/signal'
+
+          export const orderPaid = signal({ id: 'order.paid', schema: { parse: (v: unknown) => v } })
+          const supportAgent = agent({ id: 'support-agent' })
+          export const support = session(supportAgent, { key: 'customer-a' })
+          void support.subscribe(orderPaid)
+          void support.stream()
+          void support.stats()
+        `,
+      },
+      expect: {
+        definitionIds: ["session:support-agent:customer-a"],
+        definitionFacts: {
+          "session:support-agent:customer-a": {
+            usage: { subscribe: true, stream: true, stats: true },
+            subscriptions: [
+              {
+                signalDefinitionId: "signal:order.paid",
+                matchKind: "bare",
+              },
+            ],
+          },
+        },
+        relationTypes: [
+          "session.targets_agent",
+          "session.subscribes_to_signal",
+        ],
+      },
+    },
+    {
       name: "non-owner-session-thread-mutation-shared-analyzer",
       workspacePackages: ["core"],
       files: {

@@ -24,7 +24,14 @@ export function initialSessionStatistics(
   return ledger.export(owner)!;
 }
 
-/** Append idempotently selected mechanical facts to a Session ledger export. */
+/**
+ * Append idempotently selected mechanical facts to a Session ledger export.
+ *
+ * Commit time is the later of `at` and the restored ledger's newest timestamp
+ * so durable appends stay nondecreasing under clock skew after restore. Cursor
+ * and fact identity semantics are unchanged; event chronology is preserved
+ * elsewhere by callers.
+ */
 export function recordSessionStatistics(
   statistics: StatisticsLedgerExport,
   sessionId: string,
@@ -35,10 +42,13 @@ export function recordSessionStatistics(
   const ledger = createMemoryStatisticsLedger();
   ledger.restore(statistics);
   const owner = sessionStatisticsOwner(sessionId);
+  const newest = ledger.snapshot(owner)?.at;
+  const commitAt =
+    newest && newest.getTime() > at.getTime() ? newest : at;
   let cursor = statistics.cursor;
   for (const fact of facts) {
     cursor += 1;
-    ledger.record({ owner, cursor, at, fact });
+    ledger.record({ owner, cursor, at: commitAt, fact });
   }
   return ledger.export(owner)!;
 }

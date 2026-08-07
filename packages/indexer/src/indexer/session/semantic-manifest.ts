@@ -3,13 +3,13 @@ import type { CompletionSiteManifestEntry } from "../semantic/backends/tsgo/dire
 /** Session calls handled by the complete shared semantic analyzer. */
 export const sessionSemanticCallNames = ["session", "getSession"] as const;
 
-/** Structurally required completion role for Session Agent targets. */
+/** Structurally required completion roles for Session Agent/Flow targets. */
 export const sessionCompletionSites = [
   {
     callNames: sessionSemanticCallNames,
     propertyPath: ["$args", "0"],
     slot: "scalarIdentifier",
-    acceptedKinds: ["agent"],
+    acceptedKinds: ["agent", "flow"],
     insertion: "identifier",
   },
 ] as const satisfies readonly CompletionSiteManifestEntry[];

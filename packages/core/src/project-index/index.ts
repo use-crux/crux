@@ -802,18 +802,51 @@ export interface AgentFacts {
   prepareHandler?: SourceRefSummary;
 }
 
-/** Stable authored evidence for one durable Agent Session call site. */
+/** Observed public method usage on a Session binding, when statically linked. */
+export interface SessionUsageFacts {
+  readonly subscribe?: true;
+  readonly stream?: true;
+  readonly stats?: true;
+  readonly close?: true;
+  readonly kill?: true;
+  readonly delete?: true;
+  readonly fork?: true;
+  readonly clone?: true;
+}
+
+/** One authored Session.subscribe(...) call site linked to a Session binding. */
+export interface SessionSubscriptionFacts {
+  /** Local or imported Signal binding expression text when available. */
+  readonly signalVariable?: string;
+  /** Resolved Signal definition id when the source is statically known. */
+  readonly signalDefinitionId?: string;
+  /**
+   * How the subscription source is authored.
+   *
+   * - `bare` — `session.subscribe(signal)`
+   * - `when` — `session.subscribe(signal.when({ ... }))`
+   * - `dynamic` — runtime-selected or otherwise unresolved source
+   */
+  readonly matchKind: "bare" | "when" | "dynamic";
+}
+
+/** Stable authored evidence for one durable Session call site. */
 export interface SessionFacts {
   readonly kind: "session";
   /** Public operation represented by this call site. */
   readonly operation: "create" | "get";
-  /** Authored local or imported Agent binding supplied as the target. */
+  /** Authored local or imported Agent/Flow binding supplied as the target. */
   readonly targetVariable?: string;
-  /** Semantically resolved Agent definition when the target is statically known. */
+  /**
+   * Semantically resolved target definition when the target is statically known.
+   *
+   * @remarks Agent ids use `agent:…`; Flow ids use `flow:…`.
+   */
   readonly targetDefinitionId?: string;
   /** Compiler classification used to reject unresolved or runtime-selected targets. */
   readonly target:
     | { readonly kind: "agent" }
+    | { readonly kind: "flow" }
     | { readonly kind: "unresolved" }
     | { readonly kind: "dynamic" };
   /** Evidence for whether the stable caller key is a direct string literal. */
@@ -829,6 +862,21 @@ export interface SessionFacts {
         readonly kind: "ambiguous";
         readonly reason: "arity" | "options";
       };
+  /**
+   * Public Session methods observed on the same binding.
+   *
+   * @remarks Present only when the compiler can link method calls to this
+   * Session definition. Absence means no static evidence, not that the Session
+   * never uses those methods at runtime.
+   */
+  readonly usage?: SessionUsageFacts;
+  /**
+   * Authored Signal subscriptions observed on the same binding.
+   *
+   * @remarks Each entry is one `subscribe(...)` call site. Match payloads are
+   * not retained; only identity-bearing Signal lineage is projected.
+   */
+  readonly subscriptions?: readonly SessionSubscriptionFacts[];
 }
 
 export type {

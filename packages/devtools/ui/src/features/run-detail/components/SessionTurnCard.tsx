@@ -18,6 +18,8 @@ export function SessionTurnCard({
   const checkpointThread = record(checkpoint?.thread);
   const recovery = record(session?.recovery);
   const stats = record(session?.stats);
+  const forkedFrom = record(session?.forkedFrom);
+  const subscriptions = records(session?.subscriptions).slice(0, 64);
   const inputs = records(session?.inputs).slice(0, 64);
   const state = stringValue(status?.state);
   const outcome = stringValue(attributes?.outcome);
@@ -32,17 +34,34 @@ export function SessionTurnCard({
           </Chip>
         )}
         {outcome && outcome !== state && <Chip tone="muted">{outcome}</Chip>}
+        {stringValue(identity?.targetKind) && (
+          <Chip tone="muted">{stringValue(identity?.targetKind)}</Chip>
+        )}
       </div>
 
       <CardShell label="Session identity">
         <div className="flex flex-col gap-1.5 px-3.5 py-3">
           <SafeValue k="Session ID" value={identity?.sessionId} />
           <SafeValue k="Target" value={identity?.targetId} />
+          <SafeValue k="Target kind" value={identity?.targetKind} />
           <SafeValue k="Thread ID" value={identity?.threadId} />
           <SafeValue k="Key fingerprint" value={identity?.keyHash} />
           <SafeValue k="Thread revision" value={thread?.revision} />
         </div>
       </CardShell>
+
+      {forkedFrom && (
+        <CardShell label="Fork lineage">
+          <div className="flex flex-col gap-1.5 px-3.5 py-3">
+            <SafeValue k="Parent Session" value={forkedFrom.sessionId} />
+            <SafeValue k="Parent cursor" value={forkedFrom.cursor} />
+            <SafeValue
+              k="Pinned Thread revision"
+              value={forkedFrom.threadRevision}
+            />
+          </div>
+        </CardShell>
+      )}
 
       <CardShell label="State">
         <div className="flex flex-col gap-1.5 px-3.5 py-3">
@@ -55,6 +74,31 @@ export function SessionTurnCard({
           )}
         </div>
       </CardShell>
+
+      {subscriptions.length > 0 && (
+        <CardShell label={`Active subscriptions · ${subscriptions.length}`}>
+          <div className="divide-y divide-(--devtools-border)">
+            {subscriptions.map((subscription, index) => (
+              <div
+                key={`${stringValue(subscription.subscriptionId) ?? "sub"}-${index}`}
+                className="flex flex-col gap-1.5 px-3.5 py-3"
+              >
+                <SafeValue k="Subscription" value={subscription.subscriptionId} />
+                <SafeValue k="Signal" value={subscription.signalId} />
+                <SafeValue
+                  k="Match key"
+                  value={
+                    stringValue(subscription.matchKey) === ""
+                      ? "(bare)"
+                      : subscription.matchKey
+                  }
+                />
+                <SafeValue k="State" value={subscription.state} />
+              </div>
+            ))}
+          </div>
+        </CardShell>
+      )}
 
       {inputs.length > 0 && (
         <CardShell label={`Turn lineage · ${inputs.length}`}>
@@ -146,6 +190,8 @@ function StatisticsCard({
   const current = record(total?.current);
   const modelCalls = record(stats.modelCalls);
   const failures = record(stats.failures);
+  const inputs = record(stats.inputs);
+  const inputTotal = record(inputs?.total);
   const currentParts = [
     countLabel(current?.queued, "queued"),
     countLabel(current?.running, "running"),
@@ -163,6 +209,15 @@ function StatisticsCard({
         <Count k="Model calls succeeded" value={modelCalls?.succeeded} />
         <Count k="Model calls failed" value={modelCalls?.failed} />
         <Count k="Failures" value={failures?.total} />
+        {inputTotal && (
+          <>
+            <Count k="Ingress accepted" value={inputTotal.accepted} />
+            <Count k="Ingress deduplicated" value={inputTotal.deduplicated} />
+            <Count k="Ingress delivered" value={inputTotal.delivered} />
+            <Count k="Ingress resumed" value={inputTotal.resumed} />
+            <Count k="Ingress dropped" value={inputTotal.dropped} />
+          </>
+        )}
       </div>
     </CardShell>
   );

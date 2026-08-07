@@ -90,7 +90,8 @@ export async function writeSession(
             statistics = $9::jsonb,
             wake_pending = $10,
             activation = $11::jsonb,
-            updated_at = $12
+            fenced_work_id = $12,
+            updated_at = $13
       WHERE namespace = $1 AND session_id = $2
       RETURNING *`,
     [
@@ -105,10 +106,90 @@ export async function writeSession(
       encodeJson(session.statistics),
       session.wakePending,
       session.activation ? encodeJson(session.activation) : null,
+      session.fencedWorkId ?? null,
       session.updatedAt,
     ],
   )
   const row = result.rows[0]
   if (!row) throw new Error(`Session "${session.sessionId}" was not found.`)
+  return decodeSessionRecord(row)
+}
+
+/**
+ * Update only lifecycle fields so concurrent settlement counters are preserved.
+ *
+ * @remarks Used by close/closing transitions under a row lock.
+ */
+export async function writeSessionCloseState(
+  db: PgExecutor,
+  schema: string,
+  faults: PostgresStoreFaults,
+  input: {
+    readonly namespace: string
+    readonly sessionId: string
+    readonly state: 'closing' | 'closed'
+    readonly wakePending: boolean
+    readonly updatedAt: string
+  },
+): Promise<RuntimeSessionRecord> {
+  recordWrite(faults)
+  const result = await db.query<Record<string, unknown>>(
+    `UPDATE ${table(schema, 'sessions')}
+        SET state = $3,
+            wake_pending = $4,
+            updated_at = $5
+      WHERE namespace = $1 AND session_id = $2
+      RETURNING *`,
+    [
+      input.namespace,
+      input.sessionId,
+      input.state,
+      input.wakePending,
+      input.updatedAt,
+    ],
+  )
+  const row = result.rows[0]
+  if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
+  return decodeSessionRecord(row)
+}
+
+/**
+ * Apply kill fence without replaying a stale full-record snapshot.
+ *
+ * @remarks Zeros pending counters and clears activation under the row lock.
+ */
+export async function writeSessionKillState(
+  db: PgExecutor,
+  schema: string,
+  faults: PostgresStoreFaults,
+  input: {
+    readonly namespace: string
+    readonly sessionId: string
+    readonly fencedWorkId: string | null
+    readonly updatedAt: string
+  },
+): Promise<RuntimeSessionRecord> {
+  recordWrite(faults)
+  const result = await db.query<Record<string, unknown>>(
+    `UPDATE ${table(schema, 'sessions')}
+        SET state = 'killed',
+            pending_inputs = 0,
+            pending_work = 0,
+            blocked_work = 0,
+            activation = NULL,
+            wake_pending = false,
+            fenced_work_id = COALESCE($3, fenced_work_id),
+            updated_at = $4
+      WHERE namespace = $1 AND session_id = $2
+      RETURNING *`,
+    [
+      input.namespace,
+      input.sessionId,
+      input.fencedWorkId,
+      input.updatedAt,
+    ],
+  )
+  const row = result.rows[0]
+  if (!row) throw new Error(`Session "${input.sessionId}" was not found.`)
   return decodeSessionRecord(row)
 }

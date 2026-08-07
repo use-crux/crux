@@ -195,6 +195,7 @@ export function flowIdForRuntimeWork(work: RuntimeWorkItem): RuntimeFlowId {
     case "task.run":
     case "watch.deliver":
     case "session.turn":
+    case "session.signal-ingress":
       throw new Error(
         `Runtime target \`${work.targetId}\` received non-flow work \`${work.work.kind}\`.`,
       );

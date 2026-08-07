@@ -53,8 +53,8 @@ describe("static cache identity", () => {
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
   });
 
-  it("takes the Session diagnostic evidence contract epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v49");
+  it("takes the Session Flow-target + durable Effects merged semantic contract epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v51");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

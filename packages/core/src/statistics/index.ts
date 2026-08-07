@@ -10,6 +10,8 @@ export type {
   ModelCallStats,
   ModelUsageStats,
   ScopeStats,
+  SessionInputOutcomeStats,
+  SessionInputStats,
   StatisticsUsageReport,
   StatisticsCoverage,
   StatisticsFact,

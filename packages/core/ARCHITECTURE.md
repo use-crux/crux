@@ -1021,50 +1021,88 @@ controls from those same records. Local operator inspection projects only the
 safe digest, definition/effect/result references, ownership, bounded ledger,
 and Work events; it does not expose input or result payloads.
 
-### Durable Agent Sessions
+### Durable Sessions (Agent and Flow)
 
-Durable Agent Sessions (`session/` plus Runtime Session ports) are keyed,
-Agent-only owners that reuse the same Work host, Runtime Program, worker,
-Effect scope, and statistics ledger. They are not a second queue, Thread head
-mechanism, registry, or async scope.
+Durable Sessions (`session/` plus Runtime Session ports) are keyed owners for a
+first-party **Agent or exported Flow**. They reuse the same Work host, Runtime
+Program, worker, Effect scope, and statistics ledger. They are not a second
+queue, Thread head mechanism, registry, transport daemon, or async scope.
 
 **Identity and hash.** Public lookup identity is the SHA-256 of
 `["crux-session:v1", namespace, key]`. The public Session id and automatic Thread
-id additionally hash the Agent target id so cross-target key collisions remain
-detectable without collapsing distinct owners. Durable rows store the key hash,
-never the raw key, in operator projections.
+id additionally hash the target id (Agent id or Flow name) so cross-target key
+collisions remain detectable without collapsing distinct owners. Durable rows
+store the key hash, never the raw key, in operator projections.
 
 **Owner registration and Thread head.** Session creation uses a repairable
 `prepared → Thread owner registered → ready` protocol. Owner registration,
 owner-head selection, and deletion publication share the existing linearizable
 Thread `RecordStore.mutate` fence and the existing `heads` map entry for the
 Session owner. `session.thread` is a read-only view of finalized owner heads
-only.
+only. Post-delete reads never auto-register owners (empty owner path, no
+resurrection).
 
 **Records, cursors, and leases.** Session control records retain accepted and
-processed cursors, pending input/work counts, optional activation linkage, and
-a lifetime statistics ledger export. Each accepted input keeps its own identity
-and server-assigned cursor. Activation Work uses the ordinary Runtime lease and
-wake path; there is no Session-specific lease domain.
+processed cursors, pending input/work counts, optional activation linkage,
+`targetKind`, optional GenerationModel (Agent) or pinned Flow definition, fork
+lineage, and a lifetime statistics ledger export. Each accepted input keeps its
+own identity and server-assigned cursor. Activation Work uses the ordinary
+Runtime lease and wake path; there is no Session-specific lease domain.
 
-**Canonical Work and Effect scope.** Compatible pending inputs claim one
+**Canonical Work and Effect scope.** Compatible pending Agent inputs claim one
 canonical `session.turn` Work occurrence for the longest cursor-consecutive
-prefix. Joined input handles resolve that same Work and exact shared result or
-failure. The Work's Effect scope is the Session turn's effect boundary.
+prefix. Flow Session activation reuses the canonical `flow.resume` Work spine
+with the same owner Thread registration and Work result handles. Joined input
+handles resolve that same Work and exact shared result or failure. The Work's
+Effect scope is the Session turn's effect boundary.
 
-**Preparation, checkpoints, and replay.** Before provider dispatch, the turn
-journals a sealed preparation plan against a pinned Thread revision/range and
-bounded request evidence. Recovery replays durable preparation and the
-write-once private result artifact. It never re-runs callbacks, provider
-requests, Tools, effects, or Thread publication. Missing prepared artifacts
-surface `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` without payload exposure.
+**Signal subscriptions and Agent Signal ingress.** Durable subscriptions are
+Session-owned rows idempotent by Session + signal id + canonical match key
+(key-order invariant codec shared by Memory/PostgreSQL/Convex). Publication
+fans out to matching active subscriptions with restart-safe per-subscription
+delivery identities. Agent targets enqueue `session.signal-ingress` Work on the
+existing input lane; Flow Session-owned waiters receive durable Signal delivery
+only when a matching active Session subscription also matches. Mid-turn Agent
+ingress waits for the next declared safe boundary. Settlement uses delivery
+compare-and-set (`pending → leased → terminal`) and idempotent `acceptInputs`.
 
-**Target authority and generated program.** Agents are first-class immutable
-Runtime Program targets. Selected models must appear in
-`RuntimeProgram.generationModels`; durable state pins only
-`{ definitionId, fingerprint }`. Generated programs import exported Agents and
-their fingerprints through the existing target authority. There is no Agent
-executor registry or host-level `agentExecutor` option.
+**Preparation journal, boundary settlement, and replay.** Before provider
+dispatch, the turn journals a sealed preparation plan against a pinned Thread
+revision/range and bounded request evidence. Recovery replays durable
+preparation and the write-once private result artifact. It never re-runs
+callbacks, provider requests, Tools, effects, or Thread publication. Missing
+prepared artifacts surface `SESSION_TURN_RESULT_ARTIFACT_UNAVAILABLE` without
+payload exposure. Safe-boundary settlement never mutates sealed provider
+requests, pinned Thread revisions, or already journaled controller decisions.
+
+**Lifecycle controls.** `close()` is a joinable ordered barrier that seals
+external send/subscribe, deactivates Signal subscriptions, and drains currently
+represented pending-input/work/activation obligations (not a full nested causal
+Work tree). `kill()` fences claim/checkpoint/start and closed-owner Thread
+commit authority, cancels active Work, and projects as public `closed` while
+storage retains `killed`. `delete()` is retention-safe after close/kill: payload
+strip, key tombstone, linearizable owner unregister. `fork()`/`clone()` register
+the child owner/head pin before the Session fork record with immutable lineage
+from a pinned source revision.
+
+**Streams and event cursors.** `session.stream()` reads the durable event port
+stream `crux.session:{sessionId}` and emits ordered snapshot / status /
+ingress.accepted / ingress.delivered events. Cursor resume is exact; expired
+cursors emit a replacement snapshot then continue from the earliest retained
+event. Retention is bounded by the event port.
+
+**Statistics ledger.** Owner `session.stats()` restores the Session ledger
+export and projects shared `ScopeStats`, including exact ingress
+accepted/deduplicated/delivered/resumed/dropped totals and first-64 identity
+coverage under `inputs`, linked to canonical Work stats. Facts are recorded
+through the same mechanical statistics path as other owners.
+
+**Target authority and generated program.** Agents and Flows are first-class
+immutable Runtime Program targets. Agent models must appear in
+`RuntimeProgram.generationModels`; durable Agent state pins only
+`{ definitionId, fingerprint }`. Flow Sessions pin definition metadata without
+GenerationModel. Generated programs import exported targets through the
+existing target authority.
 
 **Thread finalization.** After a successful generation checkpoint, the Session
 owner commits the canonical message group through the existing owner-scoped
@@ -1072,20 +1110,26 @@ Thread path. Replay reuses the same commit receipt. Only Session-marked ingress
 messages project as user input; provider validation-correction traffic does not
 become Session history.
 
-**Observability privacy boundary.** `SessionRuntimeReadModel` and `session.turn`
-attributes project identity, state, cursors, bounded input-to-Work lineage,
-Thread revision, checkpoint request counts, recovery diagnostics, coverage, and
-lifetime stats. They never project prompts, inputs, outputs, reasoning, Tool
-arguments, credentials, sealed request ids, or provider-native objects.
-Evidence opens only when an observability sink is active.
+**Adapter transactionality.** Lifecycle and subscription writes go through
+`runtime.store.transact` so they linearize against settlement. Memory,
+PostgreSQL, and Convex implement the same normalized Session ports and
+composites with truthful capability reporting. PostgreSQL durable deployments
+require Runtime storage and the Session-owned Thread `RecordStore` on the same
+database. Convex keeps Session writes inside atomic component transactions.
+Shared `runSessionConformanceTests` proves identity, concurrent acceptance,
+prefix claiming, subscriptions, lifecycle, fork lineage, stream cursors,
+checkpoint recovery, exact results, inspection, stats, and capability rejection.
 
-**Adapter laws.** Memory, PostgreSQL, and Convex implement the same normalized
-Session ports and composites. PostgreSQL durable deployments require Runtime
-storage and the Session-owned Thread `RecordStore` on the same database.
-Convex keeps Session writes inside atomic component transactions. Shared
-`runSessionConformanceTests` proves identity, concurrent acceptance, prefix
-claiming, checkpoint recovery, exact results, inspection, stats, and capability
-rejection across adapters.
+**Observability and Project Index.** `SessionRuntimeReadModel` and `session.turn`
+attributes project identity (including `targetKind`), state, cursors, fork
+lineage, active subscriptions, bounded input-to-Work lineage, Thread revision,
+checkpoint request counts, recovery diagnostics, coverage, and lifetime stats
+from the same persisted facts — never a second source of truth. They never
+project prompts, inputs, outputs, reasoning, Tool arguments, credentials,
+sealed request ids, or provider-native objects. Project Index captures authored
+`session`/`getSession` call sites, Agent/Flow targets, subscription lineage,
+and observed method usage with static/semantic parity; Devtools Catalog and
+Runs render those projections without private payloads.
 
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 

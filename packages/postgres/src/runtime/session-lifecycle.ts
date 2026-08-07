@@ -2,6 +2,7 @@ import { recordSessionStatistics } from '@use-crux/core/runtime/internal/session
 import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
+import { sessionAcceptsWorkMutation } from './session-controls'
 import {
   listSessionInputs,
   listTurnInputs,
@@ -28,6 +29,11 @@ export async function reserveSessionTurn(
   input: ReserveInput,
 ) {
   const session = await requiredSession(db, schema, input, true)
+  if (!sessionAcceptsWorkMutation(session)) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer accepts Work mutations.`,
+    )
+  }
   if (session.activation) return session.activation
   await requiredInput(db, schema, input)
   const activation: RuntimeSessionActivation = Object.freeze({
@@ -60,6 +66,7 @@ export async function startSessionTurn(
   input: TurnInput,
 ) {
   const session = await requiredSession(db, schema, input, true)
+  if (!sessionAcceptsWorkMutation(session)) return null
   const activation = session.activation
   if (!activation || activation.primaryInputId !== input.inputId) return null
   if (activation.state === 'running') {
@@ -145,6 +152,11 @@ export async function claimSessionStepInputs(
   input: StepInput,
 ) {
   const session = await requiredSession(db, schema, input, true)
+  if (!sessionAcceptsWorkMutation(session)) {
+    throw new Error(
+      `Session "${input.sessionId}" no longer holds commit authority.`,
+    )
+  }
   const activation = session.activation
   if (
     !activation ||
@@ -198,6 +210,25 @@ export async function claimSessionStepInputs(
         encodeJson(work),
         encodeJson(delivery),
       ],
+    )
+    await writeSession(
+      db,
+      schema,
+      faults,
+      Object.freeze({
+        ...session,
+        statistics: recordSessionStatistics(
+          session.statistics,
+          session.sessionId,
+          input.now,
+          candidates.map((member) => ({
+            kind: 'session-input' as const,
+            identity: member.inputId,
+            outcome: 'delivered' as const,
+          })),
+        ),
+        updatedAt: input.now.toISOString(),
+      }),
     )
   }
   const replayable = (

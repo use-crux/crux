@@ -9,11 +9,12 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  */
 export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v94";
 /**
- * Semantic v49 is the durable-Effects merge of main's Session diagnostic
- * classification (v48) with the Effects branch lineage so neither parent can
- * reuse a stale semantic cache after integration.
+ * Semantic v51 combines Session Flow targets (v50: canonical `flow` export
+ * identity, subscription lineage, observed public method usage) with main's
+ * durable-Effects lineage (v49) so neither parent can reuse a stale semantic
+ * cache after integration.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v49";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v51";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

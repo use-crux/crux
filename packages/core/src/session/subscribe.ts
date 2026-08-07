@@ -1,4 +1,4 @@
-/** Durable Flow Session Signal subscription helpers. */
+/** Durable Session Signal subscription helpers for Agent and Flow targets. */
 
 import type { ResolvedRuntimeEngine } from "../runtime/api/create-runtime";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
@@ -9,6 +9,7 @@ import {
   signalSourcePredicate,
 } from "../signal/source";
 import { SessionCapabilityError, SessionInputError } from "./errors";
+import { assertSessionAcceptsIngress } from "./lifecycle";
 import type { SessionSubscription } from "./target-types";
 import { sha256Hex } from "../content/sha256";
 import {
@@ -19,19 +20,24 @@ import {
 const encoder = new TextEncoder();
 
 /**
- * Persist or reuse one durable Signal subscription for a Flow Session.
+ * Persist or reuse one durable Signal subscription for a Session.
  *
  * @remarks Idempotent by Session, Signal identity, and canonical match key.
- * Active subscriptions participate in Signal publication fan-out and gate
- * durable delivery to Session-owned Flow waiters. Unsubscribe marks the
- * subscription inactive for future publications; already accepted deliveries
- * remain on the occurrence ledger.
+ * Active subscriptions participate in Signal publication fan-out. Agent
+ * Sessions accept matching payloads as typed Session input; Flow Sessions
+ * also gate durable delivery to Session-owned Flow waiters. Unsubscribe marks
+ * the subscription inactive for future publications; already accepted
+ * deliveries remain on the occurrence ledger.
  */
 export async function subscribeSession(
   runtime: ResolvedRuntimeEngine,
   record: RuntimeSessionRecord,
   source: unknown,
 ): Promise<SessionSubscription> {
+  const latest = runtime.store.sessions
+    ? await runtime.store.sessions.get(runtime.namespace, record.sessionId)
+    : null;
+  assertSessionAcceptsIngress(latest ?? record);
   if (!isStaticSignalSource(source)) {
     throw new SessionInputError(
       "Session.subscribe() accepts only a Signal or match filter.",

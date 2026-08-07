@@ -2,6 +2,7 @@ import type {
   MutableApprovals,
   MutableLifecycle,
   MutableModelCalls,
+  MutableSessionInputOutcome,
   MutableToolOutcome,
   MutableUsage,
   MutableWorkOutcome,
@@ -173,6 +174,20 @@ export function readLifecycle(value: unknown): MutableLifecycle {
   if (object.resumptions > object.suspensions) {
     invalid("state.lifecycle resumptions");
   }
+  return { ...object };
+}
+
+export function readSessionInputOutcome(
+  value: unknown,
+  label: string,
+): MutableSessionInputOutcome {
+  const object = counts(value, label, [
+    "accepted",
+    "deduplicated",
+    "delivered",
+    "resumed",
+    "dropped",
+  ]);
   return { ...object };
 }
 

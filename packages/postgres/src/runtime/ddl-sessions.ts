@@ -27,6 +27,9 @@ export const SESSION_REQUIRED_COLUMNS: Readonly<
     'statistics',
     'wake_pending',
     'activation',
+    'parent_session_id',
+    'forked_from',
+    'fenced_work_id',
     'created_at',
     'updated_at',
   ],
@@ -56,6 +59,7 @@ export const SESSION_REQUIRED_COLUMNS: Readonly<
 
 export const SESSION_REQUIRED_INDEXES: readonly string[] = [
   'sessions_namespace_key_hash_idx',
+  'sessions_parent_session_idx',
   'session_inputs_namespace_cursor_idx',
   'session_inputs_work_idx',
   'session_subscriptions_session_idx',
@@ -86,6 +90,9 @@ export function sessionDdlStatements(schema: string): readonly string[] {
       statistics jsonb NOT NULL,
       wake_pending boolean NOT NULL,
       activation jsonb,
+      parent_session_id text,
+      forked_from jsonb,
+      fenced_work_id text,
       created_at timestamptz NOT NULL,
       updated_at timestamptz NOT NULL,
       PRIMARY KEY (namespace, session_id),
@@ -96,7 +103,16 @@ export function sessionDdlStatements(schema: string): readonly string[] {
     `ALTER TABLE ${sessions}
       ADD COLUMN IF NOT EXISTS definition jsonb`,
     `ALTER TABLE ${sessions}
+      ADD COLUMN IF NOT EXISTS parent_session_id text`,
+    `ALTER TABLE ${sessions}
+      ADD COLUMN IF NOT EXISTS forked_from jsonb`,
+    `ALTER TABLE ${sessions}
+      ADD COLUMN IF NOT EXISTS fenced_work_id text`,
+    `ALTER TABLE ${sessions}
       ALTER COLUMN model DROP NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS sessions_parent_session_idx
+      ON ${sessions} (namespace, parent_session_id)
+      WHERE parent_session_id IS NOT NULL`,
     `CREATE TABLE IF NOT EXISTS ${inputs} (
       namespace text NOT NULL,
       session_id text NOT NULL,

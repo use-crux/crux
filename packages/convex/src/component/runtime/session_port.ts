@@ -2,6 +2,7 @@ import type { RuntimeStoreTransaction } from '@use-crux/core/runtime'
 import type { MutationCtx } from '../_generated/server.js'
 import {
   acceptSessionInputs,
+  appendSessionStatistics,
   createSession,
   getSession,
   getSessionByActivationWorkId,
@@ -26,6 +27,13 @@ import {
   completeSessionTurn,
   getSessionPreparedExecution,
 } from './session_checkpoint'
+import {
+  closeSession,
+  deleteSession,
+  forkSession,
+  killSession,
+  listSessionForks,
+} from './session_controls'
 
 /** Build the Convex-local Session port for one atomic component mutation. */
 export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeStoreTransaction['sessions']> {
@@ -38,6 +46,7 @@ export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeSt
     inspectInputs: (namespace, sessionId, limit) => inspectSessionInputs(ctx, namespace, sessionId, limit),
     markReady: (namespace, sessionId, now) => markSessionReady(ctx, namespace, sessionId, now),
     acceptInputs: (input) => acceptSessionInputs(ctx, input),
+    appendStatistics: (input) => appendSessionStatistics(ctx, input),
     reserveTurn: (input) => reserveSessionTurn(ctx, input),
     startTurn: (input) => startSessionTurn(ctx, input),
     getTurnInputs: (namespace, sessionId, workId) => getSessionTurnInputs(ctx, namespace, sessionId, workId),
@@ -58,5 +67,10 @@ export function createConvexSessionPort(ctx: MutationCtx): NonNullable<RuntimeSt
       listActiveSubscriptionsForSignal(ctx, namespace, signalId),
     unsubscribe: (namespace, sessionId, subscriptionId, now) =>
       unsubscribeSessionSubscription(ctx, namespace, sessionId, subscriptionId, now),
+    close: (input) => closeSession(ctx, input),
+    kill: (input) => killSession(ctx, input),
+    delete: (input) => deleteSession(ctx, input),
+    fork: (input) => forkSession(ctx, input),
+    listForks: (namespace, sessionId) => listSessionForks(ctx, namespace, sessionId),
   }
 }

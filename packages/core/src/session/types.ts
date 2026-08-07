@@ -89,7 +89,9 @@ export type SessionModelGuard<
  * Read-only canonical Thread owner view for one durable Agent Session.
  *
  * @remarks Exposes only finalized Session-owned heads. There is no public
- * mutation surface on this view.
+ * mutation surface on this view. Reads never auto-register owners: after
+ * Session delete unregisters the owner, `read()` returns an empty owner path
+ * without resurrecting ownership, so whole-Thread deletion remains allowed.
  */
 export interface SessionThreadView {
   /** Stable id of the Thread owned by this Session. */
@@ -97,7 +99,8 @@ export interface SessionThreadView {
   /**
    * Read the owner Thread's canonical snapshot with optional pagination.
    *
-   * @returns A detached snapshot of finalized owner-head messages.
+   * @returns A detached snapshot of finalized owner-head messages, or empty
+   * when the owner is unregistered after Session delete.
    */
   read(options?: ThreadReadOptions): Promise<ThreadSnapshot>;
 }
@@ -140,13 +143,14 @@ export interface SessionTurnHandle<TOutput> extends SessionInputHandle {
 }
 
 /**
- * Detached compact lifecycle snapshot for one live durable Agent Session.
+ * Detached compact lifecycle snapshot for one durable Session.
  *
- * @remarks Lifecycle close/kill/delete APIs are outside this surface.
+ * @remarks `closing` and `closed` are lifecycle barriers. Killed Sessions
+ * project as `closed`. Deleted Sessions reject status reads.
  */
 export interface SessionStatus {
-  /** Current live execution state; lifecycle closure is outside this API. */
-  readonly state: "parked" | "running" | "blocked";
+  /** Current execution or lifecycle state. */
+  readonly state: "parked" | "running" | "blocked" | "closing" | "closed";
   /** Newest durably accepted input cursor, when any input was accepted. */
   readonly acceptedCursor?: string;
   /** Newest successfully processed input cursor, when any turn completed. */
@@ -155,6 +159,26 @@ export interface SessionStatus {
   readonly pendingInputs: number;
   /** Canonical Work occurrences that have not completed successfully. */
   readonly pendingWork: number;
+}
+
+/**
+ * Immutable parent boundary retained by a forked Session.
+ *
+ * @remarks Values are detached snapshots. They never track later parent heads.
+ */
+export interface SessionForkLineage {
+  /** Parent Session identity at the fork barrier. */
+  readonly sessionId: string;
+  /** Parent accepted-cursor high-water mark at the fork barrier. */
+  readonly cursor: string;
+  /** Exact Thread control revision observed when the child head was pinned. */
+  readonly threadRevision: string;
+}
+
+/** Payload-free direct child summary returned by {@link Session.forks}. */
+export interface SessionForkSummary {
+  readonly sessionId: string;
+  readonly forkedFrom: SessionForkLineage;
 }
 
 /**
@@ -264,9 +288,16 @@ export interface Session<TInput, TOutput = unknown> {
   /** Read-only view of the Session-owned canonical Thread. */
   readonly thread: SessionThreadView;
   /**
+   * Immutable parent boundary when this Session was created by {@link Session.fork}.
+   *
+   * @remarks Absent for root Sessions created by `session()`.
+   */
+  readonly forkedFrom?: SessionForkLineage;
+  /**
    * Accept one typed input and retained wake intent.
    *
    * @remarks Resolves after durable acceptance only; never waits for execution.
+   * Rejects after close/kill barriers and for deleted Sessions.
    */
   send(input: TInput): Promise<SessionTurnHandle<TOutput>>;
   /**
@@ -282,8 +313,68 @@ export interface Session<TInput, TOutput = unknown> {
   status(): Promise<SessionStatus>;
   /** Read bounded payload-safe ordering and recovery diagnostics. */
   inspect(): Promise<SessionInspection>;
-  /** Read bounded statistics for the complete addressed Session lifetime. */
+  /**
+   * Read bounded statistics for the complete addressed Session lifetime.
+   *
+   * @remarks Reuses the owner-scoped statistics ledger and public
+   * {@link ExecutionStats} shape. Session ingress outcomes
+   * (accepted/deduplicated/delivered/resumed/dropped) are exact totals with
+   * first-64 identity attribution under `inputs`.
+   */
   stats(): Promise<ExecutionStats>;
+  /**
+   * Read ordered, reconnectable Session state/event records.
+   *
+   * @remarks Without `after`, emits `session.snapshot` (`initial`) then every
+   * retained event from the earliest retained position through the live tail.
+   * A valid `after` resumes strictly after that cursor. An expired/unknown
+   * `after` emits `session.snapshot` (`cursor-expired`) then continues from
+   * the earliest retained event. Snapshot events replace local reducer state;
+   * later retained events are authoritative (may restate snapshot facts).
+   * Closed Sessions end after the terminal `session.status` event. Retention
+   * is bounded by the durable event port — slow consumers cannot retain
+   * unbounded history.
+   */
+  stream(
+    options?: import("./events").SessionStreamOptions,
+  ): AsyncIterable<import("./events").SessionEvent>;
+  /**
+   * Seal external ingress, deactivate Signal subscriptions, and drain.
+   *
+   * @remarks Joinable and idempotent. Deactivates Session subscriptions at the
+   * barrier, then returns only after currently represented activation/input
+   * obligations drain and state is `closed`. Nested causal Work trees beyond
+   * pending-input/work counters are not yet counted. Does not wake a parked
+   * Session merely for maintenance.
+   */
+  close(): Promise<void>;
+  /**
+   * Fence the Session immediately and revoke active Work commit authority.
+   *
+   * @remarks Distinct from graceful close. Idempotent. Deactivates Signal
+   * subscriptions, cancels active Work, marks the Thread owner closed, and
+   * rejects late claim/checkpoint/start and Thread commits after the fence.
+   */
+  kill(): Promise<void>;
+  /**
+   * Retention-safe delete after close or kill.
+   *
+   * @remarks Removes Thread ownership through the linearizable owner registry
+   * so whole-Thread deletion can proceed. Keyed recreation is rejected.
+   */
+  delete(): Promise<void>;
+  /**
+   * Create a child Session owner/head pinned to this Session's current revision.
+   *
+   * @remarks The child never aliases the parent's mutable head. Lineage is
+   * immutable. `clone()` is an alias for the same barrier. The return type is
+   * the same exact handle shape as the parent (Agent or Flow).
+   */
+  fork(): Promise<this>;
+  /** Alias for {@link Session.fork}. */
+  clone(): Promise<this>;
+  /** List direct children created by fork/clone. */
+  forks(): Promise<readonly SessionForkSummary[]>;
   /** Exact target output retained for later joinable Session results. @internal */
   readonly [sessionOutput]?: TOutput;
 }

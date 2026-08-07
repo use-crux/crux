@@ -9,7 +9,10 @@ import type {
   RuntimeSessionPreparedExecution,
 } from "../../ports/sessions";
 import { cloneRuntimeResultRef } from "../../results/types";
-import { initialSessionStatistics } from "../../engine/session-statistics";
+import {
+  initialSessionStatistics,
+  recordSessionStatistics,
+} from "../../engine/session-statistics";
 import {
   claimSessionStepInputs,
   getSessionTurnInputs,
@@ -29,6 +32,15 @@ import {
   unsubscribeMemorySessionSubscription,
   upsertMemorySessionSubscription,
 } from "./session-subscriptions";
+import {
+  closeMemorySession,
+  deleteMemorySession,
+  forkMemorySession,
+  killMemorySession,
+  listMemorySessionForks,
+  sessionAcceptsIngress,
+  sessionAcceptsWorkMutation,
+} from "./session-controls";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 
@@ -54,6 +66,9 @@ export function createMemorySessionStore(
       const key = scopedKey(input.namespace, input.keyHash);
       const existing = data.sessionsByKey.get(key);
       if (existing) {
+        if (existing.state === "deleted") {
+          return { kind: "tombstone", session: existing };
+        }
         return existing.targetId === input.targetId
           ? { kind: "existing", session: existing }
           : { kind: "conflict", session: existing };
@@ -138,6 +153,11 @@ export function createMemorySessionStore(
       const session = data.sessionsById.get(sessionKey);
       if (!session) throw new Error(`Session "${sessionId}" was not found.`);
       if (session.state === "ready") return session;
+      if (session.state !== "prepared") {
+        throw new Error(
+          `Session "${sessionId}" cannot become ready from state "${session.state}".`,
+        );
+      }
       const updated = Object.freeze({
         ...session,
         state: "ready" as const,
@@ -153,41 +173,85 @@ export function createMemorySessionStore(
       const session = data.sessionsById.get(sessionKey);
       if (!session)
         throw new Error(`Session "${input.sessionId}" was not found.`);
-      if (session.state !== "ready") {
-        throw new Error(`Session "${input.sessionId}" is not ready.`);
+      if (!sessionAcceptsIngress(session)) {
+        throw new Error(
+          `Session "${input.sessionId}" no longer accepts external ingress.`,
+        );
+      }
+      if (
+        input.inputIds !== undefined &&
+        input.inputIds.length !== input.inputs.length
+      ) {
+        throw new Error("Session inputIds must align with inputs.");
       }
       const acceptedAt = input.now.toISOString();
-      const inputs = input.inputs.map((value, index) =>
-        Object.freeze({
+      // Stable inputIds are idempotent: existing rows return as-is without a
+      // second cursor/pending advance. Mixed batches insert only missing ids.
+      const accepted: RuntimeSessionInputRecord[] = [];
+      let newCount = 0;
+      let nextCursor = session.acceptedCursor;
+      for (let index = 0; index < input.inputs.length; index += 1) {
+        const inputId =
+          input.inputIds?.[index] ??
+          `input_${input.sessionId}_${nextCursor + 1}`;
+        const existing = data.sessionInputs.get(
+          scopedKey(input.namespace, inputId),
+        );
+        if (existing && existing.sessionId === input.sessionId) {
+          accepted.push(existing);
+          continue;
+        }
+        nextCursor += 1;
+        newCount += 1;
+        const record = Object.freeze({
           schemaVersion: 1 as const,
           namespace: input.namespace,
           sessionId: input.sessionId,
-          inputId: `input_${input.sessionId}_${session.acceptedCursor + index + 1}`,
-          cursor: session.acceptedCursor + index + 1,
-          input: value,
+          inputId,
+          cursor: nextCursor,
+          input: input.inputs[index]!,
           acceptedAt,
-        }),
-      );
+        });
+        data.sessionInputs.set(scopedKey(input.namespace, inputId), record);
+        accepted.push(record);
+      }
+      if (newCount > 0) {
+        const updated = Object.freeze({
+          ...session,
+          acceptedCursor: nextCursor,
+          pendingInputs: session.pendingInputs + newCount,
+          wakePending: true,
+          updatedAt: acceptedAt,
+        });
+        data.sessionsById.set(sessionKey, updated);
+        data.sessionsByKey.set(
+          scopedKey(input.namespace, session.keyHash),
+          updated,
+        );
+        recordWrite?.();
+      }
+      return accepted as readonly RuntimeSessionInputRecord[];
+    },
+    async appendStatistics(input) {
+      const sessionKey = scopedKey(input.namespace, input.sessionId);
+      const session = data.sessionsById.get(sessionKey);
+      if (!session)
+        throw new Error(`Session "${input.sessionId}" was not found.`);
+      if (input.facts.length === 0) return session;
       const updated = Object.freeze({
         ...session,
-        acceptedCursor: session.acceptedCursor + inputs.length,
-        pendingInputs: session.pendingInputs + inputs.length,
-        wakePending: true,
-        updatedAt: acceptedAt,
+        statistics: recordSessionStatistics(
+          session.statistics,
+          session.sessionId,
+          input.now,
+          input.facts,
+        ),
+        updatedAt: input.now.toISOString(),
       });
       data.sessionsById.set(sessionKey, updated);
-      data.sessionsByKey.set(
-        scopedKey(input.namespace, session.keyHash),
-        updated,
-      );
-      for (const accepted of inputs) {
-        data.sessionInputs.set(
-          scopedKey(input.namespace, accepted.inputId),
-          accepted,
-        );
-      }
+      data.sessionsByKey.set(scopedKey(input.namespace, session.keyHash), updated);
       recordWrite?.();
-      return inputs as readonly RuntimeSessionInputRecord[];
+      return updated;
     },
     async reserveTurn(input) {
       return reserveSessionTurn(data, input, recordWrite);
@@ -215,6 +279,17 @@ export function createMemorySessionStore(
     async checkpointPreparedExecution(
       input: CheckpointRuntimeSessionExecutionInput,
     ) {
+      const session = data.sessionsById.get(
+        scopedKey(input.namespace, input.sessionId),
+      );
+      if (!session) {
+        throw new Error(`Session "${input.sessionId}" was not found.`);
+      }
+      if (!sessionAcceptsWorkMutation(session)) {
+        throw new Error(
+          `Session "${input.sessionId}" no longer holds commit authority.`,
+        );
+      }
       const accepted = data.sessionInputs.get(
         scopedKey(input.namespace, input.inputId),
       );
@@ -284,6 +359,21 @@ export function createMemorySessionStore(
         now,
         recordWrite,
       );
+    },
+    async close(input) {
+      return closeMemorySession(data, input, recordWrite);
+    },
+    async kill(input) {
+      return killMemorySession(data, input, recordWrite);
+    },
+    async delete(input) {
+      return deleteMemorySession(data, input, recordWrite);
+    },
+    async fork(input) {
+      return forkMemorySession(data, input, recordWrite);
+    },
+    async listForks(namespace, sessionId) {
+      return listMemorySessionForks(data, namespace, sessionId);
     },
   };
 }

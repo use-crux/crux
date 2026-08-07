@@ -9,6 +9,7 @@ import { registerSessionRecoveryConformance } from "./recovery-conformance";
 import { registerSessionResultConformance } from "./result-conformance";
 import { registerSessionInspectionConformance } from "./inspection-conformance";
 import { registerSessionCapabilityConformance } from "./capability-conformance";
+import { registerSessionLifecycleConformance } from "./lifecycle-conformance";
 import type {
   RunSessionConformanceTestsOptions,
   SessionConformanceWorker,
@@ -127,5 +128,6 @@ export function runSessionConformanceTests(
     registerSessionResultConformance(options);
     registerSessionInspectionConformance(options);
     registerSessionCapabilityConformance(options);
+    registerSessionLifecycleConformance(options);
   });
 }

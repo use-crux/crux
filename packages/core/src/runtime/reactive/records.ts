@@ -93,6 +93,35 @@ export interface RuntimeSignalStorePort {
     namespace: string,
     occurrenceId: string,
   ): Promise<readonly SignalDeliveryRecord[]>;
+  /**
+   * List Session-subscription deliveries for one Session.
+   *
+   * @remarks Optional. Boundary settlement prefers this for pending Agent
+   * ingress so terminal deliveries and unrelated Work cannot starve the scan.
+   * Adapters without the method fall back to Work listing.
+   */
+  listSessionDeliveries?(
+    namespace: string,
+    sessionId: string,
+    options?: {
+      readonly state?: SignalDeliveryRecord["state"];
+      readonly limit?: number;
+    },
+  ): Promise<readonly SignalDeliveryRecord[]>;
   /** Persist one required delivery in the active transaction. */
   putDelivery(record: SignalDeliveryRecord): Promise<void>;
+  /**
+   * Atomically replace a delivery only when its current state matches.
+   *
+   * @returns The written record, or `null` when another writer won the race.
+   * @remarks Used by Agent Session Signal settlement so only one settler can
+   * claim `pending → leased` and later `leased → delivered|dead-letter`.
+   * Implementations must not write when the CAS loses.
+   */
+  compareAndSetDelivery?(
+    namespace: string,
+    deliveryId: string,
+    expectedState: SignalDeliveryRecord["state"],
+    next: SignalDeliveryRecord,
+  ): Promise<SignalDeliveryRecord | null>;
 }

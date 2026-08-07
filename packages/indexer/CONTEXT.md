@@ -200,11 +200,13 @@ _Avoid_: JavaScript fallback, partial native coverage
 **Semantic Facts Cache**:
 The projected semantic fact cache keyed by semantic source profile, backend identity, TypeScript and
 compiler-option identity, and explicit epoch. Current writes use the binary local envelope after the
-`semantic-facts-v49` hard migration, which includes bounded media streaming,
+`semantic-facts-v51` hard migration, which includes bounded media streaming,
 PromptText fragment-join, diagnostic, and multiline-string refactor evidence,
 authored execution-evidence projection, context-planning structure, and canonical
 PromptText identities nested inside callback expressions, typed mixed
-Agent-tool relations, and Session diagnostic classification.
+Agent-tool relations, Session diagnostic classification, durable Effects
+lineage, Flow Session targets gated by canonical `flow` export identity,
+subscription lineage, and observed public method usage.
 _Avoid_: legacy JSON cache, backend-agnostic cache blob
 
 **Runtime Index**:
@@ -299,7 +301,7 @@ _Avoid_: hints, assumptions
   `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v94`, `semantic-facts-v49`, and Go snapshot `epoch-71` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v94`, `semantic-facts-v51`, and Go snapshot `epoch-72` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names and production fact projection are owned by the Rust/Oxc Static Index primitive manifest. TypeScript compatibility extraction is limited to parity baselines required by the static contract.

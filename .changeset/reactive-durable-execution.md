@@ -268,3 +268,43 @@ a matching active Session subscription also matches the payload; non-Session
 Flow waiters remain an independent consumer. Memory, PostgreSQL, and Convex use
 one canonical subscription match-key codec for upsert idempotency and delivery
 matching, including key-order-invariant match data.
+
+Add production Session lifecycle controls on the same Thread owner registry and
+Runtime Work spine: joinable `close()` that deactivates Signal subscriptions at
+the barrier and drains currently represented pending-input/work/activation
+obligations (not a full nested causal Work tree), fenced `kill()` that revokes
+claim/checkpoint/start and closed-owner Thread commit authority, retention-safe
+`delete()` that unregisters owners only after closed/killed tombstones, and
+`fork()`/`clone()` that register the child owner/head pin before the Session
+fork record. Keyed recreation after delete is rejected. Memory, PostgreSQL, and
+Convex implement the lifecycle ports and shared conformance laws.
+
+Complete dynamic Signal ingress for Agent Sessions on the existing Session
+input lane, preparation journal, and one Runtime worker: durable Agent
+`subscribe()`/`subscriptions()`, independent fan-out with
+Session-subscription delivery identity deduplication, parked-turn activation
+and mid-turn deferral until the next declared safe boundary, cursor-resumable
+bounded `session.stream()` state/event records with stable expired-cursor
+snapshots, and restart-safe owner `session.stats()` aggregates that extend the
+shared statistics ledger with exact accepted/deduplicated/delivered/resumed/
+dropped totals plus first-64 identity coverage linked to canonical Work stats.
+Missing Agent targets on temporary publish dispatchers requeue
+`session.signal-ingress` Work with outbox backoff (no terminal idempotency);
+the program worker settles once. Boundary settlement lists pending ingress via
+targeted `listWork({ kind, sessionId })` so unrelated Work cannot starve a
+Session (Memory, PostgreSQL, and Convex). Concurrent worker and step-boundary
+settlement is atomic via delivery compare-and-set (`pending → leased →
+terminal`) and idempotent `acceptInputs` for stable `inputIds` (no double
+cursor/pending/stats; PostgreSQL uses `ON CONFLICT DO NOTHING`). Boundary
+scans prefer pending Session deliveries and retire residual ingress Work after
+terminal deliveries so the settle budget is not spent on already-settled rows.
+
+Complete Session tooling, observability, and documentation on the same runtime
+facts: Project Index static and semantic evidence for Agent/Flow Session
+targets, Signal subscription lineage, and observed public method usage with
+exact JS/native parity and cache-epoch migration; LSP/lint copy that accepts
+resolved Agent or Flow targets; Devtools Catalog and `session.turn` detail for
+targets, subscriptions, fork lineage, and bounded ingress statistics via the
+existing Runtime Bridge read model; progressive user guides, recipes, exact API
+reference, and Core architecture internals that distinguish shipped Session
+behavior from future managed transport and Channel work.

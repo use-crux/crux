@@ -14,7 +14,10 @@ import { ThreadError } from "./errors";
 import { assertThreadId } from "./ids";
 import { commitThreadTurn, readThreadHistory } from "./entry";
 import { observeThreadOperation } from "./observability";
-import { registerThreadOwner, type ThreadOwner } from "./owner";
+import {
+  ensureThreadOwnerPresent,
+  type ThreadOwner,
+} from "./owner";
 import { redactThreadMessages } from "./redact";
 import { registerThreadInspectableResource } from "./runtime-bridge";
 import { commitThreadEdit } from "./store/alternatives";
@@ -41,12 +44,25 @@ export function thread(options: ThreadOptions): Thread {
   return createThreadHandle(options);
 }
 
+/** Options for owner-scoped Thread handles. */
+export interface CreateThreadHandleOptions {
+  /**
+   * When true (default), ensure the owner is registered on first mutation/read.
+   *
+   * @remarks Session-owned read views pass false so deleted Sessions never
+   * resurrect owners. Session create/fork remain the only registration paths.
+   */
+  readonly registerOwner?: boolean;
+}
+
 /** Create a Thread handle bound to one optional durable owner. */
 export function createThreadHandle(
   options: ThreadOptions,
   owner?: ThreadOwner,
+  handleOptions: CreateThreadHandleOptions = {},
 ): Thread {
   assertThreadId(options.id);
+  const registerOwner = handleOptions.registerOwner !== false;
   let resolved: Storage | undefined;
   const resolveStorage = (): Storage => {
     if (resolved) return resolved;
@@ -67,7 +83,11 @@ export function createThreadHandle(
   };
   const withOwner = async <T>(run: (storage: Storage) => Promise<T>) => {
     const storage = resolveStorage();
-    if (owner) await registerThreadOwner(storage, options.id, owner);
+    // Ordinary Thread handles still auto-register. Session views opt out so
+    // post-delete reads cannot resurrect owners.
+    if (owner && registerOwner) {
+      await ensureThreadOwnerPresent(storage, options.id, owner);
+    }
     return run(storage);
   };
   registerThreadInspectableResource(options.id, resolveStorage);

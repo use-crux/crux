@@ -28,6 +28,8 @@ export async function reserveNextSessionActivation(
   if (!sessions) throw new Error("Runtime Session storage is unavailable.");
   const session = await sessions.get(input.namespace, input.sessionId);
   if (!session || session.activation) return null;
+  // Close drain continues existing activations; kill/delete never reserve.
+  if (session.state !== "ready" && session.state !== "closing") return null;
   const cursor = (session.processedCursor ?? 0) + 1;
   const accepted = await sessions.getInputAtCursor(
     input.namespace,

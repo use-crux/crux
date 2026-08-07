@@ -7,6 +7,7 @@ import type { ExecutionStats } from "../work";
 import { SessionNotFoundError } from "./errors";
 import type { SessionInspection, SessionStatus } from "./types";
 import { parsePreparedSessionTurn } from "./prepared-execution";
+import { sessionStatusFromRecord } from "./status-project";
 
 const INSPECTION_INPUT_LIMIT = 64;
 
@@ -16,22 +17,10 @@ export async function readSessionStatus(
   sessionId: string,
 ): Promise<SessionStatus> {
   const record = await readSession(runtime, sessionId);
-  return Object.freeze({
-    state:
-      record.blockedWork > 0
-        ? "blocked"
-        : record.pendingInputs > 0 || record.pendingWork > 0
-          ? "running"
-          : "parked",
-    ...(record.acceptedCursor > 0
-      ? { acceptedCursor: String(record.acceptedCursor) }
-      : {}),
-    ...(record.processedCursor === undefined
-      ? {}
-      : { processedCursor: String(record.processedCursor) }),
-    pendingInputs: record.pendingInputs,
-    pendingWork: record.pendingWork,
-  });
+  if (record.state === "deleted") {
+    throw new SessionNotFoundError(sessionId);
+  }
+  return sessionStatusFromRecord(record);
 }
 
 /** Read the existing detached bounded statistics aggregate for this Session. */

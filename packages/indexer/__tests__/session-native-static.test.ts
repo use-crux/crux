@@ -201,6 +201,62 @@ describe("Session native static projection", () => {
       );
     },
   );
+
+  itWithRustOxc(
+    "projects a literal-key Flow construction and its local Flow target",
+    async () => {
+      const result = await extractNativeAndFallback({
+        callNames: ["flow", "session"],
+        callInterests: [
+          {
+            name: "flow",
+            importFrom: ["@use-crux/core", "@use-crux/core/flow"],
+          },
+          {
+            name: "session",
+            importFrom: ["@use-crux/core", "@use-crux/core/session"],
+            configArg: 1,
+          },
+        ],
+        source: [
+          `import { flow } from '@use-crux/core/flow'`,
+          `import { session } from '@use-crux/core/session'`,
+          `export const checkout = flow('checkout', async () => null)`,
+          `export const checkoutSession = session(checkout, { key: 'order-42' })`,
+        ].join("\n"),
+      });
+
+      expect(nativeFactCount(result.record, "session")).toBe(1);
+      expect(sessionProjection(result.nativeOut)).toMatchObject({
+        definitions: [
+          {
+            id: "session:checkout:order-42",
+            kind: "session",
+            name: "checkout:order-42",
+            metadata: {
+              facts: {
+                kind: "session",
+                operation: "create",
+                targetVariable: "checkout",
+                targetDefinitionId: "flow:checkout",
+                target: { kind: "flow" },
+                key: { kind: "literal", value: "order-42" },
+                identity: "static",
+              },
+            },
+          },
+        ],
+        relations: [
+          expect.objectContaining({
+            type: "session.targets_flow",
+            from: "session:checkout:order-42",
+            to: "flow:checkout",
+          }),
+        ],
+      });
+      expectSessionProjectionParity(result);
+    },
+  );
 });
 
 function expectSessionProjectionParity(result: {
@@ -224,7 +280,10 @@ function sessionProjection(output: StaticFileExtraction) {
   return {
     definitions,
     relations: output.relations.filter(
-      (relation) => relation.type === "session.targets_agent",
+      (relation) =>
+        relation.type === "session.targets_agent" ||
+        relation.type === "session.targets_flow" ||
+        relation.type === "session.subscribes_to_signal",
     ),
     sourceRefs: definitions.flatMap((definition) =>
       (definition.sourceRefs ?? []).map((ref) => ({

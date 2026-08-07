@@ -704,15 +704,15 @@
         "recommended",
         "strict"
       ],
-      "title": "Session Agent target is not static",
-      "description": "A durable Session target must resolve to one authored Agent definition that generated runtime artifacts can import in a later process.",
-      "rationale": "A durable Session target must resolve to one authored Agent definition that generated runtime artifacts can import in a later process.",
+      "title": "Session target is not a static Agent or Flow",
+      "description": "A durable Session target must resolve to one authored Agent or Flow definition that generated runtime artifacts can import in a later process.",
+      "rationale": "A durable Session target must resolve to one authored Agent or Flow definition that generated runtime artifacts can import in a later process.",
       "impact": "An unresolved or runtime-selected target cannot be pinned to one durable definition fingerprint and may fail when the Session wakes.",
       "docsUrl": "/docs/reference/crux-core/index-lints/session-invalid-target",
       "fixes": [
         {
-          "title": "Pass one static Agent target",
-          "description": "Pass a top-level local or imported Agent definition directly instead of selecting or constructing the target dynamically.",
+          "title": "Pass one static Agent or Flow target",
+          "description": "Pass a top-level local or imported Agent or Flow definition directly instead of selecting or constructing the target dynamically.",
           "kind": "manual"
         }
       ],

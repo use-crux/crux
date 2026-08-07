@@ -27,6 +27,11 @@ import {
 import { sessionPostPublicationSeam } from "./post-publication-seam";
 import { SessionTurnResultArtifactError } from "./errors";
 import { sessionInputRecord } from "./input";
+import { appendSessionIngressDeliveredEvent } from "../runtime/engine/session-events";
+import {
+  settleAgentSessionSignalIngress,
+  settlePendingAgentSessionSignalIngressForSession,
+} from "../runtime/engine/composites/signal-session-ingress";
 
 /** Adapt one statically imported Agent into the existing Runtime worker path. */
 export function createSessionAgentRuntimeTarget(
@@ -40,7 +45,27 @@ export function createSessionAgentRuntimeTarget(
     async execute(
       context: RuntimeTargetContext,
     ): Promise<RuntimeTargetOutcome> {
-      const turn = context.work.work;
+      const workPayload = context.work.work;
+      // Deferred Signal ingress: validate with this program Agent, then accept.
+      if (workPayload.kind === "session.signal-ingress") {
+        const runtime = runtimeRef.current;
+        if (!runtime?.store.sessions || !runtime.store.signals) {
+          return blocked(target.id, workPayload.kind);
+        }
+        await runtime.store.transact(async (tx) => {
+          await settleAgentSessionSignalIngress(tx, {
+            namespace: context.work.namespace,
+            sessionId: workPayload.sessionId,
+            deliveryId: workPayload.deliveryId,
+            occurrenceId: workPayload.occurrenceId,
+            subscriptionId: workPayload.subscriptionId,
+            now: runtime.now(),
+            parseSchema: target.prompt.inputSchema,
+          });
+        });
+        return { status: "completed" };
+      }
+      const turn = workPayload;
       if (turn.kind !== "session.turn") return blocked(target.id, turn.kind);
       const model = resolveModel(target, turn.model, resolveGenerationModel);
       const runtime = runtimeRef.current;
@@ -56,6 +81,20 @@ export function createSessionAgentRuntimeTarget(
         },
         { id: turn.sessionId, state: "open" },
       );
+      const assertCommitAuthority = async () => {
+        const session = await runtime.store.sessions!.get(
+          context.work.namespace,
+          turn.sessionId,
+        );
+        if (
+          !session ||
+          (session.state !== "ready" && session.state !== "closing")
+        ) {
+          throw new Error(
+            `Session "${turn.sessionId}" no longer holds commit authority.`,
+          );
+        }
+      };
       const checkpoint = await runtime.store.sessions.getPreparedExecution(
         context.work.namespace,
         turn.sessionId,
@@ -81,6 +120,7 @@ export function createSessionAgentRuntimeTarget(
           }
           throw error;
         }
+        await assertCommitAuthority();
         await ownerThread.commitTurn({
           messages: prepared.publication.messages,
           after: prepared.publication.after,
@@ -105,11 +145,20 @@ export function createSessionAgentRuntimeTarget(
           input: turn.input,
           model,
           [managedGenerationStepBoundary]: async (boundary) => {
+            await assertCommitAuthority();
             const claimed = await runtime.store.transact(async (tx) => {
               if (!tx.sessions) {
                 throw new Error("Runtime Session storage is unavailable.");
               }
-              return tx.sessions.claimStepInputs({
+              // Settle pending Signal ingress with this program Agent before
+              // claiming the safe-boundary prefix (mid-turn cooperative path).
+              await settlePendingAgentSessionSignalIngressForSession(tx, {
+                namespace: context.work.namespace,
+                sessionId: turn.sessionId,
+                now: runtime.now(),
+                parseSchema: target.prompt.inputSchema,
+              });
+              const result = await tx.sessions.claimStepInputs({
                 namespace: context.work.namespace,
                 sessionId: turn.sessionId,
                 inputId: turn.inputId,
@@ -118,6 +167,27 @@ export function createSessionAgentRuntimeTarget(
                 reason: boundary.reason,
                 now: runtime.now(),
               });
+              // Persist stream delivery facts atomically with the claim. Event
+              // ids are input+step scoped so claim retries stay idempotent.
+              for (const accepted of result.inputs) {
+                if (
+                  accepted.delivery?.stepIndex !== boundary.stepIndex ||
+                  accepted.delivery.reason !== boundary.reason
+                ) {
+                  continue;
+                }
+                await appendSessionIngressDeliveredEvent(tx, {
+                  namespace: context.work.namespace,
+                  sessionId: turn.sessionId,
+                  accepted,
+                  source: accepted.inputId.startsWith("input_sig_")
+                    ? "signal"
+                    : "send",
+                  stepIndex: boundary.stepIndex,
+                  workId: context.work.workId,
+                });
+              }
+              return result;
             });
             return Object.freeze({
               inputs: Object.freeze(
@@ -134,6 +204,7 @@ export function createSessionAgentRuntimeTarget(
             });
           },
           [managedGenerationCheckpoint]: async (prepared) => {
+            await assertCommitAuthority();
             const encoded = encodePreparedSessionTurn(
               context.work.workId,
               prepared,

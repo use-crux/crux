@@ -2,6 +2,11 @@
 
 import type { AnyAgent } from "../agent";
 import { sha256Hex } from "../content/sha256";
+import { appendSessionStatusEvent } from "../runtime/engine/session-events";
+import {
+  sessionStatusEventId,
+  sessionStatusFromRecord,
+} from "./status-project";
 import type { GenerationModel } from "../generation-model";
 import { createRuntimeError } from "../runtime/engine/errors";
 import type { RuntimeSessionRecord } from "../runtime/ports/sessions";
@@ -15,6 +20,7 @@ import {
   GenerationModelNotStaticError,
   SessionCapabilityError,
   SessionIdentityConflictError,
+  SessionTombstonedError,
 } from "./errors";
 import { createSessionHandle } from "./handle";
 import { requireCompatibleModel } from "./model-guard";
@@ -89,11 +95,19 @@ export async function readySessionHandle<TTarget extends SessionTarget>(
     ready = await runtime.store.transact(async (tx) => {
       const sessions = tx.sessions;
       if (!sessions) throw sessionCapabilityError();
-      return sessions.markReady(
+      const next = await sessions.markReady(
         runtime.namespace,
         record.sessionId,
         runtime.now(),
       );
+      const status = sessionStatusFromRecord(next);
+      await appendSessionStatusEvent(tx, {
+        namespace: next.namespace,
+        sessionId: next.sessionId,
+        status,
+        eventId: sessionStatusEventId(next.sessionId, status, next.state),
+      });
+      return next;
     });
   }
   registerSessionInspectableResource(runtime, ready.sessionId, storage);
@@ -171,6 +185,9 @@ async function createSessionRecord<TTarget extends SessionTarget>(
   });
   if (created.kind === "conflict") {
     throw new SessionIdentityConflictError(input.key);
+  }
+  if (created.kind === "tombstone") {
+    throw new SessionTombstonedError(input.key);
   }
   return readySessionHandle(
     host.runtime,

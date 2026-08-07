@@ -1,4 +1,4 @@
-//! Built-in lint rules for durable Agent Session authoring.
+//! Built-in lint rules for durable Session authoring (Agent and Flow targets).
 
 use std::collections::BTreeMap;
 
@@ -86,7 +86,7 @@ fn invalid_target_findings(
                 rule_id: "session.invalid_target",
                 key: definition.id.as_str(),
                 message: format!(
-                    "Session \"{}\" uses an {} Agent target that cannot be generated durably.",
+                    "Session \"{}\" uses an {} target that cannot be generated durably. Sessions accept only first-party Agent or Flow targets.",
                     definition.name, target_form
                 ),
                 source: definition.source.as_ref(),
@@ -95,7 +95,7 @@ fn invalid_target_findings(
                 evidence: vec![session_evidence(
                     definition,
                     facts,
-                    "Session Agent target is not statically resolved",
+                    "Session target is not a resolved Agent or Flow",
                     &["operation", "target", "targetVariable"],
                 )],
                 fixes: Vec::new(),

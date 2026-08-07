@@ -258,6 +258,32 @@ function assertFixtureCoverage(
       ],
     });
   }
+  if (fixture.name === "local-non-crux-flow-is-not-session-flow-target") {
+    const definitionIds = (facts.definitions ?? []).map(
+      (definition) => definition.id,
+    );
+    expect(definitionIds).not.toContain("session:local-helper:order-a");
+    expect(definitionIds).not.toContain("flow:local-helper");
+    expect(
+      (facts.relations ?? []).some(
+        (relation) =>
+          relation.type === "session.targets_flow" &&
+          relation.to === "flow:local-helper",
+      ),
+    ).toBe(false);
+    const sessions = (facts.definitions ?? []).filter(
+      (definition) => definition.kind === "session",
+    );
+    expect(sessions.length).toBeGreaterThan(0);
+    for (const session of sessions) {
+      const sessionFacts = session.metadata?.facts as
+        | Readonly<Record<string, unknown>>
+        | undefined;
+      expect(sessionFacts?.targetDefinitionId).not.toBe("flow:local-helper");
+      expect(sessionFacts?.target).not.toEqual({ kind: "flow" });
+      expect(sessionFacts?.identity).toBe("partial");
+    }
+  }
 }
 
 function semanticFactCoverage(facts: IndexPatchFacts): {

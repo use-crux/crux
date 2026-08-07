@@ -82,7 +82,7 @@ describe("completion site manifest", () => {
         callNames: ["session", "getSession"],
         propertyPath: ["$args", "0"],
         slot: "scalarIdentifier",
-        acceptedKinds: ["agent"],
+        acceptedKinds: ["agent", "flow"],
         insertion: "identifier",
       },
       {
