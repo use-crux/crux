@@ -23,12 +23,7 @@ export { attachStreamObservability } from './stream-observability'
 export function generationAttributes(
   spec: Pick<
     OrchestrationSpec<Record<string, unknown>>,
-    | 'promptId'
-    | 'provider'
-    | 'model'
-    | 'traceModel'
-    | 'outputMode'
-    | 'timeout'
+    'promptId' | 'provider' | 'model' | 'traceModel' | 'outputMode' | 'structuredOutput' | 'timeout'
   >,
   operation: 'generate' | 'stream',
 ): Record<string, unknown> {
@@ -37,13 +32,20 @@ export function generationAttributes(
     operation,
     ...(spec.promptId ? { promptId: spec.promptId } : {}),
     ...(spec.provider ? { provider: spec.provider } : {}),
-    ...(spec.traceModel
-      ? { model: spec.traceModel }
-      : typeof spec.model === 'string'
-        ? { model: spec.model }
-        : {}),
+    ...(spec.traceModel ? { model: spec.traceModel } : typeof spec.model === 'string' ? { model: spec.model } : {}),
     ...(spec.outputMode ? { outputMode: spec.outputMode } : {}),
-    ...(totalTimeoutMs ? { totalTimeoutMs, deadlineAt: new Date(Date.now() + totalTimeoutMs).toISOString() } : {}),
+    ...(spec.structuredOutput
+      ? {
+          structuredOutputStrategy: spec.structuredOutput.strategy,
+          structuredOutputProfile: spec.structuredOutput.profileId,
+        }
+      : {}),
+    ...(totalTimeoutMs
+      ? {
+          totalTimeoutMs,
+          deadlineAt: new Date(Date.now() + totalTimeoutMs).toISOString(),
+        }
+      : {}),
   }
 }
 
@@ -60,9 +62,7 @@ export function emitOperationDeadline(totalMs: TimeoutOptions['totalMs']): void 
 }
 
 /** Record that call-site messages intentionally shadowed resolved Thread I/O. */
-export function emitThreadHistoryOverride(
-  override: OrchestrationSpec["threadHistoryOverride"],
-): void {
+export function emitThreadHistoryOverride(override: OrchestrationSpec['threadHistoryOverride']): void {
   if (!override) return
   emitThreadHistoryOverrideEvidence(override.threadId, override.reason)
 }

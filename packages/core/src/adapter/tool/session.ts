@@ -212,7 +212,8 @@ export type ToolInputCapabilitiesResolution =
       readonly providerId: string;
       readonly modelId?: string;
     }
-  | { readonly kind: "default" };
+  | { readonly kind: "default" }
+  | { readonly kind: "passthrough"; readonly profileId: string };
 
 /** Options for {@link createToolLifecycle} — one session per generate/stream call. */
 export interface ToolLifecycleOptions {
@@ -686,6 +687,7 @@ export function createToolLifecycle(
         activateForcedOffloadSupport,
       ),
       toolCapabilities,
+      capabilityResolution.kind === "passthrough",
       toolInputPlans,
     );
     wrappedTools = withToolInputDecode(

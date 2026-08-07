@@ -149,8 +149,8 @@ describe('attemptStructuredGeneration', () => {
     const scripted = scriptedGateway({ generateText: [{ output: { items: ['a'] } }] })
 
     const request = structuredRequest(schema, {
-      model: model('anthropic/claude-sonnet-4-5', 'openrouter'),
-      modelInfo: { provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4-5' },
+      model: model('claude-sonnet-4-5', 'anthropic'),
+      modelInfo: { provider: 'anthropic', modelId: 'claude-sonnet-4-5' },
     })
     await attemptStructuredGeneration(scripted.gateway, request)
 

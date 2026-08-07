@@ -61,6 +61,9 @@ export interface LoopOwnedRuntimeContract<
    */
   structuredOutput?: {
     capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined;
+    resolve?(
+      context: import("../structured-output").StructuredOutputResolverContext,
+    ): import("../structured-output").StructuredOutputResolution;
   };
   /** Bind a concrete SDK client to the SDK-owned generation loop. */
   bind(

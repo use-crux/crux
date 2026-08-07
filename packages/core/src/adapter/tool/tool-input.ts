@@ -18,7 +18,9 @@
 
 import {
   compileCanonicalSchema,
+  compileCanonicalSchemaPassthrough,
   compileStructuredOutput,
+  compileStructuredOutputPassthrough,
   decodeStructuredValue,
   type StructuredOutputCapabilities,
   type StructuredOutputDecodeManifest,
@@ -91,6 +93,7 @@ export interface ToolInputPlan {
 export function compileToolInputPlan(
   parameters: unknown,
   capabilities: StructuredOutputCapabilities,
+  passthrough = false,
 ): ToolInputPlan {
   if (parameters === undefined || parameters === null) {
     return {
@@ -100,7 +103,9 @@ export function compileToolInputPlan(
     };
   }
   if (isZodParameters(parameters)) {
-    const plan = compileStructuredOutput(parameters, capabilities);
+    const plan = passthrough
+      ? compileStructuredOutputPassthrough(parameters)
+      : compileStructuredOutput(parameters, capabilities);
     return {
       wireSchema: plan.outputSchema,
       manifest: plan.decodeManifest,
@@ -111,11 +116,10 @@ export function compileToolInputPlan(
   // The caller-owned schema is deep-cloned before lowering + freezing so the
   // authored schema is never mutated or frozen.
   const normalized = normalizeToolInputSchema(parameters, capabilities);
-  const plan = compileCanonicalSchema(
-    cloneJsonSchema(normalized.jsonSchema),
-    capabilities,
-    { rawSchema: true },
-  );
+  const cloned = cloneJsonSchema(normalized.jsonSchema);
+  const plan = passthrough
+    ? compileCanonicalSchemaPassthrough(cloned)
+    : compileCanonicalSchema(cloned, capabilities, { rawSchema: true });
   return {
     wireSchema: plan.outputSchema,
     manifest: plan.decodeManifest,

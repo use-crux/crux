@@ -26,7 +26,11 @@ import { materializeAiSdkToolSource } from "./mcp-materializer";
 import { withAiSdkToolModelIngress } from "./sdk-codec/tool-model-ingress";
 import { runCoordinatedStream } from "./sdk-codec/coordinated-stream";
 import { resolveAiSdkNativeModel } from "./generation-model";
-import { aiSdkStructuredCapabilities } from "./provider-profile";
+import {
+  aiSdkStructuredCapabilities,
+  createAiSdkStructuredOutputResolver,
+  type AiSdkStructuredOutputOptions,
+} from "./provider-profile";
 import { toModelMessages } from "./messages";
 
 const HISTORY_SUMMARY_SYSTEM =
@@ -48,11 +52,14 @@ export type AiSdkLoopRuntime = LoopRuntimePort<
  * `liveSdkGateway()`, tests bind a scripted gateway. The returned port is what
  * `aiSdkProviderRuntime` and `createCruxAi({ gateway })` drive.
  *
- * @param gateway - The AI SDK gateway to invoke (`generateText`/`generateObject`/
- *   `streamText`/`streamObject`).
+ * @param gateway - The AI SDK gateway to invoke (`generateText`/`streamText`/
+ *   `streamObject`).
  * @returns A loop runtime port bound to the gateway.
  */
-export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
+export function createAiSdkLoopRuntime(
+  gateway: SdkGateway,
+  structuredOutput: AiSdkStructuredOutputOptions = {},
+): AiSdkLoopRuntime {
   const codec = createAiSdkCodec();
 
   return {
@@ -64,7 +71,10 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
       // rejected attempt without surfacing any of it and restream (RFC #173).
       coordinatedStream: true,
     },
-    structuredOutput: { capabilities: aiSdkStructuredCapabilities },
+    structuredOutput: {
+      capabilities: aiSdkStructuredCapabilities,
+      resolve: createAiSdkStructuredOutputResolver(structuredOutput),
+    },
 
     materializeToolSource: materializeAiSdkToolSource,
 

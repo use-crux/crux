@@ -10,6 +10,7 @@ import {
   CruxAdapterError,
   cruxProviderError,
 } from "../src/adapter/normalized-outcome";
+import { CruxUnsupportedSchemaError } from "../src/adapter/structured-output";
 import { ValidationExhaustedError } from "../src/generation/validation-retry";
 import { createGeneratedImageResult } from "../src/generation/image-result";
 import { createNoTranscriptError } from "../src/transcription/errors";
@@ -148,10 +149,27 @@ describe("classifyError()", () => {
     expect(
       classifyError(new FallbackExhaustedError([], emptyRouting, [])),
     ).toBeNull();
-    expect(classifyError(new AggregateError([inputLimit]))).toBe(
-      "input_limit",
-    );
+    expect(classifyError(new AggregateError([inputLimit]))).toBe("input_limit");
     expect(classifyError(new AggregateError([]))).toBeNull();
+  });
+
+  it("propagates only unanimous schema incompatibility from nested collections", () => {
+    const schemaA = new CruxUnsupportedSchemaError("strict-a", "unsupported");
+    const schemaB = new CruxUnsupportedSchemaError("strict-b", "unsupported");
+    const timeout = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    const emptyRouting = createRoutingReceipt("fallback", undefined, []);
+
+    expect(
+      classifyError(
+        new FallbackExhaustedError([], emptyRouting, [
+          schemaA,
+          new AggregateError([schemaB]),
+        ]),
+      ),
+    ).toBe("schema_incompatible");
+    expect(
+      classifyError(new AggregateError([schemaA, timeout])),
+    ).toBeNull();
   });
 
   it("classifies normalized adapter failures without provider-specific status fields", () => {
@@ -261,6 +279,14 @@ describe("classifyError()", () => {
       promptId: "test",
     });
     expect(classifyError(err)).toBe("invalid_response");
+  });
+
+  it("classifies a wrapped local schema compilation failure", () => {
+    const error = new Error("Tool schema compilation failed", {
+      cause: new CruxUnsupportedSchemaError("test.strict", "unsupported shape"),
+    });
+    expect(classifyError(error)).toBe("schema_incompatible");
+    expect(shouldAttemptFallback(error, {})).toBe(true);
   });
 
   it("classifies empty completed-media responses as invalid_response", () => {
