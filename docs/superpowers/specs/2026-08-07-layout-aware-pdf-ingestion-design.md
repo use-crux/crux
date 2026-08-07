@@ -71,6 +71,7 @@ interface IngestPageTextBlock {
   role: "heading" | "paragraph" | "list" | "code" | "other";
   content: string;
   headingPath?: string[];
+  sourceRange?: { start: number; end: number };
 }
 
 interface IngestPageTableBlock {
@@ -80,13 +81,25 @@ interface IngestPageTableBlock {
   rows: string[][];
   columns?: string[];
   headingPath?: string[];
+  sourceRange?: { start: number; end: number };
 }
 ```
 
-Block IDs are stable within their page and ordered exactly as their source
-blocks appear. Arrays exposed by parser results follow existing ingest
-mutability conventions; Core's corresponding indexing input types remain
-readonly where currently required.
+For a page part with ID `<pageId>`, block IDs are
+`<pageId>/block:<ordinal>`, where `ordinal` is the zero-based source-order
+ordinal of every emitted top-level block, including headings and tables. The
+ID is therefore stable for identical page Markdown and block-parser behavior;
+inserting or removing an earlier block intentionally renumbers later blocks.
+`sourceRange`, when present, is the exact half-open UTF-16 offset range into
+that page's `content`, and `page.content.slice(start, end)` must equal the
+block's `content`. The parser omits the range when it normalizes, combines, or
+otherwise cannot prove that equality. Empty blocks are not emitted.
+
+Core also adds the provider-neutral `blockIds?: string[]` field to
+`ChunkProvenance`. Block IDs are kept in first-contribution order and
+deduplicated when provenance is merged. Arrays exposed by parser results
+follow existing ingest mutability conventions; Core's corresponding indexing
+input types remain readonly where currently required.
 
 The compatible content change is that `content` may now contain structured
 Markdown instead of flattened plain text. `blocks` is additive and optional:
@@ -145,6 +158,22 @@ owned by `@use-crux/ingest`, preserves source order, maintains an active
 heading path, classifies top-level narrative/list/code blocks, and converts
 Markdown tables to cell rows. This parser is internal and does not add a
 general Markdown AST contract to Core.
+
+Heading blocks retain the complete source heading slice in `content`, including
+its Markdown heading markers. A `headingPath` entry is only the normalized
+visible inline heading text: trim outer whitespace, collapse internal
+whitespace to one ASCII space, and omit Markdown heading markers. On a heading
+of source level `L`, discard active headings at level `L` or deeper and append
+the new heading. A jump in levels adds no placeholder, so `H1 -> H3` produces
+the compact path `[H1, H3]`. Content before the first heading has no
+`headingPath`. Heading blocks include the path containing themselves; other
+blocks receive the active path at their source position.
+
+Whenever chunk content needs heading context, it uses one normalized prefix,
+never the source heading slice: render the compact path as ATX lines whose
+levels are their one-based path positions (`# H1`, `## H3`), joined by `\n`,
+then one blank line. Thus skipped source levels collapse deterministically and
+heading markers occur in the prefix, but never inside `headingPath` entries.
 
 ## Native Result Validation
 
@@ -250,20 +279,78 @@ Within a blocked page it processes blocks in source order:
 3. Paragraph, list, and code blocks remain whole when they fit. An individual
    oversized block uses the existing paragraph, sentence, then hard-limit
    splitter.
-4. Every narrative chunk carries its active heading path in its content. The
-   first chunk may use the source heading already present; later chunks repeat
-   a normalized Markdown heading prefix so embeddings and generation receive
-   the section context.
+4. Every narrative chunk carries exactly the normalized heading prefix defined
+   above. Source heading blocks establish boundaries and ancestry but are not
+   also copied into a narrative body, so blocks are never rendered twice.
 5. A table is a separate structural unit. It uses `tableRowsPerChunk`, repeats
    its column/header row for each window, and carries the active heading path.
-6. A heading with no following content still produces one useful heading
-   chunk rather than disappearing.
+6. A heading with no following narrative or table produces exactly one chunk
+   containing its normalized prefix without the trailing blank line. Consecutive
+   headings therefore produce a heading-only chunk for each heading whose
+   section is empty.
 
-Chunks that are exact contiguous page/block slices retain exact provenance
-when it can be proven. Repeating heading context, rendering table windows, or
-combining separated block content marks character-span provenance as derived.
-Every resulting chunk retains the physical page location and the nested block
-IDs that contributed to it.
+`maxChars` is the narrative-body budget. Packing accounts for all separators
+inside the body, and the existing splitter produces body slices of at most
+`maxChars`. The normalized heading prefix is deterministic soft overhead and
+does not reduce that budget: a prefixed output is bounded by
+`maxChars + prefix.length`. If the prefix alone exceeds `maxChars`, it remains
+whole; it is not split or truncated. A heading-only chunk likewise remains
+whole. This is the only heading-related exception to the configured limit.
+
+For table blocks, `columns`, when present, is the single parsed header row and
+`rows` contains body rows only; the header is never duplicated in `rows`.
+Tables without a recognized header omit `columns`. A header-only table has
+`columns` and an empty `rows` array and emits exactly one header-only chunk. A
+table with neither a header nor body rows is not emitted as a block.
+`tableRowsPerChunk` counts body rows. Each table chunk renders the normalized
+heading prefix, then the header when present, then a consecutive body-row
+window. It starts with at most `tableRowsPerChunk` body rows and repeatedly
+removes the last row until the rendered table payload (header, separator,
+rows, and newlines, but excluding heading-prefix soft overhead) is at most
+`maxChars`. A single body row that still exceeds `maxChars` is emitted whole
+with its header and is never text-split. Missing-header windows repeat no
+synthetic header. A header-only table, or a header that exceeds `maxChars`
+before any body row is added, also remains whole. Table output is therefore
+bounded by `prefix.length + maxChars` except for exactly one indivisible
+header/body-row payload when that payload itself exceeds `maxChars`. This gives
+exactly one partition for a given block and options.
+
+Every block-aware chunk carries its page part ID, physical page location, and
+the contributing `blockIds`. A heading prefix contributes the IDs of the
+heading blocks represented by its path; a body or table contributes its own
+block ID. A global `sourceSpan` is exact only when the final chunk content is
+one unchanged contiguous page slice, the contributing block has a matching
+`sourceRange` (or a proven contiguous subrange of it produced by the splitter),
+and that page part's complete `content` has exactly one occurrence in aggregate
+`document.content`. Exactness is resolved from the part-relative range, never
+by searching for the block text globally. Repeated block text within a uniquely
+occurring page is therefore still exact when its range identifies the
+occurrence. Repeated complete page content makes the global location ambiguous,
+so `sourceSpans` is omitted and confidence is `derived`. Packing multiple
+blocks, adding/repeating a normalized heading prefix, rendering any table
+window, or splitting content without a proven range-to-output mapping is also
+derived and does not expose guessed spans.
+Page, part, location, and block identifiers remain available in derived
+provenance; `confidence: "exact"` never means merely that those coarse facts
+are exact.
+
+### Parent-child structural boundaries
+
+The structured first stage supplies each unit's page ID, compact
+`headingPath`, contributing `blockIds`, and structural kind. Parent aggregation
+has a hard boundary when the page ID or `headingPath` changes, and before and
+after every table window. It therefore never joins physical pages, sections,
+or narrative and table units. Narrative units in the same page and section may
+be packed up to `parentMaxChars`.
+
+Children inherit the same boundaries. Narrative parents use the existing
+child splitter only within that one page and section. Each rendered table
+window is one indivisible parent and one identical indivisible child; neither
+the parent nor child splitter may cut its header or rows. An oversized table
+window may consequently exceed `parentMaxChars` and `childMaxChars`. Its
+provenance remains derived and retains the page, heading-block IDs, and table
+block ID. These are the minimum facts required to enforce the boundary without
+a PDF-specific Core type.
 
 The page-block path is enabled only for `chunker.structured()` and the
 structured first stage used by `chunker.parentChild()`. `chunker.text()` keeps
@@ -306,31 +393,50 @@ source API; the external native package may be mocked only where a particular
 boundary failure must be forced.
 
 1. **Layout-aware tracer bullet:** a PDF loaded through `fileSource()` exposes
-   the native page Markdown, typed blocks, and existing page provenance. Add
-   the minimum native and block-parsing path to pass.
+   the native page Markdown, typed blocks, stable page-local block IDs, exact
+   optional page-relative ranges, and existing page provenance. Prove that a
+   normalized block omits its range rather than guessing. Add the minimum
+   native and block-parsing path to pass.
 2. **Structured chunk tracer bullet:** the public structured chunker keeps two
-   PDF sections separate and repeats heading context when one section spans
-   multiple chunks. Add the minimum block-aware chunking path to pass.
+   PDF sections separate and repeats the one normalized heading prefix when a
+   section spans multiple chunks. Cover nested and skipped heading levels,
+   consecutive/absent headings, block IDs, a heading-only section, and exact
+   versus derived narrative provenance. Add the minimum block-aware chunking
+   path to pass.
 3. **Table chunking:** a native PDF table becomes row-windowed chunks with a
    repeated header, heading context, page provenance, and derived span
-   confidence. Add only the table block path.
+   confidence. Cover missing headers, a header-only table, body-row counting,
+   max-character window shrinking, and one oversized indivisible row. Add only
+   the table block path.
 4. **Explicit strategy isolation:** text chunking remains flat while
-   parent-child consumes the structured page interpretation. Add the minimum
-   strategy distinction and fingerprint changes.
-5. **Visual routing:** a mixed PDF routes only native `needsOcr` pages through
+   parent-child consumes the structured page interpretation and semantic
+   chunking retains its existing boundary input. Add the minimum strategy
+   distinction and only the structured/parent-child fingerprint changes.
+5. **Parent-child boundaries:** prove parents and children cannot cross pages
+   or heading paths, tables cannot join narrative content, and a rendered table
+   window remains one identical child even when it exceeds child limits.
+   Prove retained page, heading-block, and table-block provenance.
+6. **Visual routing:** a mixed PDF routes only native `needsOcr` pages through
    `media.describe`, never indexes their unreliable native Markdown, and keeps
    reliable pages model-free. Add the minimum routing logic.
-6. **Unavailable backend fallback:** forced native-load failure returns all
+7. **Unavailable backend fallback:** forced native-load failure returns all
    physical pages through `pdfjs-dist` and one bounded downgrade warning. Add
    the minimum fallback state and warning.
-7. **Extraction and validation fallbacks:** throws and malformed/missing page
+8. **Extraction and validation fallbacks:** throws and malformed/missing page
    results select their exact closed reason while preserving the same public
    behavior. Add runtime validation without `any` or broad assertions.
-8. **Metadata and source parity:** preserve PDF title metadata and verify URL
+9. **Metadata and source parity:** preserve PDF title metadata and verify URL
    and Asset-backed sources use the same parser behavior.
-9. **Failure compatibility:** failure of both extraction paths still becomes
+10. **Failure compatibility:** failure of both extraction paths still becomes
    the existing source parse failure.
-10. **Refactor while green:** remove duplication between native and fallback
+11. **Ambiguous aggregate provenance:** use fixtures with repeated block text
+    in one uniquely occurring page and with two identical complete pages.
+    Prove the first resolves through its page-relative range while the second
+    omits global spans and is derived.
+12. **Heading limit edges:** prove body packing includes separators, prefix
+    overhead follows the exact soft-overhead formula, and an over-limit prefix
+    and heading-only chunk remain whole.
+13. **Refactor while green:** remove duplication between native and fallback
     page materialization, retain one media-description helper, and keep the
     external boundary and page-block types small.
 
@@ -376,12 +482,25 @@ This changes published runtime behavior and install behavior for
 - Supported installations use `pdf-inspector` by default.
 - Reliable pages retain layout-aware Markdown, ordered typed blocks, and exact
   page provenance.
+- Block IDs use the page-ID/source-ordinal scheme; an exposed source range is
+  an exact half-open page-content slice, and normalized blocks omit it.
 - Structured chunks do not cross PDF headings or physical pages, retain active
-  heading context, and keep fitting list/code/paragraph blocks whole.
+  heading context through the single normalized prefix, deterministically
+  collapse skipped levels, and keep fitting list/code/paragraph blocks whole.
+- Heading-only, missing-heading, nested-heading, over-limit-prefix, and
+  body-limit cases have one deterministic output under the specified
+  soft-overhead rule.
 - PDF table blocks use row windows with repeated headers and derived span
-  provenance.
-- Parent-child chunking consumes the structured page interpretation while text
-  and semantic chunking retain their existing strategies.
+  provenance; missing-header, header-only, max-limited, and oversized-row cases
+  follow the declared row convention without splitting a row.
+- Exact global spans require a provable page-relative mapping and unique page
+  occurrence; repeated block text is resolved by its range, while repeated
+  complete page content produces derived provenance without guessed spans.
+- Parent-child parents and children do not cross page, section, or table
+  boundaries, and each table window remains one indivisible child with its
+  page, heading-block, and table-block provenance.
+- Text and semantic chunking retain their existing strategies and fingerprints;
+  only structured and parent-child behavior and fingerprints change.
 - Pages marked `needsOcr` never index unreliable native Markdown.
 - Only those unreliable pages invoke `media.describe`.
 - Native loading, extraction, or validation failures recover with a
