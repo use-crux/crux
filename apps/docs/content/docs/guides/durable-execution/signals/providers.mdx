@@ -59,11 +59,9 @@ export const orders = signalProvider({
   signals: { orderSubmitted },
   async onEvent(envelope, { signals }) {
     const orderId = decodeOrderId(envelope.payload);
-    await signals.orderSubmitted.publish(
-      { orderId },
-      // Default key is provider/account/event when omitted.
-      { idempotencyKey: envelope.eventId },
-    );
+    // Omit idempotencyKey: the transport runner defaults to a transport-scoped
+    // provider/account/event key so crash recovery cannot double-deliver.
+    await signals.orderSubmitted.publish({ orderId });
   },
 });
 
@@ -79,7 +77,9 @@ Host edge shape:
 
 1. Call `transport.handle(request)` for authentication and size validation.
 2. Build a validated accepted envelope and call `acceptTransportEnvelope()`.
-3. Acknowledge the provider only when the result has `acknowledge: true`.
+3. Acknowledge the provider only when acceptance resolves with
+   `acknowledge: true`. Catch `TransportEnvelopeConflictError` for 409; do not
+   treat conflict as a successful ack.
 4. Let the Runtime worker or `createTransportNormalizationRunner()` claim and
    normalize accepted envelopes after the response is sent.
 

@@ -4,6 +4,7 @@ import {
   createMemoryStatisticsLedger,
   type StatisticsOwner,
 } from "../src/statistics";
+import { transportStatisticsIdentity } from "../src/runtime/transport";
 
 describe("statistics ledger transport envelopes", () => {
   it("accumulates bounded transport outcomes with adapter identity attribution", () => {
@@ -12,6 +13,14 @@ describe("statistics ledger transport envelopes", () => {
       kind: "transport",
       id: "ns.orders",
     } satisfies StatisticsOwner;
+    const ordersIdentity = transportStatisticsIdentity(
+      "adapter.orders",
+      "binding.orders",
+    );
+    const otherIdentity = transportStatisticsIdentity(
+      "adapter.other",
+      "binding.other",
+    );
     let cursor = 0;
     const at = (offset: number) => new Date(1_800_100_000_000 + offset);
     const record = (
@@ -35,7 +44,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.orders/binding.orders",
+        identity: ordersIdentity,
         outcome: "accepted",
       },
       1,
@@ -43,7 +52,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.orders/binding.orders",
+        identity: ordersIdentity,
         outcome: "deduplicated",
       },
       2,
@@ -51,7 +60,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.orders/binding.orders",
+        identity: ordersIdentity,
         outcome: "retried",
       },
       3,
@@ -59,7 +68,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.orders/binding.orders",
+        identity: ordersIdentity,
         outcome: "normalized",
       },
       4,
@@ -67,7 +76,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.orders/binding.orders",
+        identity: ordersIdentity,
         outcome: "delivered",
       },
       5,
@@ -75,7 +84,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.other/binding.other",
+        identity: otherIdentity,
         outcome: "accepted",
       },
       6,
@@ -83,7 +92,7 @@ describe("statistics ledger transport envelopes", () => {
     record(
       {
         kind: "transport-envelope",
-        identity: "adapter.other/binding.other",
+        identity: otherIdentity,
         outcome: "dead-lettered",
       },
       7,
@@ -98,16 +107,14 @@ describe("statistics ledger transport envelopes", () => {
       retried: 1,
       deadLettered: 1,
     });
-    expect(scope.transport.byIdentity["adapter.orders/binding.orders"]).toEqual(
-      {
-        accepted: 1,
-        deduplicated: 1,
-        normalized: 1,
-        delivered: 1,
-        retried: 1,
-        deadLettered: 0,
-      },
-    );
+    expect(scope.transport.byIdentity[ordersIdentity]).toEqual({
+      accepted: 1,
+      deduplicated: 1,
+      normalized: 1,
+      delivered: 1,
+      retried: 1,
+      deadLettered: 0,
+    });
     expect(scope.transport.identityAttribution).toBe("complete");
   });
 

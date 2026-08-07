@@ -229,14 +229,18 @@ export interface TransportEnvelopeOutcomeStats {
 /**
  * Bounded managed-transport aggregates with first-64 identity attribution.
  *
- * @remarks Totals are exact. Identity keys are adapter/binding ids, never
- * per-event secrets or raw payloads. Later identities roll into
- * `otherIdentities`.
+ * @remarks Totals are exact. Identity keys are structured adapter/binding
+ * pairs (see `transportStatisticsIdentity`), never per-event secrets or raw
+ * payloads. Later identities roll into `otherIdentities`.
  */
 export interface TransportEnvelopeStats {
   /** Exact totals across every adapter/transport identity. */
   readonly total: TransportEnvelopeOutcomeStats;
-  /** Outcomes for the first 64 normalized adapter/transport identities. */
+  /**
+   * Outcomes for the first 64 structured adapter/transport identities.
+   *
+   * @remarks Keys come from `transportStatisticsIdentity(adapterId, bindingId)`.
+   */
   readonly byIdentity: Readonly<Record<string, TransportEnvelopeOutcomeStats>>;
   /** Outcomes for identities beyond the fixed attribution bound. */
   readonly otherIdentities?: TransportEnvelopeOutcomeStats;

@@ -79,11 +79,14 @@ captures handles, credentials, or callbacks.
 
 Call only after edge authentication succeeds.
 
-| Result | `acknowledge` | Meaning |
+| Outcome | How it surfaces | Host ack |
 | --- | --- | --- |
-| `accepted` | `true` | First durable acceptance |
-| `duplicate` | `true` | Same identity and digest |
-| `conflict` | `false` | Same identity, different digest (throws `TransportEnvelopeConflictError` with structured result) |
+| `accepted` | Resolves `{ kind: "accepted", acknowledge: true, record }` | Acknowledge success |
+| `duplicate` | Resolves `{ kind: "duplicate", acknowledge: true, record }` | Acknowledge success |
+| conflict | Throws `TransportEnvelopeConflictError` (`code: "TRANSPORT_ENVELOPE_CONFLICT"`, plus `provider`, `accountId`, `eventId`) | Do not acknowledge as success (typically HTTP 409) |
+
+Catch only `TransportEnvelopeConflictError` for conflict responses and rethrow
+other errors. Conflict is never a resolved `acknowledge: false` result.
 
 ### Envelope lifecycle states
 
@@ -114,7 +117,9 @@ Returns `TransportEnvelopeStats`:
 
 - exact totals: `accepted`, `deduplicated`, `normalized`, `delivered`,
   `retried`, `deadLettered`
-- first-64 `byIdentity` attribution keyed by `adapterId/bindingId`
+- first-64 `byIdentity` attribution keyed by
+  `transportStatisticsIdentity(adapterId, bindingId)` (structured JSON pair,
+  unambiguous when either id contains `/`)
 - overflow identities roll into `otherIdentities` with
   `identityAttribution: "truncated"`
 

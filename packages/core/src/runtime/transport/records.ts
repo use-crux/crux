@@ -22,6 +22,16 @@ export interface RuntimeTransportEnvelopeFailure {
 }
 
 /**
+ * Maximum Signal publications retained on one envelope after normalization.
+ *
+ * @remarks Matches the statistics first-64 attribution bound. Provider
+ * `onEvent` may publish more Signals; only the first
+ * {@link MAX_TRANSPORT_LINEAGE_ENTRIES} occurrence identities are persisted
+ * and `lineageTruncated` becomes true when additional publications succeed.
+ */
+export const MAX_TRANSPORT_LINEAGE_ENTRIES = 64;
+
+/**
  * Signal publication linked from one accepted transport envelope.
  *
  * @remarks Uses existing Signal occurrence identities. Never stores payloads.
@@ -80,10 +90,19 @@ export interface RuntimeTransportEnvelopeRecord {
   /**
    * Signal publications produced by the latest successful normalization.
    *
-   * @remarks Bounded to the publications from one `onEvent` pass. Empty when
-   * normalization has not completed or published nothing.
+   * @remarks Bounded to at most {@link MAX_TRANSPORT_LINEAGE_ENTRIES}
+   * publications from one `onEvent` pass. Empty when normalization has not
+   * completed or published nothing. Never stores payloads.
    */
   readonly lineage?: readonly RuntimeTransportDeliveryLineageEntry[];
+  /**
+   * True when successful `onEvent` publications exceeded
+   * {@link MAX_TRANSPORT_LINEAGE_ENTRIES} and later entries were dropped.
+   *
+   * @remarks Payload-free aggregate indicator only. Omitted or false when the
+   * retained lineage is complete for that normalization pass.
+   */
+  readonly lineageTruncated?: boolean;
 }
 
 /** Identity used for idempotent acceptance lookup. */

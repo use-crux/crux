@@ -54,9 +54,16 @@ export interface CompleteRuntimeTransportNormalizationInput {
   /**
    * Signal publications produced by this normalization pass.
    *
-   * @remarks Occurrence ids only. Never include payloads or credentials.
+   * @remarks Occurrence ids only, already bounded by the caller to
+   * {@link import("./records").MAX_TRANSPORT_LINEAGE_ENTRIES}. Never include
+   * payloads or credentials.
    */
   readonly lineage?: readonly RuntimeTransportDeliveryLineageEntry[];
+  /**
+   * True when publications beyond the lineage bound were omitted from
+   * {@link lineage}.
+   */
+  readonly lineageTruncated?: boolean;
 }
 
 /** Input for recording a failed normalization attempt. */

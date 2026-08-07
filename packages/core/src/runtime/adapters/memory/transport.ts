@@ -172,6 +172,9 @@ export function createMemoryTransportStore(
               ),
             }
           : {}),
+        ...(input.lineageTruncated === true
+          ? { lineageTruncated: true as const }
+          : {}),
       });
 
       data.transportEnvelopes.set(key, next);
@@ -329,6 +332,9 @@ function cloneRecord(
     lineage: record.lineage
       ? Object.freeze(record.lineage.map((entry) => Object.freeze({ ...entry })))
       : undefined,
+    ...(record.lineageTruncated === true
+      ? { lineageTruncated: true as const }
+      : {}),
   });
 }
 

@@ -16,6 +16,7 @@ import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
 import { scopeProviderSignalsForEnvelope } from "./publication-scope";
 import {
   appendTransportFacts,
+  createTransportLineageAccumulator,
   failNormalizationAttempt,
   instrumentSignalsForLineage,
   statsIdentity,
@@ -102,7 +103,7 @@ export async function normalizeClaimedTransportEnvelope(
     return { kind: "lost-lease" };
   }
 
-  const lineage: Array<{ signalId: string; occurrenceId: string }> = [];
+  const lineage = createTransportLineageAccumulator();
 
   try {
     const scoped = scopeProviderSignalsForEnvelope(
@@ -135,7 +136,8 @@ export async function normalizeClaimedTransportEnvelope(
       identity,
       leaseToken,
       now,
-      lineage,
+      lineage: lineage.entries,
+      ...(lineage.truncated ? { lineageTruncated: true } : {}),
     });
 
     if (!record) {
@@ -156,7 +158,7 @@ export async function normalizeClaimedTransportEnvelope(
           identity: statsIdentity(options.record),
           outcome: "normalized",
         },
-        ...(lineage.length > 0
+        ...(lineage.entries.length > 0
           ? [
               {
                 kind: "transport-envelope" as const,

@@ -24,13 +24,15 @@ export function transportStatisticsOwner(namespace: string): StatisticsOwner {
 /**
  * Adapter/transport attribution key for bounded identity coverage.
  *
- * @remarks Uses adapter and binding ids only — never event payloads or secrets.
+ * @remarks Encodes `(adapterId, bindingId)` as a JSON string array so keys stay
+ * unambiguous when either identifier contains `/`. Uses adapter and binding
+ * ids only — never event payloads or secrets.
  */
 export function transportStatisticsIdentity(
   adapterId: string,
   bindingId: string,
 ): string {
-  return `${adapterId}/${bindingId}`;
+  return JSON.stringify([adapterId, bindingId]);
 }
 
 /** Create the first persisted ledger export for a transport owner. */

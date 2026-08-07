@@ -17,7 +17,7 @@ import { encodeJson } from './codec'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import type { PgExecutor } from './sql'
-import { table } from './sql'
+import { advisoryLockKey, table } from './sql'
 
 /** Create the PostgreSQL managed-transport envelope transaction port. */
 export function createPostgresTransportStore(
@@ -173,7 +173,7 @@ export function createPostgresTransportStore(
           input.identity.eventId,
           input.now.toISOString(),
           input.leaseToken,
-          encodeJson(input.lineage ?? []),
+          encodeJson(encodeLineagePayload(input.lineage, input.lineageTruncated)),
         ],
       )
       return result.rows[0] ? decodeRecord(result.rows[0]) : null
@@ -247,6 +247,10 @@ export function createPostgresTransportStore(
     },
 
     async getStatistics(namespace: string) {
+      // Serialize read-modify-write across concurrent transactions, including
+      // first insert when no statistics row exists yet (FOR UPDATE cannot lock
+      // an absent row).
+      await lockTransportStatisticsNamespace(db, schema, namespace)
       const result = await db.query<Record<string, unknown>>(
         `SELECT statistics FROM ${statistics} WHERE namespace = $1`,
         [namespace],
@@ -256,6 +260,7 @@ export function createPostgresTransportStore(
     },
 
     async putStatistics(namespace: string, value: StatisticsLedgerExport) {
+      await lockTransportStatisticsNamespace(db, schema, namespace)
       recordWrite(faults)
       await db.query(
         `INSERT INTO ${statistics} (namespace, statistics, updated_at)
@@ -269,15 +274,25 @@ export function createPostgresTransportStore(
 
     async prune(options) {
       recordWrite(faults)
-      const result = await db.query<{ removed: string }>(
-        `WITH doomed AS (
-           SELECT namespace, provider, account_id, event_id
+      const limit = Math.max(0, Math.trunc(options.limit))
+      const result = await db.query<{
+        removed: string | number
+        truncated: boolean
+      }>(
+        `WITH candidates AS (
+           SELECT namespace, provider, account_id, event_id,
+                  row_number() OVER (ORDER BY updated_at ASC) AS rn
            FROM ${envelopes}
            WHERE ($1::text IS NULL OR namespace = $1)
              AND state IN ('normalized', 'dead-letter')
              AND updated_at < $2::timestamptz
            ORDER BY updated_at ASC
-           LIMIT $3
+           LIMIT $4
+         ),
+         doomed AS (
+           SELECT namespace, provider, account_id, event_id
+           FROM candidates
+           WHERE rn <= $3
          ),
          deleted AS (
            DELETE FROM ${envelopes} AS target
@@ -288,20 +303,61 @@ export function createPostgresTransportStore(
              AND target.event_id = doomed.event_id
            RETURNING 1
          )
-         SELECT count(*)::text AS removed FROM deleted`,
+         SELECT
+           (SELECT count(*)::text FROM deleted) AS removed,
+           EXISTS(SELECT 1 FROM candidates WHERE rn > $3) AS truncated`,
         [
           options.namespace ?? null,
           options.before.toISOString(),
-          options.limit,
+          limit,
+          limit + 1,
         ],
       )
-      const removed = Number(result.rows[0]?.removed ?? 0)
       return {
-        removed,
-        truncated: removed >= options.limit,
+        removed: Number(result.rows[0]?.removed ?? 0),
+        truncated: Boolean(result.rows[0]?.truncated),
       }
     },
   }
+}
+
+/**
+ * Transaction-scoped lock for one namespace statistics ledger.
+ *
+ * Covers both get/put and the absent-row first-insert race under READ COMMITTED.
+ */
+async function lockTransportStatisticsNamespace(
+  db: PgExecutor,
+  schema: string,
+  namespace: string,
+): Promise<void> {
+  await db.query(
+    'SELECT pg_advisory_xact_lock($1::integer, $2::integer)',
+    [
+      advisoryLockKey(`transport-statistics:${schema}`),
+      advisoryLockKey(namespace),
+    ],
+  )
+}
+
+/** Persist lineage as a structured payload with optional truncation flag. */
+function encodeLineagePayload(
+  lineage: readonly { readonly signalId: string; readonly occurrenceId: string }[] | undefined,
+  lineageTruncated: boolean | undefined,
+):
+  | readonly { readonly signalId: string; readonly occurrenceId: string }[]
+  | {
+      readonly entries: readonly {
+        readonly signalId: string
+        readonly occurrenceId: string
+      }[]
+      readonly truncated: true
+    } {
+  const entries = lineage ?? []
+  if (lineageTruncated === true) {
+    return { entries, truncated: true as const }
+  }
+  return entries
 }
 
 async function getIdentity(
@@ -322,20 +378,7 @@ function decodeRecord(row: Record<string, unknown>): RuntimeTransportEnvelopeRec
     | { message?: string; code?: string }
     | null
     | undefined
-  const lineage = Array.isArray(row.lineage)
-    ? (row.lineage as ReadonlyArray<{ signalId?: string; occurrenceId?: string }>)
-        .filter(
-          (entry) =>
-            typeof entry?.signalId === 'string' &&
-            typeof entry?.occurrenceId === 'string',
-        )
-        .map((entry) =>
-          Object.freeze({
-            signalId: entry.signalId as string,
-            occurrenceId: entry.occurrenceId as string,
-          }),
-        )
-    : undefined
+  const { lineage, lineageTruncated } = decodeLineagePayload(row.lineage)
   return Object.freeze({
     schemaVersion: 1 as const,
     namespace: String(row.namespace),
@@ -370,7 +413,62 @@ function decodeRecord(row: Record<string, unknown>): RuntimeTransportEnvelopeRec
     ...(lineage && lineage.length > 0
       ? { lineage: Object.freeze(lineage) }
       : {}),
+    ...(lineageTruncated ? { lineageTruncated: true as const } : {}),
   })
+}
+
+function decodeLineagePayload(value: unknown): {
+  readonly lineage?: readonly {
+    readonly signalId: string
+    readonly occurrenceId: string
+  }[]
+  readonly lineageTruncated: boolean
+} {
+  if (Array.isArray(value)) {
+    const lineage = decodeLineageEntries(value)
+    return {
+      ...(lineage.length > 0 ? { lineage } : {}),
+      lineageTruncated: false,
+    }
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as {
+      entries?: unknown
+      truncated?: unknown
+    }
+    const lineage = Array.isArray(record.entries)
+      ? decodeLineageEntries(record.entries)
+      : []
+    return {
+      ...(lineage.length > 0 ? { lineage } : {}),
+      lineageTruncated: record.truncated === true,
+    }
+  }
+
+  return { lineageTruncated: false }
+}
+
+function decodeLineageEntries(
+  value: readonly unknown[],
+): readonly {
+  readonly signalId: string
+  readonly occurrenceId: string
+}[] {
+  return value
+    .filter(
+      (entry): entry is { signalId: string; occurrenceId: string } =>
+        !!entry &&
+        typeof entry === 'object' &&
+        typeof (entry as { signalId?: unknown }).signalId === 'string' &&
+        typeof (entry as { occurrenceId?: unknown }).occurrenceId === 'string',
+    )
+    .map((entry) =>
+      Object.freeze({
+        signalId: entry.signalId,
+        occurrenceId: entry.occurrenceId,
+      }),
+    )
 }
 
 function timestamp(value: unknown): string {

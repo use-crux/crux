@@ -9,9 +9,10 @@ import type { StatisticsFact } from "../../statistics";
 import type { RuntimeStoreAdapter } from "../store";
 import { retryDelayMs } from "../engine/retry";
 import { TransportStoreMissingError } from "./lifecycle-errors";
-import type {
-  RuntimeTransportDeliveryLineageEntry,
-  RuntimeTransportEnvelopeRecord,
+import {
+  MAX_TRANSPORT_LINEAGE_ENTRIES,
+  type RuntimeTransportDeliveryLineageEntry,
+  type RuntimeTransportEnvelopeRecord,
 } from "./records";
 import type { RuntimeTransportStorePort } from "./store";
 import {
@@ -19,6 +20,27 @@ import {
   recordTransportStatistics,
   transportStatisticsIdentity,
 } from "./statistics";
+
+export { MAX_TRANSPORT_LINEAGE_ENTRIES };
+
+/**
+ * Mutable accumulator for Signal publications during one `onEvent` pass.
+ *
+ * @remarks Caps retained entries at {@link MAX_TRANSPORT_LINEAGE_ENTRIES} and
+ * records a payload-free truncation indicator when more publishes succeed.
+ */
+export interface TransportLineageAccumulator {
+  readonly entries: RuntimeTransportDeliveryLineageEntry[];
+  truncated: boolean;
+}
+
+/** Create an empty bounded lineage accumulator for one normalization attempt. */
+export function createTransportLineageAccumulator(): TransportLineageAccumulator {
+  return {
+    entries: [],
+    truncated: false,
+  };
+}
 
 /** Outcome of one claimed-envelope normalization attempt. */
 export type NormalizeClaimedTransportEnvelopeResult =
@@ -149,11 +171,13 @@ type ProviderSignalRuntime = {
 /**
  * Wrap provider Signal publishes so successful receipts become envelope lineage.
  *
- * @remarks Lineage stores only Signal and occurrence identities — never payloads.
+ * @remarks Lineage stores only Signal and occurrence identities — never
+ * payloads. Entries beyond {@link MAX_TRANSPORT_LINEAGE_ENTRIES} set
+ * `truncated` without growing the retained array.
  */
 export function instrumentSignalsForLineage<TSignals extends object>(
   signals: TSignals,
-  lineage: RuntimeTransportDeliveryLineageEntry[],
+  lineage: TransportLineageAccumulator,
 ): TSignals {
   const instrumented: Record<string, ProviderSignalRuntime> = {};
 
@@ -165,12 +189,16 @@ export function instrumentSignalsForLineage<TSignals extends object>(
       async publish(payload: unknown, options?: SignalPublishOptions) {
         const receipt = await definition.publish(payload, options);
 
-        lineage.push(
-          Object.freeze({
-            signalId: receipt.signalId,
-            occurrenceId: receipt.occurrenceId,
-          }),
-        );
+        if (lineage.entries.length < MAX_TRANSPORT_LINEAGE_ENTRIES) {
+          lineage.entries.push(
+            Object.freeze({
+              signalId: receipt.signalId,
+              occurrenceId: receipt.occurrenceId,
+            }),
+          );
+        } else {
+          lineage.truncated = true;
+        }
 
         return receipt;
       },

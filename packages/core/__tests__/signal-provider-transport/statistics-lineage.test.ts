@@ -13,8 +13,10 @@ import { inMemoryRuntimeStore } from "../../src/runtime/adapters/memory";
 import {
   acceptTransportEnvelope,
   createTransportNormalizationRunner,
+  MAX_TRANSPORT_LINEAGE_ENTRIES,
   projectTransportEnvelope,
   transportStatistics,
+  transportStatisticsIdentity,
   type RuntimeAcceptedTransportEnvelope,
 } from "../../src/runtime/transport";
 
@@ -109,7 +111,9 @@ describe("transport statistics and lineage", () => {
       deadLettered: 0,
     });
     expect(
-      stats.byIdentity["adapter.orders/binding.orders"]?.accepted,
+      stats.byIdentity[
+        transportStatisticsIdentity("adapter.orders", "binding.orders")
+      ]?.accepted,
     ).toBe(1);
 
     const identity = {
@@ -119,12 +123,15 @@ describe("transport statistics and lineage", () => {
       eventId: "evt_1",
     };
     const record = await store.transact(async (tx) => {
-      if (!tx.transports) throw new Error("missing transports");
+      if (!tx.transports) {
+        throw new Error("missing transports");
+      }
       return tx.transports.get(identity);
     });
     expect(record).not.toBeNull();
     const projection = projectTransportEnvelope(record!);
     expect(projection.lineage).toHaveLength(1);
+    expect(projection.lineageTruncated).toBe(false);
     expect(projection.lineage[0]).toMatchObject({
       signalId: "order.submitted",
       occurrenceId: expect.stringMatching(/.+/),
@@ -183,7 +190,9 @@ describe("transport statistics and lineage", () => {
     });
 
     const record = await store.transact(async (tx) => {
-      if (!tx.transports) throw new Error("missing transports");
+      if (!tx.transports) {
+        throw new Error("missing transports");
+      }
       return tx.transports.get({
         namespace: "demo",
         provider: "orders",
@@ -194,6 +203,7 @@ describe("transport statistics and lineage", () => {
     const projection = projectTransportEnvelope(record!);
     expect(projection.state).toBe("dead-letter");
     expect(projection.lastFailure?.code).toBe("POISON");
+    expect(projection.lineageTruncated).toBe(false);
     expect(JSON.stringify(projection)).not.toMatch(/ord_1|base64/);
   });
 
@@ -264,8 +274,105 @@ describe("transport statistics and lineage", () => {
 
     const after = await transportStatistics({ store, namespace: "demo" });
     expect(after).toEqual(before);
-    expect(after.byIdentity["adapter.orders/binding.orders"]?.delivered).toBe(
-      1,
-    );
+    expect(
+      after.byIdentity[
+        transportStatisticsIdentity("adapter.orders", "binding.orders")
+      ]?.delivered,
+    ).toBe(1);
+  });
+
+  it("bounds envelope lineage and surfaces a payload-free truncation indicator", async () => {
+    const orderSubmitted = signal({
+      id: "order.submitted",
+      schema: z.object({ orderId: z.string() }),
+    });
+    const store = inMemoryRuntimeStore();
+    const provider = signalProvider({
+      id: "adapter.orders",
+      transport: webhook({
+        async handle() {
+          throw new Error("unused");
+        },
+      }),
+      signals: { orderSubmitted },
+      async onEvent(_envelope, { signals }) {
+        for (let index = 0; index < MAX_TRANSPORT_LINEAGE_ENTRIES + 1; index += 1) {
+          await signals.orderSubmitted.publish(
+            { orderId: `ord_${index}` },
+            { idempotencyKey: `publish-${index}` },
+          );
+        }
+      },
+    });
+
+    await acceptTransportEnvelope({
+      store,
+      namespace: "demo",
+      envelope: sampleEnvelope("evt_lineage_bound"),
+      now: new Date("2026-08-04T16:00:00.000Z"),
+    });
+
+    await createTransportNormalizationRunner({
+      store,
+      namespace: "demo",
+      providers: [provider],
+    }).runOnce({
+      now: new Date("2026-08-04T16:00:01.000Z"),
+    });
+
+    const record = await store.transact(async (tx) => {
+      if (!tx.transports) {
+        throw new Error("missing transports");
+      }
+      return tx.transports.get({
+        namespace: "demo",
+        provider: "orders",
+        accountId: "acct_1",
+        eventId: "evt_lineage_bound",
+      });
+    });
+
+    expect(record?.lineage).toHaveLength(MAX_TRANSPORT_LINEAGE_ENTRIES);
+    expect(record?.lineageTruncated).toBe(true);
+
+    const projection = projectTransportEnvelope(record!);
+    expect(projection.lineage).toHaveLength(MAX_TRANSPORT_LINEAGE_ENTRIES);
+    expect(projection.lineageTruncated).toBe(true);
+    expect(JSON.stringify(projection)).not.toMatch(/ord_\d+|base64|payload/);
+  });
+
+  it("keeps slash-bearing adapter and binding ids as separate byIdentity keys", async () => {
+    const store = inMemoryRuntimeStore();
+    const first = {
+      ...sampleEnvelope("evt_slash_a"),
+      adapterId: "a/b",
+      bindingId: "c",
+    };
+    const second = {
+      ...sampleEnvelope("evt_slash_b"),
+      adapterId: "a",
+      bindingId: "b/c",
+    };
+
+    await acceptTransportEnvelope({
+      store,
+      namespace: "demo",
+      envelope: first,
+      now: new Date("2026-08-04T17:00:00.000Z"),
+    });
+    await acceptTransportEnvelope({
+      store,
+      namespace: "demo",
+      envelope: second,
+      now: new Date("2026-08-04T17:00:01.000Z"),
+    });
+
+    const stats = await transportStatistics({ store, namespace: "demo" });
+    const left = transportStatisticsIdentity("a/b", "c");
+    const right = transportStatisticsIdentity("a", "b/c");
+    expect(left).not.toBe(right);
+    expect(stats.byIdentity[left]?.accepted).toBe(1);
+    expect(stats.byIdentity[right]?.accepted).toBe(1);
+    expect(stats.total.accepted).toBe(2);
   });
 });

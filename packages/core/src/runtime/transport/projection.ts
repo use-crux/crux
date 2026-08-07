@@ -33,6 +33,12 @@ export interface RuntimeTransportEnvelopeProjection {
   readonly nextAttemptAt: string;
   readonly lastFailure?: RuntimeTransportEnvelopeRecord["lastFailure"];
   readonly lineage: readonly RuntimeTransportDeliveryLineageEntry[];
+  /**
+   * True when successful publications exceeded the retained lineage bound.
+   *
+   * @remarks Aggregate indicator only; never carries payloads or credentials.
+   */
+  readonly lineageTruncated: boolean;
   readonly configRefId: string;
   readonly configRefRevision: string;
   readonly targetSignalId: string;
@@ -73,6 +79,7 @@ export function projectTransportEnvelope(
         }),
       ),
     ),
+    lineageTruncated: record.lineageTruncated === true,
     configRefId: record.envelope.configRef.id,
     configRefRevision: record.envelope.configRef.revision,
     targetSignalId: record.envelope.target.signalId,

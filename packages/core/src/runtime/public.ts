@@ -68,6 +68,7 @@ export {
   transportStatisticsIdentity,
   transportStatisticsOwner,
   emptyTransportEnvelopeStats,
+  MAX_TRANSPORT_LINEAGE_ENTRIES,
 } from "./transport";
 
 export { createRuntimeProgram } from "./program";

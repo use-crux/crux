@@ -26,6 +26,7 @@ export type {
   RuntimeTransportEnvelopeRecord,
   RuntimeTransportEnvelopeState,
 } from "./records";
+export { MAX_TRANSPORT_LINEAGE_ENTRIES } from "./records";
 export type {
   AcceptRuntimeTransportEnvelopeInput,
   AcceptRuntimeTransportEnvelopeResult,

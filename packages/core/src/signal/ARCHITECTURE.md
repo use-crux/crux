@@ -157,7 +157,7 @@ inventing a second queue or worker:
 
 Identity remains `(namespace, provider, accountId, eventId)`. Statistics use
 the shared statistics ledger export under owner kind `transport`, with exact
-totals and first-64 `adapterId/bindingId` attribution. Terminal envelope
+totals and first-64 structured adapter/binding identity attribution. Terminal envelope
 retention is `RuntimeRetentionConfig.transportEnvelopes` (default `7d`) and
 only prunes `normalized` and `dead-letter` rows through ordinary maintenance.
 

@@ -111,8 +111,8 @@ export type StatisticsFact =
       /**
        * Bounded adapter/transport attribution key.
        *
-       * Prefer `adapterId/bindingId`. Never a raw payload, credential, or
-       * per-event secret.
+       * Prefer `transportStatisticsIdentity(adapterId, bindingId)`. Never a
+       * raw payload, credential, or per-event secret.
        */
       readonly identity: string;
       readonly outcome:
