@@ -46,7 +46,7 @@ import type {
   ExecutorStreamMeta,
 } from "../executor-types";
 import {
-  compileStructuredOutputForRequest,
+  compileResolvedStructuredOutputForRequest,
   CruxUnsupportedStructuredOutputError,
 } from "../structured-output";
 import type {
@@ -65,6 +65,7 @@ import {
   DEFAULT_MAX_STEPS,
   previewForDevtools,
   resolveToolInputCapabilities,
+  toolStructuredOutputTrace,
   withSkillActivationInput,
 } from "./shared";
 import { emitInputTokenEstimate } from "./media-token-budget";
@@ -100,6 +101,7 @@ import {
   prepareThreadInvocation,
   validateThreadReplay,
 } from "./thread-history";
+import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -216,7 +218,14 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
   let representationSelections: ReadonlyMap<string, number> | undefined;
+  let lastRequestReceipt:
+    | import("../../request/receipt/receipt").RequestReceipt
+    | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
+  const toolInputCapabilities = resolveToolInputCapabilities(
+    dialect,
+    modelInfo,
+  );
   try {
     lifecycle = createToolLifecycle({
       regime: "sdk",
@@ -231,8 +240,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       // Compile tool input schemas against the selected model's verified profile.
       // An unknown model (resolver present, returns undefined) fails before
       // transport for any schema'd tool rather than silently going permissive.
-      toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
+      toolInputCapabilities,
       promptId: prompt.id,
+      requestReceipt: () => lastRequestReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
@@ -313,9 +323,17 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   let structuredOutputSchema: JsonSchemaObject | undefined;
   let structuredDecodeManifest: StructuredOutputDecodeManifest | undefined;
   let structuredCanonicalSchema: JsonSchemaObject | undefined;
+  let structuredOutputTrace = toolStructuredOutputTrace(
+    toolInputCapabilities,
+    lifecycle.toolWireSchemas,
+  );
   if (resolved.schema) {
+    const resolution = dialect.structuredOutput?.resolve?.({
+      model: modelInfo,
+      usage: "output",
+    });
     const capabilities = dialect.structuredOutput?.capabilities(modelInfo);
-    if (!capabilities) {
+    if (!resolution && !capabilities) {
       stepBudget.dispose();
       await closeSources();
       throw new CruxUnsupportedStructuredOutputError(
@@ -325,14 +343,21 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         }" has no verified structured-output capability profile`,
       );
     }
-    const plan = compileStructuredOutputForRequest(
+    const plan = compileResolvedStructuredOutputForRequest(
       resolved.schema,
-      capabilities,
+      resolution ?? {
+        strategy: "inferred",
+        profileId: capabilities!.id,
+        capabilities: capabilities!,
+      },
       { diagnostics, promptId: prompt.id },
     );
     structuredOutputSchema = plan.outputSchema;
     structuredDecodeManifest = plan.decodeManifest;
     structuredCanonicalSchema = plan.canonicalSchema;
+    structuredOutputTrace = resolution
+      ? { strategy: resolution.strategy, profileId: resolution.profileId }
+      : { strategy: "inferred", profileId: capabilities!.id };
   }
   const cachedFinalizer =
     resolved.schema && structuredCanonicalSchema
@@ -437,6 +462,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       : undefined;
   const planStep = createSdkRequestStepPlanner({
     dialect,
+    onSealed: (receipt) => {
+      lastRequestReceipt = receipt;
+    },
     prompt,
     resolveOptions: () => boundaryResolveOpts,
     resolved: () => resolved,
@@ -590,6 +618,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             traceModel: modelInfo.modelId || undefined,
             resolved,
             outputMode: resolved.schema ? "object" : "text",
+            structuredOutput: structuredOutputTrace,
             timeout: args.timeout,
             ...(threadInvocation.override
               ? { threadHistoryOverride: threadInvocation.override }
@@ -697,6 +726,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       });
+      await refreshEffectJournalRetryLinks(meta?.requestReceipts ?? []);
       await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
       const threadCommit = await commitThreadInvocation(threadInvocation, {
         messages: guarded?.messages ?? messages,

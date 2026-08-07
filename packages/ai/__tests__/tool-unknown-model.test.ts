@@ -29,29 +29,30 @@ const toolPrompt = prompt({
   prompt: "Use a tool.",
 });
 
-describe("unknown AI SDK model — tool schemas fail before transport", () => {
-  it("rejects a Zod tool schema without calling the provider", async () => {
+describe("unknown AI SDK model tool schemas", () => {
+  it("passes a Zod tool schema through by default", async () => {
     const scripted = scriptedGateway({ generateText: [{ text: "unused" }] });
     const ai = createCruxAi({ gateway: scripted.gateway });
 
-    await expect(
-      ai.generate(toolPrompt, {
-        model: unknownModel,
-        tools: {
-          save: {
-            description: "save",
-            inputSchema: z.object({ q: z.string() }),
-            execute: async () => "ok",
-          },
-        } as never,
-      }),
-    ).rejects.toBeInstanceOf(CruxUnsupportedStructuredOutputError);
-    expect(scripted.calls.generateText).toHaveLength(0);
+    await ai.generate(toolPrompt, {
+      model: unknownModel,
+      tools: {
+        save: {
+          description: "save",
+          inputSchema: z.object({ q: z.string() }),
+          execute: async () => "ok",
+        },
+      } as never,
+    });
+    expect(scripted.calls.generateText).toHaveLength(1);
   });
 
   it("rejects a raw JSON Schema tool without calling the provider", async () => {
     const scripted = scriptedGateway({ generateText: [{ text: "unused" }] });
-    const ai = createCruxAi({ gateway: scripted.gateway });
+    const ai = createCruxAi({
+      gateway: scripted.gateway,
+      structuredOutput: { unknownModel: "reject" },
+    });
 
     await expect(
       ai.generate(toolPrompt, {
@@ -59,7 +60,10 @@ describe("unknown AI SDK model — tool schemas fail before transport", () => {
         tools: {
           save: {
             description: "save",
-            inputSchema: { type: "object", properties: { q: { type: "string" } } },
+            inputSchema: {
+              type: "object",
+              properties: { q: { type: "string" } },
+            },
             execute: async () => "ok",
           },
         } as never,

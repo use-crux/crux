@@ -307,9 +307,11 @@ is intentionally unsupported and rejects with
 
 Build a `@use-crux/ai` instance bound to a specific `SdkGateway`. The package-level exports are an instance created with the live gateway; reach for this when you need the test seam.
 
-| Field             | Type          | Description                                                           |
-| ----------------- | ------------- | --------------------------------------------------------------------- |
-| `options.gateway` | `SdkGateway?` | The AI SDK gateway to execute against. Defaults to `liveSdkGateway()` |
+| Field                                   | Type                                        | Description                                                            |
+| --------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| `options.gateway`                       | `SdkGateway?`                               | The AI SDK gateway to execute against. Defaults to `liveSdkGateway()`  |
+| `options.structuredOutput.capabilities` | `StructuredOutputCapabilities \| resolver?` | Explicit factory-scoped profile or resolver, before built-in inference |
+| `options.structuredOutput.unknownModel` | `'passthrough' \| 'reject'?`                | Unknown-model policy. Defaults to `passthrough`                        |
 
 **Returns:** `CruxAi`, `{ generate, stream, prepare, generateTextFn, generateObjectFn, embedding, retrievalModel, reranker }`
 
@@ -319,6 +321,13 @@ import { createCruxAi } from "@use-crux/ai";
 const ai = createCruxAi({ gateway: myScriptedGateway });
 const result = await ai.generate(myPrompt, { model, input });
 ```
+
+Built-in lowering is inferred only from direct OpenAI, Anthropic, Google, and
+Vertex provider identities. Aggregators such as OpenRouter and unknown models
+receive the canonical schema unchanged by default; Crux still validates the
+returned value with the authored schema. The same policy applies to
+`generate()`, `stream()`, schema-bearing tools, and this instance's
+`generateObjectFn`.
 
 ### `createAiSdkLoopRuntime(gateway)`
 

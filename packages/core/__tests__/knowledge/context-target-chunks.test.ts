@@ -16,7 +16,7 @@ const assertionTypes = {
 }
 
 describe('connected knowledge context vs target chunks', () => {
-  it('renders role labels for context chunks and pins the evidence schema to targets only', async () => {
+  it('renders role labels while the evidence schema stays generic', async () => {
     const prompts: string[] = []
     const schemas: z.ZodType<unknown>[] = []
     const model = assertionModel(prompts, schemas)
@@ -43,11 +43,11 @@ describe('connected knowledge context vs target chunks', () => {
 
     const schema = schemas[0]!
     expect(schema.safeParse({
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')] }],
+      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }],
     }).success).toBe(true)
     expect(schema.safeParse({
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')] }],
-    }).success).toBe(false)
+      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
+    }).success).toBe(true)
   })
 
   it('deterministic run rejects evidence pointing at a context-only chunk', async () => {
@@ -96,10 +96,10 @@ describe('connected knowledge context vs target chunks', () => {
     expect(result).toEqual([{ stageId: 'facts', status: 'ran', claims: 1, warnings: [] }])
   })
 
-  it('generated context-only citation repairs once then exhausts with context_only_evidence', async () => {
+  it('generated context-only citation repairs once then exhausts with local validation', async () => {
     const prompts: string[] = []
     const invalid = {
-      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')] }],
+      assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
     }
     const model = fixedAssertionModel([invalid, invalid], prompts)
     const stage = assertions({
@@ -123,17 +123,16 @@ describe('connected knowledge context vs target chunks', () => {
     expect(error).toBeInstanceOf(ValidationExhaustedError)
     expect(model.generateObject).toHaveBeenCalledTimes(2)
     // The authored diagnostic reaches the repair prompt so the model can self-correct.
-    expect(prompts[1]).toContain('evidence may only reference target chunks')
-    // The ultimate error surfaces the stable content-safe code.
+    expect(prompts[1]).toContain('invalid evidence — context-only chunk')
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'assertions.[0].evidence.[0]', depth: 4, code: 'context_only_evidence' },
+      { path: 'assertions.[0].evidence', depth: 3, code: 'custom' },
     ])
   })
 
   it('generated citation of a target chunk passes validation', async () => {
     const prompts: string[] = []
     const model = fixedAssertionModel([
-      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')] }] },
+      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',
@@ -168,7 +167,7 @@ describe('connected knowledge context vs target chunks', () => {
         prompts.push(prompt)
         const object = [
           null,
-          { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')] }] },
+          { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
         ][index++]
         return { object }
       }),
@@ -196,13 +195,14 @@ describe('connected knowledge context vs target chunks', () => {
     expect(model.generateObject).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps independent schema failures visible in the repair prompt alongside context-only diagnostics', async () => {
+  it('reports malformed structure through Zod before local evidence validation', async () => {
     const prompts: string[] = []
     const invalid = {
       assertions: [{
         type: 'fact',
         data: { value: 'x' },
         evidence: [chunkRef('c2')],
+        provenance: 'derived',
         stray: true,
       }],
     }
@@ -211,6 +211,7 @@ describe('connected knowledge context vs target chunks', () => {
         type: 'fact',
         data: { value: 'x' },
         evidence: [chunkRef('c1')],
+        provenance: 'derived',
         stray: true,
       }],
     }
@@ -233,22 +234,21 @@ describe('connected knowledge context vs target chunks', () => {
       chunks: sourceChunks,
     }).catch((cause: unknown) => cause)
 
-    // The repair prompt discloses BOTH the context-only citation and the stray key.
-    expect(prompts[1]).toContain('evidence may only reference target chunks')
+    // A malformed envelope does not reach the local evidence validator.
     expect(prompts[1]).toContain('assertions.0')
-    // The surviving independent failure reaches the exhausted error, not just the context issue.
-    expect((error as ValidationExhaustedError).issues.some(
-      (issue) => issue.path === 'assertions.[0]' && issue.code !== 'context_only_evidence',
-    )).toBe(true)
+    expect((error as ValidationExhaustedError).issues).toEqual([
+      { path: 'assertions.[0]', depth: 2, code: 'unrecognized_keys' },
+    ])
   })
 
-  it('keeps a co-located evidence defect visible in the repair prompt alongside the context-only diagnostic', async () => {
+  it('reports malformed evidence structure through Zod', async () => {
     const prompts: string[] = []
     const invalid = {
       assertions: [{
         type: 'fact',
         data: { value: 'x' },
         evidence: [{ kind: 'chunk', sourceId, chunkId: 'c2', stray: true }],
+        provenance: 'derived',
       }],
     }
     const fixed = {
@@ -256,6 +256,7 @@ describe('connected knowledge context vs target chunks', () => {
         type: 'fact',
         data: { value: 'x' },
         evidence: [{ kind: 'chunk', sourceId, chunkId: 'c1', stray: true }],
+        provenance: 'derived',
       }],
     }
     const model = fixedAssertionModel([invalid, fixed], prompts)
@@ -277,13 +278,11 @@ describe('connected knowledge context vs target chunks', () => {
       chunks: sourceChunks,
     }).catch((cause: unknown) => cause)
 
-    // The evidence slot's own strictness defect survives substitution as its own line.
-    expect(prompts[1]).toContain('evidence may only reference target chunks')
-    expect(prompts[1]).toMatch(/assertions\.0\.evidence\.0\n/)
-    // The surviving defect reaches the exhausted error under an unrelated code.
-    expect((error as ValidationExhaustedError).issues.some(
-      (issue) => issue.path === 'assertions.[0].evidence.[0]' && issue.code !== 'context_only_evidence',
-    )).toBe(true)
+    // The evidence slot's strictness defect is reported directly.
+    expect(prompts[1]).toContain('assertions.0.evidence.0')
+    expect((error as ValidationExhaustedError).issues).toEqual([
+      { path: 'assertions.[0].evidence.[0]', depth: 4, code: 'unrecognized_keys' },
+    ])
   })
 
   it('keeps smaller context visible beyond a dropped overflow neighbor', async () => {
@@ -468,7 +467,7 @@ describe('connected knowledge context vs target chunks', () => {
     const prompts: string[] = []
     // Model cites the (truncated) target chunk t1 — must remain admissible evidence.
     const model = fixedAssertionModel([
-      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('t1')] }] },
+      { assertions: [{ type: 'fact', data: { value: 'x' }, evidence: [chunkRef('t1')], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',

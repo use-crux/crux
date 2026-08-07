@@ -19,6 +19,7 @@ import type {
   RuntimeWakeFactoryInput,
 } from "../api/runtime-definition";
 import type { RuntimeRetentionConfig } from "../engine/retention";
+import type { RuntimeProgram } from "../program";
 
 /** Options for the in-process Node runtime composer. */
 export interface NodeRuntimeOptions<
@@ -40,6 +41,8 @@ export interface NodeRuntimeOptions<
   readonly autoStartMaintenance?: boolean;
   /** Retention policy for terminal Runtime Engine records. */
   readonly retention?: RuntimeRetentionConfig;
+  /** Immutable authored targets used for exact durable handler resolution. */
+  readonly program?: RuntimeProgram;
 }
 
 /**
@@ -72,6 +75,7 @@ export function node<TStore extends RuntimeStoreAdapter>(
       autoStart: options?.autoStartMaintenance ?? true,
     },
     ...(options?.retention ? { retention: options.retention } : {}),
+    ...(options?.program ? { program: options.program } : {}),
     createWake: createMicrotaskWake,
   });
 }

@@ -53,6 +53,42 @@ export function compileStructuredOutput(
   );
 }
 
+/** Compile without provider-specific validation or lowering. */
+export function compileStructuredOutputPassthrough(
+  authoredSchema: z.ZodType,
+  profileId = "passthrough",
+): StructuredOutputPlan {
+  return compileCanonicalSchemaPassthrough(
+    toCanonicalJsonSchema(authoredSchema),
+    profileId,
+  );
+}
+
+/** Preserve a caller-owned canonical schema, cloning it before freezing the plan. */
+export function compileCanonicalSchemaPassthrough(
+  schema: JsonSchemaObject,
+  profileId = "passthrough",
+): StructuredOutputPlan {
+  const canonicalSchema = structuredClone(schema);
+  const decodeManifest: StructuredOutputDecodeManifest = {
+    version: STRUCTURED_OUTPUT_MANIFEST_VERSION,
+    operations: [],
+  };
+  const fingerprint = structuredOutputFingerprint({
+    canonicalSchema,
+    capabilities: { id: profileId, passthrough: true },
+    manifest: decodeManifest,
+    loweringDecisions: [],
+  });
+  return deepFreeze({
+    canonicalSchema,
+    outputSchema: structuredClone(canonicalSchema),
+    decodeManifest,
+    diagnostics: [],
+    fingerprint,
+  });
+}
+
 /**
  * Compile a canonical JSON Schema (rather than an authored Zod type) against a
  * capability profile, sharing the exact lowering kernel: profile validation,

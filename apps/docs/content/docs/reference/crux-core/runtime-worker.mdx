@@ -24,14 +24,15 @@ interface RuntimeProgram {
   readonly manifestHash: string;
   readonly targets: readonly RuntimeProgramTarget[];
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
+  readonly effectTargets: readonly RuntimeEffectTarget[];
   readonly generationModels: readonly GenerationModel[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
 ```
 
-A provider-neutral declaration of the executable targets, statically declared
-generation models, and inert managed-transport bindings for one project with
-shallow structural immutability. `manifestHash` is the SHA-256 hash
+A provider-neutral declaration of executable targets, exact Effect recovery
+target identities, statically declared generation models, and managed-transport
+bindings for one project with shallow structural immutability. `manifestHash` is the SHA-256 hash
 of the canonical program declaration. It is distinct from the generated
 artifact hash that binds `program.ts` to the exact bytes of `manifest.json`.
 
@@ -59,6 +60,7 @@ interface CreateRuntimeProgramOptions {
         };
     }
   )[];
+  readonly effectTargets?: readonly RuntimeEffectTargetDefinition[];
   readonly generationModels?: readonly GenerationModel[];
   readonly transports: readonly RuntimeManagedTransportBinding[];
 }
@@ -71,12 +73,12 @@ declare function createRuntimeProgram(
 Purely validates, canonicalizes, hashes, and freezes one program. It performs no
 I/O or discovery. Generated code calls this same function.
 
-Validation rejects duplicate target or binding identities, bindings whose
-Signal target is absent from `targets`, and one adapter identity declared with
-incompatible providers. `generationModels` are ordered and fingerprinted into
-the manifest; Session construction rejects a selected model that is absent from
-this list with `GENERATION_MODEL_NOT_STATIC`. `transports` are represented in
-the program but the current execution worker leaves them inert.
+Validation rejects duplicate target or binding identities and one adapter
+identity declared with incompatible providers. Effect recovery targets must be
+recoverable definitions and are keyed by exact `(id, version)`. `generationModels`
+are ordered and fingerprinted into the manifest; Session construction rejects a
+selected model that is absent from this list with
+`GENERATION_MODEL_NOT_STATIC`.
 
 ```ts
 import { createRuntimeProgram, durableTask } from "@use-crux/core/runtime";
@@ -110,8 +112,12 @@ declare function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
 
 Creates and immediately starts a process-local worker. It resolves executable
 targets only from `program.targets`, disables composer-owned maintenance, and
-runs one immediate serial maintenance loop. `pollIntervalMs` defaults to the
-composer's maintenance interval, then 1000 ms, and must be positive and finite.
+runs one immediate serial maintenance loop. Each pass runs retention, claims
+interrupted Effect rollback scopes through the Effects store port, then drains
+managed transport envelopes. Effect recovery resolves only exact targets from
+`program.effectTargets` and executes the store-reconstructed reverse plan.
+`pollIntervalMs` defaults to the composer's maintenance interval, then 1000 ms,
+and must be positive and finite.
 
 `runtime` must be an in-process definition such as `node()`, not a host-bound
 definition. The low-level API can use any conforming Runtime store, but safe
@@ -163,8 +169,8 @@ The loader used by `crux runtime worker` is internal. It reads
 `.crux/generated/runtime/program.ts` and `manifest.json`, validates manifest
 version and shape, imports the program with an 8-second bound, compares the
 manifest byte hash, validates the exported program shape, and compares ordered
-target names and kinds. Users regenerate artifacts rather than calling this
-loader.
+target definitions and Effect `(id, version)` identities. Users regenerate
+artifacts rather than calling this loader.
 
 `loadRuntimeWorkerHost({ root, configPath? })` from
 `@use-crux/indexer/host/runtime` is a Crux-owned compiler/build host contract,

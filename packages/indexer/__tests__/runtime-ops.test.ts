@@ -417,6 +417,7 @@ async function runtimeOpsFixtureRoot(options: {
             fingerprint: "definition-runtime-ops-review",
           },
         ],
+        effectTargets: [],
         providers: [],
         transports: [],
         evals: [],

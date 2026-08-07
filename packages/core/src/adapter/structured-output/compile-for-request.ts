@@ -14,10 +14,34 @@ import type { z } from "zod";
 import type { StructuredOutputCapabilities } from "./capabilities";
 import type { StructuredOutputPlan } from "./plan";
 import { compileStructuredOutput } from "./compile";
+import { compileStructuredOutputPassthrough } from "./compile";
+import type { StructuredOutputResolution } from "./plan";
+import { CruxUnsupportedStructuredOutputError } from "./errors";
 
 /** Minimal diagnostics sink; the resolver `DiagnosticsPort` satisfies it. */
 export interface StructuredOutputDiagnosticsSink {
   warn(message: string, detail?: unknown): void;
+}
+
+export function compileResolvedStructuredOutputForRequest(
+  schema: z.ZodType,
+  resolution: StructuredOutputResolution,
+  context: StructuredOutputRequestContext,
+): StructuredOutputPlan {
+  if (resolution.strategy === "reject") {
+    throw new CruxUnsupportedStructuredOutputError(
+      resolution.profileId,
+      "unknown model policy is reject",
+    );
+  }
+  if (resolution.strategy === "passthrough") {
+    return compileStructuredOutputPassthrough(schema, resolution.profileId);
+  }
+  return compileStructuredOutputForRequest(
+    schema,
+    resolution.capabilities,
+    context,
+  );
 }
 
 /** Context surfaced alongside each emitted structured-output diagnostic. */

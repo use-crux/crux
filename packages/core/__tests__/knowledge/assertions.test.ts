@@ -167,12 +167,12 @@ describe('assertions', () => {
     await persistChunks(records, [chunk('doc-1', 'c1', 'Fact')])
     const model = countingModel([
       { assertions: [
-        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef] },
-        { type: 'fact', data: { value: 12 }, evidence: [chunkRef] },
-        { type: 'fact', data: { value: 'missing evidence' } },
+        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
+        { type: 'fact', data: { value: 12 }, evidence: [chunkRef], provenance: 'derived' },
+        { type: 'fact', data: { value: 'missing evidence' }, provenance: 'derived' },
       ] },
       { assertions: [
-        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef] },
+        { type: 'fact', data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
       ] },
     ])
     const stage = assertions({ id: 'facts', version: 1, types: schemas, model })
@@ -194,7 +194,7 @@ describe('assertions', () => {
     expect(model.generateObject).toHaveBeenCalledTimes(2)
   })
 
-  it('sends authored data and exact batch evidence constraints to the model', async () => {
+  it('sends authored data with generic evidence references to the model', async () => {
     const { records } = inMemoryStorage()
     const chunks = [
       chunk('doc-1', 'c1', 'Fact'),
@@ -215,15 +215,18 @@ describe('assertions', () => {
         type: 'price',
         data: { value: 'wrong schema' },
         evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
+        provenance: 'derived',
       }] }).success).toBe(false)
       expect(schema.safeParse({ assertions: [{
         type: 'fact',
         data: { value: 'unoffered evidence' },
         evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'not-offered' }],
-      }] }).success).toBe(false)
+        provenance: 'derived',
+      }] }).success).toBe(true)
       expect(schema.safeParse({ assertions: [{
         type: 'fact',
         data: { value: 'missing evidence' },
+        provenance: 'derived',
       }] }).success).toBe(false)
       return { object: valid } as never
     })

@@ -5,8 +5,9 @@ description: An effect rollback scope reference is missing, malformed, or unavai
 
 ## What failed
 
-`rollback()` received a value that is not a valid `EffectScopeRef`, or the
-in-process ledger could not match its `id` and `runId`.
+`rollback()` received a value that is not a valid `EffectScopeRef`, or neither
+the process ledger nor a configured Runtime Effects store could match its `id`
+and `runId`.
 
 This code is also used when a scope ref is passed to receipt-only recovery.
 
@@ -23,8 +24,9 @@ const scope = await rollbackOnError(async (boundary) => {
 await rollback(scope);
 ```
 
-Do not construct, edit, or mix scope refs from different runs. This release
-stores scopes in process, so a ref cannot be resolved after a restart.
+Do not construct, edit, or mix scope refs from different runs. Without a
+Runtime store, scopes are process-local. With a store, the same ref can
+reconstruct after restart when the durable scope row still exists.
 
 See [Roll back a boundary later](/docs/guides/effects/rollback-boundaries#roll-back-a-boundary-later)
-for the lifetime and use of `boundary.ref`.
+and [Durability and restarts](/docs/guides/effects/durability-and-restarts).

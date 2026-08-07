@@ -15,6 +15,7 @@ import type { RuntimeWakeDeliver } from '../engine/outbox'
 import type { RuntimeWakeRequestVerifier } from '../handler/verify'
 import type { RuntimeRetentionConfig } from '../engine/retention'
 import { createRuntimeError } from '../engine/errors'
+import type { RuntimeProgram } from '../program'
 
 /** Provenance of a Runtime Engine namespace resolved by a composer. */
 export type RuntimeNamespaceSource =
@@ -65,6 +66,8 @@ export interface InProcessRuntimeEngineDefinition<
   readonly maintenance?: RuntimeMaintenanceLoopOptions
   /** Retention policy for terminal Runtime Engine records. */
   readonly retention?: RuntimeRetentionConfig
+  /** Immutable authored target program available to durable execution. */
+  readonly program?: RuntimeProgram
   /** Current time source inherited by resolved runtime instances. */
   readonly now?: () => Date
   /** Work id generator inherited by resolved runtime instances. */

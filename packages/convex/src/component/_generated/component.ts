@@ -83,6 +83,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           Name
         >;
       };
+      composite_effects: {
+        run: FunctionReference<
+          "mutation",
+          "internal",
+          { input: any; operation: string },
+          any,
+          Name
+        >;
+      };
       deferred: {
         createIntent: FunctionReference<
           "mutation",

@@ -17,13 +17,17 @@ import type {
   RollbackOnErrorOptions,
   RollbackOptions,
 } from "../types";
-import { allocateEffectBoundaryId } from "./boundary-identity";
+import {
+  allocateEffectBoundaryId,
+  isAdmissionPreallocatedEffectId,
+} from "./boundary-identity";
 import { effectLedger } from "./ledger";
 import { registerNestedBoundaryUnit } from "./recovery-stack";
 import {
   runRollback,
   type RollbackExecution,
 } from "./run-rollback";
+import { persistDurableEffectScopeTransition } from "./ledger-durable";
 
 const effectBoundaryStates = new Map<string, EffectBoundaryState>();
 
@@ -79,19 +83,37 @@ export function runPassiveEffectBoundary<T>(
   existingRef?: EffectScopeRef,
   options?: PassiveEffectBoundaryOptions,
 ): Promise<T> {
-  const locatedScope =
-    existingRef?.kind === "effect.scope" &&
-    existingRef.runId === runId
-      ? effectLedger.getScope(existingRef.id)
+  const preallocated =
+    existingRef?.kind === "effect.scope" && existingRef.runId === runId
+      ? Object.freeze({
+          kind: "effect.scope" as const,
+          id: existingRef.id,
+          runId: existingRef.runId,
+        })
       : undefined;
+  const locatedScope = preallocated
+    ? effectLedger.getScope(preallocated.id)
+    : undefined;
   const existingScope =
-    existingRef &&
-    locatedScope?.ref.id === existingRef.id &&
-    locatedScope.ref.runId === existingRef.runId
+    preallocated &&
+    locatedScope?.ref.id === preallocated.id &&
+    locatedScope.ref.runId === preallocated.runId
       ? locatedScope
+      : undefined;
+  // Resume reuses a ledger match. Work/Session admission refs use stable
+  // `effect_<hash>` ids claimed before the first ledger entry. Other free
+  // snapshot ids still allocate through the collision-resistant path so a
+  // stale or colliding persisted identity cannot take over a live boundary.
+  const admitPreallocated =
+    preallocated &&
+    !locatedScope &&
+    !effectBoundaryStates.has(preallocated.id) &&
+    isAdmissionPreallocatedEffectId(preallocated.id)
+      ? preallocated
       : undefined;
   const ref =
     existingScope?.ref ??
+    admitPreallocated ??
     Object.freeze({
       kind: "effect.scope" as const,
       id: createEffectBoundaryId(existingRef?.id),
@@ -139,6 +161,7 @@ export function runPassiveEffectBoundary<T>(
           : undefined;
         if (!boundary.rollbackOperation && boundary.lifecycle === "open") {
           closeEffectBoundary(boundary);
+          await persistDurableEffectScopeTransition(boundary.ref.id);
         }
         if (parent) {
           registerNestedBoundaryUnit(
@@ -242,11 +265,13 @@ export function startEffectBoundaryRollback(
   updateBoundaryRecord(boundary, "rolling_back");
   const operation = (async () => {
     try {
+      await persistDurableEffectScopeTransition(boundary.ref.id);
       await waitForEffectBoundaryOperations(boundary);
       return await runRollback(boundary.ref, options);
     } finally {
       boundary.lifecycle = "completed";
       updateBoundaryRecord(boundary, "completed");
+      await persistDurableEffectScopeTransition(boundary.ref.id);
     }
   })();
   boundary.rollbackOperation = operation;

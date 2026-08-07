@@ -12,9 +12,10 @@ fn project_patch_events_chunks_fact_batches() {
     const DEFINITION_COUNT: usize = 205;
     const MAX_FACTS_PER_BATCH: usize = 100;
     // Baseline envelopes (definitions of other kinds, rules, producers, …) plus
-    // DEFINITION_COUNT context definitions. Signal provider tooling adds three
-    // baseline rule-catalog facts (73 → 76 remainder; 273 → 276 total).
-    const TOTAL_FACTS: usize = 276;
+    // DEFINITION_COUNT context definitions. The merged Signal + Session + Effect
+    // addressability rule catalog is 72 descriptors (71 from main + 1 Effect),
+    // so remainder is 77 and total is 277.
+    const TOTAL_FACTS: usize = 277;
 
     let definitions = (0..DEFINITION_COUNT)
         .map(|index| {
@@ -70,7 +71,7 @@ fn project_patch_events_chunks_fact_batches() {
         batches[2]["facts"].as_array().expect("batch facts").len(),
         expected_last_batch
     );
-    assert_eq!(expected_last_batch, 76);
+    assert_eq!(expected_last_batch, 77);
     assert_eq!(
         events.last().expect("phase done")["summary"]["factCount"],
         TOTAL_FACTS

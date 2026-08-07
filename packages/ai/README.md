@@ -16,6 +16,27 @@ pnpm add @use-crux/ai @use-crux/core ai@^6
 
 `ai` is a peer dependency (`^6.0.0`). Add a provider package (e.g. `@ai-sdk/openai`) for the models you call. `react` is an optional peer, required only for the `@use-crux/ai/stream` transport.
 
+## Structured-output capability routing
+
+Crux applies its built-in schema lowering only when the AI SDK model reports a
+direct OpenAI, Anthropic, Google, or Vertex provider. Unknown providers and
+aggregators such as OpenRouter receive the canonical schema unchanged by
+default; the authored validator still validates the result. Configure an
+isolated client with an explicit profile or resolver, or reject unknown models:
+
+```ts
+const ai = createCruxAi({
+  structuredOutput: {
+    capabilities: ({ model, usage }) => myProfiles[model.provider],
+    unknownModel: "reject",
+  },
+});
+```
+
+The setting applies to generation, streaming, schema-bearing tools, and the
+client's `generateObjectFn`. Strict provider profiles continue to reject schema
+shapes they cannot reversibly lower, including optional fields in union branches.
+
 ## Usage
 
 ```ts

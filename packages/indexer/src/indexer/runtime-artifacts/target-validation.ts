@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import type { RuntimeArtifactManifestTarget } from "@use-crux/core/runtime";
+import type {
+  RuntimeArtifactManifestEffectTarget,
+  RuntimeArtifactManifestTarget,
+} from "@use-crux/core/runtime";
 import ts from "typescript";
 import {
   RuntimeArtifactGenerationError,
@@ -11,7 +14,10 @@ import type { RuntimeArtifactFinding } from "./types";
 /** Verify that every discovered durable target remains a named value export. */
 export async function validateTargetExports(
   root: string,
-  targets: readonly RuntimeArtifactManifestTarget[],
+  targets: readonly (
+    | RuntimeArtifactManifestTarget
+    | RuntimeArtifactManifestEffectTarget
+  )[],
 ): Promise<void> {
   const byFile = new Map<string, Set<string>>();
   for (const target of targets) {

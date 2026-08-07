@@ -93,8 +93,9 @@ fn finalize_request_is_accepted_through_worker_path() {
         parsed.events[2]["patch"]["project"]["root"],
         "/workspace/acme"
     );
-    // Builtin rule-descriptor catalog includes the three Signal provider/transport rules.
-    const BUILTIN_RULE_DESCRIPTOR_FACTS: u64 = 71;
+    // Builtin catalog is the union of main Signal/Session rules and the Effect
+    // recovery-addressability rule.
+    const BUILTIN_RULE_DESCRIPTOR_FACTS: u64 = 72;
     let batch_facts = parsed.events[1]["facts"]
         .as_array()
         .expect("worker finalize emits one fact batch");

@@ -8,6 +8,12 @@ import {
   deferredDdlStatements,
 } from './ddl-deferred'
 import {
+  EFFECTS_POSTGRES_TABLES,
+  EFFECTS_REQUIRED_COLUMNS,
+  EFFECTS_REQUIRED_INDEXES,
+  effectsDdlStatements,
+} from './ddl-effects'
+import {
   SESSION_POSTGRES_TABLES,
   SESSION_REQUIRED_COLUMNS,
   SESSION_REQUIRED_INDEXES,
@@ -34,6 +40,7 @@ const TABLES = [
   'idle_counters',
   'results',
   ...DEFERRED_POSTGRES_TABLES,
+  ...EFFECTS_POSTGRES_TABLES,
   ...SESSION_POSTGRES_TABLES,
   ...TRANSPORT_POSTGRES_TABLES,
 ] as const
@@ -135,6 +142,7 @@ export const REQUIRED_COLUMNS: Readonly<
     'created_at',
   ],
   ...DEFERRED_REQUIRED_COLUMNS,
+  ...EFFECTS_REQUIRED_COLUMNS,
   ...SESSION_REQUIRED_COLUMNS,
   ...TRANSPORT_REQUIRED_COLUMNS,
 }
@@ -292,6 +300,7 @@ export function ddlStatements(schema: string): readonly string[] {
       created_at timestamptz NOT NULL
     )`,
     ...deferredDdlStatements(schema),
+    ...effectsDdlStatements(schema),
     ...sessionDdlStatements(schema),
     ...transportDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
@@ -417,6 +426,7 @@ export async function checkDdl(
     'idempotency_completed_at_idx',
     'results_namespace_created_at_idx',
     ...DEFERRED_REQUIRED_INDEXES,
+    ...EFFECTS_REQUIRED_INDEXES,
     ...SESSION_REQUIRED_INDEXES,
     ...TRANSPORT_REQUIRED_INDEXES,
   ]

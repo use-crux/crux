@@ -13,6 +13,7 @@ const guidePages = [
   "recovery-patterns",
   "rollback-boundaries",
   "ambiguity-and-reconciliation",
+  "durability-and-restarts",
 ];
 const guidePaths = guidePages.map((page) =>
   path.join(guideDir, `${page}.mdx`),
@@ -57,11 +58,13 @@ for (const required of [
   "## When not to use an effect",
   "rollback boundaries",
   "Ambiguity and reconciliation",
+  "Durability and restarts",
   "## Inspect effects in Devtools",
   "unanalyzable binding",
   "recovery.of",
   "effects ·",
   "Devtools is read-only for Effects",
+  "Runtime store",
 ]) {
   if (!guide.includes(required)) {
     throw new Error(`Effects guide is missing ${JSON.stringify(required)}`);
@@ -114,6 +117,30 @@ for (const required of [
   }
 }
 
+const durability = await readFile(guidePaths[4], "utf8");
+for (const required of [
+  "## Mode table",
+  "Runtime store",
+  "createRuntimeProgram",
+  "effectTargets",
+  "handler_unavailable",
+  "multiOperationTransactions",
+  "external",
+  "worker",
+  "prepared",
+  "unknown",
+  "reconcileEffect",
+  "effectEnvelopes",
+  "@use-crux/postgres",
+  "@use-crux/convex",
+]) {
+  if (!durability.includes(required)) {
+    throw new Error(
+      `Effects durability guide is missing ${JSON.stringify(required)}`,
+    );
+  }
+}
+
 for (let index = 0; index < guidePaths.length; index += 1) {
   const page = await readFile(guidePaths[index], "utf8");
   if (page.includes("—")) {
@@ -141,6 +168,18 @@ for (const optionsType of [
 ]) {
   if (!reference.includes(optionsType)) {
     throw new Error(`Effects reference is missing ${optionsType}`);
+  }
+}
+for (const required of [
+  "createRuntimeProgram",
+  "effectTargets",
+  "handler_unavailable",
+  "effectEnvelopes",
+]) {
+  if (!reference.includes(required)) {
+    throw new Error(
+      `Effects reference is missing durable surface ${JSON.stringify(required)}`,
+    );
   }
 }
 for (const page of guidePages.slice(1)) {

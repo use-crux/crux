@@ -15,7 +15,11 @@ import type {
   ModelInfo,
   SystemBlock,
 } from "@use-crux/core";
-import type { StructuredOutputCapabilities } from "@use-crux/core/adapter";
+import type {
+  StructuredOutputCapabilities,
+  StructuredOutputResolution,
+  StructuredOutputResolverContext,
+} from "@use-crux/core/adapter";
 import { resolveAiSdkNativeModel } from "./generation-model";
 
 /**
@@ -115,6 +119,45 @@ export function aiSdkStructuredCapabilities(
   return undefined;
 }
 
+export type AiSdkStructuredOutputResolver = (
+  context: StructuredOutputResolverContext,
+) => StructuredOutputCapabilities | undefined;
+
+export interface AiSdkStructuredOutputOptions {
+  readonly capabilities?:
+    | StructuredOutputCapabilities
+    | AiSdkStructuredOutputResolver;
+  readonly unknownModel?: "passthrough" | "reject";
+}
+
+export function createAiSdkStructuredOutputResolver(
+  options: AiSdkStructuredOutputOptions = {},
+): (context: StructuredOutputResolverContext) => StructuredOutputResolution {
+  return (context) => {
+    const explicit =
+      typeof options.capabilities === "function"
+        ? options.capabilities(context)
+        : options.capabilities;
+    if (explicit) {
+      return {
+        strategy: "explicit",
+        profileId: explicit.id,
+        capabilities: explicit,
+      };
+    }
+    const inferred = aiSdkStructuredCapabilities(context.model);
+    if (inferred)
+      return {
+        strategy: "inferred",
+        profileId: inferred.id,
+        capabilities: inferred,
+      };
+    return options.unknownModel === "reject"
+      ? { strategy: "reject", profileId: "ai-sdk.unknown" }
+      : { strategy: "passthrough", profileId: "ai-sdk.passthrough" };
+  };
+}
+
 /**
  * Extract provider and model ID from an AI SDK `LanguageModel`.
  *
@@ -140,40 +183,37 @@ export function extractModelInfo(model: LanguageModel): ModelInfo {
 /**
  * Detect whether a model targets Anthropic's API.
  *
- * Handles both direct Anthropic SDK usage (provider = 'anthropic') and
- * OpenRouter-routed Anthropic models (provider = 'openrouter',
- * modelId = 'anthropic/...').
+ * Trusts only the direct Anthropic provider identity. Aggregator model IDs do
+ * not identify the concrete endpoint that will receive the request.
  */
 export function isAnthropicModel(modelInfo: ModelInfo): boolean {
   return (
-    modelInfo.provider.startsWith("anthropic") ||
-    modelInfo.modelId.startsWith("anthropic/")
+    modelInfo.provider === "anthropic" ||
+    modelInfo.provider.startsWith("anthropic.")
   );
 }
 
-/** Detect OpenAI models, including AI Gateway/OpenRouter namespaced ids. */
+/** Detect a direct OpenAI provider identity. */
 export function isOpenAIModel(modelInfo: ModelInfo): boolean {
   return (
-    modelInfo.provider.startsWith("openai") ||
-    modelInfo.modelId.startsWith("openai/")
+    modelInfo.provider === "openai" || modelInfo.provider.startsWith("openai.")
   );
 }
 
 /** Detect Google Vertex models whose AI SDK provider options key is `vertex`. */
 export function isGoogleVertexModel(modelInfo: ModelInfo): boolean {
   return (
-    modelInfo.provider.startsWith("vertex") ||
-    modelInfo.provider.startsWith("google-vertex") ||
-    modelInfo.modelId.startsWith("vertex/")
+    modelInfo.provider === "vertex" ||
+    modelInfo.provider.startsWith("vertex.") ||
+    modelInfo.provider === "google-vertex" ||
+    modelInfo.provider.startsWith("google-vertex.")
   );
 }
 
-/** Detect Google Generative AI models, including Gateway namespaced ids. */
+/** Detect a direct Google Generative AI provider identity. */
 export function isGoogleModel(modelInfo: ModelInfo): boolean {
   return (
-    modelInfo.provider.startsWith("google") ||
-    modelInfo.modelId.startsWith("google/") ||
-    modelInfo.modelId.startsWith("gemini-")
+    modelInfo.provider === "google" || modelInfo.provider.startsWith("google.")
   );
 }
 

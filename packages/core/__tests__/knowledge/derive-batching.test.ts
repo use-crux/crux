@@ -157,8 +157,8 @@ describe('connected knowledge derive batching', () => {
     }
     const invalid = {
       assertions: [
-        { type: 'first', data: { value: 1 }, evidence: [chunkRef('c1')] },
-        { type: 'second', data: { value: 2 }, evidence: [chunkRef('c1')] },
+        { type: 'first', data: { value: 1 }, evidence: [chunkRef('c1')], provenance: 'derived' },
+        { type: 'second', data: { value: 2 }, evidence: [chunkRef('c1')], provenance: 'derived' },
       ],
     }
     const model = fixedAssertionModel([invalid, invalid])
@@ -327,7 +327,7 @@ function fixedAssertionModel(objects?: readonly unknown[], prompts: string[] = [
       return {
         object: objects?.[index++] ?? {
           assertions: chunkIdsFromPrompt(prompt).map((chunkId) =>
-            ({ type: 'fact', data: { value: chunkId }, evidence: [chunkRef(chunkId)] })),
+            ({ type: 'fact', data: { value: chunkId }, evidence: [chunkRef(chunkId)], provenance: 'derived' })),
         },
       }
     }),

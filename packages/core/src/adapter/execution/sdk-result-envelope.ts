@@ -27,6 +27,9 @@ export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
     ...(step.request !== undefined ? { request: step.request } : {}),
     content: step.content ?? [{ type: "text", text: step.text }],
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
+    ...(step.transportRetries !== undefined
+      ? { transportRetries: step.transportRetries }
+      : {}),
     ...(step.toolCalls.length > 0 ? { toolCalls: [...step.toolCalls] } : {}),
     finishReason: step.finishReason,
     responseId: undefined,

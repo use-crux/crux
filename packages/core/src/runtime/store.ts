@@ -22,6 +22,7 @@ import type { TimerId, WaiterId, WorkId } from "./ports/ids";
 import type { RuntimeStatePort } from "./ports/state";
 import type { RuntimeWork } from "./ports/work";
 import type { RuntimeWorkControlPort } from "./ports/work-control";
+import type { RuntimeEffectStorePort } from "./ports/effects";
 import type { RuntimeWaiter, WaiterPort } from "./ports/waiters";
 import type {
   RuntimePruneOptions,
@@ -234,6 +235,8 @@ export interface RuntimeStoreTransaction {
   readonly outbox: RuntimeOutboxPort;
   /** Durable invocation scopes and their staged named work. */
   readonly deferred: RuntimeDeferredStorePort;
+  /** Optional durable Effect records written only through the Effect ledger. */
+  readonly effects?: RuntimeEffectStorePort;
   /** Optional internal storage for atomically accepted Work-control commands. */
   readonly workControl?: RuntimeWorkControlPort;
   /** Optional transactional durable Agent Session identity and ingress records. */

@@ -23,6 +23,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("returns an SDK cache hit that omits provider steps", async () => {
+  const result = await generateCachedPair({
+    regime: "sdk",
+    kind: "text",
+    prompt: textPrompt("cache-hit-without-provider-steps"),
+    providerOutputs: ["cached text"],
+  });
+
+  expect(Object.hasOwn(result.second, "steps")).toBe(false);
+  expect(result.second._meta).toMatchObject({
+    semanticCache: { hit: true },
+  });
+});
+
 describe.each(regimes)("semantic cache generate safety — %s", (regime) => {
   it("accepts a valid cached text without another provider call", async () => {
     const result = await generateCachedPair({

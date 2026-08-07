@@ -84,8 +84,9 @@ const replaceSettings = effect(
 
 If capture fails, Crux records a preparation failure and does not call the
 executor. Keep captured state minimal because it can contain sensitive domain
-data. In this release it stays inside the in-process ledger and does not appear
-in observability or automatic evidence.
+data. Captured state stays inside the Effect ledger and, when JSON-safe, the
+configured Runtime store. It does not appear in observability or automatic
+evidence.
 
 ## Forward the idempotency keys
 
@@ -260,13 +261,14 @@ const chargeCustomer = effect(
 Do not bump the version for an internal refactor that preserves receipt and
 recovery compatibility. A version bump creates a new contract; it does not
 upgrade existing receipts. Keep the exact older definition available for as
-long as its receipts may need recovery. In this release those receipts live
-only for the current process, but the compatibility rule keeps the definition
-ready for durable runtimes later.
+long as its receipts may need recovery. With a Runtime store, declare that
+exact `(id, version)` on the restarted `RuntimeProgram` or recovery returns
+`handler_unavailable`.
 
 ## Related
 
 - [Effects overview](/docs/guides/effects)
 - [Rollback boundaries](/docs/guides/effects/rollback-boundaries)
 - [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [Durability and restarts](/docs/guides/effects/durability-and-restarts)
 - [Effects API reference](/docs/reference/crux-core/effect)

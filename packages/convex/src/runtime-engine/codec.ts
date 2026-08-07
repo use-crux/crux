@@ -223,6 +223,22 @@ export function decodeCompositeValue<T>(value: unknown): T {
   return decodeCompositeUnknown(value) as T
 }
 
+/** Encode a durable Effect payload without unsupported `undefined` fields. */
+export function encodeEffectValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(encodeEffectValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, encodeEffectValue(entry)]),
+  )
+}
+
+/** Decode a durable Effect payload returned by the component. */
+export function decodeEffectValue<T>(value: unknown): T {
+  return value as T
+}
+
 function decodeCompositeUnknown(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => decodeCompositeUnknown(item))

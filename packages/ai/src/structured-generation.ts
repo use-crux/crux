@@ -4,7 +4,7 @@
  * Core owns structured-output policy for SDK-loop adapters: validation retry,
  * corrective feedback, exhaustion errors, safety, interception, and result
  * shaping. This module owns the one AI SDK-specific operation core cannot
- * perform: exactly one `generateObject()` attempt with provider schema quirks,
+ * perform: exactly one `generateText()` + `Output.object()` attempt with provider schema quirks,
  * cheap JSON repair, and SDK validation errors translated into the
  * `StructuredAttempt` contract.
  *
@@ -22,6 +22,7 @@ import type {
 } from "@use-crux/core/adapter";
 import {
   compileStructuredOutput,
+  compileStructuredOutputPassthrough,
   CruxAdapterError,
   CruxUnsupportedStructuredOutputError,
   decodeStructuredValue,
@@ -33,6 +34,8 @@ import type { SdkLoopResultLike } from "./sdk-codec";
 import { createAiSdkCodec } from "./sdk-codec";
 import {
   aiSdkStructuredCapabilities,
+  createAiSdkStructuredOutputResolver,
+  type AiSdkStructuredOutputOptions,
   extractModelInfo,
 } from "./provider-profile";
 import { resolveAiSdkNativeModel } from "./generation-model";
@@ -66,7 +69,7 @@ interface StructuredFallbackTryOptions {
 }
 
 /**
- * Perform exactly one AI SDK `generateObject()` attempt.
+ * Perform exactly one AI SDK structured `generateText()` attempt.
  *
  * Validation and parse failures are returned as `status: 'invalid'` so core
  * can decide whether and how to retry. Provider, transport, and other runtime
@@ -84,7 +87,10 @@ export async function attemptStructuredGeneration(
     const invalid = await call.decodeError(error);
     if (invalid) return invalid;
     const normalized = mapAiSdkError(error);
-    if (normalized?.kind === "invalid-response") {
+    if (
+      normalized?.kind === "invalid-response" ||
+      normalized?.code === "ai-sdk.schema_rejected"
+    ) {
       throw new CruxAdapterError(normalized, { cause: error });
     }
     throw error;
@@ -102,7 +108,10 @@ export async function attemptStructuredGeneration(
  */
 export function createStructuredGenerateObjectFn(
   gateway: StructuredGateway,
+  structuredOutput: AiSdkStructuredOutputOptions = {},
 ): GenerateObjectFn {
+  const resolveCapabilities =
+    createAiSdkStructuredOutputResolver(structuredOutput);
   return async <T>(
     options: GenerateObjectOptions<T>,
   ): Promise<StructuredObjectResult<T>> => {
@@ -113,14 +122,23 @@ export function createStructuredGenerateObjectFn(
       // Core owns compilation and the authored parse even for this standalone
       // helper: compile a wire schema the SDK validates structurally, then
       // decode + authored-parse the wire value here.
-      const capabilities = aiSdkStructuredCapabilities(extractModelInfo(model));
-      if (!capabilities) {
+      const resolution = resolveCapabilities({
+        model: extractModelInfo(model),
+        usage: "output",
+      });
+      if (resolution.strategy === "reject") {
         throw new CruxUnsupportedStructuredOutputError(
-          "ai-sdk",
+          resolution.profileId,
           `the selected model has no verified structured-output capability profile`,
         );
       }
-      const plan = compileStructuredOutput(options.schema, capabilities);
+      const plan =
+        resolution.strategy === "passthrough"
+          ? compileStructuredOutputPassthrough(
+              options.schema,
+              resolution.profileId,
+            )
+          : compileStructuredOutput(options.schema, resolution.capabilities);
       const attempt = await attemptStructuredGeneration(
         gateway,
         requestFromGenerateObjectOptions(

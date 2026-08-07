@@ -7,10 +7,12 @@ import {
   exitOf,
   expireWorkLease,
   runApplication,
+  startApplication,
   startWorker as startWorkerProcess,
   stopWorker,
   waitForOwnership,
   type RuntimeWorkerProjectFixture,
+  type ApplicationProcess,
   type WorkerProcess,
 } from './runtime-worker-process-harness'
 import { startPostgresTestDatabase, type PostgresTestDatabase } from './test-database'
@@ -18,6 +20,7 @@ import { startPostgresTestDatabase, type PostgresTestDatabase } from './test-dat
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workerScript = resolve(packageRoot, '../local-workers/dist/runtime-worker.mjs')
 const activeChildren = new Set<WorkerProcess>()
+const activeApplications = new Set<ApplicationProcess>()
 let fixtureNumber = 0
 
 describe('generated Runtime worker process', () => {
@@ -38,6 +41,12 @@ describe('generated Runtime worker process', () => {
 
   afterEach(async () => {
     await Promise.all([...activeChildren].map(stopWorker))
+    for (const application of activeApplications) {
+      if (application.child.exitCode === null && application.child.signalCode === null) {
+        application.child.kill('SIGKILL')
+      }
+    }
+    await Promise.all([...activeApplications].map((application) => application.exited))
   })
 
   it('rejects stale artifacts and releases durable ownership on signal for restart', async () => {
@@ -138,6 +147,50 @@ describe('generated Runtime worker process', () => {
     await expect(exitOf(replacement)).resolves.toMatchObject({ code: 0 })
   }, 90_000)
 
+  it('recovers an interrupted Effect exactly once in a replacement worker process', async () => {
+    const fixture = await projectFixture(testDatabase().url, false, false, true)
+    roots.push(fixture.root)
+    const application = startApplication(fixture, 'interrupt', {
+      documentId: 'doc_effect_1',
+    })
+    activeApplications.add(application)
+    void application.exited.finally(() => activeApplications.delete(application))
+    await expect.poll(
+      () => access(fixture.recoveryReadyMarker).then(() => true, () => false),
+      { timeout: 30_000 },
+    ).toBe(true)
+
+    application.child.kill('SIGKILL')
+    await expect(application.exited).resolves.toMatchObject({ signal: 'SIGKILL' })
+
+    const worker = startWorker(fixture.root)
+    await waitForOwnership(worker)
+    await expect.poll(
+      () => access(fixture.recoveryEffectMarker).then(() => true, () => false),
+      { timeout: 30_000 },
+    ).toBe(true)
+    const scope = JSON.parse(await readFile(fixture.recoveryScopeMarker, 'utf8'))
+    const status = await runApplication(fixture, 'effect-status', { scope })
+    expect(status).toMatchObject({
+      scopeRecord: { scope: { status: 'completed' } },
+      receipts: expect.arrayContaining([
+        expect.objectContaining({
+          receipt: expect.objectContaining({ recovery: 'recovered' }),
+        }),
+      ]),
+      units: [{ unit: { status: 'recovered' } }],
+      reconciliationRequired: [],
+    })
+    expect(status.attempts).toEqual([
+      expect.objectContaining({ originalReceiptId: expect.any(String) }),
+    ])
+    expect((await readFile(fixture.recoveryCallsMarker, 'utf8')).trim().split('\n'))
+      .toHaveLength(1)
+
+    worker.child.kill('SIGTERM')
+    await expect(exitOf(worker)).resolves.toMatchObject({ code: 0 })
+  }, 90_000)
+
   function testDatabase(): PostgresTestDatabase {
     if (!database) throw new Error('PostgreSQL test database is unavailable.')
     return database
@@ -147,6 +200,7 @@ describe('generated Runtime worker process', () => {
     url: string,
     delayStartup = false,
     publicWork = false,
+    effectRecovery = false,
   ): Promise<RuntimeWorkerProjectFixture> {
     return createRuntimeWorkerProjectFixture({
       packageRoot,
@@ -154,6 +208,7 @@ describe('generated Runtime worker process', () => {
       fixtureNumber: fixtureNumber++,
       delayStartup,
       publicWork,
+      effectRecovery,
     })
   }
 })

@@ -14,6 +14,13 @@ let nextOccurrenceId = 0;
 let nextRecoveryAttemptId = 0;
 const nextIndexByIdentity = new Map<string, number>();
 
+/** Reset process-local occurrence identity to simulate a fresh process in tests. */
+export function resetEffectOccurrencesForTesting(): void {
+  nextOccurrenceId = 0;
+  nextRecoveryAttemptId = 0;
+  nextIndexByIdentity.clear();
+}
+
 /** Identity allocated before one custom effect executor runs. */
 export interface EffectOccurrence {
   /** Stable receipt identifier. */

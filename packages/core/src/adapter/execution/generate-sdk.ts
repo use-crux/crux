@@ -63,6 +63,7 @@ import {
   previewForDevtools,
   mergeDirectives,
   resolveToolInputCapabilities,
+  toolStructuredOutputTrace,
   withSkillActivationInput,
 } from "./shared";
 import { generateSdkStructured } from "./generate-sdk-structured";
@@ -74,7 +75,7 @@ import { systemMessagePrefixPatch } from "./system-prefix-patch";
 import { guardCorrectiveWriteback } from "../../safety/session-feedback-guard";
 import { replaceFinalAssistantOutput } from "./messages";
 import {
-  compileStructuredOutputForRequest,
+  compileResolvedStructuredOutputForRequest,
   CruxUnsupportedStructuredOutputError,
   type StructuredOutputPlan,
 } from "../structured-output";
@@ -99,6 +100,7 @@ import {
 import { attachThreadCommit } from "./thread-result";
 import { managedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
 import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
+import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -236,7 +238,14 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   resolved = sourceSession.resolved;
   selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   let representationSelections: ReadonlyMap<string, number> | undefined;
+  let lastRequestReceipt:
+    | import("../../request/receipt/receipt").RequestReceipt
+    | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
+  const toolInputCapabilities = resolveToolInputCapabilities(
+    dialect,
+    modelInfo,
+  );
   try {
     lifecycle = createToolLifecycle({
       regime: "sdk",
@@ -251,8 +260,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       // Compile tool input schemas against the selected model's verified profile.
       // An unknown model (resolver present, returns undefined) fails before
       // transport for any schema'd tool rather than silently going permissive.
-      toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
+      toolInputCapabilities,
       promptId: prompt.id,
+      requestReceipt: () => lastRequestReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
@@ -294,9 +304,17 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   const maxSteps =
     args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS;
   let structuredPlan: StructuredOutputPlan | undefined;
+  let structuredOutputTrace = toolStructuredOutputTrace(
+    toolInputCapabilities,
+    lifecycle.toolWireSchemas,
+  );
   if (resolved.schema) {
+    const resolution = dialect.structuredOutput?.resolve?.({
+      model: modelInfo,
+      usage: "output",
+    });
     const capabilities = dialect.structuredOutput?.capabilities(modelInfo);
-    if (!capabilities) {
+    if (!resolution && !capabilities) {
       throw new CruxUnsupportedStructuredOutputError(
         dialect.id,
         `the selected model "${
@@ -304,14 +322,21 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         }" has no verified structured-output capability profile`,
       );
     }
-    structuredPlan = compileStructuredOutputForRequest(
+    structuredPlan = compileResolvedStructuredOutputForRequest(
       resolved.schema,
-      capabilities,
+      resolution ?? {
+        strategy: "inferred",
+        profileId: capabilities!.id,
+        capabilities: capabilities!,
+      },
       {
         diagnostics: withDefaultResolverPorts().diagnostics,
         promptId: prompt.id,
       },
     );
+    structuredOutputTrace = resolution
+      ? { strategy: resolution.strategy, profileId: resolution.profileId }
+      : { strategy: "inferred", profileId: capabilities!.id };
   }
   const cachedFinalizer =
     resolved.schema && structuredPlan
@@ -333,6 +358,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
   const planStep = createSdkRequestStepPlanner({
     dialect,
+    onSealed: (receipt) => {
+      lastRequestReceipt = receipt;
+    },
     prompt,
     resolveOptions: () => boundaryResolveOpts,
     resolved: () => resolved,
@@ -532,6 +560,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             provider: modelInfo.provider || dialect.id,
             resolved,
             outputMode: resolved.schema ? "object" : "text",
+            structuredOutput: structuredOutputTrace,
             timeout: args.timeout,
             ...(threadInvocation.override
               ? { threadHistoryOverride: threadInvocation.override }
@@ -568,6 +597,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           }
         },
         async (result) => {
+          await refreshEffectJournalRetryLinks(
+            (result.steps ?? []).flatMap((step) =>
+              step.request ? [step.request] : [],
+            ),
+          );
           const threadCommit = await checkpointAndCommitManagedGeneration(
             args,
             threadInvocation,

@@ -1053,6 +1053,42 @@
       "title": "Irreversible Effect is inside a required-recovery boundary"
     },
     {
+      "category": "runtime",
+      "confidence": "high",
+      "description": "A recoverable Effect used in a statically known required-recovery boundary is not exported while Runtime is configured.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/effect-recovery-not-runtime-addressable",
+      "fidelity": "safe",
+      "fixes": [
+        {
+          "command": "crux runtime generate",
+          "description": "Move the Effect to a top-level exported const and regenerate Runtime artifacts.",
+          "kind": "manual",
+          "title": "Export the Effect definition"
+        }
+      ],
+      "id": "effect.recovery_not_runtime_addressable",
+      "impact": "Recovery after restart returns handler_unavailable because the authored definition cannot be included in the Runtime program.",
+      "maturity": "preview",
+      "phase": "index",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "rationale": "Durable recovery resolves exact Effect definitions from immutable Runtime program targets, and generated entries can only import named exports.",
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "severity": "error",
+      "source": "builtin",
+      "suppression": {
+        "directive": "// crux-lint-disable-next-line effect.recovery_not_runtime_addressable -- reason",
+        "scope": "next-line",
+        "supported": true
+      },
+      "title": "Effect recovery is not Runtime-addressable"
+    },
+    {
       "category": "safety",
       "confidence": "high",
       "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",

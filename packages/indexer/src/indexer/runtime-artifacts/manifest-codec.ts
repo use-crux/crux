@@ -28,6 +28,7 @@ export function decodeRuntimeArtifactManifest(
       "version",
       "evalPrivacyFingerprint",
       "targets",
+      "effectTargets",
       "providers",
       "transports",
       "evals",
@@ -35,6 +36,8 @@ export function decodeRuntimeArtifactManifest(
     typeof value.evalPrivacyFingerprint !== "string" ||
     !Array.isArray(value.targets) ||
     !value.targets.every(isTarget) ||
+    !Array.isArray(value.effectTargets) ||
+    !value.effectTargets.every(isEffectTarget) ||
     !Array.isArray(value.providers) ||
     !value.providers.every(isProvider) ||
     !Array.isArray(value.transports) ||
@@ -66,6 +69,19 @@ function isTarget(value: unknown): boolean {
     typeof value.export === "string" &&
     typeof value.definitionId === "string" &&
     typeof value.fingerprint === "string"
+  );
+}
+
+
+function isEffectTarget(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["id", "version", "module", "export"]) &&
+    typeof value.id === "string" &&
+    typeof value.version === "number" &&
+    Number.isFinite(value.version) &&
+    typeof value.module === "string" &&
+    typeof value.export === "string"
   );
 }
 

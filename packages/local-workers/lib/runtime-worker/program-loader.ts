@@ -112,6 +112,9 @@ function isRuntimeProgram(value: unknown): value is RuntimeProgram {
     'targetDefinitions' in value &&
     Array.isArray(value.targetDefinitions) &&
     value.targetDefinitions.every(isRuntimeTargetDefinition) &&
+    'effectTargets' in value &&
+    Array.isArray(value.effectTargets) &&
+    value.effectTargets.every(isRuntimeEffectTarget) &&
     'providers' in value &&
     Array.isArray(value.providers) &&
     'transports' in value &&
@@ -136,9 +139,18 @@ function programTargetsMatchManifest(
     definitionId: target.definitionId,
     fingerprint: target.fingerprint,
   }))
+  const actualEffects = program.effectTargets.map(({ id, version }) => ({
+    id,
+    version,
+  }))
+  const expectedEffects = manifest.effectTargets.map(({ id, version }) => ({
+    id,
+    version,
+  }))
   return (
     JSON.stringify(actual) === JSON.stringify(expected) &&
-    JSON.stringify(actualDefinitions) === JSON.stringify(expectedDefinitions)
+    JSON.stringify(actualDefinitions) === JSON.stringify(expectedDefinitions) &&
+    JSON.stringify(actualEffects) === JSON.stringify(expectedEffects)
   )
 }
 
@@ -247,6 +259,17 @@ function isRuntimeTargetDefinition(value: unknown): boolean {
     typeof value.definitionId === 'string' &&
     'fingerprint' in value &&
     typeof value.fingerprint === 'string'
+  )
+}
+
+function isRuntimeEffectTarget(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'version' in value &&
+    typeof value.version === 'number'
   )
 }
 

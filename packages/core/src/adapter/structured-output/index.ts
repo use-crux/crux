@@ -40,8 +40,21 @@ export {
 } from "./identity";
 export type { StructuredOutputFingerprintInput } from "./identity";
 export { decodeStructuredValue } from "./decode";
-export { compileCanonicalSchema, compileStructuredOutput } from "./compile";
-export { compileStructuredOutputForRequest } from "./compile-for-request";
+export {
+  compileCanonicalSchema,
+  compileCanonicalSchemaPassthrough,
+  compileStructuredOutput,
+  compileStructuredOutputPassthrough,
+} from "./compile";
+export type {
+  StructuredOutputResolution,
+  StructuredOutputResolverContext,
+  StructuredOutputStrategy,
+} from "./plan";
+export {
+  compileResolvedStructuredOutputForRequest,
+  compileStructuredOutputForRequest,
+} from "./compile-for-request";
 export type {
   StructuredOutputDiagnosticsSink,
   StructuredOutputRequestContext,

@@ -5,6 +5,7 @@ import type { WorkId } from "../ports/ids";
 import type { RuntimeWakeDeliver } from "../engine/outbox";
 import type { RuntimeLeaseExtensionOptions } from "../engine/kernel";
 import type { RuntimeTargetMap } from "../engine/kernel";
+import type { RuntimeProgram } from "../program";
 import { createEvalExecuteTarget, EVAL_EXECUTE_TARGET_ID } from "./target";
 import type {
   CreateEvalHostOptions,
@@ -35,6 +36,8 @@ export function createResolvedEvalHost<TStore extends EvalHostStore>(
     readonly leaseExtension?: false | RuntimeLeaseExtensionOptions;
     /** Additional generated Runtime targets deployed beside the Eval executor. */
     readonly targets?: RuntimeTargetMap;
+    /** Immutable authored target program deployed beside the Eval executor. */
+    readonly program?: RuntimeProgram;
   },
 ): ResolvedEvalHost<TStore> {
   assertEvalHostEntry(options);
@@ -53,6 +56,7 @@ export function createResolvedEvalHost<TStore extends EvalHostStore>(
       ...options.targets,
       [EVAL_EXECUTE_TARGET_ID]: target,
     },
+    program: options.program ?? options.runtime.program,
     newWorkId: () => `eval-host-internal:${++generatedId}` as WorkId,
     now,
     leaseExtension: options.leaseExtension,

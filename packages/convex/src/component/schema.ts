@@ -317,4 +317,33 @@ export default defineSchema({
   })
     .index('by_intent', ['namespace', 'intentId'])
     .index('by_scope_state', ['namespace', 'scopeId', 'state']),
+
+  runtimeEffectRecords: defineTable({
+    namespace: v.string(),
+    kind: v.string(),
+    recordId: v.string(),
+    boundaryId: v.string(),
+    record: v.any(),
+    revision: v.number(),
+    fenceToken: v.optional(v.string()),
+    recoveryStatus: v.optional(v.string()),
+    recoveryLeaseExpiresAt: v.optional(v.number()),
+    retentionMode: v.optional(v.string()),
+    retentionAt: v.optional(v.number()),
+  })
+    .index('by_identity', ['namespace', 'kind', 'recordId'])
+    .index('by_boundary_kind', ['namespace', 'boundaryId', 'kind'])
+    .index('by_recovery', [
+      'namespace',
+      'kind',
+      'recoveryStatus',
+      'recoveryLeaseExpiresAt',
+    ])
+    .index('by_retention', [
+      'namespace',
+      'kind',
+      'retentionMode',
+      'retentionAt',
+    ])
+    .index('by_retention_global', ['kind', 'retentionMode', 'retentionAt']),
 })

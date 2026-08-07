@@ -2,6 +2,10 @@
   "nativeParityOmittedRules": [
     {
       "reason": "Requires loaded crux.config.ts runtime state, which is not part of native lint fact finalization.",
+      "ruleId": "effect.recovery_not_runtime_addressable"
+    },
+    {
+      "reason": "Requires loaded crux.config.ts runtime state, which is not part of native lint fact finalization.",
       "ruleId": "runtime.missing_runtime_config"
     }
   ],

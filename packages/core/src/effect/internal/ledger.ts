@@ -14,6 +14,7 @@ import type {
   RecoveryUnitRecord,
 } from "../receipt-types";
 import type { EffectResource } from "../types";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 import type {
   RecoveryHandlerInvocation,
   RecoveryOperationResult,
@@ -25,8 +26,15 @@ import {
   commitLedgerReconciliation,
   type LedgerReconciliation,
   type ReconciliationAudit,
+  type ReconciliationCommit,
   type ReconciliationLedgerState,
+  prepareLedgerReconciliation,
 } from "./reconcile";
+import type { DurableEffectScopeSnapshot } from "./durable-records";
+import type { DurableEffectLedgerBinding } from "./durable-binding";
+import { restoreDurableLedgerSnapshot } from "./ledger-restore";
+import { assertLedgerReceiptTransition } from "./durable-state-machine";
+import { persistDurableEffectReconciliation } from "./durable-recovery";
 
 /** Fields required to allocate a preparing receipt. */
 export interface EffectReceiptInit {
@@ -45,6 +53,14 @@ export interface EffectReceiptInit {
   readonly runId?: string;
   /** Canonical observability span identifier. */
   readonly spanId?: string;
+  /** Containing tool-call identifier. */
+  readonly toolCallId?: string;
+  /** Sealed provider-request identifier. */
+  readonly requestId?: string;
+  /** Evidence reference for the sealed request plan. */
+  readonly requestPlanRef?: EvidenceArtifactRef;
+  /** Retry count inspected from the sealed request receipt. */
+  readonly requestRetryCount?: number;
   /** Initial recovery availability. */
   readonly recovery: RecoveryAvailability;
   readonly startedAt: number;
@@ -71,7 +87,11 @@ export interface ReceiptTransition {
 export interface EffectLedger {
   createReceipt(init: EffectReceiptInit): EffectReceipt;
   transition(receiptId: string, patch: ReceiptTransition): EffectReceipt;
-  reconcile(command: LedgerReconciliation): EffectReceipt;
+  linkToolOutcome(receiptId: string, ref: EvidenceArtifactRef): EffectReceipt;
+  linkRequestRetryCount(receiptId: string, count: number): EffectReceipt;
+  prepareReconciliation(command: LedgerReconciliation): ReconciliationCommit;
+  persistReconciliation(change: ReconciliationCommit): Promise<void>;
+  commitReconciliation(change: ReconciliationCommit): EffectReceipt;
   putEnvelope(envelope: StoredRecoveryEnvelope): void;
   registerScope(scope: EffectScopeRecord): void;
   registerUnit(boundaryId: string, unit: RegisteredRecoveryUnit): void;
@@ -90,6 +110,10 @@ export interface EffectLedger {
   reconciliationsFor(receiptId: string): readonly ReconciliationAudit[];
   unitsFor(boundaryId: string): readonly RecoveryUnitRecord[];
   stackFor(boundaryId: string): readonly RecoveryStackEntry[];
+  restoreDurableSnapshot(
+    snapshot: DurableEffectScopeSnapshot,
+    binding?: DurableEffectLedgerBinding,
+  ): void;
 }
 
 const receipts = new Map<string, EffectReceipt>();
@@ -99,6 +123,17 @@ const units = new Map<string, RegisteredRecoveryUnit>();
 const unitIdsByBoundary = new Map<string, string[]>();
 const stacksByBoundary = new Map<string, RecoveryStackEntry[]>();
 const reconciliationAudits = new Map<string, ReconciliationAudit[]>();
+
+/** Clear process-local state to simulate a fresh process in tests. */
+export function resetEffectLedgerForTesting(): void {
+  receipts.clear();
+  envelopes.clear();
+  scopes.clear();
+  units.clear();
+  unitIdsByBoundary.clear();
+  stacksByBoundary.clear();
+  reconciliationAudits.clear();
+}
 
 const reconciliationState: ReconciliationLedgerState = {
   getReceipt: (id) => receipts.get(id),
@@ -121,13 +156,6 @@ const reconciliationState: ReconciliationLedgerState = {
   },
 };
 
-const terminalOutcomes = new Set<EffectOutcome>([
-  "succeeded",
-  "failed",
-  "cancelled",
-  "unknown",
-]);
-
 /** Default in-memory ledger used by in-process effects. */
 export const effectLedger: EffectLedger = {
   createReceipt(init) {
@@ -149,6 +177,14 @@ export const effectLedger: EffectLedger = {
       ...(init.parentReceiptId === undefined ? {} : { parentReceiptId: init.parentReceiptId }),
       ...(init.runId === undefined ? {} : { runId: init.runId }),
       ...(init.spanId === undefined ? {} : { spanId: init.spanId }),
+      ...(init.toolCallId === undefined ? {} : { toolCallId: init.toolCallId }),
+      ...(init.requestId === undefined ? {} : { requestId: init.requestId }),
+      ...(init.requestPlanRef === undefined
+        ? {}
+        : { requestPlanRef: init.requestPlanRef }),
+      ...(init.requestRetryCount === undefined
+        ? {}
+        : { requestRetryCount: init.requestRetryCount }),
       attemptCount: 1,
       outcome: "preparing",
       recovery: init.recovery,
@@ -164,7 +200,7 @@ export const effectLedger: EffectLedger = {
     if (!current) {
       throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
     }
-    assertTransition(current.outcome, patch.outcome);
+    assertLedgerReceiptTransition(current.outcome, patch.outcome);
     const next: EffectReceipt = Object.freeze({
       ...current,
       outcome: patch.outcome,
@@ -186,8 +222,52 @@ export const effectLedger: EffectLedger = {
     return next;
   },
 
-  reconcile(command) {
-    return commitLedgerReconciliation(command, reconciliationState);
+  linkToolOutcome(receiptId, ref) {
+    const current = receipts.get(receiptId);
+    if (!current) {
+      throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
+    }
+    if (current.toolOutcomeRef) {
+      if (current.toolOutcomeRef.id !== ref.id) {
+        throw new TypeError(
+          `Effect receipt \`${receiptId}\` already links another tool outcome.`,
+        );
+      }
+      return current;
+    }
+    const next = Object.freeze({ ...current, toolOutcomeRef: ref });
+    receipts.set(receiptId, next);
+    return next;
+  },
+
+  linkRequestRetryCount(receiptId, count) {
+    const current = receipts.get(receiptId);
+    if (!current) {
+      throw new TypeError(`Effect receipt \`${receiptId}\` was not found.`);
+    }
+    if ((current.requestRetryCount ?? 0) >= count) return current;
+    const next = Object.freeze({ ...current, requestRetryCount: count });
+    receipts.set(receiptId, next);
+    return next;
+  },
+
+  prepareReconciliation(command) {
+    return prepareLedgerReconciliation(command, reconciliationState);
+  },
+
+  persistReconciliation(change) {
+    return persistDurableEffectReconciliation({
+      getReceipt: effectLedger.getReceipt,
+      getEnvelope: effectLedger.getEnvelope,
+      getUnit: effectLedger.getUnit,
+      getScope: effectLedger.getScope,
+      stackFor: effectLedger.stackFor,
+      restore: effectLedger.restoreDurableSnapshot,
+    }, change);
+  },
+
+  commitReconciliation(change) {
+    return commitLedgerReconciliation(change, reconciliationState);
   },
 
   putEnvelope(envelope) {
@@ -201,7 +281,10 @@ export const effectLedger: EffectLedger = {
   registerUnit(boundaryId, unit) {
     units.set(unit.id, unit);
     const ids = unitIdsByBoundary.get(boundaryId) ?? [];
-    unitIdsByBoundary.set(boundaryId, [...ids, unit.id]);
+    unitIdsByBoundary.set(
+      boundaryId,
+      ids.includes(unit.id) ? ids : [...ids, unit.id],
+    );
   },
 
   appendStackEntry(boundaryId, entry) {
@@ -267,6 +350,16 @@ export const effectLedger: EffectLedger = {
   stackFor(boundaryId) {
     return stacksByBoundary.get(boundaryId) ?? [];
   },
+  restoreDurableSnapshot(snapshot, binding) {
+    restoreDurableLedgerSnapshot(snapshot, {
+      receipts,
+      envelopes,
+      scopes,
+      units,
+      unitIdsByBoundary,
+      stacksByBoundary,
+    }, binding);
+  },
 };
 
 function discardPreparedUnit(unit: RegisteredRecoveryUnit): void {
@@ -286,20 +379,5 @@ function discardPreparedUnit(unit: RegisteredRecoveryUnit): void {
       ...scope,
       unitIds: scope.unitIds.filter((id) => id !== unit.id),
     }));
-  }
-}
-
-function assertTransition(
-  from: EffectOutcome,
-  to: Exclude<EffectOutcome, "preparing">,
-): void {
-  const legal =
-    (from === "preparing" && to === "running") ||
-    (from === "preparing" && to === "failed") ||
-    (from === "running" && terminalOutcomes.has(to));
-  if (!legal) {
-    throw new TypeError(
-      `Illegal effect receipt transition from \`${from}\` to \`${to}\`.`,
-    );
   }
 }

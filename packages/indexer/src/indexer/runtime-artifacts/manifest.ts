@@ -2,6 +2,7 @@ import { relative } from "node:path";
 import type { ProjectDefinition } from "@use-crux/core/project-index";
 import type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestEffectTarget,
   RuntimeArtifactManifestProvider,
   RuntimeArtifactManifestTarget,
   RuntimeArtifactManifestTransport,
@@ -34,6 +35,9 @@ export function manifestPlanFromDefinitions(input: {
 } {
   const targets = input.definitions.flatMap((definition) =>
     targetFromDefinition(input.root, definition),
+  );
+  const effectTargets = input.definitions.flatMap((definition) =>
+    effectTargetFromDefinition(input.root, definition),
   );
   const providers = input.definitions.flatMap((definition) =>
     providerFromDefinition(input.root, definition),
@@ -80,7 +84,16 @@ export function manifestPlanFromDefinitions(input: {
             compareCodepoint(a.kind, b.kind),
         ),
       ),
-      providers: Object.freeze(
+      effectTargets: Object.freeze(
+        [...effectTargets].sort(
+          (a, b) =>
+            compareCodepoint(a.id, b.id) ||
+            a.version - b.version ||
+            compareCodepoint(a.module, b.module) ||
+            compareCodepoint(a.export, b.export),
+        ),
+      ),
+            providers: Object.freeze(
         [...providers].sort((a, b) => compareCodepoint(a.id, b.id)),
       ),
       transports: Object.freeze(
@@ -90,6 +103,49 @@ export function manifestPlanFromDefinitions(input: {
     }),
     findings: Object.freeze(findings),
   });
+}
+
+
+function effectTargetFromDefinition(
+  root: string,
+  definition: ProjectDefinition,
+): readonly RuntimeArtifactManifestEffectTarget[] {
+  if (definition.kind !== "effect") return [];
+  const metadata = definition.metadata;
+  const facts =
+    metadata?.facts && typeof metadata.facts === "object"
+      ? (metadata.facts as Record<string, unknown>)
+      : undefined;
+  const id = typeof facts?.effectId === "string" ? facts.effectId : undefined;
+  const version =
+    typeof facts?.version === "number" && Number.isFinite(facts.version)
+      ? facts.version
+      : undefined;
+  const recoverable = facts?.recoverable === true;
+  const exported = metadata?.exported === true;
+  const exportName =
+    typeof metadata?.exportName === "string"
+      ? metadata.exportName
+      : undefined;
+  const file = definition.source?.file;
+  if (
+    !recoverable ||
+    !exported ||
+    !id ||
+    version === undefined ||
+    !exportName ||
+    !file
+  ) {
+    return [];
+  }
+  return [
+    {
+      id,
+      version,
+      module: `./${relative(root, file).replace(/\\/g, "/")}`,
+      export: exportName,
+    },
+  ];
 }
 
 /** Compare manifest target names with target ids found in non-terminal runtime store rows. */

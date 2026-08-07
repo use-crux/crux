@@ -4,6 +4,7 @@ import type {
   ResolvedRuntimeEngine,
   RuntimeHandlerTarget,
   RuntimeTargetRuntimeRef,
+  RuntimeProgram,
   WakeEnvelope,
 } from '@use-crux/core/runtime'
 import { bindHostRuntime, normalizeRuntimeHandlerTargets } from '@use-crux/core/runtime'
@@ -49,6 +50,8 @@ export interface CreateConvexRuntimeTargetExecutorOptions extends Omit<
 > {
   /** Exported Convex `flow()` handles, core `flow()` handles, and `durableTask()` targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
+  /** Immutable authored target program available during execution. */
+  readonly program?: RuntimeProgram
 }
 
 /** Create the generated Node action that executes Convex runtime target modules. */
@@ -68,6 +71,7 @@ export function createConvexRuntimeTargetExecutor(
       store: convexRuntimeStore({ ctx, component: options.component }),
       namespace: options.namespace,
       targets,
+      ...(options.program ? { program: options.program } : {}),
       newWorkId: options.newWorkId ?? createConvexWorkIdGenerator(),
       leaseExtension: false,
       createWake: () => async (envelope) => {
