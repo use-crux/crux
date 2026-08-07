@@ -7,7 +7,7 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  * Cache epochs are intentional invalidation levers for compiler behavior that is not captured by
  * source/config hashes or structured dependency identities.
  */
-export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v95";
+export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v96";
 /**
  * Semantic v51 combines Session Flow targets (v50: canonical `flow` export
  * identity, subscription lineage, observed public method usage) with main's
