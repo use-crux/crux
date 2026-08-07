@@ -96,6 +96,36 @@ export interface CruxSourceFacts {
   readonly location?: CruxSourceLocation
 }
 
+/** An exact half-open range within a page part's content. */
+export interface CruxIngestPageBlockSourceRange {
+  readonly start: number
+  readonly end: number
+}
+
+/** Provider-neutral narrative content nested beneath a page part. */
+export interface CruxIngestPageTextBlock {
+  readonly id: string
+  readonly kind: 'text'
+  readonly role: 'heading' | 'paragraph' | 'list' | 'code' | 'other'
+  readonly content: string
+  readonly headingPath?: readonly string[]
+  readonly sourceRange?: CruxIngestPageBlockSourceRange
+}
+
+/** Provider-neutral tabular content nested beneath a page part. */
+export interface CruxIngestPageTableBlock {
+  readonly id: string
+  readonly kind: 'table'
+  readonly content: string
+  readonly rows: readonly (readonly string[])[]
+  readonly columns?: readonly string[]
+  readonly headingPath?: readonly string[]
+  readonly sourceRange?: CruxIngestPageBlockSourceRange
+}
+
+/** Typed content block nested beneath a page part. */
+export type CruxIngestPageBlock = CruxIngestPageTextBlock | CruxIngestPageTableBlock
+
 /** A typed segment of an ingested document. */
 export type CruxIngestPart = (
   {
@@ -112,6 +142,7 @@ export type CruxIngestPart = (
       content: string
       pageNumber: number
       headingPath?: string[]
+      blocks?: readonly CruxIngestPageBlock[]
       metadata?: Record<string, unknown>
     }
   | {
@@ -159,6 +190,7 @@ export type CruxIngestPart = (
 /** Where a chunk's content came from in its source document. */
 export interface ChunkProvenance {
   partIds?: string[]
+  blockIds?: string[]
   pages?: number[]
   sheets?: string[]
   tables?: string[]
