@@ -31,6 +31,7 @@ import {
   isManagedStreamTerminalError,
   isSafeProviderErrorCode,
   managedStreamTerminalErrorCode,
+  TRANSPORT_ACK_FAILED,
 } from "../transport/stream-errors";
 import {
   TRANSPORT_STREAM_CONTRACT_INVALID,
@@ -367,49 +368,103 @@ export async function runStreamConnection(
           };
         }
 
-        if (item.cursor === undefined) {
-          continue;
+        // Cursor checkpoint (when present) before optional post-accept ack so
+        // acknowledge() only runs after durable accept + durable cursor progress.
+        if (item.cursor !== undefined) {
+          if (
+            streamControl.signal.aborted ||
+            isLeaseExpired(activeLease(options))
+          ) {
+            await bestEffortIteratorReturn(iterator);
+            return abortedOutcome(
+              activeLease(options),
+              accepted,
+              duplicated,
+              checkpointed,
+            );
+          }
+
+          const written = await writeStreamCheckpoint({
+            store: options.store,
+            namespace: options.namespace,
+            bindingId: options.binding.id,
+            cursor: item.cursor,
+            lease: activeLease(options),
+            now: options.now(),
+            ownerId: options.ownerId,
+            configRef: options.binding.configRef,
+            status: "active",
+            clearError: true,
+            previous: latestCheckpoint,
+          });
+
+          if (written.kind === "rejected") {
+            await bestEffortIteratorReturn(iterator);
+            return {
+              accepted,
+              duplicated,
+              checkpointed,
+              failed: true,
+              leaseLost: true,
+              outcome: "lease_lost",
+            };
+          }
+
+          if (written.kind === "accepted") {
+            checkpointed = true;
+            latestCheckpoint = written.checkpoint;
+          }
         }
 
-        if (streamControl.signal.aborted || isLeaseExpired(activeLease(options))) {
-          await bestEffortIteratorReturn(iterator);
-          return abortedOutcome(
-            activeLease(options),
-            accepted,
-            duplicated,
-            checkpointed,
-          );
-        }
+        // Smallest post-accept seam: optional process-local acknowledge after
+        // durable accept/duplicate (+ cursor checkpoint when the item had one).
+        // Failure is observable and transient; never rolls back accept/cursor.
+        if (typeof item.acknowledge === "function") {
+          if (
+            streamControl.signal.aborted ||
+            isLeaseExpired(activeLease(options))
+          ) {
+            await bestEffortIteratorReturn(iterator);
+            return abortedOutcome(
+              activeLease(options),
+              accepted,
+              duplicated,
+              checkpointed,
+            );
+          }
 
-        const written = await writeStreamCheckpoint({
-          store: options.store,
-          namespace: options.namespace,
-          bindingId: options.binding.id,
-          cursor: item.cursor,
-          lease: activeLease(options),
-          now: options.now(),
-          ownerId: options.ownerId,
-          configRef: options.binding.configRef,
-          status: "active",
-          clearError: true,
-          previous: latestCheckpoint,
-        });
+          const ackResult = await invokeEnvelopeAcknowledge({
+            acknowledge: item.acknowledge,
+            signal: streamControl.signal,
+            options,
+            latestCheckpoint,
+          });
 
-        if (written.kind === "rejected") {
-          await bestEffortIteratorReturn(iterator);
-          return {
-            accepted,
-            duplicated,
-            checkpointed,
-            failed: true,
-            leaseLost: true,
-            outcome: "lease_lost",
-          };
-        }
+          if (ackResult.kind === "aborted") {
+            await bestEffortIteratorReturn(iterator);
+            return abortedOutcome(
+              activeLease(options),
+              accepted,
+              duplicated,
+              checkpointed,
+            );
+          }
 
-        if (written.kind === "accepted") {
-          checkpointed = true;
-          latestCheckpoint = written.checkpoint;
+          if (ackResult.kind === "failed") {
+            return {
+              accepted,
+              duplicated,
+              checkpointed,
+              failed: true,
+              leaseLost: ackResult.leaseLost,
+              outcome: ackResult.leaseLost ? "lease_lost" : "transient",
+              lastErrorCode: ackResult.code,
+            };
+          }
+
+          if (ackResult.latestCheckpoint) {
+            latestCheckpoint = ackResult.latestCheckpoint;
+          }
         }
       }
     } finally {
@@ -516,6 +571,70 @@ export function sameTransportConfigRef(
   right: RuntimeTransportConfigRef,
 ): boolean {
   return left.id === right.id && left.revision === right.revision;
+}
+
+/**
+ * Invoke optional post-accept acknowledge after durable accept/checkpoint.
+ *
+ * @remarks Ack failure writes `TRANSPORT_ACK_FAILED` (or a safe provider code)
+ * on an **active** checkpoint while retaining the durable cursor. Outcome is
+ * transient so reconnect resumes from that cursor; acceptance is never undone.
+ */
+async function invokeEnvelopeAcknowledge(args: {
+  readonly acknowledge: () => void | Promise<void>;
+  readonly signal: AbortSignal;
+  readonly options: RunStreamConnectionOptions;
+  readonly latestCheckpoint: RuntimeTransportBindingCheckpoint | null;
+}): Promise<
+  | { readonly kind: "ok"; readonly latestCheckpoint: RuntimeTransportBindingCheckpoint | null }
+  | { readonly kind: "aborted" }
+  | {
+      readonly kind: "failed";
+      readonly leaseLost: boolean;
+      readonly code: string;
+    }
+> {
+  const { acknowledge, signal, options, latestCheckpoint } = args;
+
+  if (signal.aborted || isLeaseExpired(activeLease(options))) {
+    return { kind: "aborted" };
+  }
+
+  try {
+    await Promise.resolve().then(() => acknowledge());
+  } catch (error) {
+    if (signal.aborted || isAbortError(error)) {
+      return { kind: "aborted" };
+    }
+
+    const code = errorCode(error) ?? TRANSPORT_ACK_FAILED;
+    const written = await writeStreamCheckpoint({
+      store: options.store,
+      namespace: options.namespace,
+      bindingId: options.binding.id,
+      // Keep durable cursor — ack failure must not lose replay safety.
+      cursor: latestCheckpoint?.cursor ?? null,
+      lease: activeLease(options),
+      now: options.now(),
+      ownerId: options.ownerId,
+      configRef: options.binding.configRef,
+      status: "active",
+      lastErrorCode: code,
+      previous: latestCheckpoint,
+    });
+
+    return {
+      kind: "failed",
+      leaseLost: written.kind === "rejected",
+      code,
+    };
+  }
+
+  if (signal.aborted || isLeaseExpired(activeLease(options))) {
+    return { kind: "aborted" };
+  }
+
+  return { kind: "ok", latestCheckpoint };
 }
 
 async function acceptStreamEnvelope(args: {
