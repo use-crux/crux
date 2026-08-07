@@ -248,6 +248,17 @@ artifact manifests now use schema version 3 so older generated manifests fail
 with an explicit incompatibility diagnostic, while generated imports and worker
 transport authority remain exact under path escaping and source drift.
 
+Close out Signal provider operations with restart-safe bounded transport
+statistics on the shared statistics ledger (`transport` owner; exact totals and
+first-64 adapter/binding attribution), Signal occurrence lineage on normalized
+envelopes, privacy-safe `projectTransportEnvelope()` and `transportStatistics()`
+APIs, and terminal envelope retention through existing Runtime maintenance
+(`transportEnvelopes`, default `7d`). Memory and PostgreSQL persist statistics
+and lineage with the transport port. Document the webhook path with a progressive
+provider guide, operator recipes, exact providers/transports reference, and
+ARCHITECTURE internals. Polling, SSE, and WebSocket supervision remain issue
+#340.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
