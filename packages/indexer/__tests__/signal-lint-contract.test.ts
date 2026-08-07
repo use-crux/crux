@@ -24,6 +24,7 @@ describe("Signal transport lint descriptor contract", () => {
       "callback",
       "handle",
       "poll",
+      "open",
       "onEvent",
       "secret",
       "token",

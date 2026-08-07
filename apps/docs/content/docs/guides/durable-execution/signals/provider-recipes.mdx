@@ -224,11 +224,96 @@ record becomes `dead-letter` and stays until retention or explicit replay.
    envelope rows should expire.
 
 Inert bindings hold only stable ids, config refs, and Signal targets. They must
-never capture credentials, `Request` objects, live clients, or `onEvent`
-closures.
+never capture credentials, `Request` objects, live clients, `poll`, `open`, or
+`onEvent` closures.
+
+## Supervise a managed stream connection
+
+```ts
+import { stream } from "@use-crux/core/signal/transport";
+import { ManagedStreamTerminalError } from "@use-crux/core/runtime";
+import {
+  managedTransportBinding,
+  signalProvider,
+} from "@use-crux/core/signal/provider";
+
+export const marketplaceStream = signalProvider({
+  id: "marketplace.stream",
+  transport: stream({
+    async *open({ cursor, signal, configRef }) {
+      const session = await openMarketplaceSession({
+        resumeFrom: cursor,
+        revision: configRef.revision,
+        signal,
+      });
+
+      try {
+        for await (const frame of session.frames) {
+          if (signal.aborted) {
+            break;
+          }
+
+          if (frame.kind === "heartbeat") {
+            // Cursor-only progress: Runtime may checkpoint immediately.
+            yield { kind: "cursor", cursor: frame.cursor };
+            continue;
+          }
+
+          if (frame.kind === "auth_revoked") {
+            // Terminal: durable faulted status, no automatic reconnect.
+            throw new ManagedStreamTerminalError(
+              "MARKETPLACE_AUTH_REVOKED",
+              "provider revoked credentials",
+            );
+          }
+
+          yield {
+            kind: "envelope",
+            accountId: frame.accountId,
+            eventId: frame.eventId,
+            authenticatedRouting: { source: "stream", topic: frame.topic },
+            payload: encodeInlinePayload(frame.body),
+            // Checkpoint only after this envelope is durably accepted.
+            cursor: frame.cursor,
+          };
+        }
+      } finally {
+        await session.close();
+      }
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+
+export const marketplaceStreamBinding = managedTransportBinding(
+  marketplaceStream,
+  {
+    id: "binding.marketplace.stream",
+    configRef: { id: "config.marketplace.stream", revision: "1" },
+    signalId: "order.submitted",
+  },
+);
+```
+
+Operator notes:
+
+- Deploy the live provider + inert binding on one Runtime worker with a store
+  that implements binding checkpoints (Memory or PostgreSQL).
+- Bump `configRef.revision` when connection credentials or resume semantics
+  change so Runtime invalidates the prior cursor.
+- Faulted bindings stay faulted across restart until config identity changes or
+  an operator clears status — they do not silently reopen.
+- SSE and WebSocket are **not** first-party helpers yet; when they land they
+  must wrap this same `stream({ open })` seam.
 
 ## Out of scope
 
-Polling, SSE, WebSocket, and generic stream supervision remain
-[#340](https://github.com/use-crux/crux/issues/340). This closeout covers
-webhook Signal providers only.
+First-party SSE / WebSocket authoring helpers and Channel exclusive conversation
+ownership remain follow-on work (#340 adapters, #302 Channels). Webhook edge
+accept, polling supervision, and managed stream supervision share one Runtime
+worker and envelope kernel.

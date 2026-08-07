@@ -21,6 +21,7 @@ export type {
   RuntimeTransportConfigRef,
   RuntimeTransportBindingCheckpoint,
   RuntimeTransportBindingCheckpointIdentity,
+  RuntimeTransportBindingStatus,
   RuntimeTransportDeliveryLineageEntry,
   RuntimeTransportEnvelopeFailure,
   RuntimeTransportEnvelopeIdentity,
@@ -74,7 +75,16 @@ export {
   emptyTransportEnvelopeStats,
   MAX_TRANSPORT_LINEAGE_ENTRIES,
   MAX_TRANSPORT_BINDING_CURSOR_BYTES,
+  isManagedStreamTerminalError,
+  isSafeProviderErrorCode,
+  ManagedStreamTerminalError,
+  managedStreamTerminalErrorCode,
+  TRANSPORT_STREAM_TERMINAL_CODE,
+  TRANSPORT_STREAM_CONTRACT_INVALID,
+  validateStreamCursor,
+  validateStreamItem,
 } from "./transport";
+
 
 export { createRuntimeProgram } from "./program";
 export type {

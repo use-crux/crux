@@ -15,11 +15,26 @@ export type {
 export type {
   RuntimeTransportBindingCheckpoint,
   RuntimeTransportBindingCheckpointIdentity,
+  RuntimeTransportBindingStatus,
 } from "./binding-checkpoint";
 export { MAX_TRANSPORT_BINDING_CURSOR_BYTES } from "./binding-checkpoint";
 export { RuntimeManagedTransportContractError } from "./errors";
 export {
+  isManagedStreamTerminalError,
+  isSafeProviderErrorCode,
+  ManagedStreamTerminalError,
+  managedStreamTerminalErrorCode,
+  TRANSPORT_STREAM_TERMINAL_CODE,
+} from "./stream-errors";
+export {
+  TRANSPORT_STREAM_CONTRACT_INVALID,
+  validateStreamCursor,
+  validateStreamItem,
+} from "./stream-item";
+export {
   validateRuntimeAcceptedTransportEnvelope,
+  validateRuntimeAcceptedTransportPayload,
+  validateRuntimeAuthenticatedRouting,
   validateRuntimeManagedTransportAdapterDeclaration,
   validateRuntimeManagedTransportBinding,
 } from "./validation";

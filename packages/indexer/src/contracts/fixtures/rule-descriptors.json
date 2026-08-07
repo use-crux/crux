@@ -2451,12 +2451,12 @@
 {
       "category": "contracts",
       "confidence": "high",
-      "description": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, poll, or onEvent fields.",
+      "description": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, poll, open, or onEvent fields.",
       "docsUrl": "/docs/reference/crux-core/index-lints/signal-transport-binding-live-value",
       "fidelity": "safe",
       "fixes": [
         {
-          "description": "Remove live Request, client, credential, socket, callback, handle, poll, and onEvent fields from managedTransportBinding() options.",
+          "description": "Remove live Request, client, credential, socket, callback, handle, poll, open, and onEvent fields from managedTransportBinding() options.",
           "kind": "manual",
           "title": "Keep the binding inert"
         }
@@ -2466,7 +2466,7 @@
       "maturity": "experimental",
       "phase": "index",
       "profiles": ["recommended", "strict"],
-      "rationale": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, poll, or onEvent fields.",
+      "rationale": "RuntimeManagedTransportBinding declarations are inert and secret-free. They must not author Request, client, credential, socket, callback, handle, poll, open, or onEvent fields.",
       "requires": ["definitions"],
       "severity": "error",
       "source": "builtin",

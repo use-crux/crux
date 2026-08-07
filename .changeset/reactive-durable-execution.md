@@ -283,6 +283,20 @@ parity and rejects live `poll` fields on inert bindings. SSE, WebSocket, and
 generic stream adapters remain follow-on #340 children on the same lifecycle
 seam. Channel exclusive conversation ownership remains #302.
 
+Add managed stream transport supervision beside polling: author `stream({ open })`
+on `@use-crux/core/signal/transport`, accept it from `signalProvider`, and let the
+single Runtime worker own connection fibers, bounded reconnect, accept-before-
+checkpoint cursor law, config-ref invalidation, and durable faulted/disabled
+status on binding checkpoints. Memory and PostgreSQL implement lease-fenced
+checkpoint fields (`configRef`, `status`) with multi-worker exclusivity.
+Project Index discovers `stream()` with static/native parity and rejects live
+`open` on inert bindings. SSE and WebSocket remain follow-on thin adapters over
+this seam, not first-party helpers in this release. Stream envelope validation
+detaches immutable payload and routing snapshots; digest conflicts never advance
+stream cursors; checkpoint timestamps use a fresh clock at each write; and
+supervision faults after consecutive top-level rejected stream fibers with
+`TRANSPORT_STREAM_EXHAUSTED` without unhandled rejections.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program

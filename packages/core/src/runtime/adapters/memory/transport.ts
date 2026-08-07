@@ -375,6 +375,15 @@ function cloneBindingCheckpoint(
       ? { lastErrorCode: checkpoint.lastErrorCode }
       : {}),
     ...(checkpoint.morePending === true ? { morePending: true as const } : {}),
+    ...(checkpoint.configRef !== undefined
+      ? {
+          configRef: Object.freeze({
+            id: checkpoint.configRef.id,
+            revision: checkpoint.configRef.revision,
+          }),
+        }
+      : {}),
+    ...(checkpoint.status !== undefined ? { status: checkpoint.status } : {}),
   });
 }
 

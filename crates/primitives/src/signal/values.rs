@@ -23,6 +23,7 @@ const LIVE_FIELDS: &[&str] = &[
     "callback",
     "handle",
     "poll",
+    "open",
     "onEvent",
     "secret",
     "token",
@@ -55,7 +56,7 @@ pub(crate) fn transport_kind(
         _ => return None,
     };
     let name = callee_name(call);
-    if name != "webhook" && name != "polling" {
+    if name != "webhook" && name != "polling" && name != "stream" {
         return None;
     }
     if !call
@@ -65,10 +66,10 @@ pub(crate) fn transport_kind(
     {
         return None;
     }
-    Some(if name == "polling" {
-        "polling"
-    } else {
-        "webhook"
+    Some(match name {
+        "polling" => "polling",
+        "stream" => "stream",
+        _ => "webhook",
     })
 }
 

@@ -19,5 +19,6 @@
   {"matchKind":"call","name":"tool","importFrom":["@use-crux/core","@use-crux/core/tools"]},
   {"matchKind":"call","name":"webhook","importFrom":["@use-crux/core","@use-crux/core/signal/transport"]},
   {"matchKind":"call","name":"polling","importFrom":["@use-crux/core","@use-crux/core/signal/transport"]},
+  {"matchKind":"call","name":"stream","importFrom":["@use-crux/core","@use-crux/core/signal/transport"]},
   {"matchKind":"new","name":"Agent","importFrom":["@use-crux/convex/agent"]}
 ]

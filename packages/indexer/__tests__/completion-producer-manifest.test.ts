@@ -65,6 +65,10 @@ describe("completion producer identity manifest", () => {
         "@use-crux/core",
         "@use-crux/core/signal/transport",
       ]),
+      producer("call", "stream", [
+        "@use-crux/core",
+        "@use-crux/core/signal/transport",
+      ]),
       producer("new", "Agent", ["@use-crux/convex/agent"]),
     ]);
   });

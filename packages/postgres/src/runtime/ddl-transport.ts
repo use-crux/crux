@@ -42,6 +42,9 @@ export const TRANSPORT_REQUIRED_COLUMNS: Readonly<
     'last_owner_id',
     'last_error_code',
     'more_pending',
+    'config_ref_id',
+    'config_ref_revision',
+    'status',
   ],
 }
 
@@ -90,8 +93,15 @@ export function transportDdlStatements(schema: string): readonly string[] {
       last_owner_id text,
       last_error_code text,
       more_pending boolean,
+      config_ref_id text,
+      config_ref_revision text,
+      status text,
       PRIMARY KEY (namespace, binding_id)
     )`,
+    // Additive upgrades for DBs created before managed stream checkpoint fields.
+    `ALTER TABLE ${checkpoints} ADD COLUMN IF NOT EXISTS config_ref_id text`,
+    `ALTER TABLE ${checkpoints} ADD COLUMN IF NOT EXISTS config_ref_revision text`,
+    `ALTER TABLE ${checkpoints} ADD COLUMN IF NOT EXISTS status text`,
     `CREATE INDEX IF NOT EXISTS transport_envelopes_claimable_idx
       ON ${envelopes} (namespace, state, next_attempt_at)`,
     `CREATE INDEX IF NOT EXISTS transport_envelopes_retention_idx

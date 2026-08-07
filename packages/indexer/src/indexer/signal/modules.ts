@@ -7,7 +7,7 @@ export const providerModules = [
   "@use-crux/core/signal/provider",
 ] as const;
 
-/** Modules that author webhook and polling transports. */
+/** Modules that author webhook, polling, and managed stream transports. */
 export const transportModules = [
   "@use-crux/core",
   "@use-crux/core/signal/transport",

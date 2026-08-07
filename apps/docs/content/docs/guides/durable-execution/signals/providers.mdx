@@ -1,21 +1,22 @@
 ---
 title: Signal providers
-description: Accept authenticated provider webhooks or poll provider pages, acknowledge only after durable acceptance, and fan out through ordinary Signals.
+description: Accept authenticated provider webhooks, poll provider pages, or supervise managed streams, acknowledge only after durable acceptance, and fan out through ordinary Signals.
 ---
 
-A Signal provider turns an external webhook or polled provider page into the
-ordinary Signal path your application already understands. Use one when a
-third-party system must push or expose events into Crux, you need
-accept-before-ack durability, and retries must not create a second logical
-delivery for the same provider event ID.
+A Signal provider turns an external webhook, polled provider page, or managed
+async stream into the ordinary Signal path your application already understands.
+Use one when a third-party system must push or expose events into Crux, you need
+accept-before-checkpoint durability, and retries must not create a second
+logical delivery for the same provider event ID.
 
 ## Transport status
 
 | Transport | Status |
 | --- | --- |
 | `webhook()` | Existing production path (#337 edge accept + worker normalize) |
-| `polling()` | This slice: one Runtime worker leases, polls, accepts, checkpoints |
-| SSE / WebSocket / generic async stream | Not implemented; follow-on [#340](https://github.com/use-crux/crux/issues/340) children |
+| `polling()` | One Runtime worker leases, polls, accepts, checkpoints |
+| `stream({ open })` | Managed async-stream seam: worker owns open, reconnect, accept-before-checkpoint, fault status |
+| SSE / WebSocket thin adapters | **Not shipped** — follow-on adapters must compile to `stream({ open })`, not a second worker |
 | Channel exclusive conversation ownership | Not on this path; remains [#302](https://github.com/use-crux/crux/issues/302) |
 
 ## Why providers exist
@@ -105,9 +106,8 @@ Do not use it when:
 
 - one conversation owner must exclusively claim the event — that is Channel
   work under related RFC tracks, not this Signal path;
-- you need SSE or WebSocket stream adapters — those remain follow-on
-  [#340](https://github.com/use-crux/crux/issues/340) children on the same
-  supervision seam.
+- you need first-party SSE or WebSocket helpers — those remain follow-on thin
+  adapters over `stream({ open })`, not a second supervision path.
 
 ## Minimal polling path
 
@@ -153,6 +153,77 @@ from the durable checkpoint. No second transport daemon is required.
 | Interval / backoff | Optional `intervalMs` is a minimum between poll starts when `more` is not pending. Poll failures store a safe `lastErrorCode` and do not advance the cursor. There is no automatic exponential backoff beyond `intervalMs` and the worker cadence. |
 | Shutdown / restart | Worker stop aborts in-flight `poll` via `AbortSignal`, releases binding leases, and preserves the last durable checkpoint. A replacement worker resumes from that cursor. |
 | Deployment | Declare providers + inert bindings on `createRuntimeProgram({ providers, transports })`, run `createRuntimeWorker({ runtime, program })` against Memory or PostgreSQL Runtime storage that implements the transports port (including binding checkpoints). Live `poll` / `onEvent` stay in process code; they never enter generated program JSON. |
+
+## Minimal managed stream path
+
+```ts
+import { stream } from "@use-crux/core/signal/transport";
+import {
+  managedTransportBinding,
+  signalProvider,
+} from "@use-crux/core/signal/provider";
+
+export const ordersStream = signalProvider({
+  id: "orders.stream",
+  transport: stream({
+    async *open({ cursor, signal }) {
+      const connection = await connectProvider({ cursor, signal });
+      try {
+        for await (const message of connection.messages) {
+          yield {
+            kind: "envelope",
+            accountId: message.accountId,
+            eventId: message.eventId,
+            authenticatedRouting: { source: "stream" },
+            payload: encodeInlinePayload(message.body),
+            cursor: message.cursor,
+          };
+        }
+      } finally {
+        await connection.close();
+      }
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+
+export const ordersStreamBinding = managedTransportBinding(ordersStream, {
+  id: "binding.orders.stream",
+  configRef: { id: "config.orders.stream", revision: "1" },
+  signalId: "order.submitted",
+});
+```
+
+This is the managed **ingress** `stream()` on `@use-crux/core/signal/transport`,
+not LLM generation `stream()` helpers on provider packages or `@use-crux/ai`.
+
+The Runtime worker leases the binding, opens one connection fiber, pulls items
+under serial backpressure, accepts each envelope through the same #337 kernel,
+and writes a cursor only after that item is durably accepted. Clean EOF and
+transient errors reconnect with bounded backoff. Terminal faults mark durable
+`faulted` status so restart does not silently reopen a dead connection.
+
+### Stream cursor, lifecycle, and recovery
+
+| Concern | Behavior |
+| --- | --- |
+| Cursor law | A yielded cursor means the adapter has finished all provider input through that position. Runtime checkpoints only after every envelope that position covers is durably accepted (or same-digest duplicate / progressable conflict with durable evidence). |
+| Item shapes | Each yield is either `{ kind: "envelope", …, cursor? }` or `{ kind: "cursor", cursor }` — never a batch of envelopes. Cursor-only items may checkpoint immediately (heartbeats / caught-up markers). |
+| Accept-before-checkpoint | Envelope cursors advance only after accept resolves. Crash between accept and checkpoint redelivers the same event id; #337 dedupe keeps Signal occurrence identity stable. |
+| Config invalidation | Checkpoint stores `configRef`. When live binding `configRef` changes, Runtime over-invalidates the prior cursor (does not inherit faulted status from the stale config). |
+| EOF | Clean iterator completion is disconnect, not terminal success. Runtime reconnects with bounded backoff from the durable cursor. |
+| Transient error | Thrown errors reconnect by default (bounded backoff). Safe `lastErrorCode` may be stored without advancing the cursor. |
+| Terminal fault | `ManagedStreamTerminalError` (or `{ terminal: true, code }`) sets durable `status: "faulted"` and stops automatic reconnect until config identity changes or an operator clears status. |
+| Abort | Worker stop, lease loss, or rebalance aborts `signal`, calls `iterator.return?.()`, and prevents stale accept/checkpoint after the lease fence. |
+| Backpressure | Pull iteration is Runtime backpressure: one item at a time on the fiber. Future push adapters must bound buffers and disconnect on overflow — never drop events silently. |
+| Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API in this release. |
+| Deployment | Same as polling: Memory or PostgreSQL with binding checkpoints, `createRuntimeProgram({ providers, transports })`, one `createRuntimeWorker`. Live `open` / `onEvent` stay process-local; generated program JSON never embeds closures or secrets. |
+| SSE / WebSocket | Not shipped as first-party helpers. When added, they must be thin authoring adapters over this `stream({ open })` seam. |
 
 ## Guarantees
 

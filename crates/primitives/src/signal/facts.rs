@@ -184,3 +184,63 @@ pub(crate) fn polling_facts(
         Vec::new(),
     ))
 }
+
+/// Projects one authored managed stream transport declaration.
+pub(crate) fn stream_facts(
+    context: &PrimitiveContext<'_>,
+    parts: &CallParts<'_>,
+) -> Option<Value> {
+    if parts.callee_name != "stream" || parts.callee_direct == Some(false) {
+        return None;
+    }
+    if !parts
+        .callee_module_specifier
+        .is_some_and(|module| TRANSPORT_MODULES.contains(&module))
+    {
+        return None;
+    }
+    let has_open = parts
+        .object_arg
+        .is_some_and(|value| has_property(value, "open"));
+    let id = format!(
+        "signal.transport:{}",
+        safe_id(&format!(
+            "{}:{}:{}",
+            context.fingerprint_file, parts.source.line, parts.source.column
+        ))
+    );
+    let mut facts = Map::new();
+    facts.insert(
+        "kind".to_string(),
+        Value::String("signal.transport".to_string()),
+    );
+    facts.insert(
+        "transportKind".to_string(),
+        Value::String("stream".to_string()),
+    );
+    facts.insert("hasOpen".to_string(), Value::Bool(has_open));
+
+    let mut metadata = Map::new();
+    metadata.insert(
+        "exportName".to_string(),
+        Value::String(parts.variable_name.to_string()),
+    );
+    parts.add_direct_export_evidence(&mut metadata);
+    metadata.insert("facts".to_string(), Value::Object(facts));
+
+    Some(extracted_facts(
+        parts.variable_name,
+        static_index_definition(NativeDefinitionInput {
+            id,
+            kind: "signal.transport",
+            name: parts.variable_name.to_string(),
+            file: context.fingerprint_file,
+            source: parts.source,
+            snippet: parts.snippet,
+            metadata,
+        }),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    ))
+}

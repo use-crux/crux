@@ -361,9 +361,10 @@ export function createPostgresTransportStore(
          )
          INSERT INTO ${checkpoints} (
            namespace, binding_id, cursor, updated_at, last_polled_at,
-           last_owner_id, last_error_code, more_pending
+           last_owner_id, last_error_code, more_pending,
+           config_ref_id, config_ref_revision, status
          )
-         SELECT $5, $6, $7, $8, $9, $10, $11, $12
+         SELECT $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
            FROM held
          ON CONFLICT (namespace, binding_id) DO UPDATE SET
            cursor = EXCLUDED.cursor,
@@ -371,7 +372,10 @@ export function createPostgresTransportStore(
            last_polled_at = EXCLUDED.last_polled_at,
            last_owner_id = EXCLUDED.last_owner_id,
            last_error_code = EXCLUDED.last_error_code,
-           more_pending = EXCLUDED.more_pending
+           more_pending = EXCLUDED.more_pending,
+           config_ref_id = EXCLUDED.config_ref_id,
+           config_ref_revision = EXCLUDED.config_ref_revision,
+           status = EXCLUDED.status
          WHERE EXISTS (SELECT 1 FROM held)
          RETURNING 1`,
         [
@@ -387,6 +391,9 @@ export function createPostgresTransportStore(
           checkpoint.lastOwnerId ?? null,
           checkpoint.lastErrorCode ?? null,
           checkpoint.morePending === true ? true : null,
+          checkpoint.configRef?.id ?? null,
+          checkpoint.configRef?.revision ?? null,
+          checkpoint.status ?? null,
         ],
       )
       if (!result.rows[0]) {
@@ -405,6 +412,19 @@ function bindingLeaseResource(namespace: string, bindingId: string): string {
 function decodeCheckpoint(
   row: Record<string, unknown>,
 ): RuntimeTransportBindingCheckpoint {
+  const configRefId =
+    typeof row.config_ref_id === 'string' ? row.config_ref_id : undefined
+  const configRefRevision =
+    typeof row.config_ref_revision === 'string'
+      ? row.config_ref_revision
+      : undefined
+  const status =
+    row.status === 'active' ||
+    row.status === 'faulted' ||
+    row.status === 'disabled'
+      ? row.status
+      : undefined
+
   return Object.freeze({
     schemaVersion: 1 as const,
     namespace: String(row.namespace),
@@ -423,6 +443,15 @@ function decodeCheckpoint(
       ? { lastErrorCode: row.last_error_code }
       : {}),
     ...(row.more_pending === true ? { morePending: true as const } : {}),
+    ...(configRefId !== undefined && configRefRevision !== undefined
+      ? {
+          configRef: Object.freeze({
+            id: configRefId,
+            revision: configRefRevision,
+          }),
+        }
+      : {}),
+    ...(status !== undefined ? { status } : {}),
   })
 }
 
