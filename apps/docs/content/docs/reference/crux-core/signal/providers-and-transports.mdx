@@ -1,6 +1,6 @@
 ---
 title: Providers and transports
-description: Exact public API for Signal providers, webhook and polling transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
+description: Exact public API for Signal providers, webhook, polling, and managed stream transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
 ---
 
 Import authoring helpers from focused subpaths and lifecycle helpers from the
@@ -9,8 +9,11 @@ Runtime surface:
 ```ts
 import {
   polling,
+  stream,
   webhook,
   type PollingTransport,
+  type StreamItem,
+  type StreamTransport,
   type WebhookTransport,
 } from "@use-crux/core/signal/transport";
 import {
@@ -21,6 +24,7 @@ import {
 import {
   acceptTransportEnvelope,
   createTransportNormalizationRunner,
+  ManagedStreamTerminalError,
   projectTransportEnvelope,
   replayTransportEnvelope,
   transportStatistics,
@@ -55,9 +59,7 @@ Returns a frozen `WebhookTransport` (`_tag: "WebhookTransport"`,
 ### `polling({ poll, intervalMs? })`
 
 Returns a frozen `PollingTransport` (`_tag: "PollingTransport"`,
-`kind: "polling"`). This is the first managed-transport supervision vertical
-(#340). Webhook remains the host-edge path; SSE / WebSocket / generic stream
-adapters are not implemented yet.
+`kind: "polling"`).
 
 `poll({ cursor, signal, configRef })` acquires one bounded page:
 
@@ -80,11 +82,55 @@ Partial failure or abort also leaves the previous cursor. Restart resumes from
 the durable checkpoint without inventing a second worker. `signal` aborts on
 worker stop or lease release.
 
+### `stream({ open })`
+
+Returns a frozen `StreamTransport` (`_tag: "StreamTransport"`,
+`kind: "stream"`). This is the managed **ingress** transport constructor on
+`@use-crux/core/signal/transport`. It is distinct from LLM generation
+`stream()` helpers on provider packages and `@use-crux/ai`.
+
+`open({ cursor, signal, configRef })` opens one connection and returns an
+`AsyncIterable<StreamItem>` (or a Promise of one). Runtime owns lease, fiber,
+reconnect, accept, and checkpoint. Credentials and live clients stay inside the
+`open` closure.
+
+#### `StreamItem`
+
+Exactly one protocol item per yield — never a batch:
+
+| Variant | Fields | Checkpoint timing |
+| --- | --- | --- |
+| Envelope | `kind: "envelope"`, `accountId`, `eventId`, `authenticatedRouting`, `payload`, optional `cursor?` | Optional `cursor` is progress **through this item inclusive**. Runtime may write it only after durable accept (or same-digest duplicate / progressable conflict with evidence). Omitted means no new checkpoint from this item. `null` clears the resume position when the provider truly has none. |
+| Cursor-only | `kind: "cursor"`, `cursor: string \| null` | May checkpoint immediately. Use for heartbeats, SSE comment/id advances, or caught-up markers that do not carry events. Must never cover unyielded input. |
+
+#### Cursor law
+
+A yielded cursor asserts that the adapter has finished all provider input through
+that opaque position. Runtime never advances an envelope cursor before accept
+resolves for that item. Crash between accept and checkpoint redelivers the same
+provider event id; the #337 kernel dedupes.
+
+#### Lifecycle
+
+| Event | Behavior |
+| --- | --- |
+| Clean EOF | Disconnect, not terminal success. Reconnect with bounded backoff from the durable cursor (defaults: base 1s, max 60s). |
+| Transient throw | Reconnect by default with bounded backoff. Safe `lastErrorCode` may be stored without advancing the cursor. |
+| Terminal fault | Throw `ManagedStreamTerminalError(code, message?)` or a duck-typed `{ terminal: true, code: string }`. Durable checkpoint `status: "faulted"`; automatic reconnect stops until config identity changes or an operator clears status. Unsafe codes map to `TRANSPORT_STREAM_TERMINAL`. |
+| Abort | `signal` aborts on worker stop, lease expiry/loss, or rebalance. Runtime calls `iterator.return?.()` and rejects stale accept/checkpoint after the lease fence. |
+| Config change | Checkpoint stores secret-free `configRef`. When live binding `configRef` differs, Runtime over-invalidates the stored cursor (does not inherit faulted status from the prior config). |
+| Backpressure | Pull iteration is serial: one item at a time on the connection fiber. Do not invent silent drop policies. |
+| Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API. |
+
+SSE and WebSocket are **not** shipped as first-party helpers. Follow-on thin
+adapters must compile to this `stream({ open })` seam without a second worker.
+
 ### `signalProvider({ id, transport, signals, onEvent })`
 
 Returns a frozen `SignalProvider`. Live definitions retain `transport` and
-`onEvent` as process code. `transport` may be `webhook()` or `polling()`.
-They perform no I/O at construction time and do not register globally.
+`onEvent` as process code. `transport` may be `webhook()`, `polling()`, or
+`stream()`. They perform no I/O at construction time and do not register
+globally.
 
 `onEvent(envelope, { signals })` may publish only the declared Signal map.
 Omitted publish idempotency keys default to the accepted provider/account/event
@@ -102,7 +148,7 @@ Projects a live provider into an inert `RuntimeManagedTransportBinding`:
 | `provider?` / `adapterId?` | Optional overrides; default to provider id |
 
 The result is suitable for immutable Runtime program generation. It never
-captures `handle`, `poll`, `onEvent`, credentials, or clients.
+captures `handle`, `poll`, `open`, `onEvent`, credentials, or clients.
 
 ## Acceptance and normalization
 
@@ -175,19 +221,22 @@ Accepted and claimed envelopes are never pruned by retention.
 
 ## Binding checkpoints
 
-Polling supervision stores opaque cursors through the transport store:
+Polling and stream supervision store opaque cursors through the transport store:
 
 | Field | Meaning |
 | --- | --- |
-| `cursor` | Last fully accepted poll position |
-| `lastPolledAt` | Start of the latest poll attempt, including failed attempts |
-| `lastOwnerId` | Diagnostic owner id from the last poll |
-| `lastErrorCode` | Safe failure code when the last poll/accept failed |
-| `morePending` | Provider reported more pages; next tick may skip `intervalMs` |
+| `cursor` | Last fully accepted poll/stream position |
+| `lastPolledAt` | Start of the latest poll attempt, including failed attempts (polling) |
+| `lastOwnerId` | Diagnostic owner id from the last poll/stream acquisition |
+| `lastErrorCode` | Safe failure code when the last poll/stream/accept failed |
+| `morePending` | Provider reported more pages; next tick may skip `intervalMs` (polling) |
+| `configRef?` | Secret-free config identity the cursor was produced under (stream invalidation; additive for shared records) |
+| `status?` | `"active"` (default), `"faulted"` (terminal stream failure / exhaustion), or `"disabled"` (operator). Non-active statuses skip acquisition |
 
 Checkpoints never retain credentials, clients, sockets, Requests, raw payloads,
 or unbounded event identity lists. Lease ownership uses the existing Runtime
 lease port with resource `transport-binding:{namespace}:{bindingId}`.
+`putBindingCheckpoint` is lease-fenced (`accepted` / `rejected`).
 
 ### Deployment requirements
 
@@ -197,16 +246,15 @@ lease port with resource `transport-binding:{namespace}:{bindingId}`.
 - `createRuntimeProgram({ providers, transports })` with live providers in
   process and inert bindings in the program.
 - `createRuntimeWorker({ runtime, program })` as the only supervised owner of
-  polling acquisition, envelope drain, and Work maintenance.
+  polling and stream acquisition, envelope drain, and Work maintenance.
 
 ## Guarantees and non-goals
 
 - No second transport daemon, queue, or global provider registry.
 - No Channel exclusive conversation ownership on this path (#302).
-- Webhook edge accept remains host-driven; polling is worker-supervised.
-- Polling supervision is the first [#340](https://github.com/use-crux/crux/issues/340)
-  vertical slice. SSE / WebSocket / generic stream adapters remain follow-on
-  children on the same lifecycle seam.
-- Competing supervisors coordinate through Runtime leases. This slice proves
-  lease exclusivity on the Memory lease port; multi-process PostgreSQL
-  competing-worker stress remains a strengthening child when needed.
+- Webhook edge accept remains host-driven; polling and managed stream are
+  worker-supervised.
+- SSE / WebSocket first-party authoring helpers are **not shipped**; they are
+  follow-on thin adapters over `stream({ open })`.
+- Competing supervisors coordinate through Runtime leases on Memory and
+  PostgreSQL.

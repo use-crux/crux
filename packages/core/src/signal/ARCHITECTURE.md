@@ -191,12 +191,50 @@ through Runtime leases, not a process-local transport registry. When
 safe `lastErrorCode` without advancing the cursor; there is no automatic
 exponential backoff beyond `intervalMs` and the worker cadence.
 
+### Managed stream supervision (issue #340 seam)
+
+`stream({ open })` is the generic managed async-stream lifecycle seam for Signal
+providers (distinct from LLM generation `stream()` helpers). Supervision starts
+long-lived connection fibers on the existing Runtime worker; fibers must not
+monopolize the maintenance tick:
+
+1. Claims the same durable binding lease as polling.
+2. Loads the binding checkpoint, including optional `configRef` and `status`.
+3. Skips acquisition when status is `faulted` or `disabled`.
+4. Over-invalidates the stored cursor when live binding `configRef` differs.
+5. Calls `open({ cursor, signal, configRef })` and pulls `StreamItem`s serially
+   (pull backpressure).
+6. For envelope items: `acceptTransportEnvelope()` first, then optional
+   lease-fenced cursor checkpoint. Cursor-only items may checkpoint immediately.
+7. Clean EOF or transient throw → bounded reconnect backoff (process-local
+   attempt/delay; not durable history).
+8. Terminal `ManagedStreamTerminalError` (or duck-typed `{ terminal: true, code }`)
+   → durable `status: "faulted"` and no automatic reconnect until config identity
+   changes or an operator clears status.
+
+Item protocol is exactly one envelope **or** one cursor-only progress item per
+yield — never a batch. Cursor means opaque adapter-owned progress through all
+yielded provider input at that position. Accept-before-checkpoint for envelope
+cursors is a hard law; redelivery after crash between accept and checkpoint is
+deduped by the #337 identity kernel.
+
+Generated Runtime programs keep providers as secret-free authority references
+and bindings as inert ids/config/target data. Live `open` closures never enter
+program JSON. Project Index discovers `stream()` with static/native parity and
+rejects live `open` on inert bindings. Devtools Catalog surfaces transport kind
+through the existing generic provider projection; live reconnect phase is
+process-local and not a separate Devtools bus in this slice.
+
+Optional post-accept notification/ack is reserved for later protocol adapters
+and is not required API. SSE and WebSocket first-party helpers are **follow-on
+thin adapters** over this seam — not shipped here and not a second worker.
+
 ## Deliberate limits
 
 This slice owns no historical replay for later local subscribers, consumer
 completion acknowledgment, or cross-process callback bus. Webhook edge
-acceptance remains the host-driven path from #337. Polling supervision is the
-first #340 vertical; SSE, WebSocket, and generic async-stream adapters remain
-follow-on children on the same lifecycle seam and must not invent a second
-worker or Channel claim policy. Channel exclusive conversation ownership
-remains #302.
+acceptance remains the host-driven path from #337. Polling and managed stream
+supervision share the #340 lifecycle seam on one worker. SSE and WebSocket
+authoring helpers remain follow-on children that must compile to `stream({ open })`
+and must not invent a second worker or Channel claim policy. Channel exclusive
+conversation ownership remains #302.
