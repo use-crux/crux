@@ -4,7 +4,11 @@
  * @module
  */
 
-export { signalProvider } from "./signal-provider";
+export {
+  isPollingTransport,
+  isWebhookTransport,
+  signalProvider,
+} from "./signal-provider";
 export type {
   SignalProvider,
   SignalProviderEventContext,
@@ -13,6 +17,7 @@ export type {
   SignalProviderSignalMember,
   SignalProviderSignals,
   SignalProviderSignalsConstraint,
+  SignalProviderTransport,
 } from "./signal-provider";
 export { managedTransportBinding } from "./binding";
 export type { ManagedTransportBindingOptions } from "./binding";

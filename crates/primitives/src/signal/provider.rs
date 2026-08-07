@@ -7,7 +7,7 @@ use crate::{
     routing::output::extracted_facts,
     signal::values::{
         PROVIDER_MODULES, config_source_refs, reference_name, signal_map, string_property,
-        webhook_kind,
+        transport_kind,
     },
 };
 
@@ -42,11 +42,11 @@ pub(crate) fn signal_provider_facts(
     let transport_value = property_value(options, "transport");
     let transport_variable = reference_name(transport_value);
     let transport_resolved = context.resolve_record_source(transport_value).flatten();
-    let transport_kind = webhook_kind(
+    let resolved_transport_kind = transport_kind(
         transport_resolved.as_ref().map(|resolved| resolved.value),
         transport_value,
     );
-    let inline_transport_definition_id = match (transport_kind, transport_value) {
+    let inline_transport_definition_id = match (resolved_transport_kind, transport_value) {
         (Some(_), Some(crate::protocol::StaticSyntaxValue::Call { source, .. })) => Some(format!(
             "signal.transport:{}",
             safe_id(&format!(
@@ -68,7 +68,7 @@ pub(crate) fn signal_provider_facts(
         facts.insert("providerId".to_string(), Value::String(provider_id.clone()));
     }
     facts.insert("identity".to_string(), Value::String(identity.to_string()));
-    if let Some(transport_kind) = transport_kind {
+    if let Some(transport_kind) = resolved_transport_kind {
         facts.insert(
             "transportKind".to_string(),
             Value::String(transport_kind.to_string()),

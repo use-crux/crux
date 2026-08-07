@@ -28,6 +28,7 @@ import type {
 } from "../../ports/sessions";
 import type { StatisticsLedgerExport } from "../../../statistics";
 import type { RuntimeTransportEnvelopeRecord } from "../../transport/records";
+import type { RuntimeTransportBindingCheckpoint } from "../../transport/binding-checkpoint";
 
 export type MemoryWriteRecorder = () => void;
 
@@ -80,6 +81,7 @@ export interface MemoryRuntimeData {
   sessionSubscriptions: Map<string, RuntimeSessionSubscriptionRecord>;
   transportEnvelopes: Map<string, RuntimeTransportEnvelopeRecord>;
   transportStatistics: Map<string, StatisticsLedgerExport>;
+  transportBindingCheckpoints: Map<string, RuntimeTransportBindingCheckpoint>;
   nextEventId: number;
   nextWaiterId: number;
   nextLeaseId: number;
@@ -119,6 +121,7 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     sessionSubscriptions: new Map(),
     transportEnvelopes: new Map(),
     transportStatistics: new Map(),
+    transportBindingCheckpoints: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -171,6 +174,7 @@ export function cloneMemoryRuntimeData(
     sessionSubscriptions: new Map(data.sessionSubscriptions),
     transportEnvelopes: new Map(data.transportEnvelopes),
     transportStatistics: new Map(data.transportStatistics),
+    transportBindingCheckpoints: new Map(data.transportBindingCheckpoints),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -213,6 +217,7 @@ export function replaceMemoryRuntimeData(
   target.sessionSubscriptions = source.sessionSubscriptions;
   target.transportEnvelopes = source.transportEnvelopes;
   target.transportStatistics = source.transportStatistics;
+  target.transportBindingCheckpoints = source.transportBindingCheckpoints;
   target.nextEventId = source.nextEventId;
   target.nextWaiterId = source.nextWaiterId;
   target.nextTimerId = source.nextTimerId;

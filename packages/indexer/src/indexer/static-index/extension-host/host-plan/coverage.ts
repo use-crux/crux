@@ -121,6 +121,10 @@ const staticIndexExtractorIds = new Set([
   }),
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'signal.transport.polling',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'signal.provider',
   }),
   extractorKey({

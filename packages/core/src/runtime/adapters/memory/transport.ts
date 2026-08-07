@@ -5,12 +5,15 @@
  */
 
 import type { StatisticsLedgerExport } from "../../../statistics";
+import type { Lease } from "../../ports/leases";
 import type {
   AcceptRuntimeTransportEnvelopeInput,
   AcceptRuntimeTransportEnvelopeResult,
   ClaimRuntimeTransportEnvelopesOptions,
   CompleteRuntimeTransportNormalizationInput,
   FailRuntimeTransportNormalizationInput,
+  PutRuntimeTransportBindingCheckpointInput,
+  PutRuntimeTransportBindingCheckpointResult,
   ReplayRuntimeTransportEnvelopeInput,
   RuntimeTransportStorePort,
 } from "../../transport/store";
@@ -18,6 +21,7 @@ import type {
   RuntimeTransportEnvelopeIdentity,
   RuntimeTransportEnvelopeRecord,
 } from "../../transport/records";
+import type { RuntimeTransportBindingCheckpoint } from "../../transport/binding-checkpoint";
 import type { MemoryRuntimeData, MemoryWriteRecorder } from "./data";
 import { scopedKey } from "./data";
 import {
@@ -286,7 +290,92 @@ export function createMemoryTransportStore(
       );
       return result;
     },
+
+    async getBindingCheckpoint(identity) {
+      const record = data.transportBindingCheckpoints.get(
+        bindingCheckpointKey(identity.namespace, identity.bindingId),
+      );
+      return record ? cloneBindingCheckpoint(record) : null;
+    },
+
+    async putBindingCheckpoint(
+      input: PutRuntimeTransportBindingCheckpointInput,
+    ): Promise<PutRuntimeTransportBindingCheckpointResult> {
+      if (!holdsBindingCheckpointLease(data, input.checkpoint, input.lease)) {
+        return Object.freeze({ kind: "rejected" as const });
+      }
+
+      recordWrite?.();
+      data.transportBindingCheckpoints.set(
+        bindingCheckpointKey(
+          input.checkpoint.namespace,
+          input.checkpoint.bindingId,
+        ),
+        cloneBindingCheckpoint(input.checkpoint),
+      );
+      return Object.freeze({ kind: "accepted" as const });
+    },
   };
+}
+
+function holdsBindingCheckpointLease(
+  data: MemoryRuntimeData,
+  checkpoint: RuntimeTransportBindingCheckpoint,
+  lease: Lease,
+): boolean {
+  const expectedResource = bindingLeaseResource(
+    checkpoint.namespace,
+    checkpoint.bindingId,
+  );
+  if (lease.resource !== expectedResource) {
+    return false;
+  }
+
+  const held = data.leases.get(lease.resource);
+  if (!held) {
+    return false;
+  }
+  if (held.token !== lease.token) {
+    return false;
+  }
+  if ((held.ownerId ?? null) !== (lease.ownerId ?? null)) {
+    return false;
+  }
+  if (held.expiresAt.getTime() <= Date.now()) {
+    return false;
+  }
+  return true;
+}
+
+/** Matches {@link import("../../worker/worker-transport-supervision").bindingLeaseResource}. */
+function bindingLeaseResource(namespace: string, bindingId: string): string {
+  return `transport-binding:${namespace}:${bindingId}`;
+}
+
+function bindingCheckpointKey(namespace: string, bindingId: string): string {
+  return scopedKey(namespace, bindingId);
+}
+
+function cloneBindingCheckpoint(
+  checkpoint: RuntimeTransportBindingCheckpoint,
+): RuntimeTransportBindingCheckpoint {
+  return Object.freeze({
+    schemaVersion: 1 as const,
+    namespace: checkpoint.namespace,
+    bindingId: checkpoint.bindingId,
+    cursor: checkpoint.cursor,
+    updatedAt: checkpoint.updatedAt,
+    ...(checkpoint.lastPolledAt !== undefined
+      ? { lastPolledAt: checkpoint.lastPolledAt }
+      : {}),
+    ...(checkpoint.lastOwnerId !== undefined
+      ? { lastOwnerId: checkpoint.lastOwnerId }
+      : {}),
+    ...(checkpoint.lastErrorCode !== undefined
+      ? { lastErrorCode: checkpoint.lastErrorCode }
+      : {}),
+    ...(checkpoint.morePending === true ? { morePending: true as const } : {}),
+  });
 }
 
 function isClaimable(

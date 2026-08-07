@@ -12,6 +12,11 @@ export type {
   RuntimeSignalTransportTarget,
   RuntimeTransportConfigRef,
 } from "./contracts";
+export type {
+  RuntimeTransportBindingCheckpoint,
+  RuntimeTransportBindingCheckpointIdentity,
+} from "./binding-checkpoint";
+export { MAX_TRANSPORT_BINDING_CURSOR_BYTES } from "./binding-checkpoint";
 export { RuntimeManagedTransportContractError } from "./errors";
 export {
   validateRuntimeAcceptedTransportEnvelope,
@@ -33,6 +38,8 @@ export type {
   ClaimRuntimeTransportEnvelopesOptions,
   CompleteRuntimeTransportNormalizationInput,
   FailRuntimeTransportNormalizationInput,
+  PutRuntimeTransportBindingCheckpointInput,
+  PutRuntimeTransportBindingCheckpointResult,
   ReplayRuntimeTransportEnvelopeInput,
   RuntimeTransportStorePort,
 } from "./store";

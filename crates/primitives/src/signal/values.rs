@@ -22,6 +22,7 @@ const LIVE_FIELDS: &[&str] = &[
     "socket",
     "callback",
     "handle",
+    "poll",
     "onEvent",
     "secret",
     "token",
@@ -45,7 +46,7 @@ pub(crate) fn string_property(
     }
 }
 
-pub(crate) fn webhook_kind(
+pub(crate) fn transport_kind(
     resolved: Option<&StaticSyntaxValue>,
     value: Option<&StaticSyntaxValue>,
 ) -> Option<&'static str> {
@@ -53,7 +54,8 @@ pub(crate) fn webhook_kind(
         Some(StaticSyntaxValue::Call { callee, .. }) => callee,
         _ => return None,
     };
-    if callee_name(call) != "webhook" {
+    let name = callee_name(call);
+    if name != "webhook" && name != "polling" {
         return None;
     }
     if !call
@@ -63,7 +65,11 @@ pub(crate) fn webhook_kind(
     {
         return None;
     }
-    Some("webhook")
+    Some(if name == "polling" {
+        "polling"
+    } else {
+        "webhook"
+    })
 }
 
 pub(crate) fn signal_map(

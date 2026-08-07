@@ -41,8 +41,9 @@ export interface ManagedTransportBindingOptions {
  * Project a live Signal provider into an inert managed-transport binding.
  *
  * @remarks The returned value contains only serializable declaration data. It
- * never captures `handle`, `onEvent`, credentials, Requests, or process-local
- * clients, and is suitable for immutable Runtime program generation.
+ * never captures `handle`, `poll`, `onEvent`, credentials, Requests, or
+ * process-local clients, and is suitable for immutable Runtime program
+ * generation.
  *
  * @param provider - Frozen Signal provider definition.
  * @param options - Binding identity, config reference, and Signal target.

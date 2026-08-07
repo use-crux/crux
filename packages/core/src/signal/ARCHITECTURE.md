@@ -169,9 +169,34 @@ program bindings.
 `projectTransportEnvelope()` is the privacy-safe operator/Devtools view: state,
 attempts, safe failure codes, and occurrence lineage without payload bytes.
 
+### Polling supervision (issue #340 baseline)
+
+`polling({ poll, intervalMs? })` is a second live transport kind for Signal
+providers. The single Runtime worker, on each maintenance tick:
+
+1. Claims a durable binding lease (`transport-binding:{namespace}:{bindingId}`).
+2. Loads the binding cursor checkpoint from the transport store.
+3. Calls `poll({ cursor, signal, configRef })` once for the leased binding.
+4. Accepts each returned event through `acceptTransportEnvelope()` (the same
+   #337 kernel as webhooks).
+5. Writes `nextCursor` only after every event in the batch is accepted or a
+   same-digest duplicate. Partial failure leaves the previous cursor in place.
+6. Drains accepted envelopes through the existing normalization runner.
+
+Shutdown aborts the poll `AbortSignal`, releases held binding leases, and keeps
+the existing worker ownership/stop contract. Competing supervisors coordinate
+through Runtime leases, not a process-local transport registry. When
+`PollResult.more` is true after durable acceptance, the next tick may skip
+`intervalMs` once (`morePending` on the checkpoint). Poll failures record a
+safe `lastErrorCode` without advancing the cursor; there is no automatic
+exponential backoff beyond `intervalMs` and the worker cadence.
+
 ## Deliberate limits
 
 This slice owns no historical replay for later local subscribers, consumer
-completion acknowledgment, or cross-process callback bus. Polling, SSE,
-WebSocket, and generic stream supervision remain issue #340 and must not be
-inferred from webhook provider identities or transport envelope records.
+completion acknowledgment, or cross-process callback bus. Webhook edge
+acceptance remains the host-driven path from #337. Polling supervision is the
+first #340 vertical; SSE, WebSocket, and generic async-stream adapters remain
+follow-on children on the same lifecycle seam and must not invent a second
+worker or Channel claim policy. Channel exclusive conversation ownership
+remains #302.

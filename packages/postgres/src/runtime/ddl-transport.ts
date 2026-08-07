@@ -3,7 +3,12 @@ import { table } from './sql'
 export const TRANSPORT_POSTGRES_TABLES: readonly [
   'transport_envelopes',
   'transport_statistics',
-] = ['transport_envelopes', 'transport_statistics']
+  'transport_binding_checkpoints',
+] = [
+  'transport_envelopes',
+  'transport_statistics',
+  'transport_binding_checkpoints',
+]
 
 export const TRANSPORT_REQUIRED_COLUMNS: Readonly<
   Record<(typeof TRANSPORT_POSTGRES_TABLES)[number], readonly string[]>
@@ -28,6 +33,16 @@ export const TRANSPORT_REQUIRED_COLUMNS: Readonly<
     'lineage',
   ],
   transport_statistics: ['namespace', 'statistics', 'updated_at'],
+  transport_binding_checkpoints: [
+    'namespace',
+    'binding_id',
+    'cursor',
+    'updated_at',
+    'last_polled_at',
+    'last_owner_id',
+    'last_error_code',
+    'more_pending',
+  ],
 }
 
 export const TRANSPORT_REQUIRED_INDEXES: readonly string[] = [
@@ -38,6 +53,7 @@ export const TRANSPORT_REQUIRED_INDEXES: readonly string[] = [
 export function transportDdlStatements(schema: string): readonly string[] {
   const envelopes = table(schema, 'transport_envelopes')
   const statistics = table(schema, 'transport_statistics')
+  const checkpoints = table(schema, 'transport_binding_checkpoints')
   return [
     `CREATE TABLE IF NOT EXISTS ${envelopes} (
       namespace text NOT NULL,
@@ -64,6 +80,17 @@ export function transportDdlStatements(schema: string): readonly string[] {
       namespace text PRIMARY KEY,
       statistics jsonb NOT NULL,
       updated_at timestamptz NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS ${checkpoints} (
+      namespace text NOT NULL,
+      binding_id text NOT NULL,
+      cursor text,
+      updated_at timestamptz NOT NULL,
+      last_polled_at timestamptz,
+      last_owner_id text,
+      last_error_code text,
+      more_pending boolean,
+      PRIMARY KEY (namespace, binding_id)
     )`,
     `CREATE INDEX IF NOT EXISTS transport_envelopes_claimable_idx
       ON ${envelopes} (namespace, state, next_attempt_at)`,

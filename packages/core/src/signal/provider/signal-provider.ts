@@ -6,8 +6,14 @@
 
 import type { Signal } from "../definition";
 import type { SignalSchema } from "../schema-types";
-import type { WebhookTransport } from "../transport";
+import type {
+  PollingTransport,
+  SignalProviderTransport,
+  WebhookTransport,
+} from "../transport";
 import type { RuntimeAcceptedTransportEnvelope } from "../../runtime/transport/contracts";
+
+export type { SignalProviderTransport };
 
 /**
  * Minimal structural bound for one provider Signal map member.
@@ -96,8 +102,13 @@ export interface SignalProviderOptions<
 > {
   /** Stable application-owned provider identity. */
   readonly id: TId;
-  /** Transport that authenticates raw ingress before acceptance. */
-  readonly transport: WebhookTransport;
+  /**
+   * Transport that authenticates raw ingress before acceptance.
+   *
+   * @remarks Webhook transports are host-edge driven. Polling transports are
+   * acquired by the single Runtime worker through the shared supervision loop.
+   */
+  readonly transport: SignalProviderTransport;
   /**
    * Signals this provider may publish.
    *
@@ -131,8 +142,8 @@ export interface SignalProvider<
   readonly _tag: "SignalProvider";
   /** Literal application-owned provider identity. */
   readonly id: TId;
-  /** Authored transport definition. */
-  readonly transport: WebhookTransport;
+  /** Authored transport definition (webhook or polling). */
+  readonly transport: SignalProviderTransport;
   /** Exact declared Signal map. */
   readonly signals: TSignals;
   /**
@@ -183,9 +194,9 @@ export function signalProvider<
   if (!options.id || options.id.trim() !== options.id) {
     throw new TypeError("signalProvider({ id }) requires a non-empty trimmed id.");
   }
-  if (options.transport?._tag !== "WebhookTransport") {
+  if (!isSignalProviderTransport(options.transport)) {
     throw new TypeError(
-      "signalProvider({ transport }) requires a webhook transport definition.",
+      "signalProvider({ transport }) requires a webhook() or polling() transport definition.",
     );
   }
   if (
@@ -207,4 +218,42 @@ export function signalProvider<
     signals,
     onEvent: options.onEvent,
   });
+}
+
+function isSignalProviderTransport(
+  value: unknown,
+): value is SignalProviderTransport {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const transport = value as {
+    readonly _tag?: unknown;
+    readonly handle?: unknown;
+    readonly poll?: unknown;
+  };
+
+  if (transport._tag === "WebhookTransport") {
+    return typeof transport.handle === "function";
+  }
+
+  if (transport._tag === "PollingTransport") {
+    return typeof transport.poll === "function";
+  }
+
+  return false;
+}
+
+/** Type-narrow a provider transport to the polling form. */
+export function isPollingTransport(
+  transport: SignalProviderTransport,
+): transport is PollingTransport {
+  return transport._tag === "PollingTransport";
+}
+
+/** Type-narrow a provider transport to the webhook form. */
+export function isWebhookTransport(
+  transport: SignalProviderTransport,
+): transport is WebhookTransport {
+  return transport._tag === "WebhookTransport";
 }

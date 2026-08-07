@@ -18,6 +18,7 @@ import {
   acquireRuntimeWorkerOwnership,
 } from './ownership'
 import { createWorkerTransportDrain } from './worker-transport'
+import { createWorkerTransportSupervision } from './worker-transport-supervision'
 import { createWorkerEffectRecoveryDrain } from './worker-effect-recovery'
 
 const DEFAULT_STOP_TIMEOUT_MS = 10_000
@@ -65,9 +66,11 @@ export interface RuntimeWorkerStopOptions {
  * The worker resolves executable targets only from `program.targets`, disables
  * composer-owned maintenance, and runs its own immediate serial maintenance
  * loop. One worker may own a store and namespace in the current process.
- * When the program declares managed transports, each tick also claims a bounded
- * batch of accepted Signal-provider envelopes and normalizes them through the
- * existing restart-safe transport kernel using `program.providers`.
+ * When the program declares managed transports, each tick also supervises
+ * polling bindings (lease, poll, durable accept, cursor checkpoint), then
+ * claims a bounded batch of accepted Signal-provider envelopes and normalizes
+ * them through the existing restart-safe transport kernel using
+ * `program.providers`.
  * Each tick also claims interrupted durable Effect rollback scopes, resolves
  * recovery only through `program.effectTargets`, and executes their exact
  * reconstructed plans before transport work.
@@ -106,8 +109,14 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   }
 
   let transportDrain
+  let transportSupervision
   let effectRecoveryDrain
   try {
+    transportSupervision = createWorkerTransportSupervision({
+      program: options.program,
+      store: runtime.store,
+      namespace: runtime.namespace,
+    })
     transportDrain = createWorkerTransportDrain({
       program: options.program,
       store: runtime.store,
@@ -157,6 +166,16 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
       releaseLocalOwnership()
     }
   }
+  const releaseTransportSupervision = async (): Promise<void> => {
+    if (!transportSupervision) {
+      return
+    }
+    try {
+      await transportSupervision.dispose()
+    } catch {
+      // Best-effort; binding lease expiry remains the ownership fence.
+    }
+  }
   const closeAfterFailure = async (error: unknown): Promise<void> => {
     if (!fatalFailure) fatalFailure = { error }
     if (state === 'closed') return
@@ -164,6 +183,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     recoveryAbort.abort()
     if (timer) clearTimeout(timer)
     runtime.maintenance.stop()
+    await releaseTransportSupervision()
     runtime.dispose()
     try {
       await releaseOwnership()
@@ -178,6 +198,11 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
       await runtime.maintenance.tick()
       if (effectRecoveryDrain && state === 'running') {
         await effectRecoveryDrain.runOnce(recoveryAbort.signal)
+      }
+      // Acquire polling bindings on the same serial cadence before drain so
+      // newly accepted envelopes can normalize in a later tick.
+      if (transportSupervision && state === 'running') {
+        await transportSupervision.runOnce(recoveryAbort.signal)
       }
       // Drain accepted transport envelopes on the same serial cadence. Claims
       // left in-flight on stop expire under the existing lease/fence contract.
@@ -215,6 +240,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
         const activeWork = activeTick ?? acquisition
         if (!(await settlesWithin(activeWork, timeoutMs))) {
           const error = stopTimeoutError(timeoutMs)
+          await releaseTransportSupervision()
           runtime.dispose()
           void activeWork.then(
             () => releaseOwnership().catch(() => undefined),
@@ -225,6 +251,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
           throw error
         }
         if (fatalFailure) throw fatalFailure.error
+        await releaseTransportSupervision()
         runtime.dispose()
         try {
           await releaseOwnership()

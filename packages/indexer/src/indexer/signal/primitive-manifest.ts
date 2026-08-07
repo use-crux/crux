@@ -1,5 +1,6 @@
 import {
   extractManagedTransportBindingStaticFacts,
+  extractPollingStaticFacts,
   extractSignalProviderStaticFacts,
   extractSignalStaticFacts,
   extractWebhookStaticFacts,
@@ -32,6 +33,18 @@ export const signalPrimitiveContributions = Object.freeze({
         },
       ],
       extract: extractWebhookStaticFacts,
+    },
+    {
+      name: "signal.transport.polling",
+      patterns: [
+        {
+          kind: "call" as const,
+          name: "polling",
+          importFrom: transportModules,
+          configArg: 0,
+        },
+      ],
+      extract: extractPollingStaticFacts,
     },
     {
       name: "signal.provider",

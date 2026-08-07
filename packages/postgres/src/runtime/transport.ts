@@ -4,7 +4,10 @@ import type {
   ClaimRuntimeTransportEnvelopesOptions,
   CompleteRuntimeTransportNormalizationInput,
   FailRuntimeTransportNormalizationInput,
+  PutRuntimeTransportBindingCheckpointInput,
+  PutRuntimeTransportBindingCheckpointResult,
   ReplayRuntimeTransportEnvelopeInput,
+  RuntimeTransportBindingCheckpoint,
   RuntimeTransportEnvelopeIdentity,
   RuntimeTransportEnvelopeRecord,
   RuntimeTransportStorePort,
@@ -27,6 +30,8 @@ export function createPostgresTransportStore(
 ): RuntimeTransportStorePort {
   const envelopes = table(schema, 'transport_envelopes')
   const statistics = table(schema, 'transport_statistics')
+  const checkpoints = table(schema, 'transport_binding_checkpoints')
+  const leases = table(schema, 'leases')
 
   return {
     async get(identity) {
@@ -318,7 +323,107 @@ export function createPostgresTransportStore(
         truncated: Boolean(result.rows[0]?.truncated),
       }
     },
+
+    async getBindingCheckpoint(identity) {
+      const result = await db.query<Record<string, unknown>>(
+        `SELECT * FROM ${checkpoints}
+          WHERE namespace = $1 AND binding_id = $2`,
+        [identity.namespace, identity.bindingId],
+      )
+      return result.rows[0] ? decodeCheckpoint(result.rows[0]) : null
+    },
+
+    async putBindingCheckpoint(
+      input: PutRuntimeTransportBindingCheckpointInput,
+    ): Promise<PutRuntimeTransportBindingCheckpointResult> {
+      const { checkpoint, lease } = input
+      const expectedResource = bindingLeaseResource(
+        checkpoint.namespace,
+        checkpoint.bindingId,
+      )
+      if (lease.resource !== expectedResource) {
+        return Object.freeze({ kind: 'rejected' as const })
+      }
+
+      const now = new Date()
+      recordWrite(faults)
+      // Single-statement fence: only insert/update when the binding lease is
+      // still held by the supplied owner/token and has not expired. An empty
+      // RETURNING set means reject without mutation (including no-row inserts).
+      const result = await db.query(
+        `WITH held AS (
+           SELECT 1
+             FROM ${leases}
+            WHERE resource = $1
+              AND token = $2
+              AND expires_at > $3::timestamptz
+              AND owner_id IS NOT DISTINCT FROM $4
+         )
+         INSERT INTO ${checkpoints} (
+           namespace, binding_id, cursor, updated_at, last_polled_at,
+           last_owner_id, last_error_code, more_pending
+         )
+         SELECT $5, $6, $7, $8, $9, $10, $11, $12
+           FROM held
+         ON CONFLICT (namespace, binding_id) DO UPDATE SET
+           cursor = EXCLUDED.cursor,
+           updated_at = EXCLUDED.updated_at,
+           last_polled_at = EXCLUDED.last_polled_at,
+           last_owner_id = EXCLUDED.last_owner_id,
+           last_error_code = EXCLUDED.last_error_code,
+           more_pending = EXCLUDED.more_pending
+         WHERE EXISTS (SELECT 1 FROM held)
+         RETURNING 1`,
+        [
+          lease.resource,
+          lease.token,
+          now,
+          lease.ownerId ?? null,
+          checkpoint.namespace,
+          checkpoint.bindingId,
+          checkpoint.cursor,
+          checkpoint.updatedAt,
+          checkpoint.lastPolledAt ?? null,
+          checkpoint.lastOwnerId ?? null,
+          checkpoint.lastErrorCode ?? null,
+          checkpoint.morePending === true ? true : null,
+        ],
+      )
+      if (!result.rows[0]) {
+        return Object.freeze({ kind: 'rejected' as const })
+      }
+      return Object.freeze({ kind: 'accepted' as const })
+    },
   }
+}
+
+/** Matches Core {@link bindingLeaseResource} for supervised polling bindings. */
+function bindingLeaseResource(namespace: string, bindingId: string): string {
+  return `transport-binding:${namespace}:${bindingId}`
+}
+
+function decodeCheckpoint(
+  row: Record<string, unknown>,
+): RuntimeTransportBindingCheckpoint {
+  return Object.freeze({
+    schemaVersion: 1 as const,
+    namespace: String(row.namespace),
+    bindingId: String(row.binding_id),
+    cursor: row.cursor === null || row.cursor === undefined
+      ? null
+      : String(row.cursor),
+    updatedAt: timestamp(row.updated_at),
+    ...(row.last_polled_at
+      ? { lastPolledAt: timestamp(row.last_polled_at) }
+      : {}),
+    ...(typeof row.last_owner_id === 'string'
+      ? { lastOwnerId: row.last_owner_id }
+      : {}),
+    ...(typeof row.last_error_code === 'string'
+      ? { lastErrorCode: row.last_error_code }
+      : {}),
+    ...(row.more_pending === true ? { morePending: true as const } : {}),
+  })
 }
 
 /**

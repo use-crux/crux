@@ -200,6 +200,85 @@ describe("signal transport native static projection", () => {
   );
 
   itWithRustOxc(
+    "projects polling transport with hasPoll and provider transportKind",
+    async () => {
+      const result = await extractNativeAndFallback({
+        callNames: ["signal", "polling", "signalProvider"],
+        callInterests: [
+          {
+            name: "signal",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal"],
+          },
+          {
+            name: "polling",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/transport"],
+          },
+          {
+            name: "signalProvider",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/provider"],
+          },
+        ],
+        source: [
+          `import { signal } from '@use-crux/core/signal'`,
+          `import { polling } from '@use-crux/core/signal/transport'`,
+          `import { signalProvider } from '@use-crux/core/signal/provider'`,
+          `import { z } from 'zod'`,
+          `export const orderSubmitted = signal({`,
+          `  id: 'order.submitted',`,
+          `  schema: z.object({ orderId: z.string() }),`,
+          `})`,
+          `const ingress = polling({`,
+          `  intervalMs: 5_000,`,
+          `  async poll() { throw new Error('PRIVATE_POLL') },`,
+          `})`,
+          `export const ordersPoll = signalProvider({`,
+          `  id: 'orders.poll',`,
+          `  transport: ingress,`,
+          `  signals: { orderSubmitted },`,
+          `  async onEvent() { throw new Error('PRIVATE_SIGNAL_EVENT') },`,
+          `})`,
+        ].join("\n"),
+      });
+
+      expect(nativeFactCount(result.record, "signal.transport.polling")).toBe(
+        1,
+      );
+      const transport = result.nativeOut.definitions.find(
+        (definition) => definition.kind === "signal.transport",
+      );
+      expect(transport).toMatchObject({
+        kind: "signal.transport",
+        name: "ingress",
+        metadata: {
+          facts: {
+            kind: "signal.transport",
+            transportKind: "polling",
+            hasPoll: true,
+          },
+        },
+      });
+      const provider = result.nativeOut.definitions.find(
+        (definition) => definition.kind === "signal.provider",
+      );
+      expect(provider?.metadata?.facts).toMatchObject({
+        kind: "signal.provider",
+        providerId: "orders.poll",
+        transportKind: "polling",
+      });
+      expect(
+        JSON.stringify(
+          result.nativeOut.definitions.map(
+            (definition) => definition.metadata?.facts,
+          ),
+        ),
+      ).not.toContain("PRIVATE_POLL");
+      expect(jsonStable(result.nativeOut)).toEqual(
+        jsonStable(result.typescriptOut),
+      );
+    },
+  );
+
+  itWithRustOxc(
     "ignores lookalike signal transport helpers",
     async () => {
       const result = await extractNativeAndFallback({
