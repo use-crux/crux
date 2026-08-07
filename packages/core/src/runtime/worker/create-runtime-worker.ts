@@ -67,11 +67,12 @@ export interface RuntimeWorkerStopOptions {
  * composer-owned maintenance, and runs its own immediate serial maintenance
  * loop. One worker may own a store and namespace in the current process.
  * When the program declares managed transports, each tick also supervises
- * polling bindings (lease, poll, durable accept, cursor checkpoint) and stream
- * bindings (lease, start/refresh connection fibers, durable accept, cursor
- * checkpoint). Stream fibers continue between ticks so long-lived connections
- * never block the maintenance loop. Each tick then claims a bounded batch of
- * accepted Signal-provider envelopes and normalizes them through the existing
+ * polling bindings (lease, poll, durable accept, cursor checkpoint) and managed
+ * stream bindings — including SSE after pure lowering onto the stream fiber
+ * (lease, start/refresh connection fibers, durable accept, cursor checkpoint).
+ * Stream fibers continue between ticks so long-lived connections never block
+ * the maintenance loop. Each tick then claims a bounded batch of accepted
+ * Signal-provider envelopes and normalizes them through the existing
  * restart-safe transport kernel using `program.providers`.
  * Each tick also claims interrupted durable Effect rollback scopes, resolves
  * recovery only through `program.effectTargets`, and executes their exact
