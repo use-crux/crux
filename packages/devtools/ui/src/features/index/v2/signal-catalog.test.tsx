@@ -153,6 +153,44 @@ describe("signal catalog", () => {
     expect(html).toMatch(/transport<\/span><span[^>]*>sse<\/span>/);
   });
 
+  it("renders managed WebSocket transport kind on provider catalog rows", () => {
+    const wsData = {
+      ...data,
+      definitions: [
+        ...data.definitions.filter(
+          (definition) => definition.kind !== "signal.provider",
+        ),
+        {
+          id: "signal.provider:orders.socket",
+          kind: "signal.provider",
+          name: "orders.socket",
+          fidelity: "resolved",
+          metadata: {
+            facts: {
+              kind: "signal.provider",
+              providerId: "orders.socket",
+              identity: "static",
+              transportKind: "websocket",
+              signalIds: ["order.submitted"],
+              hasOnEvent: true,
+            },
+          },
+        },
+      ],
+    } as unknown as ProjectIndexData;
+    const index = buildIndex(wsData);
+    const definition = index.byId("signal.provider:orders.socket")!;
+    const html = renderToStaticMarkup(
+      <IndexIndexProvider index={index}>
+        <IndexSelectProvider select={() => undefined}>
+          <IndexSignalProviderDetail def={definition} />
+        </IndexSelectProvider>
+      </IndexIndexProvider>,
+    );
+    expect(html).toContain("orders.socket");
+    expect(html).toMatch(/transport<\/span><span[^>]*>websocket<\/span>/);
+  });
+
   it("renders transport binding config-ref and Signal target lineage", () => {
     const index = buildIndex(data);
     const definition = index.byId("signal.transportBinding:binding.orders")!;

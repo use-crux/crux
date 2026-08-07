@@ -6,6 +6,7 @@ import {
   extractSseStaticFacts,
   extractStreamStaticFacts,
   extractWebhookStaticFacts,
+  extractWebSocketStaticFacts,
 } from "./static-facts";
 import { providerModules, signalModules, transportModules } from "./modules";
 
@@ -71,6 +72,18 @@ export const signalPrimitiveContributions = Object.freeze({
         },
       ],
       extract: extractSseStaticFacts,
+    },
+    {
+      name: "signal.transport.websocket",
+      patterns: [
+        {
+          kind: "call" as const,
+          name: "websocket",
+          importFrom: transportModules,
+          configArg: 0,
+        },
+      ],
+      extract: extractWebSocketStaticFacts,
     },
     {
       name: "signal.provider",
