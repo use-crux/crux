@@ -69,13 +69,15 @@ page-relative source ranges.
 - `pnpm-lock.yaml`
 
 1. RED: in the existing public-source test suite, make `fileSource()` load a
-   small PDF while the native external boundary returns multi-page Markdown.
+   committed small PDF fixture through the real installed
+   `@firecrawl/pdf-inspector`; do not mock the successful native boundary.
    Assert authoritative one-based physical pages/source locations, native
    Markdown as `content`, stable `<pageId>/block:<ordinal>` IDs, headings,
    paragraph/list/code blocks, GFM table `columns`/body `rows`, decoded compact
    heading paths, and exact `sourceRange` slices. Include a normalized or
    combined block case that deliberately omits `sourceRange` rather than
-   guessing it.
+   guessing it. Keep mocks of the native boundary only for unavailable,
+   throwing, and malformed-result cases.
 2. GREEN: mirror the same provider-neutral optional block shape in ingest
    types (structurally compatible with Core); dynamically import
    `@firecrawl/pdf-inspector`, convert bytes to `Buffer` only at that call, and
@@ -90,18 +92,29 @@ page-relative source ranges.
    AST or parser hook.
 4. RED then GREEN for title metadata best-effort behavior: native pages still
    load if `getMetadata()` fails, and an available `Title` survives.
-5. Add `@firecrawl/pdf-inspector` as a direct ingest dependency and regenerate
+5. RED then GREEN for the minimum independently shippable document-wide
+   fallback: force dynamic-import unavailability and, separately,
+   `extractPagesMarkdown` throwing. For each case, use `pdfjs-dist` to extract
+   every physical page without blocks and assert exactly one `parser_warning`.
+   Assert the exact message
+   `PDF source "<sourceId>" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`
+   with the actual source ID substituted, and metadata containing only
+   `primaryParser: "pdf-inspector"`, `fallbackParser: "pdfjs-dist"`, and the
+   applicable closed reason (`backend_unavailable` or `extraction_failed`).
+   Preserve the existing fallback textless-page behavior and one outer
+   loading-task cleanup. Defer expanded malformed-result validation to Task 5.
+6. Add `@firecrawl/pdf-inspector` as a direct ingest dependency and regenerate
    only the package lock through the normal pnpm workflow (not a manual lock
    edit). Confirm its optional platform packages remain optional/transitive;
    do not add it to Core, Local, or Indexer.
-6. Verify sequentially:
+7. Verify sequentially:
 
    ```sh
    pnpm --filter @use-crux/ingest test -- __tests__/sources.test.ts --maxWorkers=1 --no-file-parallelism
    pnpm --filter @use-crux/ingest typecheck
    ```
 
-7. Perform spec-compliance review, then code-quality review. Commit this task
+8. Perform spec-compliance review, then code-quality review. Commit this task
    alone, e.g. `feat(ingest): extract layout-aware PDF page blocks`.
 
 ## Task 3 — Structured narrative page-block chunking
@@ -209,13 +222,17 @@ while installed consumers resolve the native package.
    Markdown, emits no blocks for model text, retains blank/warned pages for an
    unavailable/empty/throwing description, and leaves reliable pages model-free.
    GREEN with one shared media-description helper.
-2. RED then GREEN for each document-wide downgrade boundary, forced only at
-   `pdf-inspector`/`pdfjs-dist`: dynamic-load unavailability,
-   `extractPagesMarkdown` throw, and each malformed result invariant (count,
-   index/order, markdown, `needsOcr`). Validate `unknown` with small readonly
-   internal types and the closed reason union; use `pdfjs-dist` extraction for
-   every page, no blocks, and exactly one `parser_warning` with only the
-   specified parser names/reason. Preserve fallback failure as the existing
+2. RED then GREEN for expanded malformed native-result validation, forced only
+   at the `pdf-inspector` boundary: missing `pages`, non-array `pages`, count,
+   index/order, `markdown`, and `needsOcr`. Validate `unknown` with small
+   readonly internal types and the closed reason union. For every malformed
+   case, assert document-wide `pdfjs-dist` extraction with no blocks and
+   exactly one `parser_warning`; assert the exact message
+   `PDF source "<sourceId>" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`
+   with the actual source ID substituted, and metadata containing only
+   `primaryParser: "pdf-inspector"`, `fallbackParser: "pdfjs-dist"`, and
+   `reason: "invalid_result"`. Retain the Task 2 exact assertions for
+   unavailable/throwing boundaries. Preserve fallback failure as the existing
    `parse_failed` cause and do not create a warning/document in that case.
 3. RED then GREEN for URL and Asset source parity, retained physical pages,
    best-effort title, and loading-task destruction on all success/failure
@@ -238,22 +255,29 @@ while installed consumers resolve the native package.
    pnpm --filter @use-crux/ingest test -- --maxWorkers=1 --no-file-parallelism
    ```
 
-7. Run the focused real-package native proof from `packages/ingest` (not a
+7. Re-run the Task 2 real-package native proof from `packages/ingest` (not a
    mocked test), invoking the installed `@firecrawl/pdf-inspector` entry and
-   `extractPagesMarkdown` against a tiny PDF fixture on the current Node 22
-   platform. This proves the selected optional platform binary loads; keep
-   forced fallback tests independent of platform support.
-8. Run a packed-consumer smoke sequentially in a safely created temporary
-   directory. Use `mktemp -d` under `${TMPDIR:-/tmp}` and a shell `trap` that
-   removes only the recorded temp directory; pack Core and Ingest into its
-   `packs/` directory with the package manager, create a Node-22 consumer
-   project under its `install/` directory, and install the tarballs with pnpm
-   offline/no-workspace resolution. Run a Node ESM script from that consumer
-   that imports `@use-crux/ingest`, loads a tiny PDF through `fileSource()`, and
-   confirms both the wrapper and selected optional native platform package
-   resolve. Do not use a repository path, workspace link, or Edge/browser
-   bundle for this smoke.
-9. Run `git diff --check`. Perform a whole-implementation spec review followed
+   `extractPagesMarkdown` against the committed tiny PDF fixture on the current
+   Node 22 platform. This proves the selected optional platform binary loads;
+   keep forced fallback tests independent of platform support.
+8. Prepare the packed-consumer inputs through the repository's normal release
+   workflow first: run `pnpm release:stage:ts -- --out <recorded-stage-dir>` as
+   one isolated, non-overlapping memory-heavy command and wait for it to exit.
+   This must compile release output and rewrite package exports to `dist`.
+   Do not pack either raw workspace package.
+9. Only after staging exits, run the packed-consumer smoke sequentially in a
+   safely created temporary directory. Use `mktemp -d` under `${TMPDIR:-/tmp}`
+   and a shell `trap` that removes only the recorded temp directory; use the
+   package manager to pack staged `<recorded-stage-dir>/@use-crux/core` and
+   `<recorded-stage-dir>/@use-crux/ingest` into the temp directory's `packs/`
+   directory, create a Node-22 consumer project under its `install/` directory,
+   and install those tarballs with pnpm offline/no-workspace resolution. Run a
+   Node ESM script from that consumer that imports `@use-crux/ingest`, loads the
+   tiny PDF fixture through `fileSource()`, and confirms both the wrapper and
+   selected optional native platform package resolve. Do not use a repository
+   path, workspace link, raw workspace tarball, or Edge/browser bundle for this
+   smoke.
+10. Run `git diff --check`. Perform a whole-implementation spec review followed
    by a whole-implementation code-quality review. Commit this task alone, e.g.
    `feat(ingest): complete layout-aware PDF fallback`.
 
@@ -270,8 +294,9 @@ while installed consumers resolve the native package.
    semantic behavior/fingerprints did not.
 5. Confirm the existing XLSX changeset was updated, no duplicate added, and
    documentation tells consumers about native platform/bundler constraints.
-6. Confirm the packed Node-22 consumer proof uses only tarballs installed in a
-   temporary directory, then cleanly removes that directory.
+6. Confirm release staging ran alone and completed before packing, and that the
+   packed Node-22 consumer proof uses only staged Core/Ingest tarballs installed
+   in a temporary directory, then cleanly removes that directory.
 7. Re-run `git diff --check`, inspect the final diff, and complete the final
    spec-compliance review followed by code-quality review before merge.
 
