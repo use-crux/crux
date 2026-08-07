@@ -55,6 +55,13 @@ Make flow runs and pipeline, agent, and composition roots passive rollback
 boundaries. Their results expose Effect scope references, and flows can
 explicitly recover completed units through `flow.rollback()`.
 
+Work and Session turn Effect scopes keep the admission identity through
+execution. `work.cancel()` and ownership detach fence execution without
+rolling back completed external Effects; recovery stays an explicit
+`rollback()` / `recover()` / worker policy choice. Detached ownership
+(`explicit` or `owner-ended`) preserves receipts and recovery access without
+reparenting the Effect scope, and ambiguous outcomes remain reconcilable.
+
 Add an internal audit-first native Effect contract so first-party domains can
 contribute receipts, evidence, and Effect facets on their existing spans while
 reporting unavailable or irreversible recovery honestly.

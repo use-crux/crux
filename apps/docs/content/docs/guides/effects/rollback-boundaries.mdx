@@ -301,6 +301,38 @@ store, the same ref reconstructs after restart; recovery still needs a matching
 program target for each unit. See
 [Durability and restarts](/docs/guides/effects/durability-and-restarts).
 
+## Work and Session lifecycle
+
+Finite Work and Session turn Work expose a stable `effects` scope allocated at
+acceptance. Execution reuses that same scope identity; detachment never
+reparents it.
+
+`work.cancel()` fences further execution. It does not erase completed external
+Effects, and it does not run recovery. Compensation runs only when application
+code or an explicit Runtime worker policy calls `rollback()`, `recover()`, or
+boundary recovery. Effect definitions never opt into cancellation-triggered
+compensation.
+
+`work.detach()` and ownership that ends as `detached: owner-ended` keep
+receipts and recovery access on the original scope. Graceful Session close does
+not imply rollback. When Session fencing terminates a turn, ambiguous external
+outcomes stay reconcilable with `reconcileEffect()` instead of being settled as
+failed or silently rolled back.
+
+```ts
+const work = await spawn(publishReport, input, {
+  idempotencyKey: requestId,
+});
+
+// Later, after review of completed Effects:
+await rollback(work.effects, { reason: "Customer rejected publication" });
+```
+
+See [Application Work](/docs/guides/durable-execution/work) for cancel, detach,
+and reconnection, and
+[Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+for unknown outcomes.
+
 ## Related
 
 - [Effects overview](/docs/guides/effects)
