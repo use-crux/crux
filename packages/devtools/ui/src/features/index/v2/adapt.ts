@@ -225,7 +225,7 @@ export interface IndexFacts {
   signalId?: string;
   providerId?: string;
   bindingId?: string;
-  transportKind?: "webhook" | "polling" | "stream";
+  transportKind?: "webhook" | "polling" | "stream" | "sse";
   transportVariable?: string;
   signalIds?: string[];
   signalVariables?: string[];

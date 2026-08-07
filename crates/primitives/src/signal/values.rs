@@ -56,7 +56,7 @@ pub(crate) fn transport_kind(
         _ => return None,
     };
     let name = callee_name(call);
-    if name != "webhook" && name != "polling" && name != "stream" {
+    if name != "webhook" && name != "polling" && name != "stream" && name != "sse" {
         return None;
     }
     if !call
@@ -69,6 +69,7 @@ pub(crate) fn transport_kind(
     Some(match name {
         "polling" => "polling",
         "stream" => "stream",
+        "sse" => "sse",
         _ => "webhook",
     })
 }

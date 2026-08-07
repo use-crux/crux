@@ -596,6 +596,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "signal.transport.sse",
+      "family": "signal.transport.sse",
+      "fixtureClasses": {
+        "definitions": "signal-native-static.test.ts",
+        "degradedBehavior": "signal-native-static.test.ts",
+        "dependencies": "signal-native-static.test.ts",
+        "diagnostics": "signal-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "relations": "signal-native-static.test.ts",
+        "runtimeMetadata": "signal-native-static.test.ts",
+        "sourceGraph": "signal-native-static.test.ts",
+        "sourceRefs": "signal-native-static.test.ts",
+        "sources": "signal-native-static.test.ts"
+      },
+      "nativeCovered": true,
+      "parityFixtures": {
+        "negative": "signal-native-static.test.ts",
+        "positive": "signal-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "signal.transportBinding",
       "family": "signal.transportBinding",
       "fixtureClasses": {

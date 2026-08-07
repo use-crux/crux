@@ -3,6 +3,7 @@ import {
   extractPollingStaticFacts,
   extractSignalProviderStaticFacts,
   extractSignalStaticFacts,
+  extractSseStaticFacts,
   extractStreamStaticFacts,
   extractWebhookStaticFacts,
 } from "./static-facts";
@@ -58,6 +59,18 @@ export const signalPrimitiveContributions = Object.freeze({
         },
       ],
       extract: extractStreamStaticFacts,
+    },
+    {
+      name: "signal.transport.sse",
+      patterns: [
+        {
+          kind: "call" as const,
+          name: "sse",
+          importFrom: transportModules,
+          configArg: 0,
+        },
+      ],
+      extract: extractSseStaticFacts,
     },
     {
       name: "signal.provider",

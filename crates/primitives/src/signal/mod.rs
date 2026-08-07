@@ -4,5 +4,5 @@ pub(crate) mod provider;
 pub(crate) mod values;
 
 pub(crate) use binding::managed_transport_binding_facts;
-pub(crate) use facts::{polling_facts, signal_facts, stream_facts, webhook_facts};
+pub(crate) use facts::{polling_facts, signal_facts, sse_facts, stream_facts, webhook_facts};
 pub(crate) use provider::signal_provider_facts;

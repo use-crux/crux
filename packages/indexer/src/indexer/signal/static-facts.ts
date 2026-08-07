@@ -17,6 +17,7 @@ import { providerModules, transportModules } from "./modules";
 
 export { extractManagedTransportBindingStaticFacts } from "./binding-static-facts";
 export { extractPollingStaticFacts } from "./polling-static-facts";
+export { extractSseStaticFacts } from "./sse-static-facts";
 export { extractStreamStaticFacts } from "./stream-static-facts";
 
 /** Projects canonical exported Signal definitions and their authored schema. */

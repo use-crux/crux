@@ -114,6 +114,44 @@ describe("signal catalog", () => {
     expect(html).not.toMatch(/onEvent\(/i);
   });
 
+  it("renders managed SSE transport kind on provider catalog rows", () => {
+    const sseData = {
+      ...data,
+      definitions: [
+        ...data.definitions.filter(
+          (definition) => definition.kind !== "signal.provider",
+        ),
+        {
+          id: "signal.provider:orders.sse",
+          kind: "signal.provider",
+          name: "orders.sse",
+          fidelity: "resolved",
+          metadata: {
+            facts: {
+              kind: "signal.provider",
+              providerId: "orders.sse",
+              identity: "static",
+              transportKind: "sse",
+              signalIds: ["order.submitted"],
+              hasOnEvent: true,
+            },
+          },
+        },
+      ],
+    } as unknown as ProjectIndexData;
+    const index = buildIndex(sseData);
+    const definition = index.byId("signal.provider:orders.sse")!;
+    const html = renderToStaticMarkup(
+      <IndexIndexProvider index={index}>
+        <IndexSelectProvider select={() => undefined}>
+          <IndexSignalProviderDetail def={definition} />
+        </IndexSelectProvider>
+      </IndexIndexProvider>,
+    );
+    expect(html).toContain("orders.sse");
+    expect(html).toContain("sse");
+  });
+
   it("renders transport binding config-ref and Signal target lineage", () => {
     const index = buildIndex(data);
     const definition = index.byId("signal.transportBinding:binding.orders")!;

@@ -15,15 +15,20 @@ import { providerModules, signalModules, transportModules } from "./modules";
 
 const liveBindingFields = new Set<string>(SIGNAL_TRANSPORT_BINDING_LIVE_FIELDS);
 
-/** Resolve whether a transport expression is an authored webhook, polling, or stream transport. */
+/** Resolve whether a transport expression is an authored webhook, polling, stream, or SSE transport. */
 export function authoredTransportKind(
   resolved: ResolvedStaticRecordSource | undefined,
   value: StaticSyntaxValue | undefined,
-): "webhook" | "polling" | "stream" | undefined {
+): "webhook" | "polling" | "stream" | "sse" | undefined {
   const call = resolved?.value.kind === "call" ? resolved.value : value;
   if (call?.kind !== "call") return undefined;
   const name = call.callee.importedName ?? call.callee.name;
-  if (name !== "webhook" && name !== "polling" && name !== "stream") {
+  if (
+    name !== "webhook" &&
+    name !== "polling" &&
+    name !== "stream" &&
+    name !== "sse"
+  ) {
     return undefined;
   }
   const moduleSpecifier = call.callee.moduleSpecifier;
