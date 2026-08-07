@@ -64,6 +64,28 @@ export interface IngestPagePart extends IngestPartBase {
   content: string
   pageNumber: number
   headingPath?: string[]
+  blocks?: IngestPageBlock[]
+}
+
+export type IngestPageBlock = IngestPageTextBlock | IngestPageTableBlock
+
+export interface IngestPageTextBlock {
+  id: string
+  kind: 'text'
+  role: 'heading' | 'paragraph' | 'list' | 'code' | 'other'
+  content: string
+  headingPath?: string[]
+  sourceRange?: { start: number; end: number }
+}
+
+export interface IngestPageTableBlock {
+  id: string
+  kind: 'table'
+  content: string
+  rows: string[][]
+  columns?: string[]
+  headingPath?: string[]
+  sourceRange?: { start: number; end: number }
 }
 
 /** Provider-neutral source facts for one emitted spreadsheet cell. */
