@@ -5,12 +5,12 @@
  */
 
 import { z } from 'zod'
-import { stableStringify } from '../../indexing/hash'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import type { AssertionStage } from '../assertions/assertions'
 import type { RelationStage, RelationTypeSpec } from '../relate/relate'
 import { MAX_DERIVE_BATCH_CHARS, MAX_DERIVE_PROMPT_CHARS } from './bounds'
 import { chunkKey } from './target-selection'
+import { compileAssertionWire, type AssertionWireManifest } from './assertion-wire'
 
 const MEDIA_PART_ESTIMATE_CHARS = 3000
 
@@ -64,16 +64,27 @@ export function renderBoundedAssertionBatches(
   stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
   targetKeys?: ReadonlySet<string>,
 ): readonly DerivePromptBatch[] {
+  const { manifest } = compileAssertionWire(stage.types)
   return renderBatches({
     stageId: stage.id,
     document,
     chunks,
     targetKeys,
-    vocabulary: Object.entries(stage.types).map(([name, schema]) =>
-      `${name}: ${stableStringify(z.toJSONSchema(schema))}`),
+    vocabulary: assertionWireVocabulary(manifest),
     chunkLabel: (chunk) => `[${chunk.sourceId}/${chunk.chunkId}]`,
     instructions: stage.instructions,
   })
+}
+
+function assertionWireVocabulary(manifest: AssertionWireManifest): readonly string[] {
+  return [
+    'Return every required slot. Use [] when that assertion kind is absent.',
+    'Do not duplicate an assertion across slots or batches. Cite only target evidence and only emit evidence-supported claims.',
+    'Choose provenance exact for explicit text or derived for a supported inference.',
+    ...manifest.slots.map((entry) => `${entry.slot} = ${entry.type}; ${entry.mode === 'typed'
+      ? `data: ${entry.expectedShape}`
+      : `dataJson: JSON string encoding ${entry.expectedShape}`}`),
+  ]
 }
 
 /** Add repair instructions and re-apply the final prompt bound. */

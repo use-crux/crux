@@ -25,6 +25,7 @@ import {
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
 import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
+import { compileAssertionWire, type AssertionWireManifest } from './assertion-wire'
 
 /** Run one assertion stage and return cached claim records. Internal. */
 export async function runAssertionStage(input: {
@@ -140,14 +141,15 @@ async function runGeneratedBatch(
   addRecords(valid, toAssertionClaimRecords(input.stage, input.document.sourceId, first.claims))
   if (first.errors.length === 0) return { claims: [...valid.values()], warnings }
 
+  const invalidSlots = [...new Set(first.errors.map((error) => error.slot))]
   const repairedPrompt = renderBoundedRepairPrompt({
     stageId: input.stage.id,
     sourceId: input.document.sourceId,
     prompt: batch.prompt,
-    errors: first.errors,
+    errors: first.errors.map((error) => error.message),
   })
   warnings.push(...repairedPrompt.warnings)
-  const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt })
+  const repaired = await readGeneratedAssertionClaims(input, { ...batch, prompt: repairedPrompt.prompt }, invalidSlots)
   warnings.push(...repaired.warnings)
   if (repaired.errors.length > 0) {
     throw assertionValidationExhausted(input.stage.id, repaired.validationError)
@@ -166,11 +168,14 @@ async function readGeneratedAssertionClaims(
     readonly targetKeys: ReadonlySet<string> | undefined
   },
   batch: DerivePromptBatch,
+  repairSlots?: readonly string[],
 ) {
   const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
-  const schema = payloadSchema(stage)
+  const compiled = compileAssertionWire(stage.types)
+  const manifest = compiled.manifest
+  const schema = compiled.schema
   const result = await generateObjectWithEvidence({
     model,
     system: 'Return only assertions that match the requested schema. Cite evidence only from the chunk ids listed in the prompt; when target chunks are marked, cite only [TARGET:] chunk ids.',
@@ -182,44 +187,71 @@ async function readGeneratedAssertionClaims(
     ...(input.targetKeys !== undefined ? { targetKeys: input.targetKeys } : {}),
     ...(input.assets ? { assets: input.assets } : {}),
   })
-  const parsed = schema.safeParse(result.object)
-  if (!parsed.success) {
-    return {
-      claims: [],
-      warnings: result.warnings,
-      errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message),
-      validationError: parsed.error,
-    }
-  }
-  const validated = validateAssertionClaims(stage, parsed.data.assertions, batch.chunks, input.targetKeys)
+  const decoded = decodeWire(result.object, manifest, repairSlots)
+  const validated = validateAssertionClaims(stage, decoded.claims, batch.chunks, input.targetKeys)
+  const errors = [
+    ...decoded.errors,
+    ...validated.errors.map((message, index) => ({ slot: decoded.claimSlots[index] ?? '<root>', message })),
+  ]
   return {
     ...validated,
+    errors,
     warnings: result.warnings,
-    validationError: new z.ZodError(validated.issues.map((issue) => ({
-      ...issue,
-      path: ['assertions', ...issue.path],
-    }))),
+    validationError: new z.ZodError([
+      ...decoded.errors.map((error) => ({ code: 'custom' as const, path: [error.slot], message: error.message })),
+      ...validated.issues.map((issue) => ({
+        ...issue,
+        path: [decoded.claimSlots[Number(issue.path[0])] ?? '<root>', ...issue.path.slice(1)],
+      })),
+    ]),
   }
 }
 
-function payloadSchema(stage: AssertionStage<Record<string, z.ZodType<unknown>>>) {
-  const evidence = z.array(z.object({
-    kind: z.literal('chunk'),
-    sourceId: z.string(),
-    chunkId: z.string(),
-  }).strict()).min(1)
-  const assertionOptions = Object.entries(stage.types).map(([type, data]) => z.object({
-    type: z.literal(type),
-    data,
-    evidence,
-    provenance: z.enum(['exact', 'derived']),
-  }).strict())
-  const [firstAssertion, ...otherAssertions] = assertionOptions
-  if (!firstAssertion) throw new Error('Structured assertion schema requires at least one type.')
-  const assertion = z.discriminatedUnion('type', [firstAssertion, ...otherAssertions])
-  return z.object({
-    assertions: z.array(assertion),
-  }).strict()
+function decodeWire(value: unknown, manifest: AssertionWireManifest, repairSlots?: readonly string[]): {
+  claims: RawAssertionClaim[]; claimSlots: string[]; errors: { slot: string; message: string }[]
+} {
+  const claims: RawAssertionClaim[] = []
+  const claimSlots: string[] = []
+  const errors: { slot: string; message: string }[] = []
+  if (!isRecord(value)) return { claims, claimSlots, errors: [{ slot: '<root>', message: 'response must be an object' }] }
+  const expected = new Set(manifest.slots.map((entry) => entry.slot))
+  for (const key of Object.keys(value)) {
+    if (!expected.has(key as `type_${number}`)) errors.push({ slot: key, message: `${key}: unknown assertion slot` })
+  }
+  for (const entry of manifest.slots) {
+    const items = value[entry.slot]
+    if (!Array.isArray(items)) {
+      errors.push({ slot: entry.slot, message: `${entry.slot}: required array is missing` })
+      continue
+    }
+    if (repairSlots !== undefined && !repairSlots.includes(entry.slot)) {
+      if (items.length > 0) errors.push({ slot: entry.slot, message: `${entry.slot}: repair must return [] for retained slots` })
+      continue
+    }
+    items.forEach((item, index) => {
+      const envelope = z.object({
+        ...(entry.mode === 'typed' ? { data: z.unknown() } : { dataJson: z.string() }),
+        evidence: z.array(z.object({ kind: z.literal('chunk'), sourceId: z.string(), chunkId: z.string() }).strict()).min(1),
+        provenance: z.enum(['exact', 'derived']),
+      }).strict().safeParse(item)
+      if (!envelope.success) {
+        errors.push({ slot: entry.slot, message: `${entry.slot}[${index}]: ${envelope.error.issues.map((issue) => issue.path.join('.') || issue.message).join(', ')}` })
+        return
+      }
+      let data: unknown
+      if (entry.mode === 'json-string') {
+        try { data = JSON.parse((envelope.data as { dataJson: string }).dataJson) }
+        catch { errors.push({ slot: entry.slot, message: `${entry.slot}[${index}]: malformed dataJson` }); return }
+      } else data = (envelope.data as { data: unknown }).data
+      claims.push({ type: entry.type, data, evidence: envelope.data.evidence, provenance: envelope.data.provenance })
+      claimSlots.push(entry.slot)
+    })
+  }
+  return { claims, claimSlots, errors }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function assertionValidationExhausted(stageId: string, zodErrors: z.ZodError): ValidationExhaustedError {

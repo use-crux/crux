@@ -4,12 +4,48 @@ import { ValidationExhaustedError } from "../../src/generation/validation-retry"
 import type { CruxChunk, CruxDocument } from "../../src/indexing/types";
 import { assertions, type KnowledgeModel } from "../../src/knowledge";
 import { runDeriveStages } from "../../src/knowledge/derive/runner";
+import { compileAssertionWire } from "../../src/knowledge/derive/assertion-wire";
 import { inMemoryRecordStore } from "../../src/storage";
 
 const sourceId = "doc-1";
 const types = { fact: z.object({ value: z.string() }) };
 
 describe("generated assertion wire schema", () => {
+  it("allocates deterministic grouped slots with a closed portable schema", () => {
+    const compiled = compileAssertionWire({
+      zebra: z.object({ count: z.number().int(), state: z.enum(["open", "closed"]).describe("Lifecycle state") }).strict(),
+      alpha: z.object({ enabled: z.boolean() }).describe("Alpha guidance").strict(),
+    });
+    const json = z.toJSONSchema(compiled.schema) as Record<string, unknown>;
+
+    expect(compiled.manifest.slots.map(({ slot, type, mode }) => ({ slot, type, mode }))).toEqual([
+      { slot: "type_0", type: "alpha", mode: "typed" },
+      { slot: "type_1", type: "zebra", mode: "typed" },
+    ]);
+    expect(Object.keys(json.properties as object)).toEqual(["type_0", "type_1"]);
+    expect(json.required).toEqual(["type_0", "type_1"]);
+    expect(json.additionalProperties).toBe(false);
+    expect(JSON.stringify(json)).not.toMatch(/oneOf|anyOf|allOf|nullable/);
+    expect(JSON.stringify(json)).toContain("Alpha guidance");
+    expect(JSON.stringify(json)).toContain("Lifecycle state");
+  });
+
+  it("falls back unsupported kinds without degrading portable neighbors", () => {
+    const compiled = compileAssertionWire({
+      portable: z.object({ value: z.string() }).strict(),
+      union: z.union([z.string(), z.number()]).describe("String or numeric identifier"),
+    });
+
+    expect(compiled.manifest.slots.map(({ type, mode, fallbackReason }) => ({ type, mode, fallbackReason }))).toEqual([
+      { type: "portable", mode: "typed", fallbackReason: undefined },
+      { type: "union", mode: "json-string", fallbackReason: "unsupported keyword anyOf" },
+    ]);
+    const json = JSON.stringify(z.toJSONSchema(compiled.schema));
+    expect(json).toContain("dataJson");
+    expect(json).toContain("String or numeric identifier");
+    expect(json).not.toContain("anyOf");
+  });
+
   it("is constant in chunk count and uses generic evidence references", async () => {
     const small = await captureSchema(chunks(2));
     const large = await captureSchema(chunks(40));
@@ -69,7 +105,7 @@ describe("generated assertion wire schema", () => {
       expect(model.generateObject).toHaveBeenCalledTimes(2);
       expect(prompts[1]).toContain(message);
       expect((error as ValidationExhaustedError).issues).toEqual([
-        { path: "assertions.[0].evidence", depth: 3, code: "custom" },
+        { path: "type_0.evidence", depth: 2, code: "custom" },
       ]);
     },
   );
@@ -103,7 +139,7 @@ async function captureSchema(
       ({ text: "", usage: undefined, response: undefined }) as never,
     generateObject: vi.fn(async ({ schema }) => {
       captured = schema;
-      return { object: { assertions: [] } };
+      return { object: { type_0: [] } };
     }),
   };
   const stage = assertions({ id: "facts", version: 1, types, model });
@@ -138,9 +174,8 @@ function fixedModel(
 
 function generatedClaim(chunkId: string) {
   return {
-    assertions: [
+    type_0: [
       {
-        type: "fact",
         data: { value: "fact" },
         evidence: [{ kind: "chunk" as const, sourceId, chunkId }],
         provenance: "derived" as const,

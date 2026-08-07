@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { CruxChunk, CruxDocument } from '../../indexing/types'
 import { stableHash } from '../../indexing/hash'
 import type { AssertionDeriveStage, StageMode } from '../derive/stage'
+import { assertionWireFingerprintInput } from '../derive/assertion-wire'
 import type { KnowledgeModel } from '../model'
 import type { KnowledgeRef } from '../refs'
 import type { AssertionSupport } from './identity'
@@ -148,6 +149,7 @@ export function assertions<const TTypes extends Record<string, z.ZodType<unknown
     id: config.id,
     version: config.version,
     types: schemaFingerprintInput(normalizedTypes),
+    wire: assertionWireFingerprintInput(normalizedTypes),
     mode: fingerprintMode,
   })
 
