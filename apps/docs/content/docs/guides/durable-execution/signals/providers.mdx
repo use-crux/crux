@@ -16,7 +16,8 @@ logical delivery for the same provider event ID.
 | `webhook()` | Existing production path (#337 edge accept + worker normalize) |
 | `polling()` | One Runtime worker leases, polls, accepts, checkpoints |
 | `stream({ open })` | Managed async-stream seam: worker owns open, reconnect, accept-before-checkpoint, fault status |
-| SSE / WebSocket thin adapters | **Not shipped** — follow-on adapters must compile to `stream({ open })`, not a second worker |
+| `sse({ open })` | Thin managed **provider-ingress** SSE adapter: `lastEventId` authoring lowers onto the stream fiber |
+| WebSocket thin adapter | **Not shipped** — follow-on must compile to `stream({ open })`, not a second worker |
 | Channel exclusive conversation ownership | Not on this path; remains [#302](https://github.com/use-crux/crux/issues/302) |
 
 ## Why providers exist
@@ -106,8 +107,9 @@ Do not use it when:
 
 - one conversation owner must exclusively claim the event — that is Channel
   work under related RFC tracks, not this Signal path;
-- you need first-party SSE or WebSocket helpers — those remain follow-on thin
-  adapters over `stream({ open })`, not a second supervision path.
+- you need a browser EventSource subscription for Crux UI state — that is
+  `@use-crux/react` `createSSETransport` / `cruxSSEHandler` (**egress**), not
+  provider-ingress `sse({ open })`.
 
 ## Minimal polling path
 
@@ -223,7 +225,90 @@ transient errors reconnect with bounded backoff. Terminal faults mark durable
 | Backpressure | Pull iteration is Runtime backpressure: one item at a time on the fiber. Future push adapters must bound buffers and disconnect on overflow — never drop events silently. |
 | Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API in this release. |
 | Deployment | Same as polling: Memory or PostgreSQL with binding checkpoints, `createRuntimeProgram({ providers, transports })`, one `createRuntimeWorker`. Live `open` / `onEvent` stay process-local; generated program JSON never embeds closures or secrets. |
-| SSE / WebSocket | Not shipped as first-party helpers. When added, they must be thin authoring adapters over this `stream({ open })` seam. |
+| SSE | Prefer `sse({ open })` when the external system is SSE (distinct Catalog/Index kind + `lastEventId` vocabulary). Lifecycle is this table via pure lowering. WebSocket remains a follow-on thin adapter. |
+
+## Minimal managed SSE path
+
+```ts
+import {
+  sse,
+  classifySseHttpStatus,
+  sseHttpStatusErrorCode,
+} from "@use-crux/core/signal/transport";
+import { ManagedStreamTerminalError } from "@use-crux/core/runtime";
+import {
+  managedTransportBinding,
+  signalProvider,
+} from "@use-crux/core/signal/provider";
+
+export const ordersSse = signalProvider({
+  id: "orders.sse",
+  transport: sse({
+    async *open({ cursor, signal, configRef }) {
+      // Adapter owns fetch / EventSource / frame parsing — Core does not.
+      const response = await connectOrdersSse({
+        lastEventId: cursor,
+        signal,
+        configRef,
+      });
+
+      if (!response.ok) {
+        const kind = classifySseHttpStatus(response.status);
+        if (kind === "terminal") {
+          throw new ManagedStreamTerminalError(
+            sseHttpStatusErrorCode(response.status),
+            `SSE connect rejected with HTTP ${response.status}`,
+          );
+        }
+        throw new Error(`SSE connect transient HTTP ${response.status}`);
+      }
+
+      for await (const frame of parseSse(response.body, signal)) {
+        if (frame.kind === "comment" && frame.id) {
+          yield { kind: "cursor", lastEventId: frame.id };
+          continue;
+        }
+        if (frame.kind === "event") {
+          yield {
+            kind: "envelope",
+            accountId: frame.accountId,
+            eventId: frame.eventId,
+            authenticatedRouting: {
+              source: "sse",
+              eventType: frame.eventType ?? "message",
+            },
+            payload: encodeInlinePayload(frame.body),
+            lastEventId: frame.id ?? undefined,
+          };
+        }
+      }
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+
+export const ordersSseBinding = managedTransportBinding(ordersSse, {
+  id: "binding.orders.sse",
+  configRef: { id: "config.orders.sse", revision: "1" },
+  signalId: "order.submitted",
+});
+```
+
+This is **provider-ingress** SSE on `@use-crux/core/signal/transport`. It is
+unrelated to `@use-crux/react` `createSSETransport` / `cruxSSEHandler`, which
+push Crux RecordStore state **to the browser**.
+
+Runtime lowers `lastEventId` to the managed stream cursor contract and reuses
+the same stream fiber, lease, checkpoint, reconnect, fault, and abort laws as
+`stream({ open })`. Use the stream lifecycle table above for EOF, transient
+errors, terminal faults, abort, and backpressure. Prefer `sse()` when the
+external system is SSE and tooling should project `transportKind: "sse"`;
+prefer `stream()` when the adapter already speaks generic cursors.
 
 ## Guarantees
 

@@ -1,6 +1,6 @@
 ---
 title: Providers and transports
-description: Exact public API for Signal providers, webhook, polling, and managed stream transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
+description: Exact public API for Signal providers, webhook, polling, managed stream, and SSE transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
 ---
 
 Import authoring helpers from focused subpaths and lifecycle helpers from the
@@ -8,10 +8,15 @@ Runtime surface:
 
 ```ts
 import {
+  classifySseHttpStatus,
   polling,
+  sse,
+  sseHttpStatusErrorCode,
   stream,
   webhook,
   type PollingTransport,
+  type SseItem,
+  type SseTransport,
   type StreamItem,
   type StreamTransport,
   type WebhookTransport,
@@ -122,15 +127,80 @@ provider event id; the #337 kernel dedupes.
 | Backpressure | Pull iteration is serial: one item at a time on the connection fiber. Do not invent silent drop policies. |
 | Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API. |
 
-SSE and WebSocket are **not** shipped as first-party helpers. Follow-on thin
-adapters must compile to this `stream({ open })` seam without a second worker.
+### `sse({ open })`
+
+Returns a frozen `SseTransport` (`_tag: "SseTransport"`, `kind: "sse"`). This is
+the managed **provider-ingress** SSE transport on
+`@use-crux/core/signal/transport`.
+
+It is **not**:
+
+- LLM generation `stream()` helpers on provider packages / `@use-crux/ai`
+- `@use-crux/react` browser SSE (`createSSETransport` / `cruxSSEHandler`), which
+  is **egress** from Crux RecordStore/state to the browser
+
+Runtime lowers SSE items onto the managed stream fiber. There is no second
+reconnect loop, worker, checkpoint schema, or Runtime-owned `fetch` /
+EventSource / frame parser. Credentials and HTTP clients stay inside the `open`
+closure; inert bindings and program JSON remain secret-free.
+
+`open({ cursor, signal, configRef })` opens one SSE connection and returns an
+`AsyncIterable<SseItem>` (or a Promise of one). The open context field is still
+named `cursor` — for SSE adapters it **is** the durable Last-Event-ID resume
+value (or `null`). Map non-null `cursor` to the HTTP `Last-Event-ID` request
+header when connecting.
+
+#### `SseItem`
+
+Exactly one protocol item per yield — never a batch:
+
+| Variant | Fields | After lowering |
+| --- | --- | --- |
+| Envelope | `kind: "envelope"`, `accountId`, `eventId`, `authenticatedRouting`, `payload`, optional `lastEventId?` | Stream envelope with `cursor` set from `lastEventId` when present; omitted when `lastEventId` was omitted |
+| Cursor-only | `kind: "cursor"`, `lastEventId: string \| null` | Stream cursor-only item with `cursor: lastEventId` |
+
+`lastEventId` is progress **through this event inclusive** (wire `id:` /
+Last-Event-ID after the event). Omitted means no new resume position.
+`null` clears the durable resume position only when the provider truly has none.
+Cursor-only items must never cover unyielded events. Validation reuses the
+canonical stream cursor contract (byte limit, non-empty trimmed, no ASCII
+controls).
+
+#### Pure HTTP status helpers
+
+Core does not perform HTTP. After an adapter observes a failed connect status:
+
+| Helper | Role |
+| --- | --- |
+| `classifySseHttpStatus(status)` | `"terminal"` or `"transient"` |
+| `sseHttpStatusErrorCode(status)` | Safe durable code such as `SSE_HTTP_401` |
+
+| HTTP status | Kind | Suggested code |
+| --- | --- | --- |
+| 401, 403, 404, 410 | terminal | `SSE_HTTP_${status}` |
+| 408, 425, 429 | transient | `SSE_HTTP_${status}` |
+| 5xx | transient | `SSE_HTTP_${status}` |
+| Other 4xx | terminal | `SSE_HTTP_${status}` |
+
+Throw `ManagedStreamTerminalError(code, message?)` for terminal classifications;
+throw an ordinary `Error` for transient. Non-HTTP / network failures before a
+status remain ordinary errors (transient reconnect). 2xx is success — do not
+call these helpers for successful connects. Content-Type mismatches after 2xx
+are adapter policy.
+
+#### Lifecycle
+
+EOF, transient throw, terminal fault, abort, config invalidation, pull
+backpressure, accept-before-checkpoint, and no post-accept ack all reuse the
+`stream({ open })` lifecycle table above. WebSocket remains a follow-on thin
+adapter over that seam.
 
 ### `signalProvider({ id, transport, signals, onEvent })`
 
 Returns a frozen `SignalProvider`. Live definitions retain `transport` and
-`onEvent` as process code. `transport` may be `webhook()`, `polling()`, or
-`stream()`. They perform no I/O at construction time and do not register
-globally.
+`onEvent` as process code. `transport` may be `webhook()`, `polling()`,
+`stream()`, or `sse()`. They perform no I/O at construction time and do not
+register globally.
 
 `onEvent(envelope, { signals })` may publish only the declared Signal map.
 Omitted publish idempotency keys default to the accepted provider/account/event

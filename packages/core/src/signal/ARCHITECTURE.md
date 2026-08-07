@@ -226,15 +226,41 @@ through the existing generic provider projection; live reconnect phase is
 process-local and not a separate Devtools bus in this slice.
 
 Optional post-accept notification/ack is reserved for later protocol adapters
-and is not required API. SSE and WebSocket first-party helpers are **follow-on
-thin adapters** over this seam — not shipped here and not a second worker.
+and is not required API.
+
+### Managed SSE supervision (thin lowerer)
+
+`sse({ open })` is a **thin provider-ingress adapter** over the managed stream
+seam — not a second supervisor, reconnect loop, checkpoint schema, or Runtime
+HTTP client:
+
+1. Authoring freezes `_tag: "SseTransport"`, `kind: "sse"`, with SSE-shaped
+   `open` yielding `SseItem`s that use `lastEventId` instead of `cursor`.
+2. Worker supervision recognizes managed-stream transports (`stream` **or**
+   `sse`). For SSE it wraps `open` with pure `lowerSseOpen` so the existing
+   stream fiber still receives `StreamItem`s.
+3. Durable checkpoints, lease fencing, accept-before-cursor, EOF reconnect,
+   transient backoff, terminal fault, abort, and config invalidation are
+   unchanged stream laws.
+4. Pure `classifySseHttpStatus` / `sseHttpStatusErrorCode` help adapters map
+   connect HTTP failures without Core owning `fetch` or provider SDKs.
+
+**Not React browser SSE.** `@use-crux/react` `createSSETransport` /
+`cruxSSEHandler` are **egress** helpers (Crux state → browser EventSource). They
+must not share types, checkpoints, or supervision with provider-ingress `sse()`.
+
+Project Index discovers `sse()` with `transportKind: "sse"` and `hasOpen`. Live
+`open` on inert bindings remains `signal.transportBinding.live_value`. Catalog
+renders the generic transport kind; no SSE-specific stats/read model is added.
+
+WebSocket remains a follow-on thin adapter over `stream({ open })`.
 
 ## Deliberate limits
 
 This slice owns no historical replay for later local subscribers, consumer
 completion acknowledgment, or cross-process callback bus. Webhook edge
-acceptance remains the host-driven path from #337. Polling and managed stream
-supervision share the #340 lifecycle seam on one worker. SSE and WebSocket
-authoring helpers remain follow-on children that must compile to `stream({ open })`
-and must not invent a second worker or Channel claim policy. Channel exclusive
+acceptance remains the host-driven path from #337. Polling, managed stream, and
+managed SSE share the #340 lifecycle seam on one worker. WebSocket authoring
+helpers remain a follow-on child that must compile to `stream({ open })` and must
+not invent a second worker or Channel claim policy. Channel exclusive
 conversation ownership remains #302.

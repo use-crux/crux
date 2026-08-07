@@ -297,6 +297,17 @@ stream cursors; checkpoint timestamps use a fresh clock at each write; and
 supervision faults after consecutive top-level rejected stream fibers with
 `TRANSPORT_STREAM_EXHAUSTED` without unhandled rejections.
 
+Add first-party managed SSE transport authoring as a thin adapter over the
+existing stream supervision seam: `sse({ open })` freezes a distinct
+`kind: "sse"` definition with `lastEventId` item vocabulary, pure
+`classifySseHttpStatus` / `sseHttpStatusErrorCode` helpers for connect failures,
+and Runtime lowering onto the managed stream fiber (same lease, checkpoint,
+reconnect, fault, abort, and accept-before-cursor laws). Project Index and
+Devtools Catalog project `transportKind: "sse"`; live `open` on inert bindings
+stays rejected. This is provider-ingress SSE only — distinct from
+`@use-crux/react` browser `createSSETransport` / `cruxSSEHandler`. WebSocket and
+post-accept ack remain follow-on.
+
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session
 structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
