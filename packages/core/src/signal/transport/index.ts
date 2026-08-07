@@ -49,6 +49,8 @@ export type {
   SseTransport,
 } from "./sse";
 
+export { lowerSseItem, lowerSseOpen } from "./sse-lower";
+
 /** Live transport definitions accepted by {@link import("../provider").signalProvider}. */
 export type SignalProviderTransport =
   | WebhookTransport
