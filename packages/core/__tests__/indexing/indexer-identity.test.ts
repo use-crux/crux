@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { embedding } from '../../src/embedding'
-import { indexer } from '../../src/indexing'
+import { chunker, indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 
 function indexerFingerprint(options: {
@@ -34,5 +34,25 @@ describe('indexer embedding identity', () => {
     expect(indexerFingerprint({ version: 'v2' })).not.toBe(base)
     expect(indexerFingerprint({ version: 'v1', batch: { maxSize: 2, concurrency: 2 } })).toBe(base)
     expect(indexerFingerprint({ version: 'v1', retry: { maxAttempts: 3, baseDelayMs: 1 } })).toBe(base)
+  })
+})
+
+describe('built-in chunker strategy identity', () => {
+  it('changes only structured identity for page-block behavior', () => {
+    const text = chunker.text()
+    const semantic = chunker.semantic({ strategy: 'custom', segment: () => [] })
+    const structured = chunker.structured()
+
+    expect({ version: text.version, fingerprint: text.fingerprint() }).toEqual({
+      version: '2', fingerprint: '0850091b',
+    })
+    expect({ version: semantic.version, fingerprint: semantic.fingerprint() }).toEqual({
+      version: '2', fingerprint: '7946e9d7',
+    })
+    expect({ version: structured.version, fingerprint: structured.fingerprint() }).toEqual({
+      version: '3', fingerprint: 'baafb216',
+    })
+    expect(structured.fingerprint()).not.toBe(text.fingerprint())
+    expect(structured.fingerprint()).not.toBe(semantic.fingerprint())
   })
 })

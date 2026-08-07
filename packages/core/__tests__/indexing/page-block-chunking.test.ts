@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { chunker } from '../../src/indexing'
 import type { CruxDocument } from '../../src/indexing'
 
@@ -298,6 +298,34 @@ describe('structured page block chunking', () => {
     expect(strategy.fingerprint()).toBe('398e0d11')
     expect(result.chunks.map((chunk) => chunk.content)).toEqual([content])
     expect(result.chunks[0]?.provenance?.blockIds).toEqual(['heading', 'before', 'scores', 'after'])
+  })
+
+  it('keeps semantic chunking on its caller-supplied segmentation boundary', async () => {
+    const content = 'Alpha. Beta. Gamma.'
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'semantic-boundaries', content,
+      parts: [{
+        id: 'page:1', kind: 'page', pageNumber: 1, content,
+        blocks: [
+          { id: 'heading', kind: 'text', role: 'heading', content: '# Ignored', headingPath: ['Ignored'] },
+          {
+            id: 'table', kind: 'table', content: '| Ignored |', headingPath: ['Ignored'],
+            columns: ['Ignored'], rows: [['Also ignored']],
+          },
+        ],
+      }],
+    }
+    const segment = vi.fn(() => [
+      { start: 0, end: 7, reason: 'caller-first' },
+      { start: 7, end: content.length, reason: 'caller-second' },
+    ])
+    const strategy = chunker.semantic({ strategy: 'model', segment })
+    const result = await strategy.chunkDocument(document, { chunking: { maxChars: 1, overlapChars: 0 } })
+
+    expect(segment).toHaveBeenCalledOnce()
+    expect(result.chunks.map((chunk) => chunk.content)).toEqual(['Alpha. ', 'Beta. Gamma.'])
+    expect(result.chunks.map((chunk) => chunk.metadata.semanticReason)).toEqual(['caller-first', 'caller-second'])
+    expect(result.chunks.every((chunk) => chunk.provenance?.blockIds === undefined)).toBe(true)
   })
 
   it('keeps parent-child materialization flat and its version-2 fingerprint unchanged', async () => {
