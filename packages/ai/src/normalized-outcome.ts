@@ -68,7 +68,9 @@ function readStatus(error: Error): number | undefined {
 /** Read the structural `isRetryable` hint AI SDK `APICallError` exposes. */
 function readIsRetryable(error: Error): boolean | undefined {
   const record = error as { isRetryable?: unknown };
-  return typeof record.isRetryable === "boolean" ? record.isRetryable : undefined;
+  return typeof record.isRetryable === "boolean"
+    ? record.isRetryable
+    : undefined;
 }
 
 /**
@@ -119,6 +121,19 @@ export function mapAiSdkError(error: unknown): CruxProviderError | undefined {
 
   const status = readStatus(error);
   const isRetryable = readIsRetryable(error);
+
+  if (
+    (status === 400 || status === 422) &&
+    /(?:response[_ -]?format|json schema|structured output).*(?:invalid|unsupported|reject)|(?:invalid|unsupported|reject).*(?:response[_ -]?format|json schema|structured output)|invalid schema for (?:function|tool)\b/i.test(
+      message,
+    )
+  ) {
+    return cruxProviderError({
+      kind: "invalid-request",
+      code: "ai-sdk.schema_rejected",
+      retryable: false,
+    });
+  }
 
   if (status === 429) {
     return cruxProviderError({

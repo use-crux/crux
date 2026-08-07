@@ -14,10 +14,7 @@ import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { MiddlewareResult } from '../runtime/types'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { TimeoutOptions } from './timeout'
-import {
-  cachedCandidateFinalizer,
-  type CachedCandidateFinalizer,
-} from '../runtime/internal/cached-candidate-finalizer'
+import { cachedCandidateFinalizer, type CachedCandidateFinalizer } from '../runtime/internal/cached-candidate-finalizer'
 
 /**
  * Context for generate/stream orchestration. Adapters construct this
@@ -51,6 +48,8 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
   provider?: string
   /** Output mode for cache hydration. */
   outputMode?: 'text' | 'object'
+  /** Structured-output capability decision for this concrete attempt. */
+  structuredOutput?: { readonly strategy: string; readonly profileId: string }
   /** Optional factory for cached stream replay. */
   createCachedStreamResult?: (cached: {
     text?: string
@@ -69,9 +68,7 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
 }
 
 /** Stream-specific subset consumed by the shared orchestration boundary. */
-export type StreamOrchestrationSpec<
-  TPreparedArgs extends Record<string, unknown>,
-> = Pick<
+export type StreamOrchestrationSpec<TPreparedArgs extends Record<string, unknown>> = Pick<
   OrchestrationSpec<TPreparedArgs>,
   | 'promptId'
   | 'promptConfig'
@@ -82,6 +79,7 @@ export type StreamOrchestrationSpec<
   | 'traceModel'
   | 'resolved'
   | 'outputMode'
+  | 'structuredOutput'
   | 'createCachedStreamResult'
   | 'timeout'
   | 'threadHistoryOverride'

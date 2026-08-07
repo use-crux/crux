@@ -29,6 +29,7 @@ export type ErrorCategory =
   | "connection_error"
   | "auth_error"
   | "invalid_response"
+  | "schema_incompatible"
   | "input_limit";
 
 /** Per-fallback timeout budgets. */
@@ -169,12 +170,20 @@ function classifyErrorBounded(
     return "input_limit";
   }
 
+  const structuredCode = (error as { code?: unknown }).code;
+  if (
+    structuredCode === "invalid-capability-profile" ||
+    structuredCode === "unsupported-structured-output" ||
+    structuredCode === "unsupported-schema"
+  )
+    return "schema_incompatible";
+
   if (error instanceof FallbackExhaustedError) {
-    return classifyInputLimitCollection(error.errors, seen, depth);
+    return classifyUniformCollection(error.errors, seen, depth);
   }
 
   if (error instanceof AggregateError) {
-    return classifyInputLimitCollection(error.errors, seen, depth);
+    return classifyUniformCollection(error.errors, seen, depth);
   }
 
   const causeCategory = classifyErrorBounded(
@@ -182,7 +191,12 @@ function classifyErrorBounded(
     seen,
     depth + 1,
   );
-  if (causeCategory === "input_limit") return "input_limit";
+  if (
+    causeCategory === "input_limit" ||
+    causeCategory === "schema_incompatible"
+  ) {
+    return causeCategory;
+  }
 
   // Validation exhaustion (all retries failed on structured output)
   if (isValidationExhaustedError(error)) return "invalid_response";
@@ -192,6 +206,7 @@ function classifyErrorBounded(
   // before falling back to legacy SDK status/code inspection.
   if (isCruxAdapterError(error)) {
     const { kind, code } = error.providerError;
+    if (code === "ai-sdk.schema_rejected") return "schema_incompatible";
     if (kind === "rate-limit") return "rate_limit";
     if (kind === "timeout") return "timeout";
     if (kind === "invalid-request" && code.endsWith(".authentication"))
@@ -253,21 +268,22 @@ function classifyErrorBounded(
   return null;
 }
 
-function classifyInputLimitCollection(
+function classifyUniformCollection(
   errors: readonly unknown[],
   seen: Set<object>,
   depth: number,
 ): ErrorCategory | null {
   if (errors.length === 0) return null;
   if (errors.length > MAX_COLLECTION_ERRORS) return null;
+  let category: ErrorCategory | null = null;
   for (const error of errors) {
-    if (
-      classifyErrorBounded(error, new Set(seen), depth + 1) !== "input_limit"
-    ) {
+    const member = classifyErrorBounded(error, new Set(seen), depth + 1);
+    if (member !== "input_limit" && member !== "schema_incompatible")
       return null;
-    }
+    if (category !== null && member !== category) return null;
+    category = member;
   }
-  return "input_limit";
+  return category;
 }
 
 /**

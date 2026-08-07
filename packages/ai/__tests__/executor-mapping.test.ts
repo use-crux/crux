@@ -701,7 +701,7 @@ describe("embedding — gateway-backed", () => {
 });
 
 describe("provider profile (pure quirks)", () => {
-  it("detects Anthropic models directly and via OpenRouter", () => {
+  it("detects Anthropic models only through a direct provider identity", () => {
     expect(
       isAnthropicModel({
         provider: "anthropic.messages",
@@ -713,7 +713,7 @@ describe("provider profile (pure quirks)", () => {
         provider: "openrouter",
         modelId: "anthropic/claude-sonnet-4-5",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(isAnthropicModel({ provider: "openai", modelId: "gpt-4o" })).toBe(
       false,
     );

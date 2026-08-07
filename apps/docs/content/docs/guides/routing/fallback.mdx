@@ -25,15 +25,16 @@ Use fallback for provider outages, rate limits, slow starts, validation exhausti
 
 ## Error Categories
 
-| Category           | Typical source                                               |
-| ------------------ | ------------------------------------------------------------ |
-| `rate_limit`       | HTTP 429                                                     |
-| `timeout`          | attempt, first-token, or total deadline expiry               |
-| `server_error`     | HTTP 500-599                                                 |
-| `connection_error` | DNS, network, connection failures                            |
-| `auth_error`       | HTTP 401/403                                                 |
-| `invalid_response` | structured validation exhaustion or `when(result)` rejection |
-| `input_limit`      | `REQUEST_TOO_LARGE` request composition failure              |
+| Category              | Typical source                                                                 |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `rate_limit`          | HTTP 429                                                                       |
+| `timeout`             | attempt, first-token, or total deadline expiry                                 |
+| `server_error`        | HTTP 500-599                                                                   |
+| `connection_error`    | DNS, network, connection failures                                              |
+| `auth_error`          | HTTP 401/403                                                                   |
+| `invalid_response`    | structured validation exhaustion or `when(result)` rejection                   |
+| `schema_incompatible` | local schema/profile incompatibility or an evidenced provider schema rejection |
+| `input_limit`         | `REQUEST_TOO_LARGE` request composition failure                                |
 
 Use `on` to restrict which failures move to the next model.
 
@@ -41,7 +42,10 @@ Use `on` to restrict which failures move to the next model.
 fallback([primary, backup], { on: ["rate_limit", "timeout"] });
 ```
 
-By default, `fallback()` tries the next candidate for any classified category, including `input_limit`. Use this when a smaller model cannot accept the complete authorized request and a later candidate has more capacity.
+By default, `fallback()` tries the next candidate for any classified category,
+including `schema_incompatible` and `input_limit`. Schema compilation happens
+inside each concrete attempt, so a later provider can receive its own wire
+schema and decode manifest.
 
 ## Response-Aware Fallback
 

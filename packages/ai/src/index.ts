@@ -86,7 +86,7 @@ import type {
   AIRerankerConfig,
   AIRetrievalModelConfig,
 } from "./extensions";
-import { aiSdkProviderRuntime } from "./profile";
+import { aiSdkProviderRuntime, createAiSdkProviderRuntime } from "./profile";
 import { extractModelInfo } from "./provider-profile";
 import { aiSdkModelCapacity } from "./capacity";
 import { createAiStreamResult } from "./stream-result";
@@ -246,6 +246,8 @@ export interface CruxAiOptions {
    * @defaultValue {@link liveSdkGateway} — the real `ai` package functions.
    */
   gateway?: SdkGateway;
+  /** Factory-scoped structured-output capability policy. */
+  structuredOutput?: import("./provider-profile").AiSdkStructuredOutputOptions;
 }
 
 /** Production `generate()` plus its managed structured-task factory. */
@@ -407,7 +409,9 @@ type StreamPromptForModel<P extends AnyPrompt, M> = PromptForModel<P, M> &
  */
 export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const gateway = options.gateway ?? liveSdkGateway();
-  const executor = aiSdkProviderRuntime.create(gateway);
+  const executor = createAiSdkProviderRuntime(options.structuredOutput).create(
+    gateway,
+  );
 
   async function runGenerate(
     activeExecutor: typeof executor,
@@ -482,7 +486,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
     if (opts.transport) {
       return runGenerate(
-        aiSdkProviderRuntime.create(transportGateway(opts.transport)),
+        createAiSdkProviderRuntime(options.structuredOutput).create(
+          transportGateway(opts.transport),
+        ),
         prompt,
         opts,
       );
@@ -501,7 +507,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     >
   > {
     const controller = createManualAiSdkGatewayController();
-    const manualExecutor = aiSdkProviderRuntime.create({
+    const manualExecutor = createAiSdkProviderRuntime(
+      options.structuredOutput,
+    ).create({
       generateImage: gateway.generateImage,
       generateSpeech: gateway.generateSpeech,
       transcribe: gateway.transcribe,
@@ -635,7 +643,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const prepareFn = prepareImpl as unknown as NonNullable<CruxAi["prepare"]>;
 
   const generateObjectFnImpl: GenerateObjectFn =
-    createStructuredGenerateObjectFn(gateway);
+    createStructuredGenerateObjectFn(gateway, options.structuredOutput);
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
     const run = async (
@@ -851,6 +859,10 @@ export type {
   AiSdkRuntimeExtensions,
 } from "./extensions";
 export { aiSdkProviderRuntime } from "./profile";
+export type {
+  AiSdkStructuredOutputOptions,
+  AiSdkStructuredOutputResolver,
+} from "./provider-profile";
 export {
   createTextStreamResponse,
   createUIMessageStreamResponse,

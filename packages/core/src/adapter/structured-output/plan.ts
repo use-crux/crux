@@ -15,6 +15,26 @@ import type { StructuredOutputDiagnostic } from "./diagnostics";
 /** A JSON Schema represented as a plain object. */
 export type JsonSchemaObject = Record<string, unknown>;
 
+export type StructuredOutputStrategy =
+  | "explicit"
+  | "inferred"
+  | "passthrough"
+  | "reject";
+
+export type StructuredOutputResolution =
+  | {
+      readonly strategy: "explicit" | "inferred";
+      readonly profileId: string;
+      readonly capabilities: import("./capabilities").StructuredOutputCapabilities;
+    }
+  | { readonly strategy: "passthrough"; readonly profileId: string }
+  | { readonly strategy: "reject"; readonly profileId: string };
+
+export interface StructuredOutputResolverContext {
+  readonly model: import("../../types").ModelInfo;
+  readonly usage: "output" | "tool-input";
+}
+
 /**
  * A single reversible decode operation applied to a provider value before
  * Safety and original Zod parsing.

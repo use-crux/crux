@@ -132,11 +132,16 @@ export type {
   StructuredOutputDecodeOperation,
   StructuredOutputDiagnostic,
   StructuredOutputPlan,
+  StructuredOutputResolution,
+  StructuredOutputResolverContext,
+  StructuredOutputStrategy,
 } from "./structured-output";
 // The core-owned compiler and decoder. Narrowly exported for provider codecs
 // that assemble native request params outside the core execution loop.
 export {
   compileStructuredOutput,
+  compileStructuredOutputPassthrough,
+  compileCanonicalSchemaPassthrough,
   decodeStructuredValue,
   CruxInvalidCapabilityProfileError,
   CruxStructuredOutputDecodeError,
