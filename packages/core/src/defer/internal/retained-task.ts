@@ -86,6 +86,7 @@ function skipInlineCallbacks(
 ): DeferredDrainResult {
   for (const registration of registrations) {
     services.evidence.skipInline(registration.observation);
+    registration.onSkipped?.();
   }
   close();
   return {

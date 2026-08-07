@@ -114,6 +114,7 @@ function parentRegistration(
     scope: parent,
     phase: 'drain',
     depth: registration.depth,
+    ...(registration.onSkipped ? { onSkipped: registration.onSkipped } : {}),
   }
 }
 

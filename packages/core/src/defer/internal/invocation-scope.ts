@@ -39,6 +39,7 @@ export interface InlineRegistration {
   readonly callback: DeferredCallback;
   readonly capturedScope: CapturedAsyncScope;
   readonly observation: DeferredScheduledObservation;
+  readonly onSkipped?: () => void;
 }
 
 /** Result retained internally for shutdown, tests, and later diagnostics. */
@@ -147,6 +148,9 @@ export function createScopeDeferController(
         callback,
         capturedScope: captureAsyncScope(),
         observation,
+        ...(registration.onSkipped
+          ? { onSkipped: registration.onSkipped }
+          : {}),
       });
       services.recordCallback();
       return "deferred";

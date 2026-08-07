@@ -66,7 +66,11 @@ export function tryScheduleDiagnosticsOnlyDeferredCallback(
           throw error;
         }
       },
-      { ...registration, evidence: "diagnostics-only" },
+      {
+        ...registration,
+        evidence: "diagnostics-only",
+        onSkipped: resolveSettlement,
+      },
     );
     if (status === "captured") resolveSettlement();
     return Object.freeze({ status, settled });
