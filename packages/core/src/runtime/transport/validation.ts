@@ -117,6 +117,32 @@ function validateTarget(value: unknown, path: string): RuntimeSignalTransportTar
   });
 }
 
+/**
+ * Validates and detaches one accepted transport payload.
+ *
+ * @remarks Shared by full envelope validation and managed stream item validation
+ * so stream ingress cannot accept incomplete or mutable provider-owned payloads.
+ */
+export function validateRuntimeAcceptedTransportPayload(
+  value: unknown,
+  path = "$.payload",
+): RuntimeAcceptedTransportPayload {
+  return validatePayload(value, path);
+}
+
+/**
+ * Validates and detaches authenticated routing as JSON-safe frozen data.
+ *
+ * @remarks Applies the same depth, node, size, cycle, and secret-key limits as
+ * {@link validateRuntimeAcceptedTransportEnvelope}.
+ */
+export function validateRuntimeAuthenticatedRouting(
+  value: unknown,
+  path = "$.authenticatedRouting",
+): Readonly<Record<string, JsonValue>> {
+  return validateRouting(value, path);
+}
+
 function validatePayload(value: unknown, path: string): RuntimeAcceptedTransportPayload {
   const record = requireExactRecord(value, path, ["kind", "value", "byteLength", "sha256"], [
     "kind",

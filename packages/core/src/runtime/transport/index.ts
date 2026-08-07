@@ -33,6 +33,8 @@ export {
 } from "./stream-item";
 export {
   validateRuntimeAcceptedTransportEnvelope,
+  validateRuntimeAcceptedTransportPayload,
+  validateRuntimeAuthenticatedRouting,
   validateRuntimeManagedTransportAdapterDeclaration,
   validateRuntimeManagedTransportBinding,
 } from "./validation";

@@ -138,7 +138,7 @@ describe("runManagedStream config + status", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,
@@ -211,7 +211,7 @@ describe("runManagedStream config + status", () => {
       transport,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,
@@ -270,7 +270,7 @@ describe("runManagedStream config + status", () => {
       transport,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+
       ownerId: "worker-a",
     });
 
@@ -317,7 +317,7 @@ describe("runManagedStream config + status", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,

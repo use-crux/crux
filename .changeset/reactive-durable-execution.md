@@ -291,7 +291,11 @@ status on binding checkpoints. Memory and PostgreSQL implement lease-fenced
 checkpoint fields (`configRef`, `status`) with multi-worker exclusivity.
 Project Index discovers `stream()` with static/native parity and rejects live
 `open` on inert bindings. SSE and WebSocket remain follow-on thin adapters over
-this seam, not first-party helpers in this release.
+this seam, not first-party helpers in this release. Stream envelope validation
+detaches immutable payload and routing snapshots; digest conflicts never advance
+stream cursors; checkpoint timestamps use a fresh clock at each write; and
+supervision faults after consecutive top-level rejected stream fibers with
+`TRANSPORT_STREAM_EXHAUSTED` without unhandled rejections.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session

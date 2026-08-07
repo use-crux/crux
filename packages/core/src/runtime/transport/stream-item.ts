@@ -2,16 +2,21 @@
  * Pure StreamItem / cursor contract validation for managed stream transports.
  *
  * @remarks Kept free of store and worker imports so fiber code and unit tests
- * share one contract path. Full envelope accept validation still happens in
- * the shared #337 kernel after mapping.
+ * share one contract path. Payload and routing reuse the canonical #337
+ * transport validators so stream items cannot accept incomplete or mutable
+ * provider-owned data. Full envelope accept validation still happens in the
+ * shared kernel after mapping.
  *
  * @module
  */
 
-import type { JsonValue } from "../../storage/types";
-import type { RuntimeAcceptedTransportPayload } from "./contracts";
-import { MAX_TRANSPORT_BINDING_CURSOR_BYTES } from "./binding-checkpoint";
 import type { StreamCursorItem, StreamEnvelopeItem, StreamItem } from "../../signal/transport/stream";
+import { MAX_TRANSPORT_BINDING_CURSOR_BYTES } from "./binding-checkpoint";
+import { RuntimeManagedTransportContractError } from "./errors";
+import {
+  validateRuntimeAcceptedTransportPayload,
+  validateRuntimeAuthenticatedRouting,
+} from "./validation";
 
 /** Stable contract-violation code for invalid stream items. */
 export const TRANSPORT_STREAM_CONTRACT_INVALID =
@@ -120,41 +125,29 @@ function validateEnvelopeItem(record: {
   const accountId = requireNonEmptyIdentifier(record.accountId, "accountId");
   const eventId = requireNonEmptyIdentifier(record.eventId, "eventId");
 
-  if (
-    record.authenticatedRouting === null ||
-    typeof record.authenticatedRouting !== "object" ||
-    Array.isArray(record.authenticatedRouting)
-  ) {
-    throw contractError(
-      "stream envelope authenticatedRouting must be a plain object.",
+  let authenticatedRouting;
+  let payload;
+  try {
+    authenticatedRouting = validateRuntimeAuthenticatedRouting(
+      record.authenticatedRouting,
+      "authenticatedRouting",
     );
-  }
-
-  if (
-    record.payload === null ||
-    typeof record.payload !== "object" ||
-    Array.isArray(record.payload)
-  ) {
-    throw contractError("stream envelope payload must be a payload object.");
-  }
-
-  const payload = record.payload as RuntimeAcceptedTransportPayload;
-  if (
-    payload.kind !== "inline-base64url" &&
-    payload.kind !== "durable-ref"
-  ) {
-    throw contractError(
-      'stream envelope payload.kind must be "inline-base64url" or "durable-ref".',
+    payload = validateRuntimeAcceptedTransportPayload(
+      record.payload,
+      "payload",
     );
+  } catch (error) {
+    if (error instanceof RuntimeManagedTransportContractError) {
+      throw contractError(error.message);
+    }
+    throw error;
   }
 
   const item: StreamEnvelopeItem = {
     kind: "envelope",
     accountId,
     eventId,
-    authenticatedRouting: record.authenticatedRouting as Readonly<
-      Record<string, JsonValue>
-    >,
+    authenticatedRouting,
     payload,
   };
 

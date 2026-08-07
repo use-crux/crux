@@ -97,17 +97,12 @@ export interface RunManagedStreamOptions {
    */
   readonly leaseBound?: LeaseBoundPollSignal;
   readonly signal: AbortSignal;
-  /**
-   * Fallback clock instant when {@link clock} is omitted.
-   *
-   * @remarks Prefer {@link clock}.now for multi-connection fibers.
-   */
-  readonly now?: Date;
   readonly ownerId?: string;
   /**
    * Process-local clock and delay injection for deterministic tests.
    *
    * @remarks When omitted, uses `new Date()` and a signal-aware `setTimeout`.
+   * This is the only time abstraction for stream reconnect fibers.
    */
   readonly clock?: ManagedStreamClock;
   /** Deterministic jitter source for reconnect backoff. Defaults to `Math.random`. */
@@ -223,7 +218,6 @@ export async function runManagedStream(
         };
       }
 
-      const now = clock.now();
       opens += 1;
 
       const connection = await runStreamConnection({
@@ -239,7 +233,7 @@ export async function runManagedStream(
         leaseSlot,
         leaseBound,
         signal: options.signal,
-        now,
+        now: () => clock.now(),
         ownerId: options.ownerId,
       });
 

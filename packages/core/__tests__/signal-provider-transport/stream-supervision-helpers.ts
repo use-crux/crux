@@ -82,7 +82,9 @@ export function createStreamFixture(options?: {
 
   const openCalls: StreamOpenCall[] = [];
   let itemFactory:
-    | ((context: StreamOpenCall) => AsyncIterable<StreamItem>)
+    | ((
+        context: StreamOpenCall,
+      ) => AsyncIterable<StreamItem> | Promise<AsyncIterable<StreamItem>>)
     | null = null;
 
   const configRef = options?.configRef ?? {
@@ -137,7 +139,9 @@ export function createStreamFixture(options?: {
     published,
     openCalls,
     setItems(
-      factory: (context: StreamOpenCall) => AsyncIterable<StreamItem>,
+      factory: (
+        context: StreamOpenCall,
+      ) => AsyncIterable<StreamItem> | Promise<AsyncIterable<StreamItem>>,
     ): void {
       itemFactory = factory;
     },

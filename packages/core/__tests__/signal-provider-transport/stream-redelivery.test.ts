@@ -62,7 +62,7 @@ describe("stream accept/checkpoint redelivery", () => {
         checkpoint: null,
         lease,
         signal: new AbortController().signal,
-        now: NOW,
+        now: () => NOW,
         ownerId: "worker-a",
       }),
     ).rejects.toThrow(/injected crash after accept before checkpoint/);
@@ -110,7 +110,7 @@ describe("stream accept/checkpoint redelivery", () => {
       checkpoint: null,
       lease,
       signal: new AbortController().signal,
-      now: new Date("2026-08-07T18:00:01.000Z"),
+      now: () => new Date("2026-08-07T18:00:01.000Z"),
       ownerId: "worker-a",
     });
 

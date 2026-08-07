@@ -60,7 +60,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,
@@ -123,7 +123,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,
@@ -168,7 +168,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+
       ownerId: "worker-a",
       maxTransientFailures: maxFailures,
       clock: {
@@ -234,7 +234,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       maxTransientFailures: 3,
       clock: {
@@ -297,7 +297,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: controller.signal,
-      now: NOW,
+
       ownerId: "worker-a",
       maxTransientFailures: 2,
       clock: {
@@ -363,7 +363,7 @@ describe("runManagedStream reconnect loop", () => {
       transport,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+
       ownerId: "worker-a",
       clock: {
         now: () => NOW,

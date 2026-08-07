@@ -26,6 +26,14 @@ import type { RuntimeManagedTransportBinding } from "../transport/contracts";
 import type { RuntimeTransportBindingCheckpoint } from "../transport/binding-checkpoint";
 import { createRuntimeError } from "../engine/errors";
 import { pollAndAccept, recordPollFailure } from "./worker-transport-poll";
+import {
+  MAX_STREAM_TRANSIENT_FAILURES,
+  TRANSPORT_STREAM_EXHAUSTED,
+} from "./worker-transport-stream";
+import {
+  loadBindingCheckpoint,
+  writeStreamCheckpoint,
+} from "./worker-transport-stream-connection";
 import { resolveStreamCheckpoint } from "./worker-transport-stream-resolve";
 import {
   disposeStreamFibers,
@@ -37,6 +45,12 @@ import {
 } from "./worker-transport-supervision-stream";
 
 const DEFAULT_BINDING_LEASE_MS = 30_000;
+
+/** Shared catch code when a stream binding throws outside a managed fiber. */
+const TRANSPORT_STREAM_FAILED = "TRANSPORT_STREAM_FAILED" as const;
+
+/** Shared catch code when a polling binding throws outside pollAndAccept. */
+const TRANSPORT_POLL_FAILED = "TRANSPORT_POLL_FAILED" as const;
 
 /** Options for building the worker-owned transport supervision loop. */
 export interface CreateWorkerTransportSupervisionOptions {
@@ -154,6 +168,8 @@ export function createWorkerTransportSupervision(
 
   const heldLeases = new Map<string, Lease>();
   const streamFibers = new Map<string, StreamFiber>();
+  /** Consecutive top-level rejected stream fibers per binding (outside reconnect). */
+  const streamFiberFailures = new Map<string, number>();
   let disposed = false;
 
   return Object.freeze({
@@ -187,6 +203,7 @@ export function createWorkerTransportSupervision(
         // cannot abort the rest of the supervision cycle.
         let lease = heldLeases.get(binding.id) ?? null;
         let checkpoint: RuntimeTransportBindingCheckpoint | null = null;
+        let streamBinding = false;
 
         try {
           const provider = resolveProgramProvider(
@@ -199,6 +216,7 @@ export function createWorkerTransportSupervision(
           }
 
           if (isStreamTransport(provider.transport)) {
+            streamBinding = true;
             const streamOutcome = await superviseStreamBinding({
               options,
               binding,
@@ -208,6 +226,7 @@ export function createWorkerTransportSupervision(
               now,
               heldLeases,
               streamFibers,
+              streamFiberFailures,
               lease,
               streamCounters,
             });
@@ -309,7 +328,9 @@ export function createWorkerTransportSupervision(
                 lease,
                 now,
                 ownerId: options.ownerId ?? lease.ownerId,
-                code: "TRANSPORT_POLL_FAILED",
+                code: streamBinding
+                  ? TRANSPORT_STREAM_FAILED
+                  : TRANSPORT_POLL_FAILED,
               });
               if (failure.leaseLost) {
                 heldLeases.delete(binding.id);
@@ -374,6 +395,7 @@ async function superviseStreamBinding(args: {
   readonly now: Date;
   readonly heldLeases: Map<string, Lease>;
   readonly streamFibers: Map<string, StreamFiber>;
+  readonly streamFiberFailures: Map<string, number>;
   lease: Lease | null;
   readonly streamCounters: StreamFiberCounters;
 }): Promise<{
@@ -388,8 +410,10 @@ async function superviseStreamBinding(args: {
     provider,
     transport,
     signal,
+    now,
     heldLeases,
     streamFibers,
+    streamFiberFailures,
     streamCounters,
   } = args;
   let { lease } = args;
@@ -404,9 +428,31 @@ async function superviseStreamBinding(args: {
     streamFibers.delete(binding.id);
     existing.leaseBound.dispose();
     existing.unlinkParent();
+
     if (harvest.leaseLost) {
       heldLeases.delete(binding.id);
       lease = null;
+    }
+
+    if (existing.error !== undefined) {
+      const failures = (streamFiberFailures.get(binding.id) ?? 0) + 1;
+      streamFiberFailures.set(binding.id, failures);
+
+      if (failures >= MAX_STREAM_TRANSIENT_FAILURES) {
+        // harvest already counted streamFaulted for this rejection.
+        await faultStreamBindingExhausted({
+          options,
+          binding,
+          lease,
+          heldLeases,
+          now,
+        });
+        // Stop reopening after the bound, even when the fault write fails.
+        return { lease: null, leased, skipped, failed: 0 };
+      }
+    } else {
+      // Successful managed-stream harvest (result present): reset the counter.
+      streamFiberFailures.delete(binding.id);
     }
   }
 
@@ -449,7 +495,20 @@ async function superviseStreamBinding(args: {
   });
   const resolved = resolveStreamCheckpoint(checkpoint, binding.configRef);
   if (resolved.skipOpen) {
+    streamFiberFailures.delete(binding.id);
     skipped = 1;
+    return { lease, leased, skipped, failed };
+  }
+
+  // Bound reached earlier and durable fault did not land — do not reopen.
+  if (
+    (streamFiberFailures.get(binding.id) ?? 0) >= MAX_STREAM_TRANSIENT_FAILURES
+  ) {
+    failed = 1;
+    if (lease) {
+      await releaseBindingLease(options, heldLeases, binding.id, lease);
+      lease = null;
+    }
     return { lease, leased, skipped, failed };
   }
 
@@ -495,6 +554,66 @@ async function superviseStreamBinding(args: {
   streamCounters.streamOpened += 1;
 
   return { lease, leased, skipped, failed };
+}
+
+async function faultStreamBindingExhausted(args: {
+  readonly options: CreateWorkerTransportSupervisionOptions;
+  readonly binding: RuntimeManagedTransportBinding;
+  lease: Lease | null;
+  readonly heldLeases: Map<string, Lease>;
+  readonly now: Date;
+}): Promise<void> {
+  const { options, binding, heldLeases, now } = args;
+  let { lease } = args;
+
+  if (!lease) {
+    return;
+  }
+
+  try {
+    const previous = await loadBindingCheckpoint(
+      options.store,
+      options.namespace,
+      binding.id,
+    );
+    const written = await writeStreamCheckpoint({
+      store: options.store,
+      namespace: options.namespace,
+      bindingId: binding.id,
+      cursor: previous?.cursor ?? null,
+      lease,
+      now,
+      ownerId: options.ownerId ?? lease.ownerId,
+      configRef: binding.configRef,
+      status: "faulted",
+      lastErrorCode: TRANSPORT_STREAM_EXHAUSTED,
+      previous,
+    });
+    if (written.kind === "rejected") {
+      heldLeases.delete(binding.id);
+      lease = null;
+    }
+  } catch {
+    // Fault writes must remain bounded and never surface as unhandled rejections.
+  }
+
+  if (lease) {
+    await releaseBindingLease(options, heldLeases, binding.id, lease);
+  }
+}
+
+async function releaseBindingLease(
+  options: CreateWorkerTransportSupervisionOptions,
+  heldLeases: Map<string, Lease>,
+  bindingId: string,
+  lease: Lease,
+): Promise<void> {
+  heldLeases.delete(bindingId);
+  try {
+    await options.store.leases.release(lease);
+  } catch {
+    // Lease expiry remains the ownership fence.
+  }
 }
 
 function emptyResult(examined: number): TransportSupervisionRunResult {

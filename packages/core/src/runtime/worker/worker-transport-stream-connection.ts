@@ -105,7 +105,13 @@ export interface RunStreamConnectionOptions {
    */
   readonly leaseBound?: LeaseBoundPollSignal;
   readonly signal: AbortSignal;
-  readonly now: Date;
+  /**
+   * Fresh wall clock for each accept and checkpoint write.
+   *
+   * @remarks Evaluated immediately before every timestamped write so long-lived
+   * connections do not freeze `updatedAt` / `lastPolledAt` / `receivedAt`.
+   */
+  readonly now: () => Date;
   readonly ownerId?: string;
 }
 
@@ -250,7 +256,7 @@ export async function runStreamConnection(
             bindingId: options.binding.id,
             cursor: latestCheckpoint?.cursor ?? null,
             lease: activeLease(options),
-            now: options.now,
+            now: options.now(),
             ownerId: options.ownerId,
             configRef: options.binding.configRef,
             status: "active",
@@ -288,7 +294,7 @@ export async function runStreamConnection(
             bindingId: options.binding.id,
             cursor: item.cursor,
             lease: activeLease(options),
-            now: options.now,
+            now: options.now(),
             ownerId: options.ownerId,
             configRef: options.binding.configRef,
             status: "active",
@@ -348,6 +354,17 @@ export async function runStreamConnection(
           accepted += 1;
         } else if (itemResult.kind === "duplicate") {
           duplicated += 1;
+        } else {
+          // Only explicit accepted/duplicate results may advance item.cursor.
+          return {
+            accepted,
+            duplicated,
+            checkpointed,
+            failed: true,
+            leaseLost: false,
+            outcome: "transient",
+            lastErrorCode: "TRANSPORT_ACCEPT_FAILED",
+          };
         }
 
         if (item.cursor === undefined) {
@@ -370,7 +387,7 @@ export async function runStreamConnection(
           bindingId: options.binding.id,
           cursor: item.cursor,
           lease: activeLease(options),
-          now: options.now,
+          now: options.now(),
           ownerId: options.ownerId,
           configRef: options.binding.configRef,
           status: "active",
@@ -522,14 +539,15 @@ async function acceptStreamEnvelope(args: {
     return { kind: "aborted" };
   }
 
-  const envelope = envelopeFromStreamItem(options.binding, item, options.now);
+  const now = options.now();
+  const envelope = envelopeFromStreamItem(options.binding, item, now);
 
   try {
     const result = await acceptTransportEnvelope({
       store: options.store,
       namespace: options.namespace,
       envelope,
-      now: options.now,
+      now,
     });
 
     if (signal.aborted || isLeaseExpired(activeLease(options))) {
@@ -542,24 +560,21 @@ async function acceptStreamEnvelope(args: {
     if (result.kind === "duplicate") {
       return { kind: "duplicate" };
     }
-    return { kind: "duplicate" };
+
+    // Unknown accept outcomes must never advance cursors as duplicates.
+    return {
+      kind: "failed",
+      leaseLost: false,
+      code: "TRANSPORT_ACCEPT_FAILED",
+    };
   } catch (error) {
     if (signal.aborted || isAbortError(error)) {
       return { kind: "aborted" };
     }
 
     if (error instanceof TransportEnvelopeConflictError) {
-      const evidence = await loadDurableEnvelopeEvidence({
-        store: options.store,
-        namespace: options.namespace,
-        provider: error.provider,
-        accountId: error.accountId,
-        eventId: error.eventId,
-      });
-      if (evidence) {
-        return { kind: "duplicate" };
-      }
-
+      // Conflicts never become duplicates and never advance item.cursor.
+      // Durable original remains the privacy-safe authority either way.
       const code = error.code;
       const written = await writeStreamCheckpoint({
         store: options.store,
@@ -567,7 +582,7 @@ async function acceptStreamEnvelope(args: {
         bindingId: options.binding.id,
         cursor: latestCheckpoint?.cursor ?? null,
         lease: activeLease(options),
-        now: options.now,
+        now: options.now(),
         ownerId: options.ownerId,
         configRef: options.binding.configRef,
         status: "active",
@@ -589,7 +604,7 @@ async function acceptStreamEnvelope(args: {
       bindingId: options.binding.id,
       cursor: latestCheckpoint?.cursor ?? null,
       lease: activeLease(options),
-      now: options.now,
+      now: options.now(),
       ownerId: options.ownerId,
       configRef: options.binding.configRef,
       status: "active",
@@ -637,7 +652,7 @@ async function handleConnectionError(args: {
       bindingId: options.binding.id,
       cursor: latestCheckpoint?.cursor ?? null,
       lease: activeLease(options),
-      now: options.now,
+      now: options.now(),
       ownerId: options.ownerId,
       configRef: options.binding.configRef,
       status: "faulted",
@@ -663,7 +678,7 @@ async function handleConnectionError(args: {
     bindingId: options.binding.id,
     cursor: latestCheckpoint?.cursor ?? null,
     lease: activeLease(options),
-    now: options.now,
+    now: options.now(),
     ownerId: options.ownerId,
     configRef: options.binding.configRef,
     status: "active",
@@ -701,31 +716,6 @@ function envelopeFromStreamItem(
     configRef: binding.configRef,
     target: binding.target,
   };
-}
-
-async function loadDurableEnvelopeEvidence(options: {
-  readonly store: RuntimeStoreAdapter;
-  readonly namespace: string;
-  readonly provider: string;
-  readonly accountId: string;
-  readonly eventId: string;
-}): Promise<boolean> {
-  const port = options.store.transports;
-  if (!port) {
-    return false;
-  }
-
-  try {
-    const record = await port.get({
-      namespace: options.namespace,
-      provider: options.provider,
-      accountId: options.accountId,
-      eventId: options.eventId,
-    });
-    return record !== null;
-  } catch {
-    return false;
-  }
 }
 
 function abortedOutcome(

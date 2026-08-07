@@ -322,7 +322,7 @@ export interface RuntimeTransportBindingCheckpoint {
 
 **Over-invalidate algorithm** (on lease acquisition / before open):
 
-```
+```text
 checkpoint = getBindingCheckpoint(binding)
 if checkpoint is null → cursor = null, status = active
 else if checkpoint.configRef missing OR checkpoint.configRef ≠ binding.configRef
@@ -354,7 +354,7 @@ Required-column lists and encode/decode updated in the same change. No second ch
 
 Per stream binding, while a worker holds the lease:
 
-```
+```text
 idle
   → leasing (claim/extend)
   → opening          (await open())

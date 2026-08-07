@@ -33,7 +33,7 @@ export interface StreamOpenContext {
  *
  * @remarks Optional `cursor` is progress **through this item inclusive**.
  * Runtime may checkpoint that cursor only after this envelope is durably
- * accepted (or same-digest duplicate / progressable conflict with evidence).
+ * accepted or same-digest duplicate. Digest conflicts never advance the cursor.
  */
 export interface StreamEnvelopeItem {
   readonly kind: "envelope";

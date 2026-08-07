@@ -149,6 +149,125 @@ describe("validateStreamItem / validateStreamCursor", () => {
       } as never),
     ).toThrow();
   });
+
+  it("rejects incomplete payload metadata through the canonical payload union", () => {
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: {},
+        payload: { kind: "inline-base64url" },
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|payload/);
+
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: {},
+        payload: {
+          kind: "inline-base64url",
+          value: "YQ",
+          byteLength: 1,
+          // missing sha256
+        },
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|payload/);
+
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: {},
+        payload: {
+          kind: "durable-ref",
+          ref: "blob:orders/1",
+          byteLength: 1,
+          sha256: "not-a-sha",
+        },
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|payload/);
+  });
+
+  it("rejects invalid nested routing, cycles, and secret-like keys", () => {
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: { nested: { token: "secret" } },
+        payload: samplePayload,
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|authenticatedRouting|token/);
+
+    const cyclic: Record<string, unknown> = { source: "stream" };
+    cyclic.self = cyclic;
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: cyclic,
+        payload: samplePayload,
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|authenticatedRouting|cyclic/);
+
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_1",
+        authenticatedRouting: { bad: Number.NaN },
+        payload: samplePayload,
+      }),
+    ).toThrow(/TRANSPORT_STREAM_CONTRACT_INVALID|authenticatedRouting|JSON/);
+  });
+
+  it("returns detached immutable payload and routing snapshots", () => {
+    const routing: Record<string, unknown> = {
+      source: "stream",
+      nested: { region: "eu" },
+    };
+    const payload = {
+      kind: "inline-base64url" as const,
+      value: samplePayload.value,
+      byteLength: samplePayload.byteLength,
+      sha256: samplePayload.sha256,
+    };
+
+    const validated = validateStreamItem({
+      kind: "envelope",
+      accountId: "acct_1",
+      eventId: "evt_snap",
+      authenticatedRouting: routing,
+      payload,
+      cursor: "cursor:1",
+    });
+
+    expect(validated.kind).toBe("envelope");
+    if (validated.kind !== "envelope") {
+      throw new Error("expected envelope item");
+    }
+
+    expect(validated.authenticatedRouting).not.toBe(routing);
+    expect(validated.payload).not.toBe(payload);
+    expect(Object.isFrozen(validated)).toBe(true);
+    expect(Object.isFrozen(validated.authenticatedRouting)).toBe(true);
+    expect(Object.isFrozen(validated.payload)).toBe(true);
+
+    routing.source = "mutated";
+    (routing.nested as { region: string }).region = "us";
+    payload.value = "mutated";
+
+    expect(validated.authenticatedRouting).toEqual({
+      source: "stream",
+      nested: { region: "eu" },
+    });
+    expect(validated.payload).toEqual(samplePayload);
+  });
 });
 
 describe("ManagedStreamTerminalError classification", () => {

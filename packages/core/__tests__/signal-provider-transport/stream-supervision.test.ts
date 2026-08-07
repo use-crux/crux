@@ -45,7 +45,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: null,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -120,7 +120,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: prior,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -156,7 +156,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: null,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -212,7 +212,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: null,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -275,7 +275,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: prior,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -314,7 +314,7 @@ describe("runStreamConnection (single leased connection)", () => {
       checkpoint: null,
       lease,
       signal: new AbortController().signal,
-      now: NOW,
+      now: () => NOW,
       ownerId: "worker-a",
     });
 
@@ -335,6 +335,165 @@ describe("runStreamConnection (single leased connection)", () => {
       lastErrorCode: "AUTH_REVOKED",
       configRef: fixture.binding.configRef,
     });
+  });
+
+  it("evaluates the injected clock immediately before each checkpoint write", async () => {
+    const fixture = createStreamFixture();
+    fixture.setItemSequence([
+      envelopeItem({ eventId: "evt_1", cursor: "cursor:1" }),
+      envelopeItem({ eventId: "evt_2", cursor: "cursor:2" }),
+    ]);
+
+    const store = inMemoryRuntimeStore();
+    const namespace = "stream-clock-per-checkpoint";
+    const lease = await claimBindingLease(store, namespace, fixture.binding.id);
+    const transport = fixture.provider.transport;
+    if (!isStreamTransport(transport)) {
+      throw new Error("expected stream transport");
+    }
+
+    let tick = 0;
+    const stamps = [
+      new Date("2026-08-07T15:00:00.000Z"),
+      new Date("2026-08-07T15:00:10.000Z"),
+      new Date("2026-08-07T15:00:20.000Z"),
+      new Date("2026-08-07T15:00:30.000Z"),
+    ];
+
+    const result = await runStreamConnection({
+      store,
+      namespace,
+      binding: fixture.binding,
+      provider: fixture.provider,
+      transport,
+      checkpoint: null,
+      lease,
+      signal: new AbortController().signal,
+      now: () => stamps[Math.min(tick++, stamps.length - 1)]!,
+      ownerId: "worker-a",
+    });
+
+    expect(result).toMatchObject({
+      accepted: 2,
+      checkpointed: true,
+      outcome: "eof",
+    });
+    expect(tick).toBeGreaterThanOrEqual(2);
+
+    const checkpoint = await store.transports!.getBindingCheckpoint!({
+      namespace,
+      bindingId: fixture.binding.id,
+    });
+    // Final checkpoint uses a later stamp than the first accept/checkpoint path.
+    expect(checkpoint?.updatedAt).toBe("2026-08-07T15:00:30.000Z");
+    expect(checkpoint?.lastPolledAt).toBe("2026-08-07T15:00:30.000Z");
+    expect(checkpoint?.cursor).toBe("cursor:2");
+  });
+
+  it("does not treat TransportEnvelopeConflictError as duplicate or advance the cursor", async () => {
+    const fixture = createStreamFixture();
+    const store = inMemoryRuntimeStore();
+    const namespace = "stream-conflict-no-advance";
+    const lease = await claimBindingLease(store, namespace, fixture.binding.id);
+
+    await store.transports!.putBindingCheckpoint!({
+      checkpoint: sampleCheckpoint({
+        namespace,
+        bindingId: fixture.binding.id,
+        cursor: "cursor:prior",
+        lastOwnerId: "worker-a",
+        configRef: fixture.binding.configRef,
+        status: "active",
+      }),
+      lease,
+    });
+
+    // Seed a durable envelope, then re-yield a conflicting digest for the same identity.
+    const first = envelopeItem({ eventId: "evt_conflict", cursor: "cursor:would-advance" });
+    fixture.setItemSequence([first]);
+    const transport = fixture.provider.transport;
+    if (!isStreamTransport(transport)) {
+      throw new Error("expected stream transport");
+    }
+
+    const prior = await store.transports!.getBindingCheckpoint!({
+      namespace,
+      bindingId: fixture.binding.id,
+    });
+
+    await runStreamConnection({
+      store,
+      namespace,
+      binding: fixture.binding,
+      provider: fixture.provider,
+      transport,
+      checkpoint: prior,
+      lease,
+      signal: new AbortController().signal,
+      now: () => NOW,
+      ownerId: "worker-a",
+    });
+
+    // Conflicting payload (different digest, same identity).
+    const conflicting = {
+      kind: "envelope" as const,
+      accountId: "acct_1",
+      eventId: "evt_conflict",
+      authenticatedRouting: { source: "stream" },
+      payload: {
+        kind: "inline-base64url" as const,
+        value: "Yg",
+        byteLength: 1,
+        sha256:
+          "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+      },
+      cursor: "cursor:conflict",
+    };
+    fixture.setItemSequence([conflicting]);
+
+    const afterFirst = await store.transports!.getBindingCheckpoint!({
+      namespace,
+      bindingId: fixture.binding.id,
+    });
+
+    const conflictResult = await runStreamConnection({
+      store,
+      namespace,
+      binding: fixture.binding,
+      provider: fixture.provider,
+      transport,
+      checkpoint: afterFirst,
+      lease,
+      signal: new AbortController().signal,
+      now: () => new Date("2026-08-07T15:01:00.000Z"),
+      ownerId: "worker-a",
+    });
+
+    expect(conflictResult).toMatchObject({
+      accepted: 0,
+      duplicated: 0,
+      checkpointed: false,
+      failed: true,
+      lastErrorCode: "TRANSPORT_ENVELOPE_CONFLICT",
+    });
+
+    const checkpoint = await store.transports!.getBindingCheckpoint!({
+      namespace,
+      bindingId: fixture.binding.id,
+    });
+    expect(checkpoint?.cursor).toBe("cursor:would-advance");
+    expect(checkpoint?.status).toBe("active");
+    expect(checkpoint?.lastErrorCode).toBe("TRANSPORT_ENVELOPE_CONFLICT");
+
+    const original = await store.transports!.get({
+      namespace,
+      provider: "orders.stream",
+      accountId: "acct_1",
+      eventId: "evt_conflict",
+    });
+    expect(original?.envelope.payload).toEqual(
+      (first as { payload: unknown }).payload,
+    );
   });
 });
 
