@@ -139,9 +139,39 @@ prompts, and consumer internals. That is a diagnostic boundary, not a storage
 classification: deployments still own payload retention, access control,
 encryption, namespace isolation, and deletion policy.
 
+## Managed transport Signal providers
+
+Webhook Signal providers reuse the Runtime managed-transport kernel rather than
+inventing a second queue or worker:
+
+1. Edge `webhook({ handle })` authenticates and size-checks the request.
+2. `acceptTransportEnvelope()` durably commits the accepted envelope and
+   updates bounded transport statistics in the same transaction.
+3. The host acknowledges the provider only when `acknowledge` is true.
+4. The single Runtime worker claims envelopes and runs provider `onEvent`
+   through `createTransportNormalizationRunner()`.
+5. Successful publication records Signal occurrence lineage on the envelope
+   (`signalId` + `occurrenceId`) and credits normalized/delivered stats.
+6. Failures schedule bounded retry or enter `dead-letter`; operators call
+   `replayTransportEnvelope()` explicitly.
+
+Identity remains `(namespace, provider, accountId, eventId)`. Statistics use
+the shared statistics ledger export under owner kind `transport`, with exact
+totals and first-64 `adapterId/bindingId` attribution. Terminal envelope
+retention is `RuntimeRetentionConfig.transportEnvelopes` (default `7d`) and
+only prunes `normalized` and `dead-letter` rows through ordinary maintenance.
+
+Inert `managedTransportBinding()` projections hold stable target and config
+references only. Live credentials, `Request` objects, clients, and callbacks
+stay on process-local provider definitions and never enter generated Runtime
+program bindings.
+
+`projectTransportEnvelope()` is the privacy-safe operator/Devtools view: state,
+attempts, safe failure codes, and occurrence lineage without payload bytes.
+
 ## Deliberate limits
 
 This slice owns no historical replay for later local subscribers, consumer
-completion acknowledgment, cross-process callback bus, restart-safe Effect
-recovery, provider transport, or tooling integration. Those capabilities must
-not be inferred from Signal identities or durable Flow delivery records.
+completion acknowledgment, or cross-process callback bus. Polling, SSE,
+WebSocket, and generic stream supervision remain issue #340 and must not be
+inferred from webhook provider identities or transport envelope records.

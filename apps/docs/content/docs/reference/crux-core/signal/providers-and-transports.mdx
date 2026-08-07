@@ -1,0 +1,145 @@
+---
+title: Providers and transports
+description: Exact public API for Signal providers, webhook transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
+---
+
+Import authoring helpers from focused subpaths and lifecycle helpers from the
+Runtime surface:
+
+```ts
+import {
+  webhook,
+  type WebhookTransport,
+} from "@use-crux/core/signal/transport";
+import {
+  managedTransportBinding,
+  signalProvider,
+  type SignalProvider,
+} from "@use-crux/core/signal/provider";
+import {
+  acceptTransportEnvelope,
+  createTransportNormalizationRunner,
+  projectTransportEnvelope,
+  replayTransportEnvelope,
+  transportStatistics,
+  type RuntimeAcceptedTransportEnvelope,
+  type RuntimeManagedTransportBinding,
+  type RuntimeTransportEnvelopeProjection,
+  type RuntimeTransportEnvelopeRecord,
+  type RuntimeTransportEnvelopeState,
+} from "@use-crux/core/runtime";
+```
+
+Provider and binding helpers also re-export from the root package where
+documented.
+
+## Authoring
+
+### `webhook({ handle })`
+
+Returns a frozen `WebhookTransport` (`_tag: "WebhookTransport"`,
+`kind: "webhook"`).
+
+`handle(request)` must authenticate and validate before returning:
+
+| Field | Meaning |
+| --- | --- |
+| `accountId` | Provider account identity for idempotent acceptance |
+| `eventId` | Provider event identity for idempotent acceptance |
+| `authenticatedRouting` | Detached JSON metadata without secrets |
+| `payload` | Opaque `inline-base64url` or durable payload reference |
+
+### `signalProvider({ id, transport, signals, onEvent })`
+
+Returns a frozen `SignalProvider`. Live definitions retain `transport` and
+`onEvent` as process code. They perform no I/O at construction time and do not
+register globally.
+
+`onEvent(envelope, { signals })` may publish only the declared Signal map.
+Omitted publish idempotency keys default to the accepted provider/account/event
+identity when invoked through the transport normalization runner.
+
+### `managedTransportBinding(provider, options)`
+
+Projects a live provider into an inert `RuntimeManagedTransportBinding`:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Stable binding identity |
+| `configRef` | `{ id, revision }` without secrets |
+| `signalId` | Declared Signal target from the provider map |
+| `provider?` / `adapterId?` | Optional overrides; default to provider id |
+
+The result is suitable for immutable Runtime program generation. It never
+captures handles, credentials, or callbacks.
+
+## Acceptance and normalization
+
+### `acceptTransportEnvelope(options)`
+
+Call only after edge authentication succeeds.
+
+| Result | `acknowledge` | Meaning |
+| --- | --- | --- |
+| `accepted` | `true` | First durable acceptance |
+| `duplicate` | `true` | Same identity and digest |
+| `conflict` | `false` | Same identity, different digest (throws `TransportEnvelopeConflictError` with structured result) |
+
+### Envelope lifecycle states
+
+`RuntimeTransportEnvelopeState`:
+
+| State | Meaning |
+| --- | --- |
+| `accepted` | Durable, claimable or retry-scheduled |
+| `claimed` | Leased for normalization |
+| `normalized` | Provider `onEvent` completed |
+| `dead-letter` | Exhausted attempts; explicit replay only |
+
+### `createTransportNormalizationRunner({ store, namespace, providers })`
+
+Claims a bounded batch and runs provider normalization. Hosts typically invoke
+`runOnce()` from the single Runtime worker maintenance path.
+
+### `replayTransportEnvelope(options)`
+
+Returns a `dead-letter` envelope to `accepted`. Automatic workers never invent
+replay.
+
+## Observability
+
+### `transportStatistics({ store, namespace })`
+
+Returns `TransportEnvelopeStats`:
+
+- exact totals: `accepted`, `deduplicated`, `normalized`, `delivered`,
+  `retried`, `deadLettered`
+- first-64 `byIdentity` attribution keyed by `adapterId/bindingId`
+- overflow identities roll into `otherIdentities` with
+  `identityAttribution: "truncated"`
+
+Statistics use the shared statistics ledger export persisted on the transport
+store. They are restart-safe where the Runtime store is durable.
+
+### `projectTransportEnvelope(record)`
+
+Privacy-safe operator view: identity, state, attempts, safe `lastFailure`,
+config ref ids, target Signal id, and `lineage` entries of
+`{ signalId, occurrenceId }`.
+
+Projections omit payload bytes, payload refs, credentials, and raw routing
+secrets. Occurrence identities join existing Signal / Work / Session / Flow
+observability without a parallel execution registry.
+
+## Retention
+
+Runtime retention accepts `transportEnvelopes` (default `7d`, or `false` to
+keep forever). Only terminal `normalized` and `dead-letter` rows are eligible.
+Accepted and claimed envelopes are never pruned by retention.
+
+## Guarantees and non-goals
+
+- No second transport daemon, queue, or global provider registry.
+- No Channel exclusive conversation ownership on this path.
+- Polling / SSE / WebSocket supervision is
+  [#340](https://github.com/use-crux/crux/issues/340), not part of this API.

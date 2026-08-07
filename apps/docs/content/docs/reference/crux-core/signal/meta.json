@@ -1,11 +1,12 @@
 {
   "title": "Signals",
-  "description": "Signal definitions, publication, filtering, Flow waits, and errors.",
+  "description": "Signal definitions, publication, filtering, Flow waits, providers, and errors.",
   "pages": [
     "index",
     "definitions-and-publication",
     "filters-and-types",
     "flow-integration",
+    "providers-and-transports",
     "errors"
   ]
 }
