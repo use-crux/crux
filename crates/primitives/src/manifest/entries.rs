@@ -34,7 +34,7 @@ use crate::{
     session::facts::session_facts,
     signal::{
         managed_transport_binding_facts, polling_facts, signal_facts, signal_provider_facts,
-        stream_facts, webhook_facts,
+        sse_facts, stream_facts, webhook_facts,
     },
     storage::facts::storage_native_facts,
     thread::facts::thread_facts,
@@ -261,6 +261,17 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &["open"],
         LOCAL_REFERENCE_FORMS,
         Projector::CallParts(stream_facts),
+        false,
+    ),
+    first_party(
+        "signal.transport.sse",
+        &["sse"],
+        &[],
+        &["signal.transport"],
+        &["signal.transport:"],
+        &["open"],
+        LOCAL_REFERENCE_FORMS,
+        Projector::CallParts(sse_facts),
         false,
     ),
     first_party(

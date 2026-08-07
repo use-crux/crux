@@ -48,8 +48,8 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v96");
-    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v95");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v97");
+    expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v96");
     expect(STATIC_PARSE_CACHE_EPOCH).not.toBe("static-parse-v85");
   });
 

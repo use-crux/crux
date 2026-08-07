@@ -114,6 +114,45 @@ describe("signal catalog", () => {
     expect(html).not.toMatch(/onEvent\(/i);
   });
 
+  it("renders managed SSE transport kind on provider catalog rows", () => {
+    const sseData = {
+      ...data,
+      definitions: [
+        ...data.definitions.filter(
+          (definition) => definition.kind !== "signal.provider",
+        ),
+        {
+          id: "signal.provider:orders.live",
+          kind: "signal.provider",
+          name: "orders.live",
+          fidelity: "resolved",
+          metadata: {
+            facts: {
+              kind: "signal.provider",
+              providerId: "orders.live",
+              identity: "static",
+              transportKind: "sse",
+              signalIds: ["order.submitted"],
+              hasOnEvent: true,
+            },
+          },
+        },
+      ],
+    } as unknown as ProjectIndexData;
+    const index = buildIndex(sseData);
+    const definition = index.byId("signal.provider:orders.live")!;
+    const html = renderToStaticMarkup(
+      <IndexIndexProvider index={index}>
+        <IndexSelectProvider select={() => undefined}>
+          <IndexSignalProviderDetail def={definition} />
+        </IndexSelectProvider>
+      </IndexIndexProvider>,
+    );
+    // Identifiers omit "sse" so the transport value assertion is not a false positive.
+    expect(html).toContain("orders.live");
+    expect(html).toMatch(/transport<\/span><span[^>]*>sse<\/span>/);
+  });
+
   it("renders transport binding config-ref and Signal target lineage", () => {
     const index = buildIndex(data);
     const definition = index.byId("signal.transportBinding:binding.orders")!;

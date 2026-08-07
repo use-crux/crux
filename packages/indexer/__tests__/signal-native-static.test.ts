@@ -414,6 +414,139 @@ describe("signal transport native static projection", () => {
   );
 
   itWithRustOxc(
+    "projects sse transport with hasOpen and provider transportKind",
+    async () => {
+      const result = await extractNativeAndFallback({
+        callNames: ["signal", "sse", "signalProvider"],
+        callInterests: [
+          {
+            name: "signal",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal"],
+          },
+          {
+            name: "sse",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/transport"],
+          },
+          {
+            name: "signalProvider",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/provider"],
+          },
+        ],
+        source: [
+          `import { signal } from '@use-crux/core/signal'`,
+          `import { sse } from '@use-crux/core/signal/transport'`,
+          `import { signalProvider } from '@use-crux/core/signal/provider'`,
+          `import { z } from 'zod'`,
+          `export const orderSubmitted = signal({`,
+          `  id: 'order.submitted',`,
+          `  schema: z.object({ orderId: z.string() }),`,
+          `})`,
+          `const ingress = sse({`,
+          `  async *open() { throw new Error('PRIVATE_OPEN') },`,
+          `})`,
+          `export const ordersSse = signalProvider({`,
+          `  id: 'orders.sse',`,
+          `  transport: ingress,`,
+          `  signals: { orderSubmitted },`,
+          `  async onEvent() { throw new Error('PRIVATE_SIGNAL_EVENT') },`,
+          `})`,
+        ].join("\n"),
+      });
+
+      expect(nativeFactCount(result.record, "signal.transport.sse")).toBe(1);
+      const transport = result.nativeOut.definitions.find(
+        (definition) => definition.kind === "signal.transport",
+      );
+      expect(transport).toMatchObject({
+        kind: "signal.transport",
+        name: "ingress",
+        metadata: {
+          facts: {
+            kind: "signal.transport",
+            transportKind: "sse",
+            hasOpen: true,
+          },
+        },
+      });
+      const provider = result.nativeOut.definitions.find(
+        (definition) => definition.kind === "signal.provider",
+      );
+      expect(provider?.metadata?.facts).toMatchObject({
+        kind: "signal.provider",
+        providerId: "orders.sse",
+        transportKind: "sse",
+      });
+      expect(
+        JSON.stringify(
+          result.nativeOut.definitions.map(
+            (definition) => definition.metadata?.facts,
+          ),
+        ),
+      ).not.toContain("PRIVATE_OPEN");
+      expect(jsonStable(result.nativeOut)).toEqual(
+        jsonStable(result.typescriptOut),
+      );
+    },
+  );
+
+  itWithRustOxc(
+    "rejects live open on SSE managedTransportBinding options",
+    async () => {
+      const result = await extractNativeAndFallback({
+        callNames: [
+          "signalProvider",
+          "managedTransportBinding",
+          "sse",
+        ],
+        callInterests: [
+          {
+            name: "signalProvider",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/provider"],
+          },
+          {
+            name: "managedTransportBinding",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/provider"],
+          },
+          {
+            name: "sse",
+            importFrom: ["@use-crux/core", "@use-crux/core/signal/transport"],
+          },
+        ],
+        source: [
+          `import { managedTransportBinding, signalProvider } from '@use-crux/core/signal/provider'`,
+          `import { sse } from '@use-crux/core/signal/transport'`,
+          `const provider = signalProvider({`,
+          `  id: 'orders.sse',`,
+          `  transport: sse({ async *open() { throw new Error('unused') } }),`,
+          `  signals: {},`,
+          `  onEvent() {},`,
+          `})`,
+          `export const binding = managedTransportBinding(provider, {`,
+          `  id: 'binding.orders',`,
+          `  configRef: { id: 'config.orders', revision: 'rev.1' },`,
+          `  signalId: 'order.submitted',`,
+          `  open: async function* () { throw new Error('PRIVATE_OPEN') },`,
+          `})`,
+        ].join("\n"),
+      });
+
+      const binding = result.nativeOut.definitions.find(
+        (definition) => definition.kind === "signal.transportBinding",
+      );
+      expect(binding?.metadata?.facts).toMatchObject({
+        kind: "signal.transportBinding",
+        liveFields: ["open"],
+      });
+      expect(JSON.stringify(binding?.metadata?.facts)).not.toContain(
+        "PRIVATE_OPEN",
+      );
+      expect(jsonStable(result.nativeOut)).toEqual(
+        jsonStable(result.typescriptOut),
+      );
+    },
+  );
+
+  itWithRustOxc(
     "ignores lookalike signal transport helpers",
     async () => {
       const result = await extractNativeAndFallback({

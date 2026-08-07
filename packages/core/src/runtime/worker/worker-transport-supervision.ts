@@ -6,18 +6,25 @@
  * mutable transport registry is introduced. Accepted events enter the shared
  * #337 envelope kernel; cursors advance only after durable acceptance.
  *
- * Stream fibers are started from a bounded {@link TransportSupervisionRunner.runOnce}
- * and never block the maintenance tick on long-lived `open`/iteration.
+ * Supervises polling, stream, and SSE bindings (SSE lowers onto the existing
+ * stream fiber — no second reconnect loop). Stream fibers are started from a
+ * bounded {@link TransportSupervisionRunner.runOnce} and never block the
+ * maintenance tick on long-lived `open`/iteration.
  *
  * @module
  */
 
 import {
+  isManagedStreamTransport,
   isPollingTransport,
-  isStreamTransport,
+  isSseTransport,
   type SignalProvider,
 } from "../../signal/provider";
-import type { StreamTransport } from "../../signal/transport";
+import {
+  lowerSseOpen,
+  stream,
+  type StreamTransport,
+} from "../../signal/transport";
 import type { RuntimeProgram } from "../program";
 import { resolveProgramProvider } from "../program-providers";
 import type { Lease } from "../ports/leases";
@@ -91,8 +98,8 @@ export interface TransportSupervisionRunResult {
  */
 export interface TransportSupervisionRunner {
   /**
-   * Claim polling/stream bindings, poll once each, start/refresh stream fibers,
-   * accept envelopes, and checkpoint.
+   * Claim polling/managed-stream bindings, poll once each, start/refresh stream
+   * fibers (including SSE after pure lowering), accept envelopes, and checkpoint.
    *
    * @param signal - Abort when the worker is stopping.
    * @param now - Optional clock for interval and lease timestamps.
@@ -109,7 +116,7 @@ export interface TransportSupervisionRunner {
 
 /**
  * Create managed-transport supervision for the worker maintenance loop, or
- * `undefined` when the program declares no polling or stream transports.
+ * `undefined` when the program declares no polling or managed-stream transports.
  *
  * @param options - Program authority, store, and namespace.
  * @returns A host-free runner invoked once per worker tick, or `undefined`.
@@ -118,9 +125,9 @@ export interface TransportSupervisionRunner {
 export function createWorkerTransportSupervision(
   options: CreateWorkerTransportSupervisionOptions,
 ): TransportSupervisionRunner | undefined {
-  // Webhook (and other non-polling/non-stream) bindings do not need in-process
-  // supervision. Bindings that resolve to a polling or stream provider are
-  // supervised; a polling/stream binding whose provider is absent is still
+  // Webhook (and other non-polling/non-managed-stream) bindings do not need
+  // in-process supervision. Bindings that resolve to a polling, stream, or SSE
+  // provider are supervised; a managed binding whose provider is absent is still
   // rejected at createRuntimeProgram() as CAPABILITY_MISSING.
   const supervisedBindings = options.program.transports.filter((binding) => {
     const provider = resolveProgramProvider(options.program.providers, binding);
@@ -129,7 +136,7 @@ export function createWorkerTransportSupervision(
     }
     return (
       isPollingTransport(provider.transport) ||
-      isStreamTransport(provider.transport)
+      isManagedStreamTransport(provider.transport)
     );
   });
 
@@ -142,11 +149,11 @@ export function createWorkerTransportSupervision(
       code: "CAPABILITY_MISSING",
       whatFailed:
         "Runtime worker cannot supervise managed transports without a store transports capability.",
-      why: "Polling and stream bindings require the optional Runtime store transports port before the worker starts.",
+      why: "Polling, stream, and SSE bindings require the optional Runtime store transports port before the worker starts.",
       whatStillWorks:
         "Queued Work maintenance still runs for executable targets when transports are omitted from the program.",
       nextStep:
-        "Use a Runtime store that implements the transports port, or remove polling/stream bindings from createRuntimeProgram({ transports }).",
+        "Use a Runtime store that implements the transports port, or remove polling/stream/SSE bindings from createRuntimeProgram({ transports }).",
     });
   }
 
@@ -158,9 +165,9 @@ export function createWorkerTransportSupervision(
       code: "CAPABILITY_MISSING",
       whatFailed:
         "Runtime worker cannot supervise managed transports without binding checkpoint methods.",
-      why: "Polling and stream supervision resume cursors through the transport store checkpoint port.",
+      why: "Polling, stream, and SSE supervision resume cursors through the transport store checkpoint port.",
       whatStillWorks:
-        "Webhook envelope drain still runs when checkpoint methods are present or no polling/stream bindings exist.",
+        "Webhook envelope drain still runs when checkpoint methods are present or no polling/stream/SSE bindings exist.",
       nextStep:
         "Use Memory or PostgreSQL Runtime storage that implements getBindingCheckpoint/putBindingCheckpoint.",
     });
@@ -215,13 +222,20 @@ export function createWorkerTransportSupervision(
             continue;
           }
 
-          if (isStreamTransport(provider.transport)) {
+          if (isManagedStreamTransport(provider.transport)) {
             streamBinding = true;
+            // SSE authors with lastEventId; lower once at the fiber boundary so
+            // runManagedStream keeps a StreamTransport-only open surface.
+            const transport: StreamTransport = isSseTransport(
+              provider.transport,
+            )
+              ? stream({ open: lowerSseOpen(provider.transport.open) })
+              : provider.transport;
             const streamOutcome = await superviseStreamBinding({
               options,
               binding,
               provider,
-              transport: provider.transport,
+              transport,
               signal,
               now,
               heldLeases,
