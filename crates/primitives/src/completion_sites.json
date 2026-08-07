@@ -6,7 +6,7 @@
   {"callNames":["cascade"],"propertyPath":["tiers","*","model"],"slot":"routingTarget","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback","agent","prompt"],"insertion":"identifier","excludeSelf":true},
   {"callNames":["fallback"],"propertyPath":["$args","0","*"],"slot":"routingTarget","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback","agent","prompt"],"insertion":"identifier","excludeSelf":true},
   {"callNames":["fallback"],"propertyPath":["$args","*"],"slot":"routingTarget","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback","agent","prompt"],"insertion":"identifier","excludeSelf":true},
-  {"callNames":["session","getSession"],"propertyPath":["$args","0"],"slot":"scalarIdentifier","acceptedKinds":["agent"],"insertion":"identifier"},
+  {"callNames":["session","getSession"],"propertyPath":["$args","0"],"slot":"scalarIdentifier","acceptedKinds":["agent","flow"],"insertion":"identifier"},
   {"callNames":["agent"],"propertyPath":["prompt"],"slot":"scalarIdentifier","acceptedKinds":["prompt"],"insertion":"identifier"},
   {"callNames":["agent"],"propertyPath":["model"],"slot":"scalarIdentifier","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback"],"insertion":"identifier"},
   {"callNames":["agent"],"propertyPath":["languageModel"],"slot":"scalarIdentifier","acceptedKinds":["routing.router","routing.split","routing.retry","routing.cascade","routing.fallback"],"insertion":"identifier"},
