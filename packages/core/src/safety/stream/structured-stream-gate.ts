@@ -104,9 +104,15 @@ export function createStructuredStreamGate(options: StructuredStreamGateOptions)
     // batch driver before the release cursor advances.
     ...(options.canonicalSchema ? { canonicalSchema: options.canonicalSchema } : {}),
   }
-  const sentinelPaths = (options.manifest?.operations ?? [])
-    .filter((operation) => operation.kind === 'delete-null-sentinel')
-    .map((operation) => operation.path)
+  const sentinelOperations = (options.manifest?.operations ?? []).filter(
+    (operation) => operation.kind === 'delete-null-sentinel',
+  )
+  // Guarded sentinel nulls whose union discriminator has not streamed yet. Each
+  // resolves when an enclosing container closes (its raw value then carries the
+  // discriminator): a confirmed sentinel stays deleted, a refuted one is a
+  // genuine null appended to the canonical tree (appending after the parent's
+  // already-ingested keys keeps the released prefix stable).
+  const pendingSentinels = new Map<string, readonly Segment[]>()
   const isSentence = (binding: GuardrailBinding): boolean =>
     selectorOf(binding).kind === 'path' && (binding.boundary as { readonly unit?: string }).unit === 'sentence'
   // A `.path().sentences()` string is gated progressively (below), not as a whole
@@ -313,8 +319,10 @@ export function createStructuredStreamGate(options: StructuredStreamGateOptions)
 
   async function ingest(path: ReadinessPath, value: unknown): Promise<void> {
     if (path.length === 0) {
-      // Root close: gate the root object occurrence over the built canonical tree.
+      // Root close: every discriminator is known, so pending sentinels resolve
+      // before the root object occurrence is gated over the canonical tree.
       // While the root is open it is the enclosing gate, so nothing has released.
+      resolvePendingSentinels([], value)
       for (const binding of rootBindings) {
         canonical = await gateOccurrence(canonical, [], binding, gateOptions)
       }
@@ -324,11 +332,21 @@ export function createStructuredStreamGate(options: StructuredStreamGateOptions)
     const isContainer = value !== null && typeof value === 'object'
 
     if (!isContainer) {
-      if (value === null && matchesSentinel(segments)) return // deleted sentinel: no canonical value, no occurrence
+      if (value === null) {
+        const state = sentinelStateAt(segments)
+        if (state === 'sentinel') return // deleted sentinel: no canonical value, no occurrence
+        if (state === 'pending') {
+          pendingSentinels.set(pathKey(segments), segments)
+          return
+        }
+      }
       canonical = setAt(canonical, segments, value)
-    } else if (valueAt(canonical, segments) === undefined) {
-      // An empty (or all-sentinel) container has no leaf events; seed it canonically.
-      canonical = setAt(canonical, segments, Array.isArray(value) ? [] : {})
+    } else {
+      if (valueAt(canonical, segments) === undefined) {
+        // An empty (or all-sentinel) container has no leaf events; seed it canonically.
+        canonical = setAt(canonical, segments, Array.isArray(value) ? [] : {})
+      }
+      resolvePendingSentinels(segments, value)
     }
 
     // Gate the completed occurrence (a deleted sentinel returned above).
@@ -392,8 +410,68 @@ export function createStructuredStreamGate(options: StructuredStreamGateOptions)
     )
   }
 
-  function matchesSentinel(segments: readonly Segment[]): boolean {
-    return sentinelPaths.some((opPath) => manifestPathMatches(opPath, segments))
+  /**
+   * Whether a null at `segments` is a transport sentinel. `'sentinel'` when a
+   * matching operation's guards all hold (or it has none), `'pending'` when a
+   * matching guarded operation's discriminator has not streamed yet, `'genuine'`
+   * when every matching operation's guards are refuted (another union branch).
+   */
+  function sentinelStateAt(segments: readonly Segment[]): 'sentinel' | 'genuine' | 'pending' {
+    let pending = false
+    for (const operation of sentinelOperations) {
+      if (!manifestPathMatches(operation.path, segments)) continue
+      const verdict = guardsVerdict(operation.guards, segments, undefined, [])
+      if (verdict === 'match') return 'sentinel'
+      if (verdict === 'unknown') pending = true
+    }
+    return pending ? 'pending' : 'genuine'
+  }
+
+  /**
+   * Evaluate an operation's guards for a concrete occurrence path, reading each
+   * discriminator from the canonical tree or, past `containerPath`, from a just
+   * closed container's raw `containerValue`.
+   */
+  function guardsVerdict(
+    guards: readonly { depth: number; key: string; value: unknown }[] | undefined,
+    segments: readonly Segment[],
+    containerValue: unknown,
+    containerPath: readonly Segment[],
+  ): 'match' | 'mismatch' | 'unknown' {
+    let unknown = false
+    for (const guard of guards ?? []) {
+      const discriminatorPath = [...segments.slice(0, guard.depth), guard.key]
+      let discriminator = valueAt(canonical, discriminatorPath)
+      if (discriminator === undefined && containerPath.length <= discriminatorPath.length) {
+        discriminator = valueAt(containerValue, discriminatorPath.slice(containerPath.length))
+      }
+      if (discriminator === undefined) unknown = true
+      else if (discriminator !== guard.value) return 'mismatch'
+    }
+    return unknown ? 'unknown' : 'match'
+  }
+
+  /** Resolve pending guarded sentinels under a closed container's raw value. */
+  function resolvePendingSentinels(containerPath: readonly Segment[], containerValue: unknown): void {
+    for (const [key, segments] of pendingSentinels) {
+      if (!containerPath.every((segment, index) => segments[index] === segment)) continue
+      let genuine = true
+      let unknown = false
+      for (const operation of sentinelOperations) {
+        if (!manifestPathMatches(operation.path, segments)) continue
+        const verdict = guardsVerdict(operation.guards, segments, containerValue, containerPath)
+        if (verdict === 'match') {
+          genuine = false
+          break
+        }
+        if (verdict === 'unknown') unknown = true
+      }
+      if (!genuine) pendingSentinels.delete(key)
+      else if (!unknown) {
+        pendingSentinels.delete(key)
+        canonical = setAt(canonical, segments, null)
+      }
+    }
   }
 
   return {

@@ -89,10 +89,15 @@ unchanged so an authored `null` is never confused with the transport sentinel.
   transport encoding rather than the authored schema.
 </Callout>
 
-Initially unsupported locations include optional properties inside recursive
-schemas, union branches, intersections, and tuples, plus a property literally
-named `"*"`, which collides with the array wildcard used by the decode
-manifest. Make the field required or give it an explicit nullable meaning.
+Optional properties inside discriminated unions are supported: each branch of a
+`z.discriminatedUnion` (or any union whose branches all require a shared
+literal property with distinct values) decodes its own transport sentinels, so
+an authored `null` in one branch is never confused with an optional field in
+another. Unsupported locations remain optional properties inside recursive
+schemas, non-discriminated union branches, intersections, and tuples, plus a
+property literally named `"*"`, which collides with the array wildcard used by
+the decode manifest. Make the field required or give it an explicit nullable
+meaning.
 
 ## Text Output
 

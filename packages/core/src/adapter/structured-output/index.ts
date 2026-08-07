@@ -15,6 +15,7 @@ export type {
 } from "./capabilities";
 export type {
   JsonSchemaObject,
+  StructuredOutputDecodeGuard,
   StructuredOutputDecodeManifest,
   StructuredOutputDecodeOperation,
   StructuredOutputPlan,

@@ -128,6 +128,7 @@ export type {
   AdditionalPropertiesSupport,
   JsonSchemaObject,
   StructuredOutputCapabilities,
+  StructuredOutputDecodeGuard,
   StructuredOutputDecodeManifest,
   StructuredOutputDecodeOperation,
   StructuredOutputDiagnostic,
