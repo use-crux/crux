@@ -6,13 +6,16 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { signal } from "../../src/signal";
-import { polling, webhook } from "../../src/signal/transport";
+import { polling, stream, webhook } from "../../src/signal/transport";
 import { signalProvider } from "../../src/signal/provider";
 
 const orderSubmitted = signal({
   id: "order.submitted",
   schema: z.object({ orderId: z.string() }),
 });
+
+const TRANSPORT_REQUIRED =
+  /signalProvider\(\{ transport \}\) requires a webhook\(\), polling\(\), or stream\(\) transport definition/;
 
 function baseOptions() {
   return {
@@ -49,6 +52,20 @@ describe("signalProvider transport validation", () => {
     expect(provider.transport._tag).toBe("PollingTransport");
   });
 
+  it("accepts stream transports with a callable open", () => {
+    const provider = signalProvider({
+      ...baseOptions(),
+      transport: stream({
+        async *open() {
+          yield { kind: "cursor" as const, cursor: null };
+        },
+      }),
+    });
+
+    expect(provider.transport._tag).toBe("StreamTransport");
+    expect(provider.transport.kind).toBe("stream");
+  });
+
   it("rejects WebhookTransport discriminators without a callable handle", () => {
     expect(() =>
       signalProvider({
@@ -58,9 +75,7 @@ describe("signalProvider transport validation", () => {
           kind: "webhook",
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
   });
 
   it("rejects PollingTransport discriminators without a callable poll", () => {
@@ -72,9 +87,19 @@ describe("signalProvider transport validation", () => {
           kind: "polling",
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
+  });
+
+  it("rejects StreamTransport discriminators without a callable open", () => {
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "StreamTransport",
+          kind: "stream",
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
   });
 
   it("rejects mismatched handlers for each transport discriminator", () => {
@@ -87,9 +112,7 @@ describe("signalProvider transport validation", () => {
           poll: async () => ({ events: [], nextCursor: null }),
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
 
     expect(() =>
       signalProvider({
@@ -102,9 +125,18 @@ describe("signalProvider transport validation", () => {
           },
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
+
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "StreamTransport",
+          kind: "stream",
+          poll: async () => ({ events: [], nextCursor: null }),
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
   });
 
   it("rejects non-function handlers even when the field is present", () => {
@@ -117,9 +149,7 @@ describe("signalProvider transport validation", () => {
           handle: "not-a-function",
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
 
     expect(() =>
       signalProvider({
@@ -130,8 +160,33 @@ describe("signalProvider transport validation", () => {
           poll: null,
         } as never,
       }),
-    ).toThrow(
-      /signalProvider\(\{ transport \}\) requires a webhook\(\) or polling\(\) transport definition/,
-    );
+    ).toThrow(TRANSPORT_REQUIRED);
+
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "StreamTransport",
+          kind: "stream",
+          open: "not-a-function",
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
+  });
+
+  it("rejects non-transport values", () => {
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: { _tag: "UnknownTransport" } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
+
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: null as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
   });
 });

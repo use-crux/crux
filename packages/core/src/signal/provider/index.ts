@@ -6,9 +6,11 @@
 
 export {
   isPollingTransport,
+  isStreamTransport,
   isWebhookTransport,
   signalProvider,
 } from "./signal-provider";
+
 export type {
   SignalProvider,
   SignalProviderEventContext,
