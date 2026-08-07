@@ -6,21 +6,25 @@
 block data and consumes it for chunking; `@use-crux/ingest` owns Markdown
 parsing plus the `pdfjs-dist` and `@firecrawl/pdf-inspector` boundaries. Do
 not add a parser/backend selector, a Core dependency on ingest/native code, or
-a public test seam. Mock only the external `pdf-inspector`/`pdfjs-dist`
-boundaries when a boundary failure must be forced.
+a public test seam. Mock an external boundary only to force an unavailable,
+throwing, or malformed failure. A normal successful native result must cross
+the real installed `@firecrawl/pdf-inspector` boundary with a committed PDF
+fixture.
 
-Each task is a sequential vertical slice. Within a task, add one failing
-caller-visible behavior test, implement only enough to make that test green,
-then proceed to the next listed behavior. Run commands one at a time; every
-Vitest command below is single-worker and no verification commands overlap.
-Before the next task starts, request spec-compliance review, then code-quality
-review, of the task commit.
+The seven tasks below are sequential, independently committed TDD slices.
+Within each task, add one failing caller-visible behavior test, implement only
+enough to make it green, and then proceed to the next listed RED/GREEN behavior.
+Run every test, typecheck, build, release-stage, install, lockfile, and package
+command sequentially and non-overlapping. Every Vitest command must use
+`--maxWorkers=1 --no-file-parallelism`. Before the next task starts, request
+spec-compliance review of the task commit and then code-quality review of the
+same commit. Do not combine or reorder those review gates.
 
-## Task 1 — Core page-block and provenance contract
+## Task 1 — Core block/provenance contract
 
-**Public behavior:** Core accepts provider-neutral blocks below a page and
-preserves their identifiers in chunk provenance without introducing PDF
-knowledge.
+**Public behavior:** Core accepts provider-neutral blocks beneath a page and
+preserves their identifiers in chunk provenance without introducing PDF or
+Markdown knowledge.
 
 **Likely files:**
 
@@ -31,17 +35,17 @@ knowledge.
 - `packages/core/__tests__/indexing/page-block-contract.test.ts` (new)
 
 1. RED: add a focused Core public chunking/provenance test with an authored
-   `CruxDocument` page that has text and table blocks. Assert the readonly
+   `CruxDocument` page containing text and table blocks. Assert the readonly
    provider-neutral block shape, page/location facts, and first-contribution
    order/deduplication of `blockIds` when provenance is merged.
 2. GREEN: add `CruxIngestPageBlock`, text/table block variants, and optional
    `blocks` only to Core's `kind: 'page'` part; add `blockIds?: string[]` to
-   `ChunkProvenance`; update coarse/merged provenance to retain block IDs in
-   order. Keep Core input fields readonly wherever existing indexing input
-   types require it, and do not mention Markdown, PDF, or parser dependencies.
-3. Add the next RED assertion only after green: normal top-level parts and
-   pages without `blocks` keep their existing valid behavior. Make the minimal
-   compatibility change if needed.
+   `ChunkProvenance`; update coarse and merged provenance to retain block IDs
+   in order. Keep Core input fields readonly wherever existing indexing input
+   types require it. Do not mention Markdown, PDF, or parser dependencies.
+3. RED then GREEN: prove ordinary top-level parts and pages without `blocks`
+   retain their existing valid behavior and make only the minimal compatibility
+   change required.
 4. Verify sequentially:
 
    ```sh
@@ -52,76 +56,109 @@ knowledge.
 5. Perform spec-compliance review, then code-quality review. Commit this task
    alone, e.g. `feat(core): add page block provenance contract`.
 
-## Task 2 — Native PDF pages and block materialization
+## Task 2 — Complete native PDF extraction safety
 
-**Public behavior:** `fileSource()` emits reliable native layout Markdown as
-physical page parts, with deterministic ordered blocks and only provable
-page-relative source ranges.
+**Public behavior:** `fileSource()` uses the real installed native extractor
+for successful layout-aware pages, routes only pages marked `needsOcr` through
+the application model boundary, and safely falls back document-wide for every
+unavailable, throwing, or invalid native result before this task is committed.
 
 **Likely files:**
 
 - `packages/ingest/src/types.ts`
 - `packages/ingest/src/pdf.ts`
-- `packages/ingest/src/index.ts` (if the new public ingest block types require
-  an explicit export)
+- `packages/ingest/src/index.ts` (only if public ingest block types need an
+  explicit export)
 - `packages/ingest/__tests__/sources.test.ts`
+- a committed small mixed-`needsOcr` PDF fixture under the existing ingest
+  fixture convention
 - `packages/ingest/package.json`
 - `pnpm-lock.yaml`
 
-1. RED: in the existing public-source test suite, make `fileSource()` load a
-   committed small PDF fixture through the real installed
-   `@firecrawl/pdf-inspector`; do not mock the successful native boundary.
-   Assert authoritative one-based physical pages/source locations, native
-   Markdown as `content`, stable `<pageId>/block:<ordinal>` IDs, headings,
-   paragraph/list/code blocks, GFM table `columns`/body `rows`, decoded compact
-   heading paths, and exact `sourceRange` slices. Include a normalized or
-   combined block case that deliberately omits `sourceRange` rather than
-   guessing it. Keep mocks of the native boundary only for unavailable,
-   throwing, and malformed-result cases.
-2. GREEN: mirror the same provider-neutral optional block shape in ingest
-   types (structurally compatible with Core); dynamically import
-   `@firecrawl/pdf-inspector`, convert bytes to `Buffer` only at that call, and
-   call `extractPagesMarkdown(buffer)` without page selection. Keep
-   `pdfjs-dist` as the initial opener/page-count/metadata owner and destroy its
-   loading task in one outer `finally`.
-3. Add the internal Markdown-to-block parser in `pdf.ts` or a focused new
+1. RED: add `@firecrawl/pdf-inspector` as a direct ingest dependency through
+   the normal pnpm workflow and commit a small PDF fixture whose real installed
+   `extractPagesMarkdown(buffer)` result contains both reliable and
+   `needsOcr: true` pages. The public `fileSource()` test must cross that real
+   successful native boundary; do not mock or synthesize a normal successful
+   result. Assert authoritative one-based physical page numbers and source
+   locations, native Markdown for reliable pages, stable
+   `<pageId>/block:<ordinal>` IDs, headings, paragraph/list/code blocks, GFM
+   table `columns` and body `rows`, decoded compact heading paths, and exact
+   `sourceRange` slices. Include a normalized or combined block that omits its
+   range rather than guessing it.
+2. GREEN: mirror the provider-neutral optional block shape in ingest types,
+   structurally compatible with Core. Dynamically import
+   `@firecrawl/pdf-inspector`, convert bytes to `Buffer` only at that boundary,
+   and call `extractPagesMarkdown(buffer)` without page selection. Keep
+   `pdfjs-dist` as initial opener, authoritative page-count owner, best-effort
+   metadata owner, and fallback extractor. Destroy its loading task in one
+   outer `finally` covering every success and failure path.
+3. GREEN: add the internal Markdown-to-block parser in `pdf.ts` or a focused
    internal sibling. Use the already-installed mdast/GFM utilities; preserve
-   source order, classify top-level blocks, retain raw heading slices, derive
-   visible normalized heading paths, and omit empty blocks/ranges that cannot
-   prove `page.content.slice(start, end) === block.content`. Do not expose an
-   AST or parser hook.
-4. RED then GREEN for title metadata best-effort behavior: native pages still
-   load if `getMetadata()` fails, and an available `Title` survives.
-5. RED then GREEN for the minimum independently shippable document-wide
-   fallback: force dynamic-import unavailability and, separately,
-   `extractPagesMarkdown` throwing. For each case, use `pdfjs-dist` to extract
-   every physical page without blocks and assert exactly one `parser_warning`.
-   Assert the exact message
-   `PDF source "<sourceId>" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`
-   with the actual source ID substituted, and metadata containing only
-   `primaryParser: "pdf-inspector"`, `fallbackParser: "pdfjs-dist"`, and the
-   applicable closed reason (`backend_unavailable` or `extraction_failed`).
-   Preserve the existing fallback textless-page behavior and one outer
-   loading-task cleanup. Defer expanded malformed-result validation to Task 5.
-6. Add `@firecrawl/pdf-inspector` as a direct ingest dependency and regenerate
-   only the package lock through the normal pnpm workflow (not a manual lock
-   edit). Confirm its optional platform packages remain optional/transitive;
-   do not add it to Core, Local, or Indexer.
-7. Verify sequentially:
+   source order, retain raw heading slices, derive parser-decoded compact
+   heading paths, classify top-level narrative/list/code/other blocks, parse
+   tables using the first GFM row as `columns`, omit empty blocks, and expose a
+   range only when `page.content.slice(start, end) === block.content`. Do not
+   expose an AST or parser hook.
+4. RED then GREEN: using the committed mixed fixture and the real successful
+   native result, assert only `needsOcr: true` pages invoke observable
+   `media.describe`; their unreliable native Markdown is discarded and any
+   model-derived page has no blocks. Reliable pages remain model-free. Cover
+   unavailable, empty, and throwing descriptions: retain the physical page as
+   empty, emit the existing located `partial_extraction` warning, and do not
+   include native diagnostics or OCR reasons. Use one shared media-description
+   helper for native OCR pages and fallback textless pages.
+5. RED then GREEN: title metadata is best-effort—native pages still load when
+   `getMetadata()` fails, while an available `Title` survives.
+6. RED: force only failure/malformed external boundaries and validate the
+   native result as `unknown`. Cover all of these independently: missing
+   `pages`; non-array `pages`; too few or too many entries; non-object entries;
+   duplicate, missing, unordered, or non-one-to-one page values after the
+   required zero-based-to-one-based mapping; fractional, `NaN`, or infinite
+   page values; non-string `markdown`; and non-boolean `needsOcr`. The accepted
+   native entries must be exactly the physical page count, unique and in strict
+   document order, with finite integer zero-based values `entry.page === n`
+   (therefore yielding ordered one-based public pages). Use `unknown`, small
+   readonly internal validated types, a closed fallback-reason union, and
+   narrow guards; do not use `any` or broad assertions.
+7. GREEN: before this task's commit, implement complete all-or-nothing result
+   validation and the document-wide `pdfjs-dist` fallback. For dynamic-import
+   unavailability, native extraction throw, and every invalid result, retain
+   every physical fallback page without blocks and emit exactly one
+   `parser_warning` with the exact message:
+
+   ```text
+   PDF source "<sourceId>" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.
+   ```
+
+   Assert metadata contains only `primaryParser: "pdf-inspector"`,
+   `fallbackParser: "pdfjs-dist"`, and respectively
+   `reason: "backend_unavailable"`, `"extraction_failed"`, or
+   `"invalid_result"`. Preserve fallback textless-page/model behavior and the
+   one outer loading-task cleanup. Warnings must not contain bytes, native
+   output/diagnostics, stacks, or paths beyond the source ID.
+8. RED then GREEN: if fallback page extraction also fails, retain the existing
+   public `parse_failed` behavior and fallback failure cause. Do not create a
+   document, downgrade warning, or new public error channel.
+9. Regenerate only the package lock through the normal pnpm workflow. Confirm
+   the native package's platform packages remain optional/transitive; do not add
+   it to Core, Local, or Indexer. Run that lock command alone and wait for it to
+   exit before any verification command.
+10. Verify sequentially:
 
    ```sh
    pnpm --filter @use-crux/ingest test -- __tests__/sources.test.ts --maxWorkers=1 --no-file-parallelism
    pnpm --filter @use-crux/ingest typecheck
    ```
 
-8. Perform spec-compliance review, then code-quality review. Commit this task
-   alone, e.g. `feat(ingest): extract layout-aware PDF page blocks`.
+11. Perform spec-compliance review, then code-quality review. Commit this task
+    alone, e.g. `feat(ingest): safely extract native PDF pages`.
 
-## Task 3 — Structured narrative page-block chunking
+## Task 3 — Structured narrative
 
-**Public behavior:** `chunker.structured()` uses page blocks to keep narrative
-sections and physical pages separate, repeats normalized heading context, and
-reports exact provenance only when it can prove it.
+**Public behavior:** `chunker.structured()` uses page text blocks to keep
+narrative sections and physical pages separate, repeat normalized heading
+context, and report exact provenance only when it can prove it.
 
 **Likely files:**
 
@@ -132,24 +169,26 @@ reports exact provenance only when it can prove it.
 - `packages/core/__tests__/indexing/chunk-source-spans.test.ts`
 
 1. RED: use authored Core page blocks to prove two sections remain separate,
-   fitting paragraph/list/code/`other` blocks remain whole, and a body split
-   repeats exactly one compact ATX heading prefix. Cover nested/skipped levels,
-   consecutive headings, content before a heading, an empty-visible heading as
-   retained `other`, heading-only sections, separator-aware body budgets, and
-   over-limit prefixes/heading-only output remaining whole.
-2. GREEN: add a block-aware structured-page path ahead of the existing flat
-   page splitter. Treat headings as boundaries rather than duplicated body;
-   pack narrative only inside one page/heading path; use the existing
-   paragraph/sentence/hard-limit splitter only for oversized narrative blocks.
-   Pages without blocks retain today's flat behavior.
-3. RED then GREEN for provenance: output keeps page part ID, page location, and
-   deduplicated heading/body block IDs; permit exact spans only for one
-   unchanged contiguous block/split slice with a proven relative range and a
-   uniquely occurring complete page. Assert repeated block text in one unique
-   page remains exact by range, while repeated complete page content is derived
-   with no guessed global span.
+   fitting paragraph/list/code/`other` blocks remain whole, and a split body
+   repeats exactly one compact ATX heading prefix. Cover nested and skipped
+   levels, consecutive headings, content before a heading, an empty-visible
+   heading retained as `other`, heading-only sections, separator-aware body
+   budgets, and over-limit prefixes/heading-only output remaining whole under
+   the approved soft-overhead rule.
+2. GREEN: add a block-aware structured narrative path ahead of the existing
+   flat page splitter. Treat headings as boundaries, not duplicated body;
+   pack narrative only within one page and compact heading path; use the
+   existing paragraph/sentence/hard-limit splitter only for oversized narrative
+   blocks. Pages without blocks retain today's flat behavior.
+3. RED then GREEN: chunks retain page part ID, physical location, and
+   deduplicated heading/body block IDs. Expose exact spans only for one unchanged
+   contiguous block or proven split slice with a matching relative range and a
+   uniquely occurring complete page. Repeated block text within one unique page
+   remains exact by range; repeated complete page content is derived with no
+   guessed global span. Packing, prefixes, and unprovable splits are derived.
 4. Bump only the `structured` chunker version/fingerprint in `pipeline.ts`.
-   Preserve `text` and `semantic` implementations/fingerprints for now.
+   Leave `text`, `semantic`, and `parent-child` behavior/fingerprints unchanged
+   in this slice.
 5. Verify sequentially:
 
    ```sh
@@ -160,92 +199,142 @@ reports exact provenance only when it can prove it.
 6. Perform spec-compliance review, then code-quality review. Commit this task
    alone, e.g. `feat(core): chunk page block narratives structurally`.
 
-## Task 4 — Table windows, strategy isolation, and parent-child boundaries
+## Task 4 — Table windows
 
-**Public behavior:** structured and parent-child chunkers respect page-block
-tables and section boundaries; text and semantic strategies do not silently
-adopt them.
+**Public behavior:** structured page-table blocks become deterministic,
+indivisible-row Markdown windows with heading context and derived provenance.
+
+**Likely files:**
+
+- `packages/core/src/indexing/chunkers.ts`
+- `packages/core/__tests__/indexing/page-block-chunking.test.ts`
+
+1. RED: assert a page table becomes canonical Markdown row windows with active
+   heading prefix, page/heading/table block IDs, and derived spans. Cover the
+   GFM header/body convention, absent headers, header-only tables, ragged cells,
+   escaped backslash/pipe/newline cells, `tableRowsPerChunk`, exact
+   max-character shrinking, and one oversized indivisible row or header
+   payload. Prove nested page tables never become top-level table parts.
+2. GREEN: implement the approved canonical cell normalization, escaping,
+   padding, rendering, and window planner. Recalculate width/padding for every
+   candidate; repeat a real header only; count body rows; repeatedly remove the
+   final candidate row until the exact payload fits `maxChars`; never truncate
+   cells or split rows. Preserve heading-prefix soft overhead and the declared
+   indivisible over-limit exceptions.
+3. Verify sequentially:
+
+   ```sh
+   pnpm --filter @use-crux/core test -- __tests__/indexing/page-block-chunking.test.ts --maxWorkers=1 --no-file-parallelism
+   pnpm --filter @use-crux/core typecheck
+   ```
+
+4. Perform spec-compliance review, then code-quality review. Commit this task
+   alone, e.g. `feat(core): window page block tables`.
+
+## Task 5 — Explicit text/semantic strategy isolation
+
+**Public behavior:** explicitly selected text and semantic strategies do not
+silently adopt structured page-block behavior.
 
 **Likely files:**
 
 - `packages/core/src/indexing/chunkers.ts`
 - `packages/core/src/indexing/pipeline.ts`
 - `packages/core/__tests__/indexing/page-block-chunking.test.ts`
-- `packages/core/__tests__/indexing/indexer-identity.test.ts` (if the existing
-  fingerprint assertions are the closest public coverage)
+- `packages/core/__tests__/indexing/indexer-identity.test.ts`
 
-1. RED: assert a page table becomes canonical Markdown row windows with active
-   heading prefix, page/heading/table block IDs, and derived spans. Cover GFM
-   header/body convention, missing headers, header-only tables, ragged cells,
-   escaped/newline cells, `tableRowsPerChunk`, max-character shrinking, and one
-   oversized indivisible row/header payload.
-2. GREEN: implement a block-table renderer/window planner that recalculates
-   width/padding for every candidate, repeats a real header only, and never
-   splits rows. Do not turn nested page tables into top-level table parts.
-3. RED then GREEN: `chunker.text()` remains the current flat splitter and
-   `chunker.semantic()` keeps caller/model/embedding boundaries; the structured
-   first stage used by `parentChild()` carries page ID, heading path, block IDs,
-   and unit kind. Parents/children cannot cross page or heading boundaries;
-   table windows neither join narrative nor split into children, even above
-   parent/child limits.
-4. Bump only `parent-child` alongside the already-bumped structured version;
-   assert both fingerprints change while text and semantic versions do not.
-5. Verify sequentially:
+1. RED: prove `chunker.text()` keeps the current flat page splitter even when
+   blocks exist, and `chunker.semantic()` keeps its existing caller/model/
+   embedding boundary behavior. Assert their chunker versions and fingerprints
+   remain unchanged while the already-changed structured fingerprint differs.
+2. GREEN: make the minimum deliberate strategy split needed to isolate the
+   structured page-block path. Do not copy structured section/table behavior
+   into text or semantic, and do not change their fingerprints.
+3. Verify sequentially:
 
    ```sh
    pnpm --filter @use-crux/core test -- __tests__/indexing/page-block-chunking.test.ts __tests__/indexing/indexer-identity.test.ts --maxWorkers=1 --no-file-parallelism
    pnpm --filter @use-crux/core typecheck
    ```
 
-6. Perform spec-compliance review, then code-quality review. Commit this task
-   alone, e.g. `feat(core): preserve page table chunk boundaries`.
+4. Perform spec-compliance review, then code-quality review. Commit this task
+   alone, e.g. `fix(core): isolate explicit chunking strategies`.
 
-## Task 5 — PDF downgrades, release contract, docs, and consumer evidence
+## Task 6 — Parent-child boundaries
 
-**Public behavior:** OCR-needed pages alone use `media.describe`; any native
-backend downgrade falls back document-wide with exactly one bounded warning,
-while installed consumers resolve the native package.
+**Public behavior:** parent-child aggregation consumes structured units without
+crossing pages, heading paths, or tables, and table windows remain indivisible
+parents and children.
 
 **Likely files:**
 
-- `packages/ingest/src/pdf.ts`
+- `packages/core/src/indexing/chunkers.ts`
+- `packages/core/src/indexing/pipeline.ts`
+- `packages/core/__tests__/indexing/page-block-chunking.test.ts`
+- `packages/core/__tests__/indexing/indexer-identity.test.ts`
+
+1. RED: prove the structured first stage supplies page ID, compact
+   `headingPath`, contributing `blockIds`, and structural kind. Parents and
+   children must not cross a physical page or heading-path boundary. Narrative
+   and table units must not join; each rendered table window is one identical
+   parent and child even above `parentMaxChars` or `childMaxChars`. Assert
+   retained page, heading-block, and table-block provenance.
+2. GREEN: add hard aggregation boundaries on page/heading change and before and
+   after every table window. Split children only inside one narrative parent;
+   bypass both splitters for table windows. Keep table provenance derived.
+3. RED then GREEN: bump only the `parent-child` version/fingerprint now. Assert
+   `structured` and `parent-child` changed, while `text` and `semantic` versions
+   and fingerprints remain unchanged.
+4. Verify sequentially:
+
+   ```sh
+   pnpm --filter @use-crux/core test -- __tests__/indexing/page-block-chunking.test.ts __tests__/indexing/indexer-identity.test.ts --maxWorkers=1 --no-file-parallelism
+   pnpm --filter @use-crux/core typecheck
+   ```
+
+5. Perform spec-compliance review, then code-quality review. Commit this task
+   alone, e.g. `feat(core): preserve parent child block boundaries`.
+
+## Task 7 — Release, docs, and consumer evidence
+
+**Public behavior:** all source forms share the approved native/fallback
+contract, published documentation explains the behavior and deployment limits,
+and a staged packed consumer resolves both Crux packages and the native binary.
+
+**Likely files:**
+
 - `packages/ingest/__tests__/sources.test.ts`
-- `packages/ingest/package.json` and `pnpm-lock.yaml` only if Task 2 review
-  identified necessary packaging corrections
 - `apps/docs/content/docs/guides/retrieval/ingestion.mdx`
 - `apps/docs/content/docs/guides/retrieval/chunkers.mdx`
 - `apps/docs/content/docs/reference/ingest/index.mdx`
 - `.changeset/xlsx-source-coordinates.md`
 
-1. RED: a mixed native result routes only `needsOcr: true` pages through the
-   observable application-owned `media.describe` call, discards their native
-   Markdown, emits no blocks for model text, retains blank/warned pages for an
-   unavailable/empty/throwing description, and leaves reliable pages model-free.
-   GREEN with one shared media-description helper.
-2. RED then GREEN for expanded malformed native-result validation, forced only
-   at the `pdf-inspector` boundary: missing `pages`, non-array `pages`, count,
-   index/order, `markdown`, and `needsOcr`. Validate `unknown` with small
-   readonly internal types and the closed reason union. For every malformed
-   case, assert document-wide `pdfjs-dist` extraction with no blocks and
-   exactly one `parser_warning`; assert the exact message
-   `PDF source "<sourceId>" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`
-   with the actual source ID substituted, and metadata containing only
-   `primaryParser: "pdf-inspector"`, `fallbackParser: "pdfjs-dist"`, and
-   `reason: "invalid_result"`. Retain the Task 2 exact assertions for
-   unavailable/throwing boundaries. Preserve fallback failure as the existing
-   `parse_failed` cause and do not create a warning/document in that case.
-3. RED then GREEN for URL and Asset source parity, retained physical pages,
-   best-effort title, and loading-task destruction on all success/failure
-   paths. Ensure warning messages never include bytes, native diagnostic text,
-   paths beyond source ID, or stacks.
-4. Update the ingest guide/reference and chunker guide: native layout-aware
-   Markdown and page blocks, OCR routing, downgrade warning, structured versus
-   text/semantic behavior, heading repetition, table windows, provenance, Node
-   22/native-only support, and bundler externalization of the N-API package.
-5. Update the existing pending `.changeset/xlsx-source-coordinates.md` with
-   the published `@use-crux/ingest` runtime/install behavior. Do **not** create
-   a new changeset.
-6. Verify sequentially, after every preceding command has exited:
+1. RED then GREEN: add caller-visible URL and Asset source parity coverage for
+   native success, mixed OCR routing, document-wide fallback, retained physical
+   pages, best-effort title, and loading-task destruction across success and
+   failure. Keep only unavailable/throwing/malformed external boundaries
+   mocked; normal native success continues through the committed fixture and
+   real installed package.
+2. Update the ingest guide/reference and chunker guide with native layout-aware
+   Markdown/page blocks, `needsOcr` visual routing, the bounded downgrade
+   warning, structured versus text/semantic behavior, heading repetition,
+   table windows, parent-child boundaries, provenance, Node 22/native-only
+   support, and required bundler externalization of the N-API package.
+3. Update the existing `.changeset/xlsx-source-coordinates.md`; do not create a
+   new changeset. Its front matter must name both directly affected packages as
+   minor:
+
+   ```yaml
+   "@use-crux/core": minor
+   "@use-crux/ingest": minor
+   ```
+
+   Keep the notes concise and user-facing: one note for Core's additive
+   page-block/provenance and structured/parent-child chunking behavior, and one
+   for Ingest's native PDF extraction, selective visual routing, and safe
+   `pdfjs-dist` fallback behavior.
+4. Verify sequentially, starting each command only after the previous command
+   exits:
 
    ```sh
    pnpm --filter @use-crux/ingest test -- __tests__/sources.test.ts --maxWorkers=1 --no-file-parallelism
@@ -255,68 +344,83 @@ while installed consumers resolve the native package.
    pnpm --filter @use-crux/ingest test -- --maxWorkers=1 --no-file-parallelism
    ```
 
-7. Re-run the Task 2 real-package native proof from `packages/ingest` (not a
-   mocked test), invoking the installed `@firecrawl/pdf-inspector` entry and
-   `extractPagesMarkdown` against the committed tiny PDF fixture on the current
-   Node 22 platform. This proves the selected optional platform binary loads;
-   keep forced fallback tests independent of platform support.
-8. Prepare the packed-consumer inputs through the repository's normal release
-   workflow first: run `pnpm release:stage:ts -- --out <recorded-stage-dir>` as
-   one isolated, non-overlapping memory-heavy command and wait for it to exit.
-   This must compile release output and rewrite package exports to `dist`.
-   Do not pack either raw workspace package.
-9. Only after staging exits, run the packed-consumer smoke sequentially in a
-   safely created temporary directory. Use `mktemp -d` under `${TMPDIR:-/tmp}`
-   and a shell `trap` that removes only the recorded temp directory; use the
-   package manager to pack staged `<recorded-stage-dir>/@use-crux/core` and
-   `<recorded-stage-dir>/@use-crux/ingest` into the temp directory's `packs/`
-   directory, create a Node-22 consumer project under its `install/` directory,
-   and install those tarballs with pnpm offline/no-workspace resolution. Run a
-   Node ESM script from that consumer that imports `@use-crux/ingest`, loads the
-   tiny PDF fixture through `fileSource()`, and confirms both the wrapper and
-   selected optional native platform package resolve. Do not use a repository
-   path, workspace link, raw workspace tarball, or Edge/browser bundle for this
-   smoke.
-10. Run `git diff --check`. Perform a whole-implementation spec review followed
-   by a whole-implementation code-quality review. Commit this task alone, e.g.
-   `feat(ingest): complete layout-aware PDF fallback`.
+5. From `packages/ingest`, run the focused real-package proof as an isolated
+   command: invoke the installed `@firecrawl/pdf-inspector` entry and
+   `extractPagesMarkdown` against the committed mixed tiny fixture on Node 22.
+   Prove the selected optional platform binary loads. Do not mock this proof or
+   make forced fallback tests depend on platform support.
+6. Prepare packed-consumer inputs before packing through the repository's
+   normal release workflow. Run
+   `pnpm release:stage:ts -- --out <recorded-stage-dir>` alone, wait for it to
+   exit, and record the stage directory. This release staging must compile the
+   output and rewrite package exports to `dist`. Do not pack a raw workspace
+   package.
+7. Only after release staging exits, run the packed-consumer smoke sequentially
+   in a safely created temporary directory. Use `mktemp -d` beneath
+   `${TMPDIR:-/tmp}` and a shell `trap` that removes only the recorded temporary
+   directory. Pack staged `<recorded-stage-dir>/@use-crux/core` and staged
+   `<recorded-stage-dir>/@use-crux/ingest` into the temporary `packs/`
+   directory, one package command at a time. Create a Node 22 consumer beneath
+   `install/`, install those tarballs with pnpm offline/no-workspace resolution,
+   then run a Node ESM script that imports `@use-crux/ingest`, loads the fixture
+   through `fileSource()`, and confirms the wrapper plus selected optional
+   native platform package resolve. Do not use repository paths, workspace
+   links, raw workspace tarballs, Edge/browser bundles, or overlapping stage,
+   pack, install, or smoke commands.
+8. Run `git diff --check`. Perform a whole-implementation spec-compliance
+   review followed by a whole-implementation code-quality review. Commit this
+   task alone, e.g. `feat(ingest): release layout-aware PDF ingestion`.
 
 ## Final sequential checklist
 
-1. Confirm the Core API remains provider-neutral and dependency direction is
-   `@use-crux/ingest -> @use-crux/core` only.
-2. Confirm `pdfjs-dist` owns open/page count/metadata/fallback and one outer
-   cleanup; native extraction is dynamic and all-or-nothing after validation.
-3. Confirm every relevant test command above includes
-   `--maxWorkers=1 --no-file-parallelism`, and no tests, typechecks, lockfile
-   update, packaging, or smoke commands run concurrently.
-4. Confirm only structured and parent-child fingerprints changed; text and
-   semantic behavior/fingerprints did not.
-5. Confirm the existing XLSX changeset was updated, no duplicate added, and
-   documentation tells consumers about native platform/bundler constraints.
-6. Confirm release staging ran alone and completed before packing, and that the
-   packed Node-22 consumer proof uses only staged Core/Ingest tarballs installed
-   in a temporary directory, then cleanly removes that directory.
-7. Re-run `git diff --check`, inspect the final diff, and complete the final
-   spec-compliance review followed by code-quality review before merge.
+1. Confirm the seven task commits exist in order and each task received its
+   own spec-compliance review followed by code-quality review before the next
+   task began.
+2. Confirm Core remains provider-neutral and dependency direction is only
+   `@use-crux/ingest -> @use-crux/core`.
+3. Confirm `pdfjs-dist` owns open/page count/metadata/fallback and one outer
+   cleanup; native extraction is dynamic and all-or-nothing after complete
+   validation.
+4. Confirm the committed real-package mixed fixture proves native success and
+   selective `needsOcr` routing without mocking a normal native result; only
+   failure and malformed external boundaries are mocked.
+5. Confirm unavailable, throwing, and invalid native results produce their
+   exact single bounded warning, while fallback failure preserves the existing
+   `parse_failed` behavior without a document warning.
+6. Confirm every relevant test command uses
+   `--maxWorkers=1 --no-file-parallelism`, and every test, typecheck, build,
+   release-stage, install, lockfile, and package command ran sequentially and
+   non-overlapping.
+7. Confirm only structured and parent-child behavior/fingerprints changed;
+   text and semantic behavior/fingerprints did not.
+8. Confirm `.changeset/xlsx-source-coordinates.md` includes both
+   `@use-crux/core` and `@use-crux/ingest` as minor with concise package-specific
+   notes, no duplicate changeset exists, and docs cover native platform and
+   bundler constraints.
+9. Confirm release staging completed before either staged package was packed,
+   and the temporary Node 22 consumer used only staged Core/Ingest tarballs,
+   resolved the native platform package, and was safely removed.
+10. Re-run `git diff --check`, inspect the final diff, then complete the final
+    spec-compliance review followed by the final code-quality review before
+    merge.
 
 ## Repository discoveries affecting execution
 
 - Current `packages/ingest/src/pdf.ts` has one `pdfjs-dist` extraction path;
-  its current textless-page behavior already uses `media.describe` and located
-  `partial_extraction` warnings. Preserve those semantics for fallback/model
-  pages rather than adding another warning channel.
+  its textless-page behavior already uses `media.describe` and located
+  `partial_extraction` warnings. Preserve those semantics for fallback and
+  model pages rather than adding another warning channel.
 - Core currently has no page-block representation and `chunker.text()` calls
-  the same `chunkDocumentStructured()` implementation as `structured`; strategy
-  isolation requires a deliberate split, not only a new conditional.
-- `structured` and `parent-child` are both version `2` in
-  `packages/core/src/indexing/pipeline.ts`; `text` and semantic are also `2`.
-  Only the former two should be bumped.
+  the same `chunkDocumentStructured()` implementation as `structured`; Task 5
+  requires a deliberate strategy split, not merely a new conditional.
+- `structured`, `parent-child`, `text`, and semantic are currently version `2`
+  in `packages/core/src/indexing/pipeline.ts`. Task 3 bumps structured, Task 6
+  bumps parent-child, and Tasks 5/6 prove text and semantic stay unchanged.
 - Ingest already owns `mdast-util-from-markdown`, `mdast-util-gfm`, and
   `mdast-util-to-string`, so no general Markdown dependency belongs in Core.
 - The lock currently contains `pdfjs-dist` but no installed
-  `@firecrawl/pdf-inspector`; Task 2 must make the dependency/lock resolution
+  `@firecrawl/pdf-inspector`; Task 2 must make dependency and lock resolution
   reproducible before the real native and packed-consumer checks.
-- `.changeset/xlsx-source-coordinates.md` is the relevant pending ingest
-  changeset and already includes PDF behavior; extend it rather than adding a
-  file.
+- `.changeset/xlsx-source-coordinates.md` is the relevant pending release
+  changeset and already includes PDF behavior. Task 7 extends that file for
+  both directly affected packages instead of adding another changeset.
