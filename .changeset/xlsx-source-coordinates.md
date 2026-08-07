@@ -1,6 +1,15 @@
 ---
+"@use-crux/core": minor
 "@use-crux/ingest": minor
 ---
+
+Add provider-neutral page blocks and block provenance to Core. Structured and
+parent-child chunking now preserve PDF page and heading boundaries, repeat
+heading context, window tables without splitting rows, and retain block IDs.
+
+Prefer native layout-aware PDF extraction in Ingest, route only unreliable
+pages through visual description, and safely fall back document-wide to
+`pdfjs-dist` with a bounded downgrade warning.
 
 Expose provider-neutral XLSX row, cell, formula, and exact worksheet/row-range
 source coordinates alongside the `rows` compatibility view, including sparse
@@ -16,6 +25,8 @@ Keep every physical PDF page in ingest output. Textless pages now produce a
 located warning and remain addressable when media description is unavailable,
 empty, or fails, rather than failing the whole document.
 XLSX malformed number-format warnings now include the sheet name, and failed PDF
-media descriptions include the underlying error text in the warning message.
+media descriptions emit a fixed warning without retaining provider error text.
+PDF loading-task cleanup failures no longer replace successful parse results or
+the primary parse error.
 Load the XLSX number formatter correctly from published ESM packages so saved
 formats remain active outside the Crux source workspace.

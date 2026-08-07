@@ -14,6 +14,11 @@ import type { ChunkProvenance, CruxChunk, CruxDocument, CruxIngestPart, CruxPare
 /** Build coarse provenance (part ids, pages, sheets, tables) from parts. */
 export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
   const partIds = parts.map((part) => part.id).filter(Boolean)
+  const blockIds = unique(
+    parts.flatMap((part) => part.kind === 'page'
+      ? (part.blocks?.map((block) => block.id) ?? [])
+      : []),
+  )
   const pages = uniqueNumbers(
     parts.flatMap((part) => {
       if (part.kind === 'page') return [part.pageNumber]
@@ -33,6 +38,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
 
   return {
     ...(partIds.length ? { partIds } : {}),
+    ...(blockIds.length ? { blockIds } : {}),
     ...(pages.length ? { pages } : {}),
     ...(sheets.length ? { sheets } : {}),
     ...(tables.length ? { tables } : {}),
@@ -105,8 +111,10 @@ function uniqueContentStart(documentContent: string | undefined, content: string
 /** Merge provenance from multiple chunks into one. */
 export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | undefined {
   if (!items.length) return undefined
+  const blockIds = unique(items.flatMap((item) => item.blockIds ?? []))
   return {
     partIds: unique(items.flatMap((item) => item.partIds ?? [])),
+    ...(blockIds.length ? { blockIds } : {}),
     pages: uniqueNumbers(items.flatMap((item) => item.pages ?? [])),
     sheets: unique(items.flatMap((item) => item.sheets ?? [])),
     tables: unique(items.flatMap((item) => item.tables ?? [])),

@@ -49,7 +49,7 @@ Loaders pick a parser from the file extension, URL content type, URL extension, 
 | Text     | `.txt`, unknown                      | `text`           | Plain fallback. Override with a custom parser for unknown domain formats. |
 | Markdown | `.md`, `.markdown`                   | `text`, `table`  | Preserves heading paths and GFM tables.                                   |
 | HTML     | `.html`, `.htm`, `text/html`         | `text`, `table`  | Extracts title, headings, paragraphs, lists, code, and tables.            |
-| PDF      | `.pdf`, `application/pdf`, PDF bytes | `page`           | Retains every physical page; warns only when native text is empty and `media.describe` is unavailable, returns empty content, or fails. |
+| PDF      | `.pdf`, `application/pdf`, PDF bytes | `page`           | Prefers native layout-aware Markdown and page blocks, while retaining every physical page. |
 | CSV      | `.csv`, CSV content type             | `table`          | Produces one table part with row and column metadata.                     |
 | JSON     | `.json`, JSON content type           | `json`           | Produces path-addressed parts for nested values.                          |
 | DOCX     | `.docx`                              | `text`, `table`  | Converts with Mammoth, then parses the generated HTML.                    |
@@ -115,7 +115,7 @@ const loader = filesSource(
 );
 ```
 
-Today that covers plain text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX files. PDFs become page parts. CSV and spreadsheet content becomes table/sheet parts. JSON becomes path-addressed parts. DOCX files are converted through Mammoth so headings, paragraphs, and tables can move through the same document model as everything else.
+Today that covers plain text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX files. PDFs become page parts with layout-aware Markdown and, on reliable native pages, ordered heading, narrative, code, list, and table blocks. CSV and spreadsheet content becomes table/sheet parts. JSON becomes path-addressed parts. DOCX files are converted through Mammoth so headings, paragraphs, and tables can move through the same document model as everything else.
 
 The point is not to hide the source format. It is to normalize common formats into one document model so indexing can stay generic.
 
@@ -201,14 +201,18 @@ const loader = filesSource(
 );
 ```
 
-PDF extraction includes an OCR hook for image-only pages. Crux does not ship an OCR provider; the hook is the extension point for teams that already have one.
+The native PDF backend marks pages whose text is unreliable. Only those pages are sent to the application-owned `media.describe` operation; reliable pages never incur that model call. Crux does not ship OCR, and model-derived page text intentionally has no trusted page blocks.
 
 ```ts
 const loader = filesSource(
   { directory: "./pdfs" },
   {
     namespace: "docs",
-    ocr: async ({ pageNumber }) => `OCR text for page ${pageNumber}`,
+    media: {
+      describe: async ({ sourceLocation }) => ({
+        text: `Visual description for page ${sourceLocation?.type === "page" ? sourceLocation.pageNumber : "unknown"}`,
+      }),
+    },
   },
 );
 ```
@@ -221,7 +225,11 @@ Two fields matter more than they first appear to.
 
 `metadata` is where domain-specific context belongs. Section names, locales, product areas, visibility levels, owners, and similar fields all belong there. Crux should own the retrieval plumbing; your application should own the domain labels.
 
-Structured parts carry their own provenance too. Page parts include `pageNumber`, table parts include rows and columns, sheet parts include `sheetName`, and JSON parts include `path`. The default chunker only uses the derived text today, but custom chunkers can use that structure immediately.
+If the native package cannot load, extraction throws, or its result does not match the physical page count, Crux falls back for the whole document to `pdfjs-dist`. A successful downgrade emits exactly one `parser_warning` with `primaryParser: "pdf-inspector"`, `fallbackParser: "pdfjs-dist"`, and a bounded `reason` of `backend_unavailable`, `extraction_failed`, or `invalid_result`. It never includes native diagnostics. Textless pages may additionally carry their existing located `partial_extraction` warning. If fallback extraction also fails, the source returns the existing `parse_failed` result instead of a document warning.
+
+PDF ingestion requires Node 22 and a supported native platform; browser and Edge runtimes are not supported. Application bundlers must externalize `@firecrawl/pdf-inspector` and its selected N-API platform package so the binary remains resolvable at runtime. Unsupported native platforms still use the safe `pdfjs-dist` fallback.
+
+Structured parts carry their own provenance too. Page parts include `pageNumber`; reliable native PDF pages can include stable page-local block IDs and exact page-relative source ranges. Table parts include rows and columns, sheet parts include `sheetName`, and JSON parts include `path`. The default structured and parent-child chunkers consume PDF blocks; explicitly selected text and semantic chunkers retain their existing flat or semantic behavior.
 
 ## Custom loaders
 

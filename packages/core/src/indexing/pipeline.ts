@@ -8,7 +8,7 @@
  * @module
  */
 
-import { chunkDocumentParentChild, chunkDocumentSemantic, chunkDocumentStructured } from './chunkers'
+import { chunkDocumentFlat, chunkDocumentParentChild, chunkDocumentSemantic, chunkDocumentStructured } from './chunkers'
 import { stableHash } from './hash'
 import type { JsonObject } from '../storage'
 import type {
@@ -71,11 +71,11 @@ export const transform = Object.freeze({
 /** Registry for building the built-in chunkers. */
 export const chunker = Object.freeze({
   text(options: ChunkingOptions = {}): Chunker {
-    return createChunker('text', '2', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
+    return createChunker('text', '2', options, (document, ctx) => chunkDocumentFlat(document, ctx, options))
   },
 
   structured(options: StructuredChunkerOptions = {}): Chunker {
-    return createChunker('structured', '2', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
+    return createChunker('structured', '3', options, (document, ctx) => chunkDocumentStructured(document, ctx, options))
   },
 
   parentChild(options: ParentChildChunkerOptions = {}): Chunker {
@@ -84,7 +84,7 @@ export const chunker = Object.freeze({
       childMaxChars: options.childMaxChars ?? 900,
       childOverlapChars: options.childOverlapChars ?? 120,
     }
-    return createChunker('parent-child', '2', normalizedOptions, async (document) =>
+    return createChunker('parent-child', '3', normalizedOptions, async (document) =>
       chunkDocumentParentChild(document, normalizedOptions),
     )
   },

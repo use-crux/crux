@@ -63,6 +63,87 @@ describe('chunk source spans', () => {
     }
   })
 
+  it('resolves repeated block text through exact page-relative ranges', async () => {
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'repeated-blocks', content: 'Repeat\n\nRepeat',
+      parts: [{
+        id: 'page:1', kind: 'page', pageNumber: 1, content: 'Repeat\n\nRepeat',
+        blocks: [
+          { id: 'first', kind: 'text', role: 'paragraph', content: 'Repeat', sourceRange: { start: 0, end: 6 } },
+          { id: 'second', kind: 'text', role: 'paragraph', content: 'Repeat', sourceRange: { start: 8, end: 14 } },
+        ],
+      }],
+    }
+
+    const result = await chunker.structured({ maxChars: 6, overlapChars: 0 })
+      .chunkDocument(document, { chunking: { maxChars: 6, overlapChars: 0 } })
+
+    expect(result.chunks).toHaveLength(2)
+    result.chunks.forEach((chunk) => expectExactSlice(document, chunk))
+    expect(result.chunks.map((chunk) => chunk.provenance?.blockIds)).toEqual([['first'], ['second']])
+  })
+
+  it('keeps proven oversized block slices exact but rejects repeated complete pages', async () => {
+    const splitDocument: CruxDocument = {
+      namespace: 'kb', sourceId: 'split-block', content: 'One sentence. Two sentence.',
+      parts: [{
+        id: 'page:1', kind: 'page', pageNumber: 1, content: 'One sentence. Two sentence.',
+        blocks: [{
+          id: 'body', kind: 'text', role: 'paragraph', content: 'One sentence. Two sentence.',
+          sourceRange: { start: 0, end: 27 },
+        }],
+      }],
+    }
+    const split = await chunker.structured({ maxChars: 14, overlapChars: 0 })
+      .chunkDocument(splitDocument, { chunking: { maxChars: 14, overlapChars: 0 } })
+    split.chunks.forEach((chunk) => expectExactSlice(splitDocument, chunk))
+
+    const repeatedPages: CruxDocument = {
+      namespace: 'kb', sourceId: 'repeated-pages', content: 'Same\n\nSame',
+      parts: [1, 2].map((pageNumber) => ({
+        id: `page:${pageNumber}`, kind: 'page' as const, pageNumber, content: 'Same',
+        blocks: [{
+          id: `page:${pageNumber}/block:0`, kind: 'text' as const, role: 'paragraph' as const,
+          content: 'Same', sourceRange: { start: 0, end: 4 },
+        }],
+      })),
+    }
+    const repeated = await chunker.structured({ maxChars: 10, overlapChars: 0 })
+      .chunkDocument(repeatedPages, { chunking: { maxChars: 10, overlapChars: 0 } })
+    repeated.chunks.forEach((chunk) => {
+      expect(chunk.provenance?.confidence).toBe('derived')
+      expect(chunk.provenance?.sourceSpans).toBeUndefined()
+    })
+  })
+
+  it('does not guess spans for packed blocks or invalid block ranges', async () => {
+    const content = 'Alpha\n\nBeta'
+    const document: CruxDocument = {
+      namespace: 'kb', sourceId: 'derived-blocks', content,
+      parts: [{
+        id: 'page:1', kind: 'page', pageNumber: 1, content,
+        blocks: [
+          { id: 'alpha', kind: 'text', role: 'paragraph', content: 'Alpha', sourceRange: { start: 0, end: 5 } },
+          { id: 'beta', kind: 'text', role: 'paragraph', content: 'Beta', sourceRange: { start: 0, end: 4 } },
+        ],
+      }],
+    }
+
+    const packed = await chunker.structured({ maxChars: 20, overlapChars: 0 })
+      .chunkDocument(document, { chunking: { maxChars: 20, overlapChars: 0 } })
+    expect(packed.chunks).toHaveLength(1)
+    expect(packed.chunks[0]?.provenance).toMatchObject({
+      blockIds: ['alpha', 'beta'], confidence: 'derived',
+    })
+    expect(packed.chunks[0]?.provenance?.sourceSpans).toBeUndefined()
+
+    const separated = await chunker.structured({ maxChars: 5, overlapChars: 0 })
+      .chunkDocument(document, { chunking: { maxChars: 5, overlapChars: 0 } })
+    expect(separated.chunks[0]?.provenance?.confidence).toBe('exact')
+    expect(separated.chunks[1]?.provenance?.confidence).toBe('derived')
+    expect(separated.chunks[1]?.provenance?.sourceSpans).toBeUndefined()
+  })
+
   it('does not claim exact character spans for rendered table windows', async () => {
     const document: CruxDocument = {
       namespace: 'kb',
