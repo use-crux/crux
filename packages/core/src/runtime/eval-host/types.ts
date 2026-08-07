@@ -8,6 +8,7 @@ import type { InProcessRuntimeEngineDefinition } from "../api/runtime-definition
 import type { RuntimeWakeRequestVerifier } from "../handler/verify";
 import type { RuntimeWorkItem } from "../engine/work";
 import type { RuntimeHandlerTarget } from "../handler/targets";
+import type { RuntimeProgram } from "../program";
 import type { TimeoutBudget } from "../../generation/timeout";
 
 /** Strict legacy wire protocol retained for decoding existing host records. */
@@ -146,6 +147,8 @@ export interface CreateServerlessEvalHostOptions<
   readonly verifyWake?: RuntimeWakeRequestVerifier;
   /** Generated Runtime targets deployed beside the Eval executor. */
   readonly targets?: readonly RuntimeHandlerTarget[];
+  /** Immutable authored target program deployed beside the Eval executor. */
+  readonly program?: RuntimeProgram;
 }
 
 /** Fetch-compatible authenticated Eval protocol handler. */

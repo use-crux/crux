@@ -257,4 +257,128 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn recoverable_effect_requires_runtime_addressable_export() {
+        let mut facts: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "project": { "root": "/fixture", "runtimeConfigured": true },
+            "definitions": [
+                {
+                    "id": "effect:customer.local:v1",
+                    "kind": "effect",
+                    "name": "customer.local",
+                    "fidelity": "resolved",
+                    "source": { "file": "src/effects.ts", "line": 3 },
+                    "metadata": {
+                        "facts": {
+                            "kind": "effect",
+                            "effectId": "customer.local",
+                            "version": 1,
+                            "recoverable": true
+                        }
+                    },
+                    "sourceRefs": [{
+                        "id": "effect:customer.local:v1:required-boundary:1",
+                        "role": "config",
+                        "property": "rollbackOnError.recovery",
+                        "symbol": "rollbackOnError",
+                        "source": { "file": "src/effects.ts", "line": 18 },
+                        "fidelity": "resolved"
+                    }]
+                },
+                {
+                    "id": "effect:customer.exported:v1",
+                    "kind": "effect",
+                    "name": "customer.exported",
+                    "fidelity": "resolved",
+                    "source": { "file": "src/effects.ts", "line": 8 },
+                    "metadata": {
+                        "exported": true,
+                        "facts": {
+                            "kind": "effect",
+                            "effectId": "customer.exported",
+                            "version": 1,
+                            "recoverable": true
+                        }
+                    }
+                },
+                {
+                    "id": "effect:customer.unused:v1",
+                    "kind": "effect",
+                    "name": "customer.unused",
+                    "fidelity": "resolved",
+                    "source": { "file": "src/effects.ts", "line": 15 },
+                    "metadata": {
+                        "facts": {
+                            "kind": "effect",
+                            "effectId": "customer.unused",
+                            "version": 1,
+                            "recoverable": true
+                        }
+                    }
+                },
+                {
+                    "id": "effect:customer.irreversible:v1",
+                    "kind": "effect",
+                    "name": "customer.irreversible",
+                    "fidelity": "resolved",
+                    "source": { "file": "src/effects.ts", "line": 12 },
+                    "metadata": {
+                        "facts": {
+                            "kind": "effect",
+                            "effectId": "customer.irreversible",
+                            "version": 1,
+                            "recoverable": false
+                        }
+                    }
+                }
+            ]
+        }))
+        .expect("runtime-addressability fixture facts decode");
+
+        append_builtin_lint_findings(&mut facts, &StaticIndexLintOptions::default());
+        let findings = facts
+            .lint_findings
+            .iter()
+            .filter(|finding| finding.rule_id == "effect.recovery_not_runtime_addressable")
+            .collect::<Vec<_>>();
+
+        assert_eq!(findings.len(), 1, "findings={findings:?}");
+        assert!(findings[0].message.contains("customer.local"));
+        assert!(findings[0].message.contains("export"));
+
+        let mut no_runtime: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "project": { "root": "/fixture", "runtimeConfigured": false },
+            "definitions": [{
+                "id": "effect:customer.local:v1",
+                "kind": "effect",
+                "name": "customer.local",
+                "fidelity": "resolved",
+                "metadata": {
+                    "facts": {
+                        "kind": "effect",
+                        "effectId": "customer.local",
+                        "version": 1,
+                        "recoverable": true
+                    }
+                },
+                "sourceRefs": [{
+                    "id": "effect:customer.local:v1:required-boundary:1",
+                    "role": "config",
+                    "property": "rollbackOnError.recovery",
+                    "symbol": "rollbackOnError",
+                    "source": { "file": "src/effects.ts", "line": 18 },
+                    "fidelity": "resolved"
+                }]
+            }]
+        }))
+        .expect("non-runtime Effect fixture facts decode");
+        append_builtin_lint_findings(&mut no_runtime, &StaticIndexLintOptions::default());
+        assert!(
+            no_runtime
+                .lint_findings
+                .iter()
+                .all(|finding| finding.rule_id != "effect.recovery_not_runtime_addressable")
+        );
+    }
 }

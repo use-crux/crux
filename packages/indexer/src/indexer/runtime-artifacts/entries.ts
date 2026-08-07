@@ -23,6 +23,7 @@ export function runtimeProgramFile(input: {
     GENERATED_HEADER,
     "import { createRuntimeProgram, type RuntimeProgramTargetInput } from '@use-crux/core/runtime'",
     ...targetImports(input.manifest, input.outputFile, input.root),
+    ...effectTargetImports(input.manifest, input.outputFile, input.root),
     ...providerImports(input.manifest, input.outputFile, input.root),
     ...transportImports(input.manifest, input.outputFile, input.root),
     "",
@@ -30,11 +31,12 @@ export function runtimeProgramFile(input: {
     "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     "",
     `const targets = [${targetProgramDeclarations(input.manifest).join(", ")}] as const satisfies readonly RuntimeProgramTargetInput[]`,
+    `const effectTargets = [${effectTargetLocalNames(input.manifest).join(", ")}] as const`,
     "const generationModels = [] as const",
     `const providers = [${providerLocalNames(input.manifest).join(", ")}] as const`,
     `const transports = [${transportLocalNames(input.manifest).join(", ")}] as const`,
     "",
-    "export const runtimeProgram = createRuntimeProgram({ targets, generationModels, providers, transports })",
+    "export const runtimeProgram = createRuntimeProgram({ targets, effectTargets, generationModels, providers, transports })",
     "",
   ].join("\n");
 }
@@ -197,6 +199,31 @@ function targetImports(
     const specifier = importSpecifier(dirname(outputFile), sourceFile);
     return `import { ${target.export} as ${targetLocalName(index)} } from ${JSON.stringify(specifier)}`;
   });
+}
+
+
+function effectTargetImports(
+  manifest: RuntimeArtifactManifest,
+  outputFile: string,
+  root: string,
+): string[] {
+  return (manifest.effectTargets ?? []).map((target, index) => {
+    const sourceFile = join(root, target.module.replace(/^\.\//, ""));
+    const specifier = importSpecifier(dirname(outputFile), sourceFile);
+    return `import { ${target.export} as ${effectTargetLocalName(index)} } from ${JSON.stringify(specifier)}`;
+  });
+}
+
+function effectTargetLocalNames(
+  manifest: RuntimeArtifactManifest,
+): string[] {
+  return (manifest.effectTargets ?? []).map((_, index) =>
+    effectTargetLocalName(index),
+  );
+}
+
+function effectTargetLocalName(index: number): string {
+  return `effectTarget${index}`;
 }
 
 function targetLocalNames(manifest: RuntimeArtifactManifest): string[] {

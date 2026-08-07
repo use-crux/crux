@@ -325,8 +325,9 @@ describe("Session turn execution", () => {
       expect(turnWork.effects).toEqual({
         kind: "effect.scope",
         id: expect.any(String),
-        runId: turnWork.id,
+        runId: expect.stringMatching(/^flow_/),
       });
+      expect(turnWork.effects.runId).not.toBe(turnWork.id);
       expect(await turnWork.status()).toMatchObject({ state: "completed" });
       expect(await turnWork.result()).toEqual(output);
       expect(await conversation.thread.read()).toMatchObject({

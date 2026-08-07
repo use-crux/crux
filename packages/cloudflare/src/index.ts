@@ -19,6 +19,7 @@ import type {
   RuntimeHandlerTarget,
   RuntimeTargetRuntimeRef,
   RuntimeResultPayloadPort,
+  RuntimeProgram,
   WakeEnvelope,
 } from "@use-crux/core/runtime";
 import {
@@ -73,6 +74,8 @@ export interface CreateCloudflareEvalHostOptions<TEnv> {
   readonly now?: () => Date;
   /** Generated Runtime targets deployed in this Worker entry. */
   readonly targets?: readonly RuntimeHandlerTarget[];
+  /** Immutable authored target program deployed in this Worker entry. */
+  readonly program?: RuntimeProgram;
   /**
    * Explicit alternate result payload storage, such as an R2-backed port.
    * The default chunks canonical payloads inside Durable Object storage.
@@ -136,6 +139,7 @@ export function createCloudflareEvalHost<TEnv>(
         store: this.#store,
         capabilities: CLOUDFLARE_RUNTIME_CAPABILITIES,
         maintenance: { autoStart: false },
+        ...(options.program ? { program: options.program } : {}),
         createWake: () => async () => {
           if ((await state.storage.getAlarm()) === null) {
             await state.storage.setAlarm(Date.now() + 1_000);
@@ -167,6 +171,7 @@ export function createCloudflareEvalHost<TEnv>(
           store: this.#store,
           createWake: runtime.createWake,
           targets: { ...this.#targets, ...runtimeOptions.targets },
+          ...(options.program ? { program: options.program } : {}),
           leaseExtension: false,
           startMaintenance: false,
         });

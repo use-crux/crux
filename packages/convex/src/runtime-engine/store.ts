@@ -29,6 +29,7 @@ import {
 import { createConvexDeferredStore } from './deferred-store'
 import { createConvexEvalHostAdmission } from './eval-host/admission'
 import { createConvexRuntimeResultStore } from './results'
+import { createConvexEffectStore } from './effects-store'
 import { createConvexSessionStore } from './session-store'
 import type { ConvexRuntimeStore, ConvexRuntimeStoreOptions } from './store-types'
 import { cleanArgs, noop, requireNamespace } from './store-utils'
@@ -194,6 +195,10 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     ...(refs.deferred ? { refs: refs.deferred } : {}),
   })
 
+  const effects = refs.composite_effects
+    ? createConvexEffectStore({ refs: refs.composite_effects, run })
+    : undefined
+
   const transaction: RuntimeStoreTransaction = {
     state,
     events,
@@ -201,6 +206,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     timers,
     outbox,
     deferred,
+    ...(effects ? { effects } : {}),
     ...(refs.sessions?.run ? { sessions: createConvexSessionStore({ ref: refs.sessions.run, run }) } : {}),
   }
   return Object.freeze({

@@ -35,6 +35,7 @@
         "./runtime": "portable-web",
         "./runtime/internal/eval-registry": "portable-web",
         "./runtime/internal/eval-host": "portable-web",
+        "./runtime/internal/effects-store": "portable-web",
         "./runtime/internal/session-store": "portable-web",
         "./setup": "node-only",
         "./runtime/testing": "node-only",

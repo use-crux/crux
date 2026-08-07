@@ -13,6 +13,7 @@ import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernelOptions, RuntimeTargetMap } from '../engine/kernel'
 import type { RuntimeWakeDeliver } from '../engine/outbox'
 import type { RuntimeWakeRequestVerifier } from '../handler/verify'
+import type { RuntimeProgram } from '../program'
 import { createRuntime } from './create-runtime'
 import type { ResolvedRuntimeEngine } from './create-runtime'
 import type {
@@ -35,6 +36,8 @@ export interface HostRuntimeBinding<
   createWake(input: RuntimeWakeFactoryInput<TStore>): RuntimeWakeDeliver
   /** Runtime targets available to wake delivery. */
   readonly targets?: RuntimeTargetMap
+  /** Immutable authored target program available during execution. */
+  readonly program?: RuntimeProgram
   /** Work id generator owned by the host or generated entry. */
   readonly newWorkId?: () => WorkId
   /** Current time source for deterministic tests. */
@@ -72,11 +75,13 @@ export function bindHostRuntime<TStore extends RuntimeStoreAdapter>(
       ? { verifyWakeRequest: binding.verifyWakeRequest }
       : {}),
     createWake: binding.createWake,
+    ...(binding.program ? { program: binding.program } : {}),
   }
 
   return createRuntime({
     runtime,
     targets: binding.targets ?? {},
+    ...(binding.program ? { program: binding.program } : {}),
     ...(binding.newWorkId ? { newWorkId: binding.newWorkId } : {}),
     ...(binding.now ? { now: binding.now } : {}),
     ...(binding.verifyWake ? { verifyWake: binding.verifyWake } : {}),

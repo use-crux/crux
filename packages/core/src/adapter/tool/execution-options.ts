@@ -10,6 +10,8 @@
 
 import { createToolRegistry } from '../../tools/tool-registry'
 import { runToolScope } from './scope'
+import type { EffectJournalLinker } from '../../effect/internal/journal-context'
+import type { RequestReceipt } from '../../request/receipt/receipt'
 
 /** Canonical options passed to one tool execution. */
 export interface ToolLifecycleExecutionOptions {
@@ -43,6 +45,13 @@ interface ToolWithExecute {
 export function withToolLifecycleExecutionOptions(
   tools: Record<string, unknown>,
   resolveOptions: ExecutionOptionsResolver,
+  journal?: {
+    readonly request: () => RequestReceipt | undefined
+    readonly retain: (
+      toolCallId: string,
+      linkers: readonly EffectJournalLinker[],
+    ) => void
+  },
 ): Record<string, unknown> {
   const contextual = createToolRegistry<unknown>()
   for (const [toolName, tool] of Object.entries(tools)) {
@@ -69,8 +78,16 @@ export function withToolLifecycleExecutionOptions(
         input: unknown,
         rawOptions?: PartialToolLifecycleExecutionOptions,
       ) {
-        return runToolScope(toolName, () =>
-          execute.call(this, input, resolveOptions(toolName, rawOptions)),
+        const resolved = resolveOptions(toolName, rawOptions)
+        return runToolScope(
+          toolName,
+          () => execute.call(this, input, resolved),
+          {
+            toolCallId: resolved.toolCallId,
+            request: journal?.request(),
+            retainEffectLinks: (linkers) =>
+              journal?.retain(resolved.toolCallId, linkers),
+          },
         )
       },
     }

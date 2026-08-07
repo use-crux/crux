@@ -8,6 +8,7 @@ use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, defini
 use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::helpers::metadata_value;
 use crate::rules::defer::defer_lint_findings;
+use crate::rules::effect::recovery_not_runtime_addressable_findings;
 
 pub(crate) fn runtime_lint_findings(
     builder: &StaticIndexLintBuilder,
@@ -24,6 +25,11 @@ pub(crate) fn runtime_lint_findings(
     findings.extend(duplicate_target_name_findings(builder, &targets));
     findings.extend(non_literal_target_name_findings(builder, &targets));
     findings.extend(target_not_exported_findings(builder, &targets));
+    findings.extend(recovery_not_runtime_addressable_findings(
+        builder,
+        facts,
+        runtime_configured,
+    ));
     findings.extend(missing_runtime_config_findings(
         builder,
         &flows,

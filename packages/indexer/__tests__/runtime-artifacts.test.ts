@@ -53,6 +53,7 @@ describe("runtime artifacts", () => {
       evalPrivacyFingerprint:
         "d2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29",
       targets: [],
+      effectTargets: [],
       providers: [],
       transports: [],
       evals: [],
@@ -84,8 +85,11 @@ describe("runtime artifacts", () => {
       sourceFile,
       [
         "import { flow } from '@use-crux/core/flow'",
+        "import { effect } from '@use-crux/core/effect'",
         "",
         "export const reviewFlow = flow('review', async () => undefined)",
+        "export const recordReview = effect('review.record', async () => undefined, { version: 2, recover: async () => undefined })",
+        "const localReview = effect('review.local', async () => undefined, { recover: async () => undefined })",
       ].join("\n"),
     );
 
@@ -98,6 +102,46 @@ describe("runtime artifacts", () => {
         fingerprint: "definition-review-v1",
         source: { file: sourceFile, line: 1 },
         metadata: { exportName: "reviewFlow" },
+      },
+      {
+        id: "effect:review.record:v2",
+        kind: "effect",
+        name: "review.record",
+        fidelity: "resolved",
+        fingerprint: "definition-review-record-v2",
+        source: { file: sourceFile, line: 4 },
+        metadata: {
+          exportName: "recordReview",
+          exported: true,
+          facts: {
+            kind: "effect",
+            effectId: "review.record",
+            version: 2,
+            recoverable: true,
+            capture: false,
+            resource: false,
+          },
+        },
+      },
+      {
+        id: "effect:review.local:v1",
+        kind: "effect",
+        name: "review.local",
+        fidelity: "resolved",
+        fingerprint: "definition-review-local-v1",
+        source: { file: sourceFile, line: 5 },
+        metadata: {
+          exportName: "localReview",
+          exported: false,
+          facts: {
+            kind: "effect",
+            effectId: "review.local",
+            version: 1,
+            recoverable: true,
+            capture: false,
+            resource: false,
+          },
+        },
       },
     ] satisfies readonly ProjectDefinition[];
 
@@ -117,11 +161,27 @@ describe("runtime artifacts", () => {
         fingerprint: "definition-review-v1",
       },
     ]);
+    expect(result.manifest.effectTargets).toEqual([
+      {
+        id: "review.record",
+        version: 2,
+        module: "./src/review.ts",
+        export: "recordReview",
+      },
+    ]);
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
       'import { reviewFlow as target0 } from "../../../src/review"',
     );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.toContain(
+      'import { recordReview as effectTarget0 } from "../../../src/review"',
+    );
+    await expect(
+      readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
+    ).resolves.not.toContain("localReview");
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain("type RuntimeProgramTargetInput");
@@ -131,7 +191,7 @@ describe("runtime artifacts", () => {
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
     ).resolves.toContain(
-      "createRuntimeProgram({ targets, generationModels, providers, transports })",
+      "createRuntimeProgram({ targets, effectTargets, generationModels, providers, transports })",
     );
     await expect(
       readFile(join(root, ".crux/generated/runtime/program.ts"), "utf8"),
@@ -839,7 +899,7 @@ describe("runtime artifacts", () => {
     await expect(
       generateRuntimeArtifacts({ root, host: "next" }),
     ).resolves.toMatchObject({
-      manifest: { version: 3, targets: [] },
+      manifest: { version: 3, targets: [], effectTargets: [] },
     });
   });
 
@@ -859,6 +919,7 @@ describe("runtime artifacts", () => {
             fingerprint: "definition-review",
           },
         ],
+        effectTargets: [],
         providers: [],
         transports: [],
         evals: [],
@@ -989,7 +1050,7 @@ describe("runtime artifacts", () => {
     expect(program).toContain("const providers = [provider0] as const");
     expect(program).toContain("const transports = [transport0] as const");
     expect(program).toContain(
-      "createRuntimeProgram({ targets, generationModels, providers, transports })",
+      "createRuntimeProgram({ targets, effectTargets, generationModels, providers, transports })",
     );
     expect(program).not.toContain("onEvent");
     expect(program).not.toContain("handle");

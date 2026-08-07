@@ -25,6 +25,17 @@ export function allocateEffectBoundaryId(
   return id;
 }
 
+/**
+ * Whether an Effect scope id is a stable Work/Session admission identity.
+ *
+ * @remarks Admission allocates `effect_<hash>` before the first ledger entry.
+ * Process-generated `effect-boundary:*` and implicit root ids stay on the
+ * collision-resistant allocator when they are not already ledger-owned.
+ */
+export function isAdmissionPreallocatedEffectId(id: string): boolean {
+  return /^effect_[0-9a-f]+$/.test(id);
+}
+
 /** Create the one-operation root boundary used by a standalone effect call. */
 export function createImplicitRootBoundary(): EffectScopeRef {
   const id = `effect-root:${++nextImplicitBoundaryId}`;

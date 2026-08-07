@@ -16,6 +16,7 @@ import {
 } from "./inspection";
 import { emitRequestPlan } from "./observability";
 import type { RequestHistoryContext } from "../history/source";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 
 export type {
   RequestInspection,
@@ -29,6 +30,7 @@ const inspectionReaders = new WeakMap<
   () => RequestInspection
 >();
 const completedObservability = new WeakSet<RequestReceipt>();
+const sealedPlanRefs = new WeakMap<RequestReceipt, EvidenceArtifactRef>();
 
 /**
  * Executed-request evidence attached to one provider-call step.
@@ -139,8 +141,21 @@ export function createRequestReceipt(
   });
   retryCounts.set(receipt, retryCount);
   inspectionReaders.set(receipt, inspect);
-  emitRequestPlan(receipt, inspect(), "sealed");
+  const sealedPlanId = emitRequestPlan(receipt, inspect(), "sealed");
+  if (sealedPlanId) {
+    sealedPlanRefs.set(receipt, Object.freeze({
+      kind: "artifact",
+      id: sealedPlanId,
+    }));
+  }
   return Object.freeze(receipt);
+}
+
+/** Return the sealed request-plan artifact retained for journal linkage. @internal */
+export function sealedRequestPlanRef(
+  receipt: RequestReceipt,
+): EvidenceArtifactRef | undefined {
+  return sealedPlanRefs.get(receipt);
 }
 
 /** Record adapter-reported transport retries without mutating the receipt. @internal */

@@ -18,6 +18,7 @@ import {
   acquireRuntimeWorkerOwnership,
 } from './ownership'
 import { createWorkerTransportDrain } from './worker-transport'
+import { createWorkerEffectRecoveryDrain } from './worker-effect-recovery'
 
 const DEFAULT_STOP_TIMEOUT_MS = 10_000
 
@@ -67,6 +68,9 @@ export interface RuntimeWorkerStopOptions {
  * When the program declares managed transports, each tick also claims a bounded
  * batch of accepted Signal-provider envelopes and normalizes them through the
  * existing restart-safe transport kernel using `program.providers`.
+ * Each tick also claims interrupted durable Effect rollback scopes, resolves
+ * recovery only through `program.effectTargets`, and executes their exact
+ * reconstructed plans before transport work.
  *
  * @param options - In-process runtime, immutable program, and optional polling override.
  * @returns An immutable worker handle whose `closed` promise tracks its lifecycle.
@@ -102,8 +106,14 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   }
 
   let transportDrain
+  let effectRecoveryDrain
   try {
     transportDrain = createWorkerTransportDrain({
+      program: options.program,
+      store: runtime.store,
+      namespace: runtime.namespace,
+    })
+    effectRecoveryDrain = createWorkerEffectRecoveryDrain({
       program: options.program,
       store: runtime.store,
       namespace: runtime.namespace,
@@ -123,6 +133,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
   let fatalFailure: { readonly error: unknown } | undefined
   let ownershipReleased = false
   let closedSettled = false
+  const recoveryAbort = new AbortController()
   let resolveClosed!: () => void
   let rejectClosed!: (reason: unknown) => void
   const closed = new Promise<void>((resolve, reject) => {
@@ -150,6 +161,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     if (!fatalFailure) fatalFailure = { error }
     if (state === 'closed') return
     state = 'closed'
+    recoveryAbort.abort()
     if (timer) clearTimeout(timer)
     runtime.maintenance.stop()
     runtime.dispose()
@@ -164,6 +176,9 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
     if (state !== 'running') return
     try {
       await runtime.maintenance.tick()
+      if (effectRecoveryDrain && state === 'running') {
+        await effectRecoveryDrain.runOnce(recoveryAbort.signal)
+      }
       // Drain accepted transport envelopes on the same serial cadence. Claims
       // left in-flight on stop expire under the existing lease/fence contract.
       if (transportDrain && state === 'running') {
@@ -193,6 +208,7 @@ export function createRuntimeWorker<TStore extends RuntimeStoreAdapter>(
       if (state === 'closed') return closed
       const timeoutMs = resolveStopTimeout(stopOptions.timeoutMs)
       state = 'stopping'
+      recoveryAbort.abort()
       if (timer) clearTimeout(timer)
       runtime.maintenance.stop()
       stopPromise = (async () => {

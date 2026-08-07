@@ -18,7 +18,10 @@ import {
 } from "../../observability";
 import { toolDefinitionRef } from "../../observability/definition-ref";
 import { toolMiddlewareDefinitionRefs } from "../../tools/middleware";
-import type { DefinitionRef } from "../../observability/contract";
+import type {
+  CruxArtifactId,
+  DefinitionRef,
+} from "../../observability/contract";
 import {
   toolSourceProvenance,
   type ToolSourceProvenance,
@@ -36,9 +39,11 @@ import {
 } from "../../evidence/internal";
 import {
   activateOffloadSupport,
+  canonicalToolOutput,
   offloadedToolModelOutput,
 } from "../../request/offload/tool-output";
 import type { ToolOutputOffloadPolicy } from "../../request/representation/ladder-types";
+import type { EvidenceArtifactRef } from "../../evidence/subjects";
 
 // ─────────────────────────────────────────────────────────────────
 // Tool model output helpers
@@ -70,12 +75,6 @@ export async function createToolModelOutput(args: {
   input: Record<string, unknown>;
   output: unknown;
 }): Promise<ToolModelOutput> {
-  const offloaded = await offloadedToolModelOutput({
-    output: args.output,
-    policy: args.tool.output,
-    activateSupport: args.tool[activateOffloadSupport],
-  });
-  if (offloaded) return offloaded;
   if (args.tool.toModelOutput) {
     return args.tool.toModelOutput({
       toolCallId: args.toolCallId,
@@ -83,6 +82,12 @@ export async function createToolModelOutput(args: {
       output: args.output,
     });
   }
+  const offloaded = await offloadedToolModelOutput({
+    output: args.output,
+    policy: args.tool.output,
+    activateSupport: args.tool[activateOffloadSupport],
+  });
+  if (offloaded) return offloaded;
 
   return defaultToolModelOutput(args.output);
 }
@@ -312,7 +317,7 @@ export function emitToolResultArtifact(
   result: unknown,
   attributes: Record<string, unknown>,
   preview: unknown = result,
-): void {
+): CruxArtifactId | undefined {
   const artifactId = observe.artifact({
     kind: "tool.result",
     contentType: "application/json",
@@ -332,6 +337,7 @@ export function emitToolResultArtifact(
       attributes: { toolName, toolCallId, ...attributes },
     });
   }
+  return artifactId;
 }
 
 /** Emit `tool.request` artifacts for the tool calls a response asked for. */
@@ -425,6 +431,11 @@ export interface InstrumentToolSetOptions {
     toolCallId: string,
     input: unknown,
   ) => ReturnType<typeof openToolCallSpan> | undefined;
+  /** Link a completed Effect to the canonical raw tool result. @internal */
+  readonly linkEffectOutcome?: (
+    toolCallId: string,
+    ref: EvidenceArtifactRef,
+  ) => Promise<void>;
 }
 
 const DEFAULT_MAX_PENDING = 1000;
@@ -480,6 +491,7 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING;
   const takeAttemptedSpan = options?.takeAttemptedSpan;
+  const linkEffectOutcome = options?.linkEffectOutcome;
   const wrapped = createToolRegistry<unknown>();
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
@@ -559,30 +571,31 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
           const result = await span.withContext(() =>
             originalExecute.call(this, input, executionOptions),
           );
-          const outputSize = measureUnknown(result);
+          const canonicalOutput = canonicalToolOutput(result);
+          const outputSize = measureUnknown(canonicalOutput);
           if (originalToModelOutput) {
             rememberPending(toolCallId, {
               start,
               input,
-              output: result,
+              output: canonicalOutput,
               outputSize,
               span,
             });
           } else {
-            const modelOutput = defaultToolModelOutput(result);
+            const modelOutput = defaultToolModelOutput(canonicalOutput);
             const modelOutputSize = measureUnknown(modelOutput);
-            span.withContext(() => {
-              emitToolResultArtifact(
+            const rawArtifactId = await span.withContext(() => {
+              const id = emitToolResultArtifact(
                 span.spanId,
                 name,
                 toolCallId,
-                result,
+                canonicalOutput,
                 {
                   resultKind: "raw",
                   outputSize,
                   isError: false,
                 },
-                sourceResultPreview(provenance, result),
+                sourceResultPreview(provenance, canonicalOutput),
               );
               emitToolResultArtifact(
                 span.spanId,
@@ -601,7 +614,14 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                 },
                 sourceResultPreview(provenance, modelOutput),
               );
+              return id;
             });
+            if (rawArtifactId) {
+              await linkEffectOutcome?.(toolCallId, {
+                kind: "artifact",
+                id: rawArtifactId,
+              });
+            }
             span.end({
               attributes: {
                 isError: false,
@@ -662,8 +682,8 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                 const outputSize =
                   pendingTool?.outputSize ?? measureUnknown(args.output);
                 const modelOutputSize = measureUnknown(modelOutput);
-                pendingTool?.span.withContext(() => {
-                  emitToolResultArtifact(
+                const rawArtifactId = await pendingTool?.span.withContext(() => {
+                  const id = emitToolResultArtifact(
                     pendingTool.span.spanId,
                     name,
                     args.toolCallId,
@@ -692,7 +712,14 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                     },
                     sourceResultPreview(provenance, modelOutput),
                   );
+                  return id;
                 });
+                if (rawArtifactId) {
+                  await linkEffectOutcome?.(args.toolCallId, {
+                    kind: "artifact",
+                    id: rawArtifactId,
+                  });
+                }
                 pendingTool?.span.end({
                   attributes: {
                     isError: false,

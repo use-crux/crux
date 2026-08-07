@@ -22,6 +22,7 @@ export async function pruneRetainedRecords(
   const namespace = options.namespace;
   const limit = retention.sweepLimit;
   const resultStore = deps.store.results;
+  const effectStore = deps.store.effects;
   const results = await Promise.all([
     pruneIfEnabled(retention.events, options.now, (before) =>
       deps.store.events.prune({ namespace: options.namespace, before, limit }),
@@ -63,6 +64,13 @@ export async function pruneRetainedRecords(
             before,
             limit,
           }),
+        )
+      : { removed: 0, truncated: false },
+    effectStore
+      ? pruneIfEnabled(retention.effectEnvelopes, options.now, (before) =>
+          deps.store.transact(async (tx) =>
+            tx.effects!.prune({ namespace, before, now: options.now, limit }),
+          ),
         )
       : { removed: 0, truncated: false },
   ]);

@@ -129,7 +129,9 @@ export default config({
 | `poolOptions` | `PoolConfig`                      | `pg` defaults       | Options for the Crux-created pool.                              |
 | `setup.mode`  | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
 
-The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
+The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, scoped-idle counters, and durable Effect receipt/scope/unit/attempt/envelope rows. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
+
+Durable Effects on PostgreSQL support atomic multi-record operations, crash fencing, and exact reverse-plan reconstruction. Recovery still runs only when application code calls the Effects APIs with a matching Runtime program; an external worker that auto-drives Effect recovery after process kill is not included. See [Durability and restarts](/docs/guides/effects/durability-and-restarts).
 
 ### Runtime setup
 

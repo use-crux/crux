@@ -130,6 +130,7 @@ export function createRuntimeHandler(
   const runtime = createRuntime({
     runtime: runtimeDefinition,
     targets,
+    ...(hasRuntimeProgram(options) ? { program: options.program } : {}),
     ...(options.newWorkId ? { newWorkId: options.newWorkId } : {}),
     startMaintenance: false,
   } satisfies CreateRuntimeOptions)

@@ -192,14 +192,17 @@ function workIdentity(namespace: string, targetId: string, key: string) {
     encoder.encode(JSON.stringify(["crux-work:v1", namespace, targetId, key])),
   );
   const workId = `work_${hash}` as WorkId;
+  const flowId = `flow_${hash}` as FlowId;
   return Object.freeze({
     hash,
     workId,
-    flowId: `flow_${hash}` as FlowId,
+    flowId,
     effects: Object.freeze({
       kind: "effect.scope" as const,
       id: `effect_${hash}`,
-      runId: workId,
+      // Flow opens the boundary with the Flow id as runId; keep admission identity
+      // aligned so Work.effects is the same scope execution and recovery use.
+      runId: flowId,
     }),
   });
 }

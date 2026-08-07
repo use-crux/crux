@@ -7,6 +7,12 @@
 import { sha256Hex } from "../content/sha256";
 import { createRuntimeError } from "./engine/errors";
 import {
+  bindRuntimeEffectTargets,
+  runtimeEffectTargetTable,
+  type RuntimeEffectTarget,
+  type RuntimeEffectTargetDefinition,
+} from "./effect-targets";
+import {
   canonicalizeRuntimeHandlerTargets,
   runtimeHandlerTargetIdentity,
   type RuntimeHandlerTarget,
@@ -46,6 +52,8 @@ export type RuntimeProgramTarget =
  * analogous to named targets: they retain `onEvent` for normalization but never
  * enter `RuntimeManagedTransportBinding` projections or secret-bearing hash
  * fields. Durable Agent Sessions may select models only from `generationModels`.
+ * Recoverable Effect recovery targets are immutable identities only; live
+ * recovery closures stay in a non-enumerable private table.
  */
 export interface RuntimeProgram {
   /** SHA-256 of the canonical program declaration. */
@@ -54,6 +62,8 @@ export interface RuntimeProgram {
   readonly targets: readonly RuntimeProgramTarget[];
   /** Generated definition identity for each executable target. */
   readonly targetDefinitions: readonly RuntimeProgramTargetDefinition[];
+  /** Canonically ordered Effect recovery-target identities. */
+  readonly effectTargets: readonly RuntimeEffectTarget[];
   /** Canonically ordered, statically declared generation models. */
   readonly generationModels: readonly GenerationModel[];
   /**
@@ -98,6 +108,8 @@ export type RuntimeProgramTargetInput =
 export interface CreateRuntimeProgramOptions {
   /** Statically imported Flow, durable task, and Agent targets. */
   readonly targets: readonly RuntimeProgramTargetInput[];
+  /** Statically imported recoverable Effect definitions. */
+  readonly effectTargets?: readonly RuntimeEffectTargetDefinition[];
   /** Statically imported generation models available to Session selection. */
   readonly generationModels?: readonly GenerationModel[];
   /**
@@ -118,11 +130,12 @@ export interface CreateRuntimeProgramOptions {
  * path. It performs no registration, discovery, configuration lookup, or I/O.
  *
  * @param options.targets - Statically imported Flow, task, and Agent targets.
+ * @param options.effectTargets - Recoverable Effect definitions for cold recovery.
  * @param options.generationModels - Models durable Agent Sessions may select.
  * @param options.providers - Executable Signal providers for managed transports.
  * @param options.transports - Inert managed-transport bindings.
- * @returns A frozen program whose `manifestHash` covers targets, models,
- *   provider ids, and transports.
+ * @returns A frozen program whose `manifestHash` covers targets, Effect
+ *   identities, models, provider ids, and transports.
  */
 export function createRuntimeProgram(
   options: CreateRuntimeProgramOptions,
@@ -133,6 +146,10 @@ export function createRuntimeProgram(
     "createRuntimeProgram()",
   );
   const targetDefinitions = canonicalTargetDefinitions(targets, declarations);
+  const effectBinding = bindRuntimeEffectTargets(
+    options.effectTargets ?? [],
+  );
+  const effectTargets = effectBinding.targets;
   const generationModels = canonicalizeProgramGenerationModels(
     options.generationModels ?? [],
     targets,
@@ -153,20 +170,26 @@ export function createRuntimeProgram(
           definition: targetDefinitions[index],
           generationModel: targetGenerationModelReference(target),
         })),
+        effectTargets,
         generationModels: generationModels.map(generationModelManifestEntry),
         providers: providers.map(providerManifestEntry),
         transports,
       }),
     ),
   );
-  return Object.freeze({
+  const program = {
     manifestHash,
     targets,
     targetDefinitions,
+    effectTargets,
     generationModels,
     providers,
     transports,
+  };
+  Object.defineProperty(program, runtimeEffectTargetTable, {
+    value: effectBinding.table,
   });
+  return Object.freeze(program);
 }
 
 function normalizeTargetDeclaration(

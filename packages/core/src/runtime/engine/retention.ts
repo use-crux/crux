@@ -29,6 +29,8 @@ export interface RuntimeRetentionConfig {
   readonly settledWaiters?: RuntimeRetentionDurationInput
   /** Terminal flow snapshot retention. Defaults to `30d`; `false` keeps snapshots forever. */
   readonly terminalSnapshots?: RuntimeRetentionDurationInput
+  /** Effect recovery-envelope retention. Defaults to `30d`; `false` keeps envelopes forever. */
+  readonly effectEnvelopes?: RuntimeRetentionDurationInput
   /** Maximum records to remove per class per maintenance tick. Defaults to 200. */
   readonly sweepLimit?: number
 }
@@ -42,6 +44,7 @@ export interface ResolvedRuntimeRetentionConfig {
   readonly settledTimers: number | false
   readonly settledWaiters: number | false
   readonly terminalSnapshots: number | false
+  readonly effectEnvelopes: number | false
   readonly sweepLimit: number
 }
 
@@ -59,6 +62,7 @@ const DEFAULT_RUNTIME_RETENTION_CONFIG = {
   settledTimers: '24h',
   settledWaiters: '24h',
   terminalSnapshots: '30d',
+  effectEnvelopes: '30d',
   sweepLimit: 200,
 } as const satisfies Required<RuntimeRetentionConfig>
 
@@ -92,6 +96,10 @@ export function resolveRuntimeRetentionConfig(
     terminalSnapshots: resolveRetentionDuration(
       config?.terminalSnapshots ?? DEFAULT_RUNTIME_RETENTION_CONFIG.terminalSnapshots,
       'terminalSnapshots',
+    ),
+    effectEnvelopes: resolveRetentionDuration(
+      config?.effectEnvelopes ?? DEFAULT_RUNTIME_RETENTION_CONFIG.effectEnvelopes,
+      'effectEnvelopes',
     ),
     sweepLimit: resolveSweepLimit(config?.sweepLimit),
   })

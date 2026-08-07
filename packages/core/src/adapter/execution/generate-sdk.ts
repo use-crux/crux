@@ -99,6 +99,7 @@ import {
 import { attachThreadCommit } from "./thread-result";
 import { managedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
 import { checkpointAndCommitManagedGeneration } from "./managed-generation-checkpoint";
+import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -236,6 +237,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   resolved = sourceSession.resolved;
   selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   let representationSelections: ReadonlyMap<string, number> | undefined;
+  let lastRequestReceipt:
+    | import("../../request/receipt/receipt").RequestReceipt
+    | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -253,6 +257,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       // transport for any schema'd tool rather than silently going permissive.
       toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
       promptId: prompt.id,
+      requestReceipt: () => lastRequestReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
@@ -333,6 +338,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
   const planStep = createSdkRequestStepPlanner({
     dialect,
+    onSealed: (receipt) => {
+      lastRequestReceipt = receipt;
+    },
     prompt,
     resolveOptions: () => boundaryResolveOpts,
     resolved: () => resolved,
@@ -568,6 +576,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           }
         },
         async (result) => {
+          await refreshEffectJournalRetryLinks(
+            (result.steps ?? []).flatMap((step) =>
+              step.request ? [step.request] : [],
+            ),
+          );
           const threadCommit = await checkpointAndCommitManagedGeneration(
             args,
             threadInvocation,

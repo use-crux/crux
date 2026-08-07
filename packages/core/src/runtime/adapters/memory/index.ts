@@ -36,6 +36,9 @@ import { createMemoryWaiterPort } from "./waiters";
 import type { RuntimeResultPayloadPort } from "../../results/types";
 import type { RuntimeWorkControlPort } from "../../ports/work-control";
 import { createMemoryWorkControlPort } from "./work-control";
+import type { RuntimeEffectStorePort } from "../../ports/effects";
+import { createMemoryEffectStore } from "./effects";
+import type { MemoryRuntimeData } from "./data";
 import { createMemorySessionStore, type MemorySessionFaults } from "./sessions";
 import type { RuntimeSessionStorePort } from "../../ports/sessions";
 import type {
@@ -53,6 +56,7 @@ import {
 type InMemoryRuntimePorts = RuntimeStoreTransaction & {
   readonly signals: RuntimeSignalStorePort;
   readonly workControl: RuntimeWorkControlPort;
+  readonly effects: RuntimeEffectStorePort;
   readonly sessions: RuntimeSessionStorePort;
   readonly transports: RuntimeTransportStorePort;
 };
@@ -63,6 +67,8 @@ export interface InMemoryRuntimeStoreTesting {
   failAfter(writes: number): void;
   /** Throw once before confirming the next outbox item. */
   crashBeforeConfirm(): void;
+  /** Recreate the adapter while retaining its process-local durable records. */
+  restart(): InMemoryRuntimeStore;
   /** Stop once after Session execution is checkpointed, before Thread publication. */
   crashAfterSessionTurnCheckpoint(): void;
   /** Stop once after ingress delivery writes, before request preparation. */
@@ -111,11 +117,18 @@ export interface InMemoryRuntimeStore extends RuntimeStoreAdapter {
   readonly signals: RuntimeSignalStorePort;
   /** Process-local Work-control command records. */
   readonly workControl: RuntimeWorkControlPort;
+  /** Process-local durable Effect records. */
+  readonly effects: RuntimeEffectStorePort;
 }
 
 /** Create a fresh, isolated in-memory runtime store. */
 export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
-  const data = createMemoryRuntimeData();
+  return createInMemoryRuntimeStore(createMemoryRuntimeData());
+}
+
+function createInMemoryRuntimeStore(
+  data: MemoryRuntimeData,
+): InMemoryRuntimeStore {
   const outboxFaults: MemoryOutboxFaults = { crashBeforeConfirm: false };
   const sessionFaults: MemorySessionFaults = {
     crashAfterIngressDelivery: false,
@@ -139,6 +152,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       deferred: createMemoryDeferredStore(target, recordWrite),
       signals: createMemorySignalStore(target, recordWrite),
       workControl: createMemoryWorkControlPort(target, recordWrite),
+      effects: createMemoryEffectStore(target, recordWrite),
       sessions: createMemorySessionStore(target, recordWrite, sessionFaults),
       transports: createMemoryTransportStore(target, recordWrite),
     };
@@ -184,6 +198,9 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       },
       crashBeforeConfirm(): void {
         outboxFaults.crashBeforeConfirm = true;
+      },
+      restart(): InMemoryRuntimeStore {
+        return createInMemoryRuntimeStore(data);
       },
       crashAfterSessionTurnCheckpoint(): void {
         sessionFaults.crashAfterPreparedExecution = true;

@@ -4,7 +4,10 @@
  * @module
  */
 
-import type { CruxRequestPlanPreview } from "../../observability/contract";
+import type {
+  CruxArtifactId,
+  CruxRequestPlanPreview,
+} from "../../observability/contract";
 import { observe } from "../../observability/observe";
 import type { RequestInspection } from "./inspection";
 import type { RequestReceipt } from "./receipt";
@@ -14,7 +17,7 @@ export function emitRequestPlan(
   receipt: RequestReceipt,
   inspection: RequestInspection,
   stage: CruxRequestPlanPreview["stage"],
-): void {
+): CruxArtifactId | undefined {
   const preview: CruxRequestPlanPreview = {
     kind: "request.plan",
     stage,
@@ -32,7 +35,7 @@ export function emitRequestPlan(
     },
     inspection,
   };
-  observe.artifact({
+  return observe.artifact({
     kind: "request.plan",
     contentType: "application/json",
     encoding: "json",

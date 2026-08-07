@@ -18,7 +18,11 @@ import { effectLedger } from "./ledger";
 import {
   aggregateRollbackStatus,
   planRollback,
+  type RollbackPlanStep,
 } from "./plan";
+import type { DurableEffectScopeSnapshot } from "./durable-records";
+import { currentDurableEffectLedgerBinding } from "./durable-binding";
+import { persistDurableRecoveryUnitTransition } from "./ledger-durable";
 
 /**
  * Rollback settlement plus a raw handler error when one occurred.
@@ -36,15 +40,18 @@ export interface RollbackExecution {
 export async function runRollback(
   scope: EffectScopeRef,
   options?: RollbackOptions,
+  durableSnapshot?: DurableEffectScopeSnapshot,
 ): Promise<RollbackExecution> {
   const startedAt = Date.now();
   const units: RecoveryUnitResult[] = [];
   let recoveryError: unknown;
-  const plan = planRollback(
-    effectLedger.stackFor(scope.id),
-    effectLedger.receiptsFor(scope.id),
-    effectLedger.unitsFor(scope.id),
-  );
+  const plan = durableSnapshot
+    ? rollbackPlanFromDurable(durableSnapshot)
+    : planRollback(
+        effectLedger.stackFor(scope.id),
+        effectLedger.receiptsFor(scope.id),
+        effectLedger.unitsFor(scope.id),
+      );
 
   for (const [index, step] of plan.entries()) {
     if (options?.signal?.aborted) {
@@ -87,6 +94,65 @@ export async function runRollback(
   });
 }
 
+function rollbackPlanFromDurable(
+  snapshot: DurableEffectScopeSnapshot,
+): readonly RollbackPlanStep[] {
+  return snapshot.plan.map((step): RollbackPlanStep => {
+    const unit = snapshot.units.find((record) => record.unit.id === step.unitId);
+    const receipt = step.kind === "effect"
+      ? snapshot.receipts.find((record) => record.receipt.id === step.receiptId)
+          ?.receipt
+      : undefined;
+    const effectIds = unit?.unit.effectIds ?? (receipt ? [receipt.effectId] : []);
+    const result = Object.freeze({
+      unitId: step.unitId,
+      effectIds,
+      ...(receipt?.resource === undefined ? {} : { resource: receipt.resource }),
+      status: durableResultStatus(step.status),
+    });
+    if (step.status !== "active" && step.status !== "failed") {
+      return {
+        kind: "settle",
+        result,
+        ...(receipt
+          ? {
+              receipt: Object.freeze({
+                kind: "effect.receipt" as const,
+                id: receipt.id,
+                effectId: receipt.effectId,
+              }),
+            }
+          : {}),
+      };
+    }
+    return step.kind === "effect"
+      ? {
+          kind: "recover-effect",
+          receipt: Object.freeze({
+            kind: "effect.receipt" as const,
+            id: step.receiptId,
+            effectId: step.effectId,
+          }),
+          cancelled: { ...result, status: "cancelled" },
+        }
+      : {
+          kind: "recover-boundary",
+          unitId: step.unitId,
+          cancelled: { ...result, status: "cancelled" },
+        };
+  });
+}
+
+function durableResultStatus(
+  status: import("../types").RecoveryUnitStatus | RecoveryUnitLifecycle,
+): import("../types").RecoveryUnitStatus {
+  if (status === "recovered") return "already_recovered";
+  if (status === "prepared" || status === "recovering" || status === "active") {
+    return "ambiguous";
+  }
+  return status;
+}
+
 async function recoverBoundaryUnitAttempt(
   unitId: string,
   options?: RollbackOptions,
@@ -109,10 +175,28 @@ async function recoverBoundaryUnitAttempt(
     return unit.recoveryOperation;
   }
   const operation = (async () => {
+    const binding = currentDurableEffectLedgerBinding();
+    const durableSnapshot = binding?.store.effects
+      ? await binding.store.effects.reconstructScope(unit.scope, {
+          namespace: binding.namespace,
+        })
+      : undefined;
+    await persistDurableRecoveryUnitTransition(unit.id);
     try {
-      const nested = await runRollback(unit.scope, options);
+      if (durableSnapshot && binding) {
+        effectLedger.restoreDurableSnapshot(durableSnapshot, binding);
+      }
+      const nested = await runRollback(
+        unit.scope,
+        options,
+        durableSnapshot ?? undefined,
+      );
       const status = nestedBoundaryUnitStatus(nested.result);
-      effectLedger.markUnit(unit.id, lifecycleFor(status));
+      const lifecycle = lifecycleFor(status);
+      effectLedger.markUnit(unit.id, lifecycle);
+      if (lifecycle !== "active") {
+        await persistDurableRecoveryUnitTransition(unit.id);
+      }
       return {
         result: boundaryUnitResult(unit, status),
         ...(nested.recoveryError === undefined
@@ -121,6 +205,7 @@ async function recoverBoundaryUnitAttempt(
       };
     } catch (error) {
       effectLedger.markUnit(unit.id, "failed");
+      await persistDurableRecoveryUnitTransition(unit.id);
       return {
         result: boundaryUnitResult(unit, "failed"),
         error,
