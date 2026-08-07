@@ -260,7 +260,7 @@ describe('structured page block chunking', () => {
 
     expect(result.chunks.map((chunk) => chunk.content)).toEqual([
       '# Results\n\nBefore',
-      '| Name | Score |\n| --- | --- |\n| Ada | 10 |',
+      '# Results\n\n| Name | Score |\n| --- | --- |\n| Ada | 10 |',
       '# Results\n\nAfter',
     ])
     expect(result.chunks[1]?.provenance).toEqual({

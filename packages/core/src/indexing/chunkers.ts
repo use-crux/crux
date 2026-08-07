@@ -50,7 +50,10 @@ export function chunkDocumentStructured(
     ? document.parts
     : [{ id: 'text:1', kind: 'text' as const, content: document.content ?? '' }]
   const chunks: CruxChunk[] = []
-  const tableRowsPerChunk = 'tableRowsPerChunk' in options ? (options.tableRowsPerChunk ?? 25) : 25
+  const requestedTableRows = 'tableRowsPerChunk' in options ? (options.tableRowsPerChunk ?? 25) : 25
+  const tableRowsPerChunk = Number.isFinite(requestedTableRows) && requestedTableRows > 0
+    ? Math.max(1, Math.floor(requestedTableRows))
+    : 1
 
   for (const part of parts) {
     if (part.kind === 'media') {
@@ -70,7 +73,7 @@ export function chunkDocumentStructured(
       continue
     }
     if (part.kind === 'page' && part.blocks?.length) {
-      chunks.push(...chunkPageNarrative(document, part, normalized, chunks.length))
+      chunks.push(...chunkPageNarrative(document, part, normalized, tableRowsPerChunk, chunks.length))
       continue
     }
 
@@ -135,16 +138,20 @@ function chunkPageNarrative(
   document: CruxDocument,
   page: Extract<CruxIngestPart, { kind: 'page' }>,
   options: Required<ChunkingOptions>,
+  tableRowsPerChunk: number,
   ordinalOffset: number,
 ): CruxChunk[] {
   const chunks: CruxChunk[] = []
   let headingPath: readonly string[] = []
   let headingIds: string[] = []
+  let sectionHasContent = false
   let body: Array<{ block: CruxIngestPageTextBlock; content: string; range?: { start: number; end: number } }> = []
 
   for (const block of page.blocks ?? []) {
     if (block.kind === 'table') {
+      if (!block.columns?.length && !block.rows.length) continue
       flushSection(false)
+      reconcileHeadingPath(block.headingPath ?? [])
       emitTable(block)
       continue
     }
@@ -165,12 +172,7 @@ function chunkPageNarrative(
     const blockPath = block.role === 'heading' && !block.headingPath?.length
       ? headingPath
       : block.headingPath ?? []
-    if (!arraysEqual(headingPath, blockPath)) {
-      flushSection(true)
-      const common = commonPrefixLength(headingPath, blockPath)
-      headingPath = blockPath
-      headingIds = headingIds.slice(0, common)
-    }
+    reconcileHeadingPath(blockPath)
     const hasExactRange = block.sourceRange !== undefined &&
       page.content.slice(block.sourceRange.start, block.sourceRange.end) === block.content
     const pieces = block.content.length > options.maxChars
@@ -192,9 +194,20 @@ function chunkPageNarrative(
     }
   }
 
+  function reconcileHeadingPath(blockPath: readonly string[]): void {
+    if (arraysEqual(headingPath, blockPath)) return
+    flushSection(true)
+    const common = commonPrefixLength(headingPath, blockPath)
+    headingPath = blockPath
+    headingIds = headingIds.slice(0, common)
+  }
+
   function flushSection(headingBoundary: boolean): void {
     if (body.length) flushBody()
-    else if (headingBoundary && headingPath.length) emit(headingPrefix(headingPath).trimEnd(), [], true)
+    else if (headingBoundary && headingPath.length && !sectionHasContent) {
+      emit(headingPrefix(headingPath).trimEnd(), [], true)
+    }
+    if (headingBoundary) sectionHasContent = false
   }
 
   function flushBody(): void {
@@ -202,18 +215,23 @@ function chunkPageNarrative(
     body = []
     const prefix = headingPrefix(headingPath)
     emit(`${prefix}${items.map((item) => item.content).join('\n\n')}`, items, prefix.length > 0)
+    sectionHasContent = true
   }
 
   function emitTable(block: CruxIngestPageTableBlock): void {
     const blockIds = [...new Set([...headingIds, block.id])]
-    chunks.push(createPartChunk(document, block.content, ordinalOffset + chunks.length, {
-      partIds: [page.id],
-      blockIds,
-      pages: [page.pageNumber],
-      tables: [block.id],
-      ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
-      confidence: 'derived',
-    }))
+    const prefix = headingPrefix(headingPath)
+    for (const payload of tableWindows(block, tableRowsPerChunk, options.maxChars)) {
+      chunks.push(createPartChunk(document, `${prefix}${payload}`, ordinalOffset + chunks.length, {
+        partIds: [page.id],
+        blockIds,
+        pages: [page.pageNumber],
+        tables: [block.id],
+        ...(page.sourceLocation ? { sourceLocations: [page.sourceLocation] } : {}),
+        confidence: 'derived',
+      }))
+      sectionHasContent = true
+    }
   }
 
   function emit(
@@ -237,6 +255,41 @@ function chunkPageNarrative(
       confidence: sourceSpans.length ? 'exact' : 'derived',
     }))
   }
+}
+
+function tableWindows(
+  block: CruxIngestPageTableBlock,
+  rowsPerChunk: number,
+  maxChars: number,
+): string[] {
+  const header = block.columns?.length ? block.columns : undefined
+  const body = block.rows
+  if (!header && !body.length) return []
+  if (!body.length) return [renderTable(header, [])]
+
+  const windows: string[] = []
+  const limit = Math.max(1, Math.floor(rowsPerChunk))
+  for (let index = 0; index < body.length;) {
+    let rows = body.slice(index, index + limit)
+    while (rows.length > 1 && renderTable(header, rows).length > maxChars) rows = rows.slice(0, -1)
+    windows.push(renderTable(header, rows))
+    index += rows.length
+  }
+  return windows
+}
+
+function renderTable(header: readonly string[] | undefined, rows: readonly (readonly string[])[]): string {
+  const width = Math.max(header?.length ?? 0, ...rows.map((row) => row.length))
+  const renderRow = (row: readonly string[]): string =>
+    `| ${Array.from({ length: width }, (_, index) => normalizeTableCell(row[index] ?? '')).join(' | ')} |`
+  return [
+    ...(header ? [renderRow(header), renderRow(Array.from({ length: width }, () => '---'))] : []),
+    ...rows.map(renderRow),
+  ].join('\n')
+}
+
+function normalizeTableCell(cell: string): string {
+  return cell.replace(/\r\n|\r|\n/g, '<br>').trim().replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 }
 
 function headingPrefix(path: readonly string[]): string {
