@@ -113,7 +113,6 @@ function chunkDocumentStructuredUnits(
           units.length,
           provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
         ),
-        ...(part.kind === 'page' ? { pageId: part.id } : {}),
         headingPath: [],
         headingInstanceIds: [],
         kind: 'narrative',

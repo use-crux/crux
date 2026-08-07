@@ -541,7 +541,7 @@ describe('structured page block chunking', () => {
     })
   })
 
-  it('separates blockless physical pages without changing ordinary part compatibility', async () => {
+  it('separates layout-aware physical pages without changing ordinary part compatibility', async () => {
     const strategy = chunker.parentChild({
       parentMaxChars: 100, childMaxChars: 7, childOverlapChars: 0,
     })
@@ -551,10 +551,12 @@ describe('structured page block chunking', () => {
         {
           id: 'page:1', kind: 'page', pageNumber: 1, content: 'Alpha page',
           sourceLocation: { type: 'page', pageNumber: 1 },
+          blocks: [{ id: 'paragraph:1', kind: 'text', role: 'paragraph', content: 'Alpha page' }],
         },
         {
           id: 'page:2', kind: 'page', pageNumber: 2, content: 'Beta page',
           sourceLocation: { type: 'page', pageNumber: 2 },
+          blocks: [{ id: 'paragraph:2', kind: 'text', role: 'paragraph', content: 'Beta page' }],
         },
       ],
     }, { chunking: { maxChars: 100, overlapChars: 0 } })
