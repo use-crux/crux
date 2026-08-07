@@ -17,7 +17,6 @@ import {
   type AssertionClaimRecord,
   type RawAssertionClaim,
 } from './assertion-claims'
-import { isKnowledgeRef } from '../refs'
 import {
   toAssertionRelationClaimRecords,
   validateAssertionRelationClaims,
@@ -26,7 +25,6 @@ import {
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
 import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
-import { chunkKey } from './target-selection'
 
 /** Run one assertion stage and return cached claim records. Internal. */
 export async function runAssertionStage(input: {
@@ -172,10 +170,10 @@ async function readGeneratedAssertionClaims(
   const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
-  const schema = payloadSchema(stage, batch.targetChunks)
+  const schema = payloadSchema(stage)
   const result = await generateObjectWithEvidence({
     model,
-    system: 'Return only assertions that match the requested schema.',
+    system: 'Return only assertions that match the requested schema. Cite evidence only from the chunk ids listed in the prompt; when target chunks are marked, cite only [TARGET:] chunk ids.',
     prompt: batch.prompt,
     schema,
     sourceId: input.document.sourceId,
@@ -186,17 +184,11 @@ async function readGeneratedAssertionClaims(
   })
   const parsed = schema.safeParse(result.object)
   if (!parsed.success) {
-    const substitutions = input.targetKeys === undefined
-      ? new Map<string, z.core.$ZodIssue>()
-      : contextOnlyEvidenceMap(result.object, batch, input.targetKeys)
-    const substituted = substituteSyntheticIssues(parsed.error.issues, substitutions)
     return {
       claims: [],
       warnings: result.warnings,
-      errors: substituted.map((issue) => isContextOnlyEvidenceIssue(issue)
-        ? issue.message
-        : (issue.path.join('.') || issue.message)),
-      validationError: new z.ZodError([...substituted]),
+      errors: parsed.error.issues.map((issue) => issue.path.join('.') || issue.message),
+      validationError: parsed.error,
     }
   }
   const validated = validateAssertionClaims(stage, parsed.data.assertions, batch.chunks, input.targetKeys)
@@ -210,94 +202,17 @@ async function readGeneratedAssertionClaims(
   }
 }
 
-function isContextOnlyEvidenceIssue(issue: z.core.$ZodIssue): boolean {
-  return (issue as { readonly code?: unknown }).code === 'context_only_evidence'
-}
-
-/** Chunk-identity rejection codes; co-located strictness issues are not covered by the authored message. */
-const IDENTITY_REJECTION_CODES = new Set(['invalid_union', 'invalid_literal'])
-
-/** Swap chunk-identity failures for authored diagnostics, suppressing their nested details, while keeping unrelated parse issues. */
-function substituteSyntheticIssues(
-  issues: readonly z.core.$ZodIssue[],
-  replacements: ReadonlyMap<string, z.core.$ZodIssue>,
-): readonly z.core.$ZodIssue[] {
-  const carried = new Set<string>()
-  const substituted: z.core.$ZodIssue[] = []
-  for (const issue of issues) {
-    const key = issue.path.join('.')
-    const exact = replacements.get(key)
-    if (exact !== undefined) {
-      // Preserve co-located defects (e.g. unrecognized_keys) at the same slot;
-      // only the identity rejection itself is swapped for the authored message.
-      if (!IDENTITY_REJECTION_CODES.has(issue.code)) substituted.push(issue)
-      if (!carried.has(key)) {
-        substituted.push(exact)
-        carried.add(key)
-      }
-      continue
-    }
-    // A nested identity failure inside a replaced evidence slot is covered by the authored message.
-    const coveredBy = (): boolean => {
-      for (const replacementKey of replacements.keys()) {
-        if (key.startsWith(`${replacementKey}.`)) return true
-      }
-      return false
-    }
-    if (coveredBy()) continue
-    substituted.push(issue)
-  }
-  for (const [key, replacement] of replacements) {
-    if (!carried.has(key)) substituted.push(replacement)
-  }
-  return substituted
-}
-
-/** Author context-only diagnostics for evidence refs, guarded against malformed model output. */
-function contextOnlyEvidenceMap(
-  object: unknown,
-  batch: DerivePromptBatch,
-  targetKeys: ReadonlySet<string>,
-): ReadonlyMap<string, z.core.$ZodIssue> {
-  const replacements = new Map<string, z.core.$ZodIssue>()
-  if (typeof object !== 'object' || object === null) return replacements
-  const assertions = (object as { readonly assertions?: unknown }).assertions
-  if (!Array.isArray(assertions)) return replacements
-  const visible = new Set(batch.chunks.map(chunkKey))
-  assertions.forEach((assertion, index) => {
-    if (typeof assertion !== 'object' || assertion === null) return
-    const evidence = (assertion as { readonly evidence?: unknown }).evidence
-    if (!Array.isArray(evidence)) return
-    evidence.forEach((ref, evidenceIndex) => {
-      if (!isKnowledgeRef(ref) || ref.kind !== 'chunk') return
-      const key = chunkKey(ref)
-      if (visible.has(key) && !targetKeys.has(key)) {
-        const path = ['assertions', index, 'evidence', evidenceIndex]
-        replacements.set(path.join('.'), {
-          code: 'context_only_evidence',
-          path,
-          message: 'evidence may only reference target chunks',
-        } as unknown as z.core.$ZodIssue)
-      }
-    })
-  })
-  return replacements
-}
-
-function payloadSchema(
-  stage: AssertionStage<Record<string, z.ZodType<unknown>>>,
-  chunks: readonly CruxChunk[],
-) {
-  const evidence = z.array(unionSchema(chunks.map((chunk) => z.object({
+function payloadSchema(stage: AssertionStage<Record<string, z.ZodType<unknown>>>) {
+  const evidence = z.array(z.object({
     kind: z.literal('chunk'),
-    sourceId: z.literal(chunk.sourceId),
-    chunkId: z.literal(chunk.chunkId),
-  }).strict()))).min(1)
+    sourceId: z.string(),
+    chunkId: z.string(),
+  }).strict()).min(1)
   const assertionOptions = Object.entries(stage.types).map(([type, data]) => z.object({
     type: z.literal(type),
     data,
     evidence,
-    provenance: z.enum(['exact', 'derived']).optional(),
+    provenance: z.enum(['exact', 'derived']),
   }).strict())
   const [firstAssertion, ...otherAssertions] = assertionOptions
   if (!firstAssertion) throw new Error('Structured assertion schema requires at least one type.')
@@ -305,12 +220,6 @@ function payloadSchema(
   return z.object({
     assertions: z.array(assertion),
   }).strict()
-}
-
-function unionSchema<T>(schemas: readonly z.ZodType<T>[]): z.ZodType<T> {
-  const [first, second, ...rest] = schemas
-  if (!first) throw new Error('Structured assertion schema requires at least one option.')
-  return second ? z.union([first, second, ...rest]) : first
 }
 
 function assertionValidationExhausted(stageId: string, zodErrors: z.ZodError): ValidationExhaustedError {

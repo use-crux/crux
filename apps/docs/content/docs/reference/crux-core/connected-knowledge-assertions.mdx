@@ -110,11 +110,16 @@ back by `(sourceId, chunkId)`, so references survive batching and truncation.
 Returning chunks outside the visible set throws, and duplicates are ignored.
 With no selector, every visible chunk is a target — the default behavior.
 
-Evidence citing a context-only chunk is rejected during validation with a
-`context_only_evidence` issue (model stages after repair retries, run stages
-immediately). An empty target selection skips model generation for that source
-with a warning manifest; deterministic runs still validate any emitted claims
-against the empty target set.
+Evidence citing a context-only chunk is rejected during validation with an
+`invalid evidence — context-only chunk` error (model stages after repair
+retries, run stages immediately). An empty target selection skips model
+generation for that source with a warning manifest; deterministic runs still
+validate any emitted claims against the empty target set.
+
+Generated stages use a provider-portable wire schema: evidence references are
+generic chunk ids and are validated locally after generation against the visible
+target chunks. Generated output must include `provenance`; `emit()` keeps it
+optional and treats an omitted value as derived provenance.
 
 ### Emit API
 

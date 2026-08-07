@@ -46,8 +46,8 @@ describe('connected knowledge derive diagnostics', () => {
   it('fails assertion extraction when repair still returns invalid claims', async () => {
     const storage = inMemoryStorage()
     const source = model([
-      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef] }] },
-      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef] }] },
+      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef], provenance: 'derived' }] },
+      { assertions: [{ type: 'fact', data: { value: 1 }, evidence: [chunkRef], provenance: 'derived' }] },
     ])
     const docs = knowledgeBase({
       id: 'kb-assertions',
@@ -74,7 +74,7 @@ describe('connected knowledge derive diagnostics', () => {
   it('records the same knowledge summary on the mutation effect receipt evidence', async () => {
     const storage = inMemoryStorage()
     const source = model([
-      { assertions: [{ type: 'fact', data: { value: 'ok' }, evidence: [chunkRef] }] },
+      { assertions: [{ type: 'fact', data: { value: 'ok' }, evidence: [chunkRef], provenance: 'derived' }] },
     ])
     const docs = knowledgeBase({
       id: 'kb-effects',
