@@ -14,19 +14,20 @@ const EMPTY_MANIFEST_V3 = {
   evalPrivacyFingerprint:
     'd2b7a3a9e0d3857b24b871ee585d118490dabd9edf81bcf10de9f5328e85cc29',
   targets: [],
+  effectTargets: [],
   providers: [],
   transports: [],
   evals: [],
 } as const
 
 describe('runtime namespace preflight', () => {
-  it('rejects an obsolete local Runtime artifact manifest with a regeneration remedy', async () => {
+  it.each([1, 2])('rejects obsolete local Runtime artifact manifest v%s with a regeneration remedy', async (version) => {
     const root = await mkdtemp(join(tmpdir(), 'crux-runtime-ops-'))
     try {
       await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
       await writeFile(
         join(root, '.crux/generated/runtime/manifest.json'),
-        `${JSON.stringify({ version: 1, targets: [] })}\n`,
+        `${JSON.stringify({ version, targets: [] })}\n`,
       )
       const runtime = serverless({
         store: {
@@ -44,7 +45,7 @@ describe('runtime namespace preflight', () => {
       await expect(preflightRuntime(root, runtime)).rejects.toMatchObject({
         code: 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE',
         message: expect.stringMatching(
-          /schema version 1[\s\S]*crux runtime generate/i,
+          new RegExp(`schema version ${version}[\\s\\S]*crux runtime generate`, 'i'),
         ),
       })
     } finally {

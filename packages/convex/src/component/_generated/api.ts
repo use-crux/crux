@@ -10,6 +10,7 @@
 
 import type * as memory from "../memory.js";
 import type * as runtime_composite_deferred from "../runtime/composite_deferred.js";
+import type * as runtime_composite_effects from "../runtime/composite_effects.js";
 import type * as runtime_composite_events from "../runtime/composite_events.js";
 import type * as runtime_composite_outbox from "../runtime/composite_outbox.js";
 import type * as runtime_composite_state from "../runtime/composite_state.js";
@@ -47,6 +48,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 const fullApi: ApiFromModules<{
   memory: typeof memory;
   "runtime/composite_deferred": typeof runtime_composite_deferred;
+  "runtime/composite_effects": typeof runtime_composite_effects;
   "runtime/composite_events": typeof runtime_composite_events;
   "runtime/composite_outbox": typeof runtime_composite_outbox;
   "runtime/composite_state": typeof runtime_composite_state;

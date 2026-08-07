@@ -107,6 +107,7 @@ export function createRuntimeKernel(
     store: options.store,
     runComposite,
     targets: options.targets,
+    program: options.program,
     verifyWake,
     newWorkId: options.newWorkId,
     now,

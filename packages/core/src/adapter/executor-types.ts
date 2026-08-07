@@ -291,6 +291,8 @@ export interface ExecutorStep {
   readonly finishReason: string | undefined;
   /** Token usage for this step, when reported. */
   readonly usage: AdapterResponse["usage"] | undefined;
+  /** Transport retries consumed by this provider-call step. */
+  readonly transportRetries?: number;
 }
 
 /**

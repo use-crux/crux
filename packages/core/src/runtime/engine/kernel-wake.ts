@@ -28,6 +28,8 @@ import {
 import { transition, type RuntimeWorkItem } from './work'
 import { openSessionTurnObservability } from '../../session/turn-observability'
 import { retryDelayMs } from './retry'
+import { runWithDurableEffectLedger } from '../../effect/internal/durable-binding'
+import type { RuntimeProgram } from '../program'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -37,6 +39,8 @@ export interface HandleWakeDeps {
   readonly runComposite: RuntimeCompositeRunner
   /** Runtime target registry. */
   readonly targets: RuntimeTargetMap
+  /** Immutable authored target program available to durable handlers. */
+  readonly program?: RuntimeProgram
   /** Wake verifier. */
   readonly verifyWake: NonNullable<RuntimeKernelOptions['verifyWake']>
   /** Current time source. */
@@ -154,9 +158,19 @@ export async function handleWake(
     )
     const sessionEvidence = openSessionTurnObservability(leased, deps.store)
     try {
+      const executeTarget = () => target.execute({ work: leased, lease })
       const execute = () =>
         executeWithNamedDeferEvidence(leased, () =>
-          target.execute({ work: leased, lease }),
+          deps.store.effects
+            ? runWithDurableEffectLedger(
+                {
+                  namespace: leased.namespace,
+                  store: deps.store,
+                  ...(deps.program ? { program: deps.program } : {}),
+                },
+                executeTarget,
+              )
+            : executeTarget(),
         )
       const outcome = sessionEvidence
         ? await sessionEvidence.withContext(execute)

@@ -105,10 +105,14 @@ the original callback error as `cause` and the honest per-unit result in
 `error.result`.
 
 <Callout type="info">
-  Effect recovery is currently in-process. A Flow snapshot may persist its
-  JSON-safe scope ref, but receipts, captured state, recovery handlers, and
-  ledger state do not survive a restart. The persisted ref alone is not a
-  durable transaction log and cannot restore recovery.
+  Without a Runtime store, Effect recovery is process-local: receipts, captured
+  state, and ledger rows live only for the current process. Configure a Runtime
+  store that implements the Effects port to persist those records and rebuild
+  the exact reverse recovery plan after a restart. Application code can call
+  `recover()`, `rollback()`, or `reconcileEffect()` with a matching Runtime
+  program. A self-hosted `crux runtime worker` can also claim and drive
+  interrupted rollback scopes after process loss. See
+  [Durability and restarts](/docs/guides/effects/durability-and-restarts).
 </Callout>
 
 ## Keep identities stable and safe
@@ -131,8 +135,8 @@ resource: ({ accountId }) => ({
 
 Resource projection runs before the executor. If it throws, Crux fails closed
 and does not make the external change. Captured recovery state stays inside the
-in-process ledger. Observability and automatic evidence receive only the safe
-resource summary and receipt status.
+Effect ledger (and the configured Runtime store when durable). Observability and
+automatic evidence receive only the safe resource summary and receipt status.
 
 ## Native Crux effects
 
@@ -188,6 +192,11 @@ to recover, roll back, or reconcile a receipt.
     title="Ambiguity and reconciliation"
     description="Handle external operations whose outcome cannot be known safely."
     href="/docs/guides/effects/ambiguity-and-reconciliation"
+  />
+  <Card
+    title="Durability and restarts"
+    description="Configure a Runtime store, reconstruct recovery plans, and handle crash windows honestly."
+    href="/docs/guides/effects/durability-and-restarts"
   />
   <Card
     title="Effects API reference"

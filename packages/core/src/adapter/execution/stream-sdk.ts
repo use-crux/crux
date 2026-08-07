@@ -100,6 +100,7 @@ import {
   prepareThreadInvocation,
   validateThreadReplay,
 } from "./thread-history";
+import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -216,6 +217,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   selectRepresentationMiddleware(resolved, resolved.representations ?? []);
   const closeSources = createStreamSourceCleanup(sourceSession, args.signal);
   let representationSelections: ReadonlyMap<string, number> | undefined;
+  let lastRequestReceipt:
+    | import("../../request/receipt/receipt").RequestReceipt
+    | undefined;
   let lifecycle: ReturnType<typeof createToolLifecycle>;
   try {
     lifecycle = createToolLifecycle({
@@ -233,6 +237,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       // transport for any schema'd tool rather than silently going permissive.
       toolInputCapabilities: resolveToolInputCapabilities(dialect, modelInfo),
       promptId: prompt.id,
+      requestReceipt: () => lastRequestReceipt,
       input: args.input ?? {},
       timeout: args.timeout,
       abortSignal: args.signal,
@@ -437,6 +442,9 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       : undefined;
   const planStep = createSdkRequestStepPlanner({
     dialect,
+    onSealed: (receipt) => {
+      lastRequestReceipt = receipt;
+    },
     prompt,
     resolveOptions: () => boundaryResolveOpts,
     resolved: () => resolved,
@@ -697,6 +705,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       });
+      await refreshEffectJournalRetryLinks(meta?.requestReceipts ?? []);
       await validateThreadReplay(threadInvocation, cachedRelease !== undefined);
       const threadCommit = await commitThreadInvocation(threadInvocation, {
         messages: guarded?.messages ?? messages,

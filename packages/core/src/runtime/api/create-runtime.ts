@@ -29,6 +29,7 @@ import {
   runtimeHostOnlyError,
   type RuntimeEngineDefinition,
 } from './runtime-definition'
+import type { RuntimeProgram } from '../program'
 
 /** Options for resolving a runtime composer into an executable kernel. */
 export interface CreateRuntimeOptions<
@@ -38,6 +39,8 @@ export interface CreateRuntimeOptions<
   readonly runtime: RuntimeEngineDefinition<TStore>
   /** Runtime targets available to wake delivery. */
   readonly targets?: RuntimeTargetMap
+  /** Immutable authored target program available during execution. */
+  readonly program?: RuntimeProgram
   /** Runtime namespace. Defaults to the composer namespace, then `local`. */
   readonly namespace?: string
   /** Work id generator owned by the caller or generated entry. */
@@ -125,6 +128,7 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
   const kernel = createRuntimeKernel({
     store: options.runtime.store,
     targets: options.targets ?? {},
+    program: options.program ?? options.runtime.program,
     verifyWake: options.verifyWake,
     newWorkId,
     now,

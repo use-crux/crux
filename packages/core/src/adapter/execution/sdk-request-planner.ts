@@ -9,7 +9,10 @@ import type { z } from "zod";
 import type { InputBudget } from "../../request/budget/input-budget";
 import { RequestCompositionError } from "../../request/errors";
 import { sealRequest } from "../../request/planner/seal";
-import { createRequestId } from "../../request/receipt/receipt";
+import {
+  createRequestId,
+  type RequestReceipt,
+} from "../../request/receipt/receipt";
 import type {
   ExecutorRequestStepInput,
   ExecutorRequestStepPlanner,
@@ -63,6 +66,7 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly rearm: (resolved: ResolvedPrompt) => Promise<void>;
   readonly configuredActiveTools?: readonly string[];
   readonly stepBoundary?: ManagedGenerationStepBoundary;
+  readonly onSealed?: (receipt: RequestReceipt) => void;
 }
 
 /** Fail before SDK execution when a loop cannot surface model-call boundaries. */
@@ -244,6 +248,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
     }
     previousRequestId = sealed.receipt.id;
     previousReceipt = sealed.receipt;
+    options.onSealed?.(sealed.receipt);
     const originalToolNames = tools?.map((tool) => tool.name) ?? [];
     const selectedToolNames =
       sealed.request.tools?.map((tool) => tool.name) ?? [];

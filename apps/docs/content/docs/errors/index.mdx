@@ -25,8 +25,8 @@ try {
 | [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING)       | The configured stack cannot support a used runtime feature.       |
 | [`OWNERSHIP_CONFLICT`](/docs/errors/OWNERSHIP_CONFLICT)       | Another worker already owns maintenance for this store namespace. |
 | [`SHUTDOWN_TIMEOUT`](/docs/errors/SHUTDOWN_TIMEOUT)           | A worker operation did not settle within the shutdown bound.      |
-| [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND)           | A wake named a target missing from the runtime entry.             |
-| [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE)           | Two runtime targets share one durable name.                       |
+| [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND)           | A wake or Effect recovery declaration named a missing or non-recoverable target. |
+| [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE)           | Two runtime targets or Effect recovery identities collide.        |
 | [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED)     | A discovered target cannot be imported as a named export.         |
 | [`REPLAY_DIVERGED`](/docs/errors/REPLAY_DIVERGED)             | Flow replay no longer matches the suspended snapshot fingerprint. |
 | [`ARTIFACTS_STALE`](/docs/errors/ARTIFACTS_STALE)             | Generated runtime artifacts are stale.                            |

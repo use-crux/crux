@@ -46,14 +46,21 @@ export interface ReconciliationCommit {
   readonly audit: ReconciliationAudit;
 }
 
-export function commitLedgerReconciliation(
+export function prepareLedgerReconciliation(
   command: LedgerReconciliation,
   state: ReconciliationLedgerState,
-): EffectReceipt {
-  const change =
+): ReconciliationCommit {
+  return (
     command.kind === "execution"
       ? executionReconciliation(command, state)
-      : recoveryReconciliation(command, state);
+      : recoveryReconciliation(command, state)
+  );
+}
+
+export function commitLedgerReconciliation(
+  change: ReconciliationCommit,
+  state: ReconciliationLedgerState,
+): EffectReceipt {
   state.commit(change);
   return change.result;
 }
@@ -201,10 +208,10 @@ function reconciliationAudit(
   });
 }
 
-export function reconcileEffectReceipt(
+export async function reconcileEffectReceipt(
   reference: EffectReceiptRef,
   resolution: EffectReconciliation,
-): EffectReceipt {
+): Promise<EffectReceipt> {
   const value: unknown = reference;
   if (
     !isRecord(value) ||
@@ -243,11 +250,13 @@ export function reconcileEffectReceipt(
   if (target.parentReceiptId) {
     return reconcileRecoveryAttempt(receipt, target, resolution);
   }
-  const settled = effectLedger.reconcile({
+  const change = effectLedger.prepareReconciliation({
     kind: "execution",
     receiptId: target.id,
     resolution,
   });
+  await effectLedger.persistReconciliation(change);
+  const settled = effectLedger.commitReconciliation(change);
   recordEffectReceiptReconciliation(settled);
   return settled;
 }
@@ -263,11 +272,11 @@ function findUnknownRecoveryAttempt(receipt: EffectReceipt): EffectReceipt | und
     );
 }
 
-function reconcileRecoveryAttempt(
+async function reconcileRecoveryAttempt(
   requested: EffectReceipt,
   attempt: EffectReceipt,
   resolution: EffectReconciliation,
-): EffectReceipt {
+): Promise<EffectReceipt> {
   const original = attempt.parentReceiptId
     ? effectLedger.getReceipt(attempt.parentReceiptId)
     : undefined;
@@ -279,13 +288,15 @@ function reconcileRecoveryAttempt(
       `Recovery attempt \`${attempt.id}\` has incompatible state.`,
     );
   }
-  const settledAttempt = effectLedger.reconcile({
+  const change = effectLedger.prepareReconciliation({
     kind: "recovery",
     attemptReceiptId: attempt.id,
     originalReceiptId: original.id,
     unitId: unit.id,
     resolution,
   });
+  await effectLedger.persistReconciliation(change);
+  const settledAttempt = effectLedger.commitReconciliation(change);
   const settledOriginal = effectLedger.getReceipt(original.id) ?? original;
   recordEffectRecoveryReconciliation(settledOriginal, settledAttempt);
   return requested.id === attempt.id

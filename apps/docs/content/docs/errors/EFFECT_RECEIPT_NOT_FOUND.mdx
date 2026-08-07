@@ -6,7 +6,8 @@ description: An effect receipt reference is missing, malformed, or belongs to an
 ## What failed
 
 `recover()` or a definition's `.recover()` method could not match the supplied
-`EffectReceiptRef` to an in-process receipt.
+`EffectReceiptRef` to a receipt in the process ledger or, when configured, the
+Runtime Effects store.
 
 ## Fix
 
@@ -18,8 +19,11 @@ const execution = await updateCustomer.run(input);
 await updateCustomer.recover(execution.receipt);
 ```
 
-Do not construct, edit, or pass a scope ref in place of a receipt ref. This
-release does not persist the receipt ledger across restarts.
+Do not construct, edit, or pass a scope ref in place of a receipt ref. Without
+a Runtime store the receipt exists only for the current process. With a store,
+cold recovery can load the durable row, but a missing or version-mismatched
+program target settles as `handler_unavailable` rather than
+`EFFECT_RECEIPT_NOT_FOUND`.
 
 See [Recover one receipt directly](/docs/guides/effects/recovery-patterns#recover-one-receipt-directly)
-for `.run()`, `recover()`, and definition-scoped recovery.
+and [Durability and restarts](/docs/guides/effects/durability-and-restarts).

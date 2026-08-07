@@ -46,8 +46,8 @@ afterEach(async () => {
 });
 
 describe("semantic facts cache", () => {
-  it("uses the Session semantic evidence contract epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v50");
+  it("uses the Session + durable Effects merged semantic evidence contract epoch", () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v51");
   });
 
   it("does not reuse a valid artifact from the pre-dynamic-identity v44 namespace", async () => {

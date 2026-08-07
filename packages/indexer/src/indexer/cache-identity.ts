@@ -9,11 +9,12 @@ import type { ProjectIndexCompilerProfile } from "./compiler/profile";
  */
 export const STATIC_PARSE_CACHE_EPOCH = "static-parse-v94";
 /**
- * Semantic v50 gates Flow Session targets on canonical `flow` export identity
- * from allowed Crux Flow modules (not bare call names), with Session Flow
- * targets, subscription lineage, and observed public method usage evidence.
+ * Semantic v51 combines Session Flow targets (v50: canonical `flow` export
+ * identity, subscription lineage, observed public method usage) with main's
+ * durable-Effects lineage (v49) so neither parent can reuse a stale semantic
+ * cache after integration.
  */
-export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v50";
+export const SEMANTIC_FACTS_CACHE_EPOCH = "semantic-facts-v51";
 export const SEMANTIC_COMPILER_OPTIONS_ID =
   "ts-bundler-es2022-strict-false-types-empty";
 

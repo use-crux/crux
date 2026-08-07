@@ -1,27 +1,55 @@
 ---
 title: TARGET_NOT_FOUND
-description: A wake envelope named a target absent from the runtime entry.
+description: A wake envelope or Effect recovery declaration named a target the runtime program cannot address.
 ---
 
 ## What failed
 
-Runtime wake delivery could not find the flow or task target named by durable work.
+Runtime wake delivery could not find the flow or task target named by durable
+work, or `createRuntimeProgram({ effectTargets })` received a value that is not
+a recoverable `effect()` definition.
 
 ## Why
 
-The target may have been renamed, removed, not exported, or omitted from the generated or hand-written runtime entry file.
+Flow and task targets may have been renamed, removed, not exported, or omitted
+from the generated or hand-written runtime entry. Effect recovery targets must
+be definitions created by `effect()` with a recovery handler; irreversible
+definitions cannot be declared as restart recovery targets.
 
 ## What still works
 
-Other targets in the same runtime entry can continue processing. The affected work is blocked instead of retried blindly.
+Other targets in the same runtime entry can continue processing. Affected wake
+work is blocked instead of retried blindly. An Effect that is not on the
+program can still execute; cold recovery for that receipt returns
+`handler_unavailable` rather than blocking the original call.
 
 ## Fix
 
-Restore/export the target or regenerate artifacts:
+Restore or export the flow/task target, or regenerate artifacts:
 
 ```bash
 crux runtime generate
 crux runtime inspect <workId>
 ```
 
-After fixing the target, retry blocked work with `crux runtime retry <workId>`.
+After fixing a wake target, retry blocked work with
+`crux runtime retry <workId>`.
+
+For Effect recovery targets, pass only recoverable definitions and declare the
+exact versions you still need after restart:
+
+```ts
+createRuntimeProgram({
+  targets: [reviewFlow],
+  transports: [],
+  effectTargets: [updateCustomer],
+});
+```
+
+Do not add irreversible Effects to `effectTargets`. Keep undeclared recoverable
+Effects callable when you only need same-process recovery, and use Project
+Index `effect.recovery_not_runtime_addressable` findings to decide what must be
+exported for cold recovery.
+
+See [Durability and restarts](/docs/guides/effects/durability-and-restarts) and
+the [Effects guide](/docs/guides/effects).

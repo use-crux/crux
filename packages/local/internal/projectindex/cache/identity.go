@@ -60,7 +60,10 @@ package cache
 // catalogues stay aligned across restart boundaries.
 // Epoch 71 adds Session Flow targets, Signal subscription lineage, and
 // observed public method usage facts so snapshots made before Session tooling
-// cannot mask the expanded catalogue.
+// cannot mask the expanded catalogue. Independently, main assigned Epoch 71 to
+// recoverable Effect Runtime-addressability findings and their rule descriptor.
+// Epoch 72 combines those Session Flow tooling and recoverable Effect
+// addressability contracts so neither parent snapshot can mask the other.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @use-crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 71
+const ProjectIndexSnapshotCacheEpoch = 72

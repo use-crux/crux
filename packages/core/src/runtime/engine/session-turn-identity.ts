@@ -22,13 +22,16 @@ export function sessionTurnIdentity(
     ),
   );
   const workId = `work_${hash}` as WorkId;
+  const flowId = `flow_${hash}` as FlowId;
   return Object.freeze({
     workId,
-    flowId: `flow_${hash}` as FlowId,
+    flowId,
     effects: Object.freeze({
       kind: "effect.scope" as const,
       id: `effect_${hash}`,
-      runId: workId,
+      // Session turn Work reuses the Flow run id so admission, execution, and
+      // delayed recovery share one Effect scope without reparenting.
+      runId: flowId,
     }),
   });
 }

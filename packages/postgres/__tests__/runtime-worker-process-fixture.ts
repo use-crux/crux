@@ -11,6 +11,7 @@ export interface CreateRuntimeWorkerProjectFixtureOptions {
   readonly fixtureNumber: number;
   readonly delayStartup?: boolean;
   readonly publicWork?: boolean;
+  readonly effectRecovery?: boolean;
 }
 
 export async function createRuntimeWorkerProjectFixture({
@@ -19,6 +20,7 @@ export async function createRuntimeWorkerProjectFixture({
   fixtureNumber,
   delayStartup = false,
   publicWork = false,
+  effectRecovery = false,
 }: CreateRuntimeWorkerProjectFixtureOptions): Promise<RuntimeWorkerProjectFixture> {
   const root = await mkdtemp(join(packageRoot, ".tmp-runtime-worker-process-"));
   const schema = `runtime_worker_process_${process.pid}_${fixtureNumber}`;
@@ -33,15 +35,17 @@ export async function createRuntimeWorkerProjectFixture({
   );
   await writeFile(
     join(root, "program-entry.ts"),
-    programEntry(root, publicWork),
+    programEntry(root, publicWork, effectRecovery),
   );
-  if (publicWork)
+  if (publicWork || effectRecovery)
     await writeFile(
       join(root, "application-entry.ts"),
-      applicationEntry(url, schema),
+      effectRecovery
+        ? effectApplicationEntry(root, url, schema)
+        : applicationEntry(url, schema),
     );
 
-  const manifest = runtimeManifest(publicWork);
+  const manifest = runtimeManifest(publicWork, effectRecovery);
   const hash = createHash("sha256").update(manifest).digest("hex");
   await Promise.all([
     buildBundle(
@@ -53,7 +57,7 @@ export async function createRuntimeWorkerProjectFixture({
       join(root, "program-entry.ts"),
       join(root, "program-bundle.mjs"),
     ),
-    ...(publicWork
+    ...(publicWork || effectRecovery
       ? [
           buildBundle(
             join(root, "application-entry.ts"),
@@ -79,7 +83,16 @@ export async function createRuntimeWorkerProjectFixture({
       "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
     ].join("\n"),
   );
-  return { root, schema, url, executionMarker: join(root, "execution.marker") };
+  return {
+    root,
+    schema,
+    url,
+    executionMarker: join(root, "execution.marker"),
+    recoveryReadyMarker: join(root, "recovery-ready.marker"),
+    recoveryCallsMarker: join(root, "recovery-calls.log"),
+    recoveryEffectMarker: join(root, "recovery-effect.marker"),
+    recoveryScopeMarker: join(root, "recovery-scope.json"),
+  };
 }
 
 function configEntry(
@@ -113,7 +126,27 @@ function configEntry(
   ].join("\n");
 }
 
-function programEntry(root: string, publicWork: boolean): string {
+function programEntry(
+  root: string,
+  publicWork: boolean,
+  effectRecovery: boolean,
+): string {
+  if (effectRecovery) {
+    return [
+      "import { appendFile, writeFile } from 'node:fs/promises'",
+      "import { effect } from '@use-crux/core'",
+      "import { createRuntimeProgram } from '@use-crux/core/runtime'",
+      `const recoveryCallsMarker = ${JSON.stringify(join(root, "recovery-calls.log"))}`,
+      `const recoveryEffectMarker = ${JSON.stringify(join(root, "recovery-effect.marker"))}`,
+      "export const generatedEffect = effect('generated-effect', async (input: { documentId: string }) => input, {",
+      "  recover: async ({ idempotencyKey }) => {",
+      "    await appendFile(recoveryCallsMarker, `${idempotencyKey}\\n`)",
+      "    await writeFile(recoveryEffectMarker, idempotencyKey, { flag: 'wx' })",
+      "  },",
+      "})",
+      "export const runtimeProgram = createRuntimeProgram({ targets: [], effectTargets: [generatedEffect], transports: [] })",
+    ].join("\n");
+  }
   if (!publicWork) {
     return [
       "import { createRuntimeProgram, durableTask } from '@use-crux/core/runtime'",
@@ -135,6 +168,53 @@ function programEntry(root: string, publicWork: boolean): string {
     "  return { documentId: input.documentId, approved: true as const }",
     "})",
     "export const runtimeProgram = createRuntimeProgram({ targets: [{ target: generatedTarget, definition: { id: 'flow:generated-flow', fingerprint: 'definition-generated-flow' } }], transports: [] })",
+  ].join("\n");
+}
+
+function effectApplicationEntry(root: string, url: string, schema: string): string {
+  return [
+    "import { writeFile } from 'node:fs/promises'",
+    "import { config, flow, rollback } from '@use-crux/core'",
+    "import { node } from '@use-crux/core/runtime'",
+    "import { postgres } from '@use-crux/postgres/runtime'",
+    "import { generatedEffect, runtimeProgram } from './program-entry'",
+    `const baseStore = postgres({ url: ${JSON.stringify(url)}, schema: '${schema}' })`,
+    `const recoveryReadyMarker = ${JSON.stringify(join(root, "recovery-ready.marker"))}`,
+    `const recoveryScopeMarker = ${JSON.stringify(join(root, "recovery-scope.json"))}`,
+    "const operation = process.argv[2]",
+    "const input = JSON.parse(process.argv[3] ?? '{}')",
+    "let pendingScope: unknown",
+    "let rollbackPersisted = false",
+    "const interruptEffects = (effects: typeof baseStore.effects) => ({ ...effects, async transitionScope(transition: Parameters<typeof effects.transitionScope>[0]) {",
+    "  const stored = await effects.transitionScope(transition)",
+    "  if (stored && transition.next.scope.status === 'rolling_back') rollbackPersisted = true",
+    "  return stored",
+    "} })",
+    "const interruptedStore = { ...baseStore, effects: interruptEffects(baseStore.effects), async transact(run: Parameters<typeof baseStore.transact>[0]) {",
+    "  const result = await baseStore.transact((tx) => run({ ...tx, effects: interruptEffects(tx.effects!) }))",
+    "  if (rollbackPersisted) {",
+    "    rollbackPersisted = false",
+    "    await writeFile(recoveryScopeMarker, JSON.stringify(pendingScope))",
+    "    await writeFile(recoveryReadyMarker, 'ready')",
+    "    await new Promise<void>(() => undefined)",
+    "  }",
+    "  return result",
+    "} }",
+    "const runtime = config({ runtime: node({ store: operation === 'interrupt' ? interruptedStore : baseStore, namespace: 'process-test', program: runtimeProgram, autoStartMaintenance: false }) })",
+    "try {",
+    "  if (operation === 'interrupt') {",
+    "    const work = flow('generated-effect-flow', async () => generatedEffect({ documentId: input.documentId }))",
+    "    const completed = await work.run()",
+    "    pendingScope = completed.effects",
+    "    await rollback(completed.effects)",
+    "  } else if (operation === 'effect-status') {",
+    "    const snapshot = await baseStore.effects.reconstructScope(input.scope, { namespace: 'process-test' })",
+    "    console.log(JSON.stringify(snapshot))",
+    "  } else throw new Error(`Unknown operation: ${operation}`)",
+    "} finally {",
+    "  runtime.dispose()",
+    "  await baseStore.close()",
+    "}",
   ].join("\n");
 }
 
@@ -170,7 +250,7 @@ function applicationEntry(url: string, schema: string): string {
   ].join("\n");
 }
 
-function runtimeManifest(publicWork: boolean): string {
+function runtimeManifest(publicWork: boolean, effectRecovery: boolean): string {
   const target = publicWork
     ? {
         name: "generated-flow",
@@ -188,7 +268,17 @@ function runtimeManifest(publicWork: boolean): string {
         definitionId: "task:generated-target",
         fingerprint: "definition-generated-target",
       };
-  return `${JSON.stringify({ version: 3, evalPrivacyFingerprint: "test", targets: [target], providers: [], transports: [], evals: [] }, null, 2)}\n`;
+  return `${JSON.stringify({
+    version: 3,
+    evalPrivacyFingerprint: "test",
+    targets: effectRecovery ? [] : [target],
+    effectTargets: effectRecovery
+      ? [{ id: "generated-effect", version: 1, module: "./src/effect.ts", export: "generatedEffect" }]
+      : [],
+    providers: [],
+    transports: [],
+    evals: [],
+  }, null, 2)}\n`;
 }
 
 function buildBundle(

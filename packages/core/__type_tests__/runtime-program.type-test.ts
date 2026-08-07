@@ -2,9 +2,11 @@ import {
   createRuntimeProgram,
   type CreateRuntimeProgramOptions,
   type RuntimeManagedTransportBinding,
+  type RuntimeEffectTarget,
   type RuntimeProgram,
   type RuntimeProgramTarget,
 } from "@use-crux/core/runtime";
+import type { RecoverableEffectDefinition } from "@use-crux/core/effect";
 import { flow } from "@use-crux/core/flow";
 import type { SignalProvider } from "@use-crux/core/signal/provider";
 
@@ -33,6 +35,10 @@ const transports = [
     target: { kind: "signal", signalId: "orders.created" },
   },
 ] as const satisfies readonly RuntimeManagedTransportBinding[];
+declare const recoverableEffect: RecoverableEffectDefinition<
+  { readonly id: string },
+  string
+>;
 
 declare const providers: readonly SignalProvider[];
 
@@ -40,6 +46,7 @@ const options = {
   targets,
   providers,
   transports,
+  effectTargets: [recoverableEffect],
 } satisfies CreateRuntimeProgramOptions;
 const program = createRuntimeProgram(options);
 const flowTarget: RuntimeProgramTarget = flow(
@@ -81,6 +88,9 @@ type _TransportsAreReadonly = Expect<
     readonly RuntimeManagedTransportBinding[]
   >
 >;
+type _EffectTargetsAreDeclarations = Expect<
+  Equal<RuntimeProgram["effectTargets"], readonly RuntimeEffectTarget[]>
+>;
 
 // @ts-expect-error Runtime program metadata is readonly.
 program.manifestHash = "changed";
@@ -92,3 +102,5 @@ program.targetDefinitions.pop();
 program.providers.pop();
 // @ts-expect-error Runtime program transport arrays are readonly.
 program.transports.pop();
+// @ts-expect-error Runtime Effect target declarations are readonly.
+program.effectTargets.push({ id: "customer.update", version: 1 });

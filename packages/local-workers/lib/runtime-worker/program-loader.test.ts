@@ -14,7 +14,7 @@ describe('loadGeneratedRuntimeProgram', () => {
 
   it('loads the generated program when its artifact identity is fresh', async () => {
     const manifest =
-      '{"version":3,"targets":[],"providers":[],"transports":[],"evals":[],"evalPrivacyFingerprint":"safe"}\n'
+      '{"version":3,"targets":[],"effectTargets":[],"providers":[],"transports":[],"evals":[],"evalPrivacyFingerprint":"safe"}\n'
     const { createHash } = await import('node:crypto')
     const hash = createHash('sha256').update(manifest).digest('hex')
     const root = await fixture({
@@ -22,7 +22,7 @@ describe('loadGeneratedRuntimeProgram', () => {
       '.crux/generated/runtime/program.ts': [
         `export const runtimeArtifactManifestHash = '${hash}'`,
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], providers: [], transports: [] }",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [], providers: [], transports: [] }",
       ].join('\n'),
     })
 
@@ -36,13 +36,13 @@ describe('loadGeneratedRuntimeProgram', () => {
     {
       name: 'stale program',
       program:
-        "export const runtimeArtifactManifestHash = 'old'\nexport const runtimeProgramFormat = 'crux-runtime-program:v1'\nexport const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], providers: [], transports: [] }",
+        "export const runtimeArtifactManifestHash = 'old'\nexport const runtimeProgramFormat = 'crux-runtime-program:v1'\nexport const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [], providers: [], transports: [] }",
       code: 'ARTIFACTS_STALE',
     },
     {
       name: 'incompatible format',
       program:
-        "export const runtimeArtifactManifestHash = 'HASH'\nexport const runtimeProgramFormat = 'crux-runtime-program:v0'\nexport const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], providers: [], transports: [] }",
+        "export const runtimeArtifactManifestHash = 'HASH'\nexport const runtimeProgramFormat = 'crux-runtime-program:v0'\nexport const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [], providers: [], transports: [] }",
       code: 'RUNTIME_ARTIFACT_MANIFEST_INCOMPATIBLE',
     },
     {
@@ -53,7 +53,7 @@ describe('loadGeneratedRuntimeProgram', () => {
     },
   ])('reports a $name artifact actionably', async ({ program, code }) => {
     const manifest =
-      '{"version":3,"evalPrivacyFingerprint":"safe","targets":[],"providers":[],"transports":[],"evals":[]}\n'
+      '{"version":3,"evalPrivacyFingerprint":"safe","targets":[],"effectTargets":[],"providers":[],"transports":[],"evals":[]}\n'
     const { createHash } = await import('node:crypto')
     const hash = createHash('sha256').update(manifest).digest('hex')
     const root = await fixture({
@@ -69,7 +69,7 @@ describe('loadGeneratedRuntimeProgram', () => {
   it('reports authored import failures without hiding their cause', async () => {
     const root = await fixture({
       '.crux/generated/runtime/manifest.json':
-        '{"version":3,"evalPrivacyFingerprint":"safe","targets":[],"providers":[],"transports":[],"evals":[]}\n',
+        '{"version":3,"evalPrivacyFingerprint":"safe","targets":[],"effectTargets":[],"providers":[],"transports":[],"evals":[]}\n',
       '.crux/generated/runtime/program.ts': "import './missing-target'",
     })
 
@@ -118,6 +118,7 @@ describe('loadGeneratedRuntimeProgram', () => {
           fingerprint: 'definition-review-v1',
         },
       ],
+      effectTargets: [],
       providers: [],
       transports: [],
       evals: [],
@@ -129,7 +130,7 @@ describe('loadGeneratedRuntimeProgram', () => {
       '.crux/generated/runtime/program.ts': [
         `export const runtimeArtifactManifestHash = '${hash}'`,
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review', kind: 'flow' }], targetDefinitions: [{ targetId: 'review', definitionId: 'flow:review', fingerprint: 'definition-review-v2' }], providers: [], transports: [] }",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review', kind: 'flow' }], targetDefinitions: [{ targetId: 'review', definitionId: 'flow:review', fingerprint: 'definition-review-v2' }], effectTargets: [], providers: [], transports: [] }",
       ].join('\n'),
     })
 
@@ -153,6 +154,7 @@ describe('loadGeneratedRuntimeProgram', () => {
           fingerprint: 'definition-review-v1',
         },
       ],
+      effectTargets: [],
       providers: [],
       transports: [],
       evals: [],
@@ -164,12 +166,44 @@ describe('loadGeneratedRuntimeProgram', () => {
       '.crux/generated/runtime/program.ts': [
         `export const runtimeArtifactManifestHash = '${hash}'`,
         "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
-        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review' }], targetDefinitions: [{ targetId: 'review', definitionId: 'flow:review', fingerprint: 'definition-review-v1' }], providers: [], transports: [] }",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [{ name: 'review' }], targetDefinitions: [{ targetId: 'review', definitionId: 'flow:review', fingerprint: 'definition-review-v1' }], effectTargets: [], providers: [], transports: [] }",
       ].join('\n'),
     })
 
     await expect(loadGeneratedRuntimeProgram(root)).rejects.toMatchObject({
       code: 'ARTIFACTS_STALE',
+    })
+  })
+
+  it('rejects Effect recovery targets that disagree with the manifest', async () => {
+    const manifest = `${JSON.stringify({
+      version: 3,
+      evalPrivacyFingerprint: 'safe',
+      targets: [],
+      effectTargets: [{
+        id: 'customer.update',
+        version: 1,
+        module: './effects.ts',
+        export: 'updateCustomer',
+      }],
+      providers: [],
+      transports: [],
+      evals: [],
+    })}\n`
+    const { createHash } = await import('node:crypto')
+    const hash = createHash('sha256').update(manifest).digest('hex')
+    const root = await fixture({
+      '.crux/generated/runtime/manifest.json': manifest,
+      '.crux/generated/runtime/program.ts': [
+        `export const runtimeArtifactManifestHash = '${hash}'`,
+        "export const runtimeProgramFormat = 'crux-runtime-program:v1'",
+        "export const runtimeProgram = { manifestHash: 'program', targets: [], targetDefinitions: [], effectTargets: [{ id: 'customer.update', version: 2 }], providers: [], transports: [] }",
+      ].join('\n'),
+    })
+
+    await expect(loadGeneratedRuntimeProgram(root)).rejects.toMatchObject({
+      code: 'ARTIFACTS_STALE',
+      whatFailed: expect.stringContaining('targets'),
     })
   })
 

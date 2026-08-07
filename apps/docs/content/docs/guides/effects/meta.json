@@ -5,6 +5,7 @@
     "index",
     "recovery-patterns",
     "rollback-boundaries",
-    "ambiguity-and-reconciliation"
+    "ambiguity-and-reconciliation",
+    "durability-and-restarts"
   ]
 }

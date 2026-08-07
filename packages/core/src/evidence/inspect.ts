@@ -20,6 +20,7 @@ import { currentObservabilityTransport } from "../observability";
 import type { EvidenceDestinationInspectRequest } from "./destination";
 import { normalizeEvidenceDestinationResult } from "./destination-validation";
 import { mergeEvidenceSources } from "./destination-merge";
+import { inspectDurableEffectEvidence } from "../effect/internal/evidence-durable";
 
 /** Inspect the active root's immutable evidence snapshot. @internal */
 export async function inspectEvidence(
@@ -31,7 +32,6 @@ export async function inspectEvidence(
   const frozenSubject = freezeEvidenceSubject(subject);
   const snapshot = activeEvidenceCollector(false)?.snapshot(frozenSubject);
   const destination = currentObservabilityTransport()?.evidence;
-  if (!snapshot && !destination) throw evidenceQueryUnavailableError();
   const role = normalizedOptions.role;
   const subjectKey = evidenceSubjectKey(frozenSubject);
   const includeHistory = normalizedOptions.includeHistory === true;
@@ -69,7 +69,14 @@ export async function inspectEvidence(
       if (CruxEvidenceError.isInstance(error)) throw error;
       throw evidenceDestinationQueryFailedError();
     }
+  } else {
+    try {
+      destinationResult = await inspectDurableEffectEvidence(request);
+    } catch {
+      throw evidenceDestinationQueryFailedError();
+    }
   }
+  if (!snapshot && !destinationResult) throw evidenceQueryUnavailableError();
 
   return Object.freeze({
     subject: frozenSubject,

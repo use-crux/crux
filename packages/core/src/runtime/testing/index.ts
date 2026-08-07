@@ -6,6 +6,12 @@
 
 export { runStoreAdapterTests } from "./store";
 export type { RunStoreAdapterTestsOptions } from "./store";
+export { runStoreEffectAdapterTests } from "./store-effects";
+export type {
+  RunStoreEffectAdapterTestsOptions,
+  StoreEffectCapability,
+  StoreEffectConformanceCapabilities,
+} from "./store-types";
 export { runRuntimeEngineAdapterTests } from "./engine";
 export type {
   RunRuntimeEngineAdapterTestsOptions,

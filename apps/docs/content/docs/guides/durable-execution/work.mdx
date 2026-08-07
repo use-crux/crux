@@ -134,9 +134,11 @@ const receipt = await work.cancel({ reason: "Request withdrawn" });
 The optional safe reason is limited to 512 characters. The Runtime uses its
 existing cancellation transaction to terminalize the Work and cancel its
 owned Flow snapshot, waiter, and timer registrations. It does not promise
-physical preemption. If completion wins the transaction race, the receipt is
-`already-terminal` with the completed status and the result remains intact.
-Repeating cancellation returns the current terminal state.
+physical preemption, and it does not roll back completed Effects; recovery
+stays an explicit `rollback(work.effects)` or Runtime worker policy. If
+completion wins the transaction race, the receipt is `already-terminal` with
+the completed status and the result remains intact. Repeating cancellation
+returns the current terminal state.
 
 Use `detach()` when the owner no longer intends to join the Work but execution
 should continue:
@@ -146,8 +148,9 @@ const receipt = await work.detach();
 ```
 
 Detachment changes only durable ownership. It is idempotent, does not cancel
-or re-enqueue execution, and does not prevent a later `getWork()` call from
-inspecting or joining the same occurrence.
+or re-enqueue execution, does not reparent the Work Effect scope, and does not
+prevent a later `getWork()` call from inspecting, joining, or recovering the
+same occurrence.
 
 ## Stream safe lifecycle events
 

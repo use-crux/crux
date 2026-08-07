@@ -68,6 +68,10 @@ export type {
   RuntimeProgramTargetDefinitionInput,
   RuntimeProgramTargetInput,
 } from "./program";
+export type {
+  RuntimeEffectTarget,
+  RuntimeEffectTargetDefinition,
+} from "./effect-targets";
 export type { RuntimeTargetDefinitionRef } from "./ports/target-definition";
 
 export { createRuntimeWorker } from "./worker/create-runtime-worker";
@@ -80,6 +84,7 @@ export type * from "./ports/maintenance-ownership";
 
 export type {
   RuntimeArtifactManifest,
+  RuntimeArtifactManifestEffectTarget,
   RuntimeArtifactManifestEval,
   RuntimeArtifactManifestEvalCase,
   RuntimeArtifactManifestEvalVariant,
@@ -333,6 +338,35 @@ export type {
   LeasePort,
   LeaseResource,
 } from "./ports/leases";
+export type {
+  DurableEffectEnvelopeRecord,
+  DurableEffectExecutionSettlement,
+  DurableEffectPlanStep,
+  DurableEffectPreparation,
+  DurableEffectReceiptRecord,
+  DurableEffectRecoveryClaim,
+  DurableEffectRecoveryFailureSettlement,
+  DurableEffectReconciliationRequirement,
+  DurableEffectReconciliationRecord,
+  DurableEffectReconciliationSettlement,
+  DurableEffectRecoveryAttemptRecord,
+  DurableEffectRecoveryPreparation,
+  DurableEffectRecoverySettlement,
+  DurableEffectRecoveryUnavailableSettlement,
+  DurableEffectRecoveryUnitRecord,
+  DurableEffectScopeRecord,
+  DurableEffectScopeSnapshot,
+  DurableEffectScopeSynchronization,
+  RuntimeEffectReadOptions,
+  RuntimeEffectRecoveryClaimOptions,
+  RuntimeEffectRecoveryRelease,
+  RuntimeEffectReceiptEvidenceLink,
+  RuntimeEffectPruneOptions,
+  RuntimeEffectReceiptTransition,
+  RuntimeEffectScopeTransition,
+  RuntimeEffectStorePort,
+  RuntimeEffectUnitTransition,
+} from "./ports/effects";
 export type {
   RuntimeSetupApplyOptions,
   RuntimeSetupFinding,

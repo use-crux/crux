@@ -33,6 +33,18 @@ export interface RuntimeArtifactManifestTarget {
   readonly fingerprint: string;
 }
 
+/** One statically importable Effect recovery target. */
+export interface RuntimeArtifactManifestEffectTarget {
+  /** Stable authored Effect identifier. */
+  readonly id: string;
+  /** Exact recovery contract version. */
+  readonly version: number;
+  /** Project-root-relative module path. */
+  readonly module: string;
+  /** Exported binding that generated entry files import. */
+  readonly export: string;
+}
+
 /** One content-addressed Case identity in a generated deployed Eval. */
 export interface RuntimeArtifactManifestEvalCase {
   readonly id: string;
@@ -109,6 +121,8 @@ export interface RuntimeArtifactManifest {
   readonly evalPrivacyFingerprint: string;
   /** Deterministically sorted runtime targets. */
   readonly targets: readonly RuntimeArtifactManifestTarget[];
+  /** Deterministically sorted recoverable Effect targets. */
+  readonly effectTargets: readonly RuntimeArtifactManifestEffectTarget[];
   /**
    * Deterministically sorted executable Signal providers.
    *

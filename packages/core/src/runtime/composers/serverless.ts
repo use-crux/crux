@@ -14,6 +14,7 @@ import { MAX_WAKE_ENVELOPE_BYTES } from '../engine/envelope'
 import { createRuntimeError } from '../engine/errors'
 import type { InProcessRuntimeEngineDefinition } from '../api/runtime-definition'
 import type { RuntimeRetentionConfig } from '../engine/retention'
+import type { RuntimeProgram } from '../program'
 import type { RuntimeWakeAdapter } from './wake-adapter'
 import {
   resolveRuntimeNamespace,
@@ -48,6 +49,8 @@ export interface ServerlessRuntimeOptions<
   readonly env?: ServerlessRuntimeEnvironment
   /** Retention policy for terminal Runtime Engine records. */
   readonly retention?: RuntimeRetentionConfig
+  /** Immutable authored targets used for exact durable handler resolution. */
+  readonly program?: RuntimeProgram
 }
 
 /** Create a serverless Runtime Engine composer from store and wake adapters. */
@@ -75,6 +78,7 @@ export function serverless<TStore extends RuntimeStoreAdapter>(
     namespaceSource: namespace.source,
     maintenance: { autoStart: false },
     ...(options.retention ? { retention: options.retention } : {}),
+    ...(options.program ? { program: options.program } : {}),
     ...(options.wake.verify ? { verifyWakeRequest: options.wake.verify } : {}),
     createWake() {
       return options.wake.createWake({ url })

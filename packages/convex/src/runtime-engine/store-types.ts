@@ -13,6 +13,7 @@ export interface ConvexRuntimeComponent {
     readonly outbox: Record<string, unknown>
     readonly leases: Record<string, unknown>
     readonly deferred?: Record<string, unknown>
+    readonly composite_effects?: { readonly run?: unknown }
     readonly results?: ConvexRuntimeResultComponent
     readonly sessions?: { readonly run?: unknown }
     readonly evalHost?: { readonly admit?: unknown }

@@ -14,6 +14,7 @@ import type { FlowSnapshot as RuntimeFlowSnapshot } from "../ports/state";
 import type { RuntimeTargetId, TaskId, WorkId } from "../ports/ids";
 import type { RuntimeOutboxItem, RuntimeStoreAdapter } from "../store";
 import type { RuntimeRetentionConfig } from "./retention";
+import type { RuntimeProgram } from "../program";
 import type { WakeEnvelope } from "./envelope";
 import type { RuntimeWorkItem, WorkItemError } from "./work";
 import type { RuntimeResultRef } from "../results/types";
@@ -110,6 +111,8 @@ export interface RuntimeKernelOptions {
   readonly store: RuntimeStoreAdapter;
   /** Runtime targets available to wake delivery. */
   readonly targets: RuntimeTargetMap;
+  /** Immutable authored target program available during execution. */
+  readonly program?: RuntimeProgram;
   /** Verify a wake envelope before any durable writes. Defaults to accept. */
   readonly verifyWake?: (envelope: WakeEnvelope) => boolean | Promise<boolean>;
   /** Work id generator owned by the kernel. */

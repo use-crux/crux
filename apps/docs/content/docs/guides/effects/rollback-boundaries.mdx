@@ -180,9 +180,11 @@ receipts. Repeated or concurrent requests join or reuse unit settlement, so a
 successfully recovered unit reports `already_recovered` and its handler does
 not run twice.
 
-Flow snapshots may persist the JSON-safe scope ref, but receipts, captured
-state, recovery handlers, and Effect ledger state remain process-local. A ref
-cannot restore recovery after restart; durable recovery is future runtime work.
+Flow snapshots may persist the JSON-safe scope ref. Without a Runtime store,
+receipts and recovery handlers stay process-local and the ref alone cannot
+restore recovery after restart. With a Runtime store that implements the Effects
+port, durable rows rebuild the reverse plan for that scope, and recovery runs
+when your process calls `rollback()` with a matching Runtime program.
 
 ## Understand terminal boundaries
 
@@ -293,13 +295,48 @@ handler may finish pure computation and return its rejection result, but any
 later Effect is rejected with `EFFECT_SCOPE_TERMINAL`.
 
 Use `rollback(result.effects)` when review happens after the run completes.
-Both APIs are in-process in this release: the reference resolves only while
-the same process, receipt ledger, and recovery handlers remain alive. Runtime-
-backed recovery after restart belongs to a future release.
+Without a Runtime store the reference resolves only while the same process,
+receipt ledger, and recovery handlers remain alive. With a configured Effects
+store, the same ref reconstructs after restart; recovery still needs a matching
+program target for each unit. See
+[Durability and restarts](/docs/guides/effects/durability-and-restarts).
+
+## Work and Session lifecycle
+
+Finite Work and Session turn Work expose a stable `effects` scope allocated at
+acceptance. Execution reuses that same scope identity; detachment never
+reparents it.
+
+`work.cancel()` fences further execution. It does not erase completed external
+Effects, and it does not run recovery. Compensation runs only when application
+code or an explicit Runtime worker policy calls `rollback()`, `recover()`, or
+boundary recovery. Effect definitions never opt into cancellation-triggered
+compensation.
+
+`work.detach()` and ownership that ends as `detached: owner-ended` keep
+receipts and recovery access on the original scope. Graceful Session close does
+not imply rollback. When Session fencing terminates a turn, ambiguous external
+outcomes stay reconcilable with `reconcileEffect()` instead of being settled as
+failed or silently rolled back.
+
+```ts
+const work = await spawn(publishReport, input, {
+  idempotencyKey: requestId,
+});
+
+// Later, after review of completed Effects:
+await rollback(work.effects, { reason: "Customer rejected publication" });
+```
+
+See [Application Work](/docs/guides/durable-execution/work) for cancel, detach,
+and reconnection, and
+[Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+for unknown outcomes.
 
 ## Related
 
 - [Effects overview](/docs/guides/effects)
 - [Recovery patterns](/docs/guides/effects/recovery-patterns)
 - [Ambiguity and reconciliation](/docs/guides/effects/ambiguity-and-reconciliation)
+- [Durability and restarts](/docs/guides/effects/durability-and-restarts)
 - [Effects API reference](/docs/reference/crux-core/effect)
