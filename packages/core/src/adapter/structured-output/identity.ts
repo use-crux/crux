@@ -24,7 +24,9 @@ export interface StructuredOutputFingerprintInput {
   /** The canonical (pre-lowering) JSON Schema. */
   readonly canonicalSchema: JsonSchemaObject;
   /** The full capability profile the schema was compiled against. */
-  readonly capabilities: StructuredOutputCapabilities;
+  readonly capabilities:
+    | StructuredOutputCapabilities
+    | { readonly id: string; readonly passthrough: true };
   /** The decode manifest produced by lowering. */
   readonly manifest: StructuredOutputDecodeManifest;
   /** Stable identifiers of the lowering decisions applied, in document order. */

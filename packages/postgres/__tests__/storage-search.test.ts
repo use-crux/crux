@@ -1,6 +1,6 @@
 import { StorageError } from '@use-crux/core/storage'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { Pool } from 'pg'
+import type { Pool } from 'pg'
 import { postgresSearchStore, postgresStorage } from '../src/index'
 import { createPostgresTestPool, startPostgresTestDatabase, type PostgresTestDatabase } from './test-database'
 
@@ -108,7 +108,7 @@ if (!pgvectorUrl) {
     it.skip('requires CRUX_TEST_PGVECTOR_URL pointing to PostgreSQL with pgvector', () => {})
   })
 } else {
-  const pool = new Pool({ connectionString: pgvectorUrl })
+  const pool = createPostgresTestPool(pgvectorUrl)
   const schemas: string[] = []
 
   afterAll(async () => {

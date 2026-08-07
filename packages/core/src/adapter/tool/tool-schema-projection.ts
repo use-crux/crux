@@ -47,6 +47,7 @@ import type { ToolDescriptor } from "./session";
 export function prepareToolInputPlans(
   registry: Record<string, unknown>,
   capabilities: StructuredOutputCapabilities,
+  passthrough: boolean,
   plans: Map<string, ToolInputPlan>,
 ): Record<string, unknown> {
   plans.clear();
@@ -67,7 +68,7 @@ export function prepareToolInputPlans(
     const authoredSchema = t.parameters ?? t.inputSchema;
     let plan: ToolInputPlan;
     try {
-      plan = compileToolInputPlan(authoredSchema, capabilities);
+      plan = compileToolInputPlan(authoredSchema, capabilities, passthrough);
     } catch (error) {
       throw new Error(`Tool "${name}": failed to compile input schema`, {
         cause: error,

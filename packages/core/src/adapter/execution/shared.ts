@@ -14,11 +14,20 @@ import type { ModelInfo } from '../../types'
 import type { GenerationSettings } from '../../generation/types'
 import type { SkillActivationSession } from '../../skill/session'
 import type { StepDirective } from '../executor-types'
-import type { StructuredOutputCapabilities } from '../structured-output'
+import type { StructuredOutputCapabilities, StructuredOutputResolution } from '../structured-output'
 import type { ToolInputCapabilitiesResolution } from '../tool/session'
 import type { ExecutionResolveOpts } from './types'
 import { systemMessagePrefixPatch } from './system-prefix-patch'
 import { preview } from '../../request/preview/preview'
+
+export interface StructuredOutputTrace {
+  readonly strategy: string
+  readonly profileId: string
+}
+
+type TracedToolInputCapabilitiesResolution = ToolInputCapabilitiesResolution & {
+  readonly trace?: StructuredOutputTrace
+}
 
 /** Default maximum model/tool loop steps for both adapter dialects. */
 export const DEFAULT_MAX_STEPS = 10
@@ -34,15 +43,59 @@ export function resolveToolInputCapabilities(
     readonly id: string
     readonly structuredOutput?: {
       capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined
+      resolve?(context: {
+        readonly model: ModelInfo
+        readonly usage: 'output' | 'tool-input'
+      }): StructuredOutputResolution
     }
   },
   modelInfo: ModelInfo,
-): ToolInputCapabilitiesResolution {
+): TracedToolInputCapabilitiesResolution {
   if (!dialect.structuredOutput) return { kind: 'default' }
+  const resolution = dialect.structuredOutput.resolve?.({
+    model: modelInfo,
+    usage: 'tool-input',
+  })
+  if (resolution?.strategy === 'passthrough')
+    return {
+      kind: 'passthrough',
+      profileId: resolution.profileId,
+      trace: { strategy: resolution.strategy, profileId: resolution.profileId },
+    }
+  if (resolution?.strategy === 'reject')
+    return {
+      kind: 'unverified',
+      providerId: resolution.profileId,
+      modelId: modelInfo.modelId,
+    }
+  if (resolution)
+    return {
+      kind: 'verified',
+      capabilities: resolution.capabilities,
+      trace: { strategy: resolution.strategy, profileId: resolution.profileId },
+    }
   const capabilities = dialect.structuredOutput.capabilities(modelInfo)
   return capabilities
-    ? { kind: 'verified', capabilities }
-    : { kind: 'unverified', providerId: dialect.id, modelId: modelInfo.modelId }
+    ? {
+        kind: 'verified',
+        capabilities,
+        trace: { strategy: 'inferred', profileId: capabilities.id },
+      }
+    : {
+        kind: 'unverified',
+        providerId: dialect.id,
+        modelId: modelInfo.modelId,
+      }
+}
+
+/** Trace schema routing only when the provider-visible tool set bears schemas. */
+export function toolStructuredOutputTrace(
+  resolution: TracedToolInputCapabilitiesResolution,
+  wireSchemas: Readonly<Record<string, unknown>> | undefined,
+): StructuredOutputTrace | undefined {
+  return wireSchemas && Object.keys(wireSchemas).length > 0
+    ? resolution.trace
+    : undefined
 }
 
 /**
@@ -52,10 +105,10 @@ export function resolveToolInputCapabilities(
  * @returns Resolve options suitable for `AnyPrompt.resolve()`.
  */
 export function buildResolveOpts(args: {
-  readonly input?: Record<string, unknown>;
-  readonly provider: string;
-  readonly modelId: string;
-  readonly settings?: GenerationSettings;
+  readonly input?: Record<string, unknown>
+  readonly provider: string
+  readonly modelId: string
+  readonly settings?: GenerationSettings
 }): ExecutionResolveOpts {
   return {
     input: args.input,
@@ -70,7 +123,9 @@ export function withSkillActivationInput(
   resolveOpts: ExecutionResolveOpts,
   session: SkillActivationSession,
 ): ExecutionResolveOpts {
-  const opts = resolveOpts as ExecutionResolveOpts & { readonly input?: Record<string, unknown> }
+  const opts = resolveOpts as ExecutionResolveOpts & {
+    readonly input?: Record<string, unknown>
+  }
   return {
     ...opts,
     input: session.resolveInput(opts.input),
@@ -118,7 +173,7 @@ export async function previewForDevtools(
     const requestPreview = await preview(prompt, {
       input,
       provider,
-      model: modelId || "unknown",
+      model: modelId || 'unknown',
       settings,
       tools,
     })

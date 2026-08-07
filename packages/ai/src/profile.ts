@@ -13,6 +13,8 @@ import { createAiSdkRuntimeExtensions } from "./extensions";
 import type { SdkGateway } from "./gateway";
 import {
   aiSdkStructuredCapabilities,
+  createAiSdkStructuredOutputResolver,
+  type AiSdkStructuredOutputOptions,
   extractModelInfo,
 } from "./provider-profile";
 import { mapAiSdkSettings } from "./sdk-codec";
@@ -31,40 +33,49 @@ import { createAiSdkSpeechOperation } from "./speech";
  * `@use-crux/core`. `bind` closes over the gateway and exposes the
  * client-dependent loop operations; core assembles them into a `LoopRuntimePort`.
  */
-export const aiSdkProviderRuntime = defineProviderRuntime({
-  id: "ai-sdk",
-  ownership: "loop-owned",
-  loop: {
-    describeModel: extractModelInfo,
-    capacity: aiSdkModelCapacity,
-    settings: mapAiSdkSettings,
-    media: aiSdkMediaHooks,
-    structuredOutput: { capabilities: aiSdkStructuredCapabilities },
-    bind: (gateway: SdkGateway) => {
-      const runtime = createAiSdkLoopRuntime(gateway);
-      const {
-        capabilities,
-        compactHistory,
-        materializeToolSource,
-        runTextLoop,
-        runStructuredAttempt,
-        runStream,
-        replayStream,
-      } = runtime;
-      return {
-        capabilities,
-        compactHistory,
-        materializeToolSource,
-        [toolModelIngressDialect]: runtime[toolModelIngressDialect],
-        runTextLoop,
-        runStructuredAttempt,
-        runStream,
-        replayStream,
-      };
+export function createAiSdkProviderRuntime(
+  structuredOutput: AiSdkStructuredOutputOptions = {},
+) {
+  return defineProviderRuntime({
+    id: "ai-sdk",
+    ownership: "loop-owned",
+    loop: {
+      describeModel: extractModelInfo,
+      capacity: aiSdkModelCapacity,
+      settings: mapAiSdkSettings,
+      media: aiSdkMediaHooks,
+      structuredOutput: {
+        capabilities: aiSdkStructuredCapabilities,
+        resolve: createAiSdkStructuredOutputResolver(structuredOutput),
+      },
+      bind: (gateway: SdkGateway) => {
+        const runtime = createAiSdkLoopRuntime(gateway, structuredOutput);
+        const {
+          capabilities,
+          compactHistory,
+          materializeToolSource,
+          runTextLoop,
+          runStructuredAttempt,
+          runStream,
+          replayStream,
+        } = runtime;
+        return {
+          capabilities,
+          compactHistory,
+          materializeToolSource,
+          [toolModelIngressDialect]: runtime[toolModelIngressDialect],
+          runTextLoop,
+          runStructuredAttempt,
+          runStream,
+          replayStream,
+        };
+      },
     },
-  },
-  image: createAiSdkImageOperation,
-  transcription: createAiSdkTranscriptionOperation,
-  speech: createAiSdkSpeechOperation,
-  extend: ({ client }) => createAiSdkRuntimeExtensions(client),
-});
+    image: createAiSdkImageOperation,
+    transcription: createAiSdkTranscriptionOperation,
+    speech: createAiSdkSpeechOperation,
+    extend: ({ client }) => createAiSdkRuntimeExtensions(client),
+  });
+}
+
+export const aiSdkProviderRuntime = createAiSdkProviderRuntime();

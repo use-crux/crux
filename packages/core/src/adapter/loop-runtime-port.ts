@@ -26,7 +26,11 @@ import type { GenerationSettings } from "../generation/types";
 import type { AdapterSpec } from "./spec";
 import type { ProviderMediaHooks } from "./native-chat/media-hooks";
 import type { ToolSourceMaterializer } from "../tools/tool-source";
-import type { StructuredOutputCapabilities } from "./structured-output";
+import type {
+  StructuredOutputCapabilities,
+  StructuredOutputResolution,
+  StructuredOutputResolverContext,
+} from "./structured-output";
 import type { ModelCapacityProfile } from "../request/capacity/model-profile";
 import type {
   ProviderHistorySummaryInput,
@@ -156,6 +160,9 @@ export interface LoopRuntimePort<
    */
   readonly structuredOutput?: {
     capabilities(model: ModelInfo): StructuredOutputCapabilities | undefined;
+    resolve?(
+      context: StructuredOutputResolverContext,
+    ): StructuredOutputResolution;
   };
 
   /**
@@ -224,7 +231,7 @@ export interface LoopRuntimePort<
    */
   runStream(
     request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },
-  ): Promise<ExecutorProviderStreamHandle<TRawStream>>
+  ): Promise<ExecutorProviderStreamHandle<TRawStream>>;
 
   /**
    * Recreate a stream handle from a cached (semantic-cache) result, when
@@ -233,7 +240,9 @@ export interface LoopRuntimePort<
    *
    * @param cached - The cached payload captured from a prior run.
    */
-  replayStream?(cached: CachedStreamPayload): ExecutorProviderStreamHandle<TRawStream>
+  replayStream?(
+    cached: CachedStreamPayload,
+  ): ExecutorProviderStreamHandle<TRawStream>;
 }
 
 /**
