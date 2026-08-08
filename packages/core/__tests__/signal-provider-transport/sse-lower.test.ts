@@ -283,4 +283,80 @@ describe("lowerSseOpen", () => {
     await iterator.return?.();
     expect(returnSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("propagates a recovered throw result from the source iterator", async () => {
+    const open: SseOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          async throw(_error?: unknown) {
+            return {
+              done: false as const,
+              value: {
+                kind: "cursor" as const,
+                lastEventId: "sse:recovered",
+              },
+            };
+          },
+        };
+      },
+    });
+
+    const loweredOpen = lowerSseOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+
+    await expect(iterator.throw?.(new Error("injected"))).resolves.toEqual({
+      done: false,
+      value: { kind: "cursor", cursor: "sse:recovered" },
+    });
+  });
+
+  it("returns done when source throw completes", async () => {
+    const open: SseOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          async throw(_error?: unknown) {
+            return { done: true as const, value: undefined };
+          },
+        };
+      },
+    });
+
+    const loweredOpen = lowerSseOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+
+    await expect(iterator.throw?.(new Error("injected"))).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
+  });
+
+  it("calls return only for cleanup when throw is absent, then rethrows", async () => {
+    const returnSpy = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const open: SseOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          return: returnSpy,
+        };
+      },
+    });
+
+    const loweredOpen = lowerSseOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+    const error = new Error("no-throw-method");
+
+    await expect(iterator.throw?.(error)).rejects.toBe(error);
+    expect(returnSpy).toHaveBeenCalledOnce();
+  });
 });

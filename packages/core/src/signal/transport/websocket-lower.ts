@@ -33,11 +33,13 @@ export function lowerWebSocketItem(item: unknown): StreamItem {
  * Wrap a WebSocket open handle so the stream fiber receives {@link StreamItem}s.
  *
  * @param open - Author-supplied WebSocket open function.
- * @returns A {@link StreamOpen} that lowers each yield and forwards iterator return.
+ * @returns A {@link StreamOpen} that lowers each yield and forwards iterator control.
  *
  * @remarks Supports both direct `AsyncIterable` and `Promise<AsyncIterable>`
  * results. Early consumer stop invokes the source iterator's `return` when
- * present so adapter cleanup (socket close, unsubscribe) runs.
+ * present so adapter cleanup (socket close, unsubscribe) runs. Consumer
+ * `throw` propagates the source `throw` result when present (done or recovered
+ * value); otherwise it runs `return` for cleanup and rethrows.
  */
 export function lowerWebSocketOpen(open: WebSocketOpen): StreamOpen {
   return (context: StreamOpenContext) => lowerWebSocketOpenIterable(open, context);
@@ -85,8 +87,20 @@ function lowerWebSocketIterable(
           error?: unknown,
         ): Promise<IteratorResult<StreamItem>> {
           if (typeof sourceIterator.throw === "function") {
-            await sourceIterator.throw(error);
-          } else if (typeof sourceIterator.return === "function") {
+            // Propagate recovery/completion from the source throw result.
+            const result = await sourceIterator.throw(error);
+            if (result.done) {
+              return { done: true, value: undefined };
+            }
+
+            return {
+              done: false,
+              value: lowerWebSocketItem(result.value),
+            };
+          }
+
+          // No source throw: best-effort cleanup only, then rethrow.
+          if (typeof sourceIterator.return === "function") {
             await sourceIterator.return();
           }
 

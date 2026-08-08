@@ -77,4 +77,34 @@ describe("createBoundedPushBuffer", () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
+
+  it("fail(undefined) rejects an already-waiting pull", async () => {
+    const buffer = createBoundedPushBuffer<number>({ capacity: 2 });
+    const iterator = buffer.items[Symbol.asyncIterator]();
+    const pending = iterator.next();
+
+    await Promise.resolve();
+    buffer.fail(undefined);
+
+    await expect(pending).rejects.toBeUndefined();
+  });
+
+  it("fail(undefined) rejects subsequent pulls after the queue drains", async () => {
+    const buffer = createBoundedPushBuffer<number>({ capacity: 2 });
+    buffer.push(1);
+    buffer.fail(undefined);
+
+    const iterator = buffer.items[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: 1 });
+    await expect(iterator.next()).rejects.toBeUndefined();
+  });
+
+  it("push after fail(undefined) reports failure rather than clean closure", () => {
+    const buffer = createBoundedPushBuffer<number>({ capacity: 2 });
+    buffer.fail(undefined);
+
+    expect(buffer.closed).toBe(true);
+    expect(() => buffer.push(1)).toThrow();
+    expect(() => buffer.push(1)).not.toThrow(/is closed/);
+  });
 });

@@ -55,6 +55,9 @@ export interface BoundedPushBuffer<T> {
    * next pull after the queue is empty rejects (or immediately if waiting).
    *
    * @remarks Use for socket errors and for overflow after closing the socket.
+   * Failure state is tracked separately from the stored reason so
+   * `fail(undefined)` still rejects waiters/subsequent pulls and makes later
+   * `push` report failure rather than clean closure.
    */
   fail(error: unknown): void;
   /** Async iterable consumed under Runtime pull backpressure. */
@@ -101,6 +104,8 @@ export function createBoundedPushBuffer<T>(
 
   const queue: T[] = [];
   let closed = false;
+  /** True after a terminal {@link fail}; tracked separately so `fail(undefined)` is still a failure. */
+  let failed = false;
   let failure: unknown;
   let waitResolve: ((value: IteratorResult<T>) => void) | null = null;
   let waitReject: ((reason: unknown) => void) | null = null;
@@ -130,11 +135,20 @@ export function createBoundedPushBuffer<T>(
     waitReject = null;
   }
 
+  function rethrowFailure(reason: unknown): never {
+    if (reason instanceof Error) {
+      throw reason;
+    }
+
+    throw Object.assign(new Error(String(reason)), { cause: reason });
+  }
+
   function failInternal(error: unknown): void {
-    if (closed && failure !== undefined) {
+    if (closed && failed) {
       return;
     }
     closed = true;
+    failed = true;
     failure = error;
     abort?.removeEventListener("abort", onAbort);
     if (waitReject) {
@@ -146,10 +160,8 @@ export function createBoundedPushBuffer<T>(
 
   function push(item: T): void {
     if (closed) {
-      if (failure !== undefined) {
-        throw failure instanceof Error
-          ? failure
-          : Object.assign(new Error(String(failure)), { cause: failure });
+      if (failed) {
+        rethrowFailure(failure);
       }
       throw new Error("Bounded push buffer is closed.");
     }
@@ -200,7 +212,7 @@ export function createBoundedPushBuffer<T>(
             return { done: false, value: queue.shift() as T };
           }
 
-          if (failure !== undefined) {
+          if (failed) {
             throw failure;
           }
 

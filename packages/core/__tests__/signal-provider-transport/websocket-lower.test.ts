@@ -163,4 +163,80 @@ describe("lowerWebSocketOpen", () => {
     await iterator.return?.();
     expect(returned).toHaveBeenCalledOnce();
   });
+
+  it("propagates a recovered throw result from the source iterator", async () => {
+    const open: WebSocketOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          async throw(_error?: unknown) {
+            return {
+              done: false as const,
+              value: {
+                kind: "cursor" as const,
+                cursor: "ws:recovered",
+              },
+            };
+          },
+        };
+      },
+    });
+
+    const loweredOpen = lowerWebSocketOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+
+    await expect(iterator.throw?.(new Error("injected"))).resolves.toEqual({
+      done: false,
+      value: { kind: "cursor", cursor: "ws:recovered" },
+    });
+  });
+
+  it("returns done when source throw completes", async () => {
+    const open: WebSocketOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          async throw(_error?: unknown) {
+            return { done: true as const, value: undefined };
+          },
+        };
+      },
+    });
+
+    const loweredOpen = lowerWebSocketOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+
+    await expect(iterator.throw?.(new Error("injected"))).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
+  });
+
+  it("calls return only for cleanup when throw is absent, then rethrows", async () => {
+    const returned = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const open: WebSocketOpen = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: true as const, value: undefined };
+          },
+          return: returned,
+        };
+      },
+    });
+
+    const loweredOpen = lowerWebSocketOpen(open);
+    const iterable = await loweredOpen(sampleContext);
+    const iterator = iterable[Symbol.asyncIterator]();
+    const error = new Error("no-throw-method");
+
+    await expect(iterator.throw?.(error)).rejects.toBe(error);
+    expect(returned).toHaveBeenCalledOnce();
+  });
 });

@@ -398,13 +398,14 @@ export const marketplaceSseBinding = managedTransportBinding(marketplaceSse, {
 
 ### Provider-ingress SSE is not React browser SSE
 
-| Surface | Package | Direction | Reconnect owner |
-| --- | --- | --- | --- |
-| Managed SSE `sse({ open })` | `@use-crux/core/signal/transport` | **Inbound** third-party SSE → durable envelopes → Signals | Runtime worker stream fiber |
-| Managed WebSocket `websocket({ open })` | `@use-crux/core/signal/transport` | **Inbound** third-party WebSocket → durable envelopes → Signals | Runtime worker stream fiber |
-| React SSE `createSSETransport` / `cruxSSEHandler` | `@use-crux/react` | **Outbound** Crux RecordStore/state → browser hooks | Browser EventSource helper |
+| Surface                                           | Package                           | Direction                                                       | Reconnect owner             |
+| ------------------------------------------------- | --------------------------------- | --------------------------------------------------------------- | --------------------------- |
+| Managed SSE `sse({ open })`                       | `@use-crux/core/signal/transport` | **Inbound** third-party SSE → durable envelopes → Signals       | Runtime worker stream fiber |
+| Managed WebSocket `websocket({ open })`           | `@use-crux/core/signal/transport` | **Inbound** third-party WebSocket → durable envelopes → Signals | Runtime worker stream fiber |
+| React SSE `createSSETransport` / `cruxSSEHandler` | `@use-crux/react`                 | **Outbound** Crux RecordStore/state → browser hooks             | Browser EventSource helper  |
 
-Never share types, checkpoints, or supervision between these two.
+Never share types, checkpoints, or supervision between managed provider ingress
+and React browser egress.
 
 Operator notes for SSE:
 
@@ -503,8 +504,8 @@ export const marketplaceWsBinding = managedTransportBinding(marketplaceWs, {
 });
 ```
 
-| Surface | Package | Direction | Reconnect owner |
-| --- | --- | --- | --- |
+| Surface                                 | Package                           | Direction                                                | Reconnect owner             |
+| --------------------------------------- | --------------------------------- | -------------------------------------------------------- | --------------------------- |
 | Managed WebSocket `websocket({ open })` | `@use-crux/core/signal/transport` | **Inbound** third-party WS → durable envelopes → Signals | Runtime worker stream fiber |
 
 Operator notes for WebSocket:

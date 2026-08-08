@@ -76,11 +76,13 @@ export function lowerSseItem(item: unknown): StreamItem {
  * Wrap an SSE open handle so the stream fiber receives {@link StreamItem}s.
  *
  * @param open - Author-supplied SSE open function.
- * @returns A {@link StreamOpen} that lowers each yield and forwards iterator return.
+ * @returns A {@link StreamOpen} that lowers each yield and forwards iterator control.
  *
  * @remarks Supports both direct `AsyncIterable` and `Promise<AsyncIterable>`
  * results. Early consumer stop invokes the source iterator's `return` when
- * present so adapter cleanup runs.
+ * present so adapter cleanup runs. Consumer `throw` propagates the source
+ * `throw` result when present (done or recovered value); otherwise it runs
+ * `return` for cleanup and rethrows.
  */
 export function lowerSseOpen(open: SseOpen): StreamOpen {
   return (context: StreamOpenContext) => lowerSseOpenIterable(open, context);
@@ -128,8 +130,20 @@ function lowerSseIterable(
           error?: unknown,
         ): Promise<IteratorResult<StreamItem>> {
           if (typeof sourceIterator.throw === "function") {
-            await sourceIterator.throw(error);
-          } else if (typeof sourceIterator.return === "function") {
+            // Propagate recovery/completion from the source throw result.
+            const result = await sourceIterator.throw(error);
+            if (result.done) {
+              return { done: true, value: undefined };
+            }
+
+            return {
+              done: false,
+              value: lowerSseItem(result.value),
+            };
+          }
+
+          // No source throw: best-effort cleanup only, then rethrow.
+          if (typeof sourceIterator.return === "function") {
             await sourceIterator.return();
           }
 
