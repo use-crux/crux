@@ -32,7 +32,7 @@ func TestAdmissionHarnessRunsFreshSequentialColdAndWarmEvidence(t *testing.T) {
 		CodeSHA256:    codeHash,
 	}
 
-	report, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second})
+	report, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 16, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,11 +80,11 @@ func TestAdmissionHarnessRejectsUnboundOrOverBudgetInputs(t *testing.T) {
 	supervisor := newTestSupervisor(t, &harnessBackend{})
 	launch, packageHash, codeHash := harnessLaunch(t)
 	caseInput := AdmissionFixtureCase{ID: "bad", Bytes: []byte("x"), Format: FormatDOCX, SourceSHA256: testDigest('a'), PackageSHA256: packageHash, RuntimeSHA256: strings.Repeat("d", 64), CodeSHA256: codeHash}
-	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 16, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
 		t.Fatal("unbound source accepted")
 	}
 	caseInput.SourceSHA256 = sha256Hex(caseInput.Bytes)
-	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: MemoryCeiling, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: MemoryCeiling, TasksMax: 16, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
 		t.Fatal("over-half rollout memory limit accepted")
 	}
 }
@@ -93,7 +93,7 @@ func TestAdmissionHarnessRequiresSystemdIntegrationGate(t *testing.T) {
 	t.Setenv(admissionHarnessEnv, "")
 	launch, packageHash, codeHash := harnessLaunch(t)
 	caseInput := AdmissionFixtureCase{ID: "gated", Bytes: []byte("x"), Format: FormatDOCX, SourceSHA256: sha256Hex([]byte("x")), PackageSHA256: packageHash, RuntimeSHA256: strings.Repeat("d", 64), CodeSHA256: codeHash}
-	if _, err := RunAdmissionHarness(context.Background(), newTestSupervisor(t, &harnessBackend{}), launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+	if _, err := RunAdmissionHarness(context.Background(), newTestSupervisor(t, &harnessBackend{}), launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 16, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
 		t.Fatal("ungated harness execution accepted")
 	}
 }

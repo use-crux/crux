@@ -474,6 +474,26 @@ func TestSystemdResultRejectsMismatchedCapabilityBeforeAcknowledging(t *testing.
 	}
 }
 
+func TestSystemdResultReportsTerminalWorkerCrash(t *testing.T) {
+	path := t.TempDir() + "/result.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := newFakeSystemBus()
+	bus.values["ActiveState"] = "failed"
+	bus.values["MainPID"] = uint32(0)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+
+	_, err = u.ReceiveResult(context.Background(), request)
+	var supervisorErr *SupervisorError
+	if !errors.As(err, &supervisorErr) || supervisorErr.Code != ErrWorkerCrash {
+		t.Fatalf("terminal result error = %T %v, want typed %q", err, err, ErrWorkerCrash)
+	}
+}
+
 type fakePeer struct{ pid int }
 
 func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) { return p.pid, 1000, nil }

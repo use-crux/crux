@@ -754,12 +754,24 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 	listener := u.resultListener
 	stopCancel := context.AfterFunc(ctx, func() { _ = listener.SetDeadline(time.Now()) })
 	defer stopCancel()
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = u.resultListener.SetDeadline(deadline)
-	}
 	for {
+		deadline := time.Now().Add(100 * time.Millisecond)
+		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+			deadline = contextDeadline
+		}
+		_ = u.resultListener.SetDeadline(deadline)
 		conn, err := u.resultListener.AcceptUnix()
 		if err != nil {
+			if ctx.Err() != nil {
+				return Result{}, ctx.Err()
+			}
+			status, statusErr := u.TerminalStatus(ctx)
+			if statusErr == nil && status.MainPID == 0 && (status.State == "inactive" || status.State == "failed") {
+				return Result{}, closed(ErrWorkerCrash)
+			}
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
 			return Result{}, errors.New("result unavailable")
 		}
 		pid, uid, peerErr := u.peers.Credentials(conn)

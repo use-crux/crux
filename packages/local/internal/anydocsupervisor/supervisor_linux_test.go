@@ -523,6 +523,21 @@ func withCPUMilliseconds(l JobLimits, value int64) JobLimits  { l.CPUMillisecond
 func withWallMilliseconds(l JobLimits, value int64) JobLimits { l.WallMilliseconds = value; return l }
 func withPIDs(l JobLimits, value int64) JobLimits             { l.PIDs = value; return l }
 
+func TestPIDLimitProfilesRemainDistinct(t *testing.T) {
+	production := (Limits{}).Clamp()
+	if production.TasksMax != 32 || jobLimits(production).PIDs != 32 {
+		t.Fatalf("production PID ceiling = %d/%d, want 32/32", production.TasksMax, jobLimits(production).PIDs)
+	}
+
+	admission, err := (AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 16, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}).supervisorLimits()
+	if err != nil || admission.TasksMax != 16 || jobLimits(admission).PIDs != 16 {
+		t.Fatalf("admission PID ceiling = %d/%d, %v; want 16/16", admission.TasksMax, jobLimits(admission).PIDs, err)
+	}
+	if _, err := (AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 17, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}).supervisorLimits(); err == nil {
+		t.Fatal("admission accepted more than half the production PID ceiling")
+	}
+}
+
 func TestStagerCreatesVerifiedPrivateSourceAndCleansIt(t *testing.T) {
 	stager := NewStager(t.TempDir())
 	staged, err := stager.Stage([]byte("source"), 16)

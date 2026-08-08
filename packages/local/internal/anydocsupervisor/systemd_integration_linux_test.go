@@ -64,7 +64,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	defer cancel()
 	run, err := supervisor.startEvaluation(ctx, input, FormatDOCX, launch, privateTemp, Limits{
 		MemoryMax:       128 << 20,
-		TasksMax:        8,
+		TasksMax:        TasksCeiling,
 		CPUQuotaPercent: 50,
 		RuntimeMax:      20 * time.Second,
 	})
@@ -241,7 +241,7 @@ func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root stri
 		{"network", "network", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
 		{"filesystem", "filesystem", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
 		{"privileges", "privileges", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
-		{"pids", "pids", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
+		{"pids", "pids", Limits{64 << 20, 4, 25, 3 * time.Second}, "result"},
 		{"memory", "memory", Limits{64 << 20, 8, 25, 4 * time.Second}, "inactive"},
 		{"cpu", "cpu", Limits{64 << 20, 8, 25, 4 * time.Second}, "cpu"},
 		{"wall", "wall", Limits{64 << 20, 8, 25, 500 * time.Millisecond}, "inactive"},
@@ -641,7 +641,7 @@ func TestContainmentProbeProcess(t *testing.T) {
 		write(0)
 	case "pids":
 		children := []*exec.Cmd{}
-		for i := 0; i < 32; i++ {
+		for i := 0; i < 8; i++ {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestContainmentProbeChild$", "--", "child")
 			if err := cmd.Start(); err != nil {
 				checks["tasksLimitEnforced"] = true

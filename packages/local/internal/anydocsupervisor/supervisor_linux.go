@@ -30,7 +30,7 @@ const (
 	AssetBytesCeiling                = 64 << 20
 	DiagnosticBytesCeiling           = 64 << 10
 	MemoryCeiling                    = 512 << 20
-	TasksCeiling                     = 64
+	TasksCeiling                     = 32
 	// This caps aggregate cgroup CPU at 18 seconds during RuntimeCeiling.
 	CPUQuotaPercent = 60
 	CPUPeriodUSec   = 1_000_000
