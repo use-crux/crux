@@ -39,6 +39,8 @@ export interface ParserRunResult {
   readonly outcome: { readonly kind: 'success' } | { readonly kind: 'failure'; readonly error: ParserRunFailure }
   readonly hashes: { readonly native?: string; readonly core?: string }
   readonly diagnostics: readonly string[]
+  /** Ephemeral eval payload. Evidence writers must retain hashes, never this content. */
+  readonly payload?: ParserWorkerSuccess
   readonly metadata: {
     readonly sourceBytes?: number
     readonly wallMilliseconds: number
@@ -168,7 +170,7 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
   const result = validateWorkerResult(settled.value, limits)
   if ('failure' in result) return { outcome: { kind: 'failure', error: result.failure }, hashes: {}, diagnostics: result.diagnostics, metadata }
   try {
-    return { outcome: { kind: 'success' }, hashes: { native: hash(result.value.native), core: hash(result.value.core) }, diagnostics: result.value.native.diagnostics, metadata }
+    return { outcome: { kind: 'success' }, hashes: { native: hash(result.value.native), core: hash(result.value.core) }, diagnostics: result.value.native.diagnostics, payload: result.value, metadata }
   } catch {
     return { outcome: { kind: 'failure', error: 'invalid-result' }, hashes: {}, diagnostics: [], metadata }
   }
