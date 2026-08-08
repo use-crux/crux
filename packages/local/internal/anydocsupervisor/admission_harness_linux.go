@@ -47,6 +47,8 @@ func (l AdmissionHarnessLimits) supervisorLimits() (Limits, error) {
 
 type AdmissionRunEvidence struct {
 	RequestSHA256       string    `json:"requestSha256"`
+	NativeSHA256        string    `json:"nativeSha256"`
+	CoreSHA256          string    `json:"coreSha256"`
 	Outcome             ErrorCode `json:"outcome"`
 	MemoryPeakBytes     int64     `json:"memoryPeakBytes"`
 	CPUMilliseconds     int64     `json:"cpuMilliseconds"`
@@ -103,6 +105,11 @@ func (r AdmissionHarnessReport) MarshalJSON() ([]byte, error) {
 	if r.Kind != "anydoc-supervised-admission-v1" || len(r.Fixtures) == 0 {
 		return nil, errors.New("invalid admission envelope")
 	}
+	for _, fixture := range r.Fixtures {
+		if !validAdmissionProjectionEvidence(fixture) {
+			return nil, errors.New("invalid admission projection evidence")
+		}
+	}
 	type wireReport AdmissionHarnessReport
 	encoded, err := json.Marshal(wireReport(r))
 	if err != nil || len(encoded) > admissionEnvelopeMaxBytes {
@@ -148,6 +155,9 @@ func RunAdmissionHarness(ctx context.Context, supervisor *Supervisor, launch Lau
 			} else {
 				entry.Warm = append(entry.Warm, runEvidence)
 			}
+		}
+		if !validAdmissionProjectionEvidence(entry) {
+			return AdmissionHarnessReport{}, errors.New("nondeterministic admission projection")
 		}
 		entry.P95 = admissionP95(append(append([]AdmissionRunEvidence(nil), entry.Cold...), entry.Warm...))
 		entry.RolloutBudgetGate = withinAdmissionRolloutP95(entry.P95, jobLimits(serviceLimits))
@@ -202,7 +212,26 @@ func runAdmissionCase(ctx context.Context, supervisor *Supervisor, launch Launch
 	if err != nil {
 		return AdmissionRunEvidence{}, nil, err
 	}
+	evidence.NativeSHA256 = first.NativeSHA256
+	evidence.CoreSHA256 = first.CoreSHA256
 	return evidence, first, nil
+}
+
+func validAdmissionProjectionEvidence(fixture AdmissionFixtureEvidence) bool {
+	if fixture.First == nil || len(fixture.Cold) != 3 || len(fixture.Warm) != 5 || !validExactSHA256(fixture.First.NativeSHA256) || !validExactSHA256(fixture.First.CoreSHA256) {
+		return false
+	}
+	allRuns := append(append([]AdmissionRunEvidence(nil), fixture.Cold...), fixture.Warm...)
+	for _, run := range allRuns {
+		if !validExactSHA256(run.NativeSHA256) || !validExactSHA256(run.CoreSHA256) || run.NativeSHA256 != fixture.First.NativeSHA256 || run.CoreSHA256 != fixture.First.CoreSHA256 {
+			return false
+		}
+	}
+	return true
+}
+
+func validExactSHA256(value string) bool {
+	return validSHA256(value) && value == strings.ToLower(value)
 }
 
 func compactFirstRun(payload []byte) (*AdmissionFirstRunEvidence, error) {

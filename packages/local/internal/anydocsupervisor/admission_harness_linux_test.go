@@ -49,6 +49,12 @@ func TestAdmissionHarnessRunsFreshSequentialColdAndWarmEvidence(t *testing.T) {
 	if first == nil || first.NativeSHA256 == "" || first.CoreSHA256 == "" || len(first.Facts) == 0 || first.Facts[0].FactPathSHA256 == "" {
 		t.Fatalf("first-run compact facts missing: %#v", first)
 	}
+	allRuns := append(append([]AdmissionRunEvidence(nil), report.Fixtures[0].Cold...), report.Fixtures[0].Warm...)
+	for index, run := range allRuns {
+		if run.NativeSHA256 != first.NativeSHA256 || run.CoreSHA256 != first.CoreSHA256 {
+			t.Fatalf("run %d projection hashes = %q/%q, want %q/%q", index, run.NativeSHA256, run.CoreSHA256, first.NativeSHA256, first.CoreSHA256)
+		}
+	}
 	if report.Fixtures[0].Cold[0].RequestSHA256 == "" || report.Fixtures[0].Cold[0].MemoryPeakBytes != 1024 || !report.Fixtures[0].Cold[0].Cleaned || !report.Fixtures[0].Cold[0].TerminationEmpty {
 		t.Fatalf("terminal accounting missing: %#v", report.Fixtures[0].Cold[0])
 	}
@@ -58,6 +64,14 @@ func TestAdmissionHarnessRunsFreshSequentialColdAndWarmEvidence(t *testing.T) {
 	}
 	if string(encoded) == "" || containsText(string(encoded), `"text":"Title"`) {
 		t.Fatalf("envelope leaked document text: %s", encoded)
+	}
+	report.Fixtures[0].Warm[4].NativeSHA256 = ""
+	if _, err := report.MarshalJSON(); err == nil {
+		t.Fatal("missing per-run native projection hash accepted")
+	}
+	report.Fixtures[0].Warm[4].NativeSHA256 = strings.Repeat("a", 64)
+	if _, err := report.MarshalJSON(); err == nil {
+		t.Fatal("divergent per-run native projection hash accepted")
 	}
 }
 
