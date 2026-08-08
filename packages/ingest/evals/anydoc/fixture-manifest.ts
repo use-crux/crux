@@ -185,6 +185,14 @@ export function validateFixtureManifest(manifests: readonly AnydocFixtureManifes
     }
 
     if (
+      fixture.actualFormat !== fixture.declaredFormat &&
+      fixture.tags.includes('mislabeled') &&
+      (fixture.expectedOutcome.kind !== 'failure' || fixture.expectedOutcome.error === undefined)
+    ) {
+      errors.push(`fixture "${fixture.id}" is mislabeled but does not fail closed with a typed error.`)
+    }
+
+    if (
       fixture.availability === 'missing' &&
       (fixture.source.kind !== 'missing' || fixture.source.reason.length === 0)
     ) {
@@ -443,6 +451,7 @@ export const fixtureManifests: readonly AnydocFixtureManifest[] = [
       ['anydoc'],
     ),
     actualFormat: 'rtf',
+    expectedOutcome: { kind: 'failure', error: 'invalid-result' },
     tags: ['mislabeled'],
   },
   {

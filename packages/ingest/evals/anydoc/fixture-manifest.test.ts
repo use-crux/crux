@@ -109,6 +109,18 @@ it('requires a declared actual-format mismatch to be an explicit hostile fixture
   ])
 })
 
+it('requires a mislabeled fixture to fail closed with a typed outcome', () => {
+  const fixture = validFixture({
+    actualFormat: 'text',
+    tags: ['mislabeled'],
+    expectedOutcome: { kind: 'success' },
+  })
+
+  expect(validateFixtureManifest([fixture])).toEqual([
+    'fixture "csv-control-v1" is mislabeled but does not fail closed with a typed error.',
+  ])
+})
+
 it('requires missing coverage to say why its source bytes are unavailable', () => {
   const fixture = validFixture({
     availability: 'missing',
