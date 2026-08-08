@@ -343,6 +343,9 @@ func (u *fakeUnit) Stop(context.Context) error {
 	return nil
 }
 func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
+func (u *fakeUnit) TerminalStatus(context.Context) (TerminalStatus, error) {
+	return TerminalStatus{State: "inactive"}, nil
+}
 func (u *fakeUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
 	if cgroup != "/fake" {
 		return TerminationEvidence{}, errors.New("unexpected cgroup")

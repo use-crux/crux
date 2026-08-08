@@ -359,6 +359,12 @@ type TerminationEvidence struct {
 	Empty        bool
 	Absent       bool
 }
+type TerminalStatus struct {
+	MainPID        int
+	State          string
+	ServiceResult  string
+	ExecMainStatus int
+}
 
 type TerminalReport struct {
 	PreStop     SandboxReport
@@ -373,8 +379,16 @@ type Unit interface {
 	CPUUsage(context.Context) (time.Duration, error)
 	Stop(context.Context) error
 	WaitInactive(context.Context) error
+	TerminalStatus(context.Context) (TerminalStatus, error)
 	TerminationEvidence(context.Context, string) (TerminationEvidence, error)
 	Cleanup(context.Context) error
+}
+type verifiedAccountingSnapshot interface {
+	MarkSnapshotVerified()
+	LastVerifiedSnapshot() (SandboxReport, time.Duration, bool)
+}
+type activeAccountingCollector interface {
+	RefreshAccounting(context.Context) (time.Duration, error)
 }
 type Backend interface {
 	Start(context.Context, ServiceSpec, *os.File) (Unit, error)
@@ -640,12 +654,29 @@ func (r *Run) monitor() {
 			return
 		case <-tick.C:
 			ctx, cancel := context.WithTimeout(context.Background(), usageTimeout)
-			u, e := r.unit.CPUUsage(ctx)
-			cancel()
-			if e != nil {
+			var u time.Duration
+			var reportErr, cpuErr error
+			if collector, ok := r.unit.(activeAccountingCollector); ok {
+				u, reportErr = collector.RefreshAccounting(ctx)
+				cpuErr = reportErr
+			} else {
+				_, reportErr = r.unit.Report(ctx)
+				u, cpuErr = r.unit.CPUUsage(ctx)
+			}
+			if reportErr != nil || cpuErr != nil {
+				status, statusErr := r.unit.TerminalStatus(ctx)
+				cancel()
+				cached := false
+				if snapshots, ok := r.unit.(verifiedAccountingSnapshot); ok {
+					_, _, cached = snapshots.LastVerifiedSnapshot()
+				}
+				if cached && statusErr == nil && status.MainPID == 0 && (status.State == "inactive" || status.State == "failed") {
+					return
+				}
 				r.Finish(context.Background(), errCPUAccounting)
 				return
 			}
+			cancel()
 			if u >= CPUCeiling {
 				r.Finish(context.Background(), context.DeadlineExceeded)
 				return
@@ -660,13 +691,21 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 		return SandboxReport{}, 0, TerminationEvidence{}, false
 	}
 	ok := true
-	report, err := unit.Report(ctx)
-	if err != nil {
-		ok = false
-	}
+	usedCachedAccounting := false
+	report, reportErr := unit.Report(ctx)
 	cpu, cpuErr := unit.CPUUsage(ctx)
-	if cpuErr != nil {
-		ok = false
+	if reportErr != nil || cpuErr != nil {
+		snapshots, hasSnapshots := unit.(verifiedAccountingSnapshot)
+		cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
+		if hasSnapshots {
+			cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
+		}
+		if !cached {
+			ok = false
+		} else {
+			report, cpu = cachedReport, cachedCPU
+			usedCachedAccounting = true
+		}
 	}
 	if unit.Stop(ctx) != nil {
 		ok = false
@@ -674,8 +713,19 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 	if unit.WaitInactive(ctx) != nil {
 		ok = false
 	}
+	status, statusErr := unit.TerminalStatus(ctx)
+	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
+		ok = false
+	} else {
+		report.MainPID = status.MainPID
+		report.ServiceResult = status.ServiceResult
+		report.ExecMainStatus = status.ExecMainStatus
+	}
 	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
 	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
+		ok = false
+	}
+	if usedCachedAccounting && !termination.Absent {
 		ok = false
 	}
 	if unit.Cleanup(ctx) != nil {
@@ -701,7 +751,13 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 			return false
 		}
 	}
-	return r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	valid := r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	if valid {
+		if snapshots, ok := u.(verifiedAccountingSnapshot); ok {
+			snapshots.MarkSnapshotVerified()
+		}
+	}
+	return valid
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

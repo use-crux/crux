@@ -384,9 +384,29 @@ type systemdUnit struct {
 	spec           ServiceSpec
 	reportMu       sync.Mutex
 	controlGroup   string
+	snapshotMu     sync.Mutex
+	snapshot       SandboxReport
+	snapshotCPU    time.Duration
+	snapshotSeen   bool
+	snapshotOK     bool
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
+
+func (u *systemdUnit) MarkSnapshotVerified() {
+	u.snapshotMu.Lock()
+	u.snapshotOK = u.snapshotSeen
+	u.snapshotMu.Unlock()
+}
+
+func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	if !u.snapshotOK || !u.snapshotSeen {
+		return SandboxReport{}, 0, false
+	}
+	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
+}
 
 // VerifyAttestedNode checks the kernel's executable reference after systemd has
 // started the unit and before any capability frame is written.
@@ -523,7 +543,14 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	return SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
+	if report.MainPID > 0 && report.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
+		u.snapshotMu.Lock()
+		u.snapshot = cloneSandboxReport(report)
+		u.snapshotSeen = true
+		u.snapshotMu.Unlock()
+	}
+	return report, nil
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -669,6 +696,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 				decodeErr = errors.New("result capability mismatch")
 			}
 			if decodeErr == nil {
+				_, decodeErr = u.RefreshAccounting(ctx)
+			}
+			if decodeErr == nil {
 				_, decodeErr = conn.Write([]byte("ACK\n"))
 			}
 			_ = conn.Close()
@@ -703,11 +733,70 @@ func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
 		if len(fields) == 2 && fields[0] == "usage_usec" {
 			v, err := strconv.ParseInt(fields[1], 10, 64)
 			if err == nil && v >= 0 {
-				return time.Duration(v) * time.Microsecond, nil
+				usage := time.Duration(v) * time.Microsecond
+				u.snapshotMu.Lock()
+				u.snapshotCPU = usage
+				u.snapshotMu.Unlock()
+				return usage, nil
 			}
 		}
 	}
 	return 0, errors.New("cpu accounting unavailable")
+}
+
+func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, error) {
+	if u == nil || u.fs == nil || ctx.Err() != nil {
+		return 0, errors.New("accounting unavailable")
+	}
+	u.reportMu.Lock()
+	cgroup := u.controlGroup
+	u.reportMu.Unlock()
+	if !validCgroup(cgroup) {
+		return 0, errors.New("accounting unavailable")
+	}
+	memoryCurrent, err := cgroupLimit(u.fs, cgroup, "memory.current")
+	if err != nil {
+		return 0, err
+	}
+	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
+	if err != nil {
+		return 0, err
+	}
+	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
+	if err != nil {
+		return 0, err
+	}
+	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
+	if err != nil {
+		return 0, err
+	}
+	members, err := cgroupPIDs(u.fs, cgroup)
+	if err != nil {
+		return 0, err
+	}
+	populated, err := cgroupPopulated(u.fs, cgroup)
+	if err != nil {
+		return 0, err
+	}
+	usageUsec, ok := cpuStats["usage_usec"]
+	if !ok || usageUsec < 0 {
+		return 0, errors.New("accounting unavailable")
+	}
+	usage := time.Duration(usageUsec) * time.Microsecond
+	u.snapshotMu.Lock()
+	if !u.snapshotOK || !u.snapshotSeen {
+		u.snapshotMu.Unlock()
+		return 0, errors.New("accounting snapshot is not verified")
+	}
+	u.snapshot.MemoryCurrent = memoryCurrent
+	u.snapshot.MemoryEvents = memoryEvents
+	u.snapshot.CPUStats = cpuStats
+	u.snapshot.PIDsEvents = pidsEvents
+	u.snapshot.ControlGroupMembers = members
+	u.snapshot.Populated = populated
+	u.snapshotCPU = usage
+	u.snapshotMu.Unlock()
+	return usage, nil
 }
 
 func (u *systemdUnit) Stop(ctx context.Context) error {
@@ -729,12 +818,11 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 
 func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 	for {
-		p, err := u.bus.UnitProperties(ctx, u.name)
+		status, err := u.TerminalStatus(ctx)
 		if err != nil {
 			return errors.New("unit status unavailable")
 		}
-		state := stringValue(p, "ActiveState")
-		if (state == "inactive" || state == "failed") && intValue(p, "MainPID") == 0 {
+		if (status.State == "inactive" || status.State == "failed") && status.MainPID == 0 {
 			return nil
 		}
 		select {
@@ -743,6 +831,17 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}
+}
+
+func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
+	if u == nil || u.bus == nil || ctx.Err() != nil {
+		return TerminalStatus{}, errors.New("unit status unavailable")
+	}
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil {
+		return TerminalStatus{}, errors.New("unit status unavailable")
+	}
+	return TerminalStatus{MainPID: intValue(p, "MainPID"), State: stringValue(p, "ActiveState"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus")}, nil
 }
 
 func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {

@@ -96,3 +96,14 @@ func TestSealedHostileProbeUsesOnlyFixedAttestedMount(t *testing.T) {
 		t.Fatal("arbitrary probe executable authority was accepted")
 	}
 }
+
+func TestSuccessfulHostileChecksUseExplicitSuccessOutcome(t *testing.T) {
+	for _, name := range []string{"network", "filesystem", "privileges", "pids"} {
+		t.Run(name, func(t *testing.T) {
+			got := observedProbeOutcome(name, probeObservation{Checks: map[string]bool{"verified": true}}, SandboxReport{}, 0, 0)
+			if got != OutcomeSuccess {
+				t.Fatalf("outcome = %q, want %q", got, OutcomeSuccess)
+			}
+		})
+	}
+}

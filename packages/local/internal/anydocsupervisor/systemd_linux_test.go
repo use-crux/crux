@@ -152,6 +152,61 @@ func TestSystemdTerminationEvidenceRequiresOriginalCgroupToBeEmptyOrAbsent(t *te
 	}
 }
 
+func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unit.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+	for path := range fs.files {
+		if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+			delete(fs.files, path)
+		}
+	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	report, cpu, termination, cleaned := cleanup(unit)
+	if !cleaned || report.ControlGroup != "/crux.slice/test" || cpu != 11*time.Microsecond || !termination.Absent {
+		t.Fatalf("vanished-cgroup cleanup = report %#v cpu %s termination %#v cleaned %v", report, cpu, termination, cleaned)
+	}
+
+	unverified := &systemdUnit{name: "crux-anydoc-unverified.service", bus: bus, fs: fs, now: immediateClock{}, controlGroup: "/crux.slice/test"}
+	if _, _, _, cleaned := cleanup(unverified); cleaned {
+		t.Fatal("vanished cgroup was accepted without an earlier verified snapshot")
+	}
+
+	fs = newFakeFS()
+	bus.values["ActiveState"] = "active"
+	bus.values["MainPID"] = uint32(42)
+	unit = &systemdUnit{name: "crux-anydoc-malformed.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err = unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	_, _ = unit.Report(context.Background())
+	unit.MarkSnapshotVerified()
+	delete(fs.files, cgroupFile("/crux.slice/test", "memory.max"))
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = nil
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	if _, _, _, cleaned := cleanup(unit); cleaned {
+		t.Fatal("cached accounting masked a malformed but present cgroup")
+	}
+}
+
 func TestMountedRuntimeAttestationRejectsTreeTamperingAndProcErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".complete"), nil, 0o444); err != nil {
@@ -295,6 +350,15 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+	first, err := u.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.MarkSnapshotVerified()
 	done := make(chan struct {
 		result Result
 		err    error

@@ -391,7 +391,7 @@ func observedProbeOutcome(name string, observation probeObservation, report Sand
 				return ErrContainmentUnavailable
 			}
 		}
-		return ""
+		return OutcomeSuccess
 	case "memory":
 		if report.MemoryEvents["oom_kill"] > 0 {
 			return ErrWorkerCrash
@@ -438,8 +438,8 @@ func awaitProbeObservation(t *testing.T, ctx context.Context, path string) probe
 func awaitUnitInactive(t *testing.T, ctx context.Context, unit Unit) {
 	t.Helper()
 	for {
-		report, err := unit.Report(ctx)
-		if err == nil && report.MainPID == 0 {
+		status, err := unit.TerminalStatus(ctx)
+		if err == nil && status.MainPID == 0 && (status.State == "inactive" || status.State == "failed") {
 			return
 		}
 		select {

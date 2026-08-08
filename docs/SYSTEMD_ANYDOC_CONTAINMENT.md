@@ -39,3 +39,11 @@ sentinels across the namespace boundary. The hostile helper itself is copied,
 hashed, and mounted read-only at one fixed internal path before the same full
 effective-property, cgroup, runtime-tree, and executable verification used by
 the production launch releases its authorization.
+
+The supervisor refreshes a previously verified accounting snapshot while the
+unit is active and once more before acknowledging a worker result. Terminal
+service status is queried independently of cgroup files, so a short-lived
+worker may exit and have its cgroup removed without losing its last valid
+accounting evidence. A missing cgroup fails closed unless such a verified
+snapshot exists; it is accepted only later as termination evidence for that
+exact original cgroup identity.
