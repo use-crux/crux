@@ -42,6 +42,19 @@ func TestResultCodecIsVersionedBoundedAndClosed(t *testing.T) {
 	assertCode(t, EncodeResult(&bytes.Buffer{}, Result{Version: ProtocolVersion, Error: "open-ended"}), ErrInvalidRequest)
 }
 
+func TestCapabilityCodecOnlyAcceptsHostVerifiedPosture(t *testing.T) {
+	want := Capability{Version: 1, VerifiedBy: "host-supervisor", FilesystemRead: "input-only", FilesystemWrite: "private-temp-only", OutboundNetwork: "denied", PrivilegeEscalation: "denied"}
+	var encoded bytes.Buffer
+	if err := EncodeCapability(&encoded, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecodeCapability(bytes.NewReader(encoded.Bytes()))
+	if err != nil || got != want {
+		t.Fatalf("DecodeCapability() = %#v, %v", got, err)
+	}
+	assertCode(t, EncodeCapability(&bytes.Buffer{}, Capability{Version: 1}), ErrInvalidRequest)
+}
+
 func TestServiceSpecIsExactAndClampsRequestedLimits(t *testing.T) {
 	spec, err := NewServiceSpec("/run/crux/input", "/run/crux/runtime", "/run/crux/tmp", Limits{MemoryMax: MemoryCeiling + 1, TasksMax: TasksCeiling + 1, CPUQuotaPercent: CPUQuotaPercent + 1, RuntimeMax: RuntimeCeiling + 1})
 	if err != nil {

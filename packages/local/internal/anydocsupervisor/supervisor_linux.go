@@ -278,6 +278,68 @@ type Capability struct {
 	VerifiedBy                                                            string
 	FilesystemRead, FilesystemWrite, OutboundNetwork, PrivilegeEscalation string
 }
+
+type capabilityWire struct {
+	Version             int    `json:"version"`
+	VerifiedBy          string `json:"verifiedBy"`
+	FilesystemRead      string `json:"filesystemRead"`
+	FilesystemWrite     string `json:"filesystemWrite"`
+	OutboundNetwork     string `json:"outboundNetwork"`
+	PrivilegeEscalation string `json:"privilegeEscalation"`
+}
+
+func EncodeCapability(w io.Writer, capability Capability) error {
+	if !validCapability(capability) {
+		return fail(ErrInvalidRequest, "invalid containment capability")
+	}
+	payload, err := json.Marshal(capabilityWire{capability.Version, capability.VerifiedBy, capability.FilesystemRead, capability.FilesystemWrite, capability.OutboundNetwork, capability.PrivilegeEscalation})
+	if err != nil {
+		return fail(ErrInvalidFrame, "encode capability")
+	}
+	if len(payload) == 0 || len(payload) > MaxFrameBytes {
+		return fail(ErrInvalidFrame, "invalid capability frame length")
+	}
+	var header [4]byte
+	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
+	if _, err := w.Write(header[:]); err != nil {
+		return err
+	}
+	_, err = w.Write(payload)
+	return err
+}
+
+func DecodeCapability(r io.Reader) (Capability, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return Capability{}, fail(ErrInvalidFrame, "read capability header: %v", err)
+	}
+	size := binary.BigEndian.Uint32(header[:])
+	if size == 0 || size > MaxFrameBytes {
+		return Capability{}, fail(ErrInvalidFrame, "invalid capability frame length %d", size)
+	}
+	payload := make([]byte, size)
+	if _, err := io.ReadFull(r, payload); err != nil {
+		return Capability{}, fail(ErrInvalidFrame, "truncated capability frame: %v", err)
+	}
+	var extra [1]byte
+	if n, err := r.Read(extra[:]); n != 0 || (err != nil && !errors.Is(err, io.EOF)) {
+		return Capability{}, fail(ErrInvalidFrame, "extra data after capability frame")
+	}
+	var wire capabilityWire
+	if err := json.Unmarshal(payload, &wire); err != nil {
+		return Capability{}, fail(ErrInvalidFrame, "invalid capability json")
+	}
+	capability := Capability{wire.Version, wire.VerifiedBy, wire.FilesystemRead, wire.FilesystemWrite, wire.OutboundNetwork, wire.PrivilegeEscalation}
+	if !validCapability(capability) {
+		return Capability{}, fail(ErrInvalidRequest, "invalid containment capability")
+	}
+	return capability, nil
+}
+
+func validCapability(capability Capability) bool {
+	return capability.Version == ProtocolVersion && capability.VerifiedBy == "host-supervisor" && capability.FilesystemRead == "input-only" && capability.FilesystemWrite == "private-temp-only" && capability.OutboundNetwork == "denied" && capability.PrivilegeEscalation == "denied"
+}
+
 type Run struct {
 	unit          Unit
 	nonce, digest string
