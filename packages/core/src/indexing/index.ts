@@ -18,6 +18,7 @@ export { transform, chunker, indexingPipeline } from './pipeline'
 export { indexer } from './define-indexer'
 export { corpus } from './define-corpus'
 export { IngestedDocumentContractError, validateIngestedDocument } from './ingested-document'
+export { normalizeIngestedDocument } from './normalize-ingested-document'
 export type {
   ApplicationOperationProducer,
   DocumentAsset,
@@ -55,6 +56,8 @@ export type {
   CruxSourceLocation,
   CruxSourceFacts,
   ChunkProvenance,
+  SpreadsheetCellProvenance,
+  SpreadsheetProvenance,
   CruxIngestLoadResultLike,
   // Chunking + pipeline
   ChunkingOptions,

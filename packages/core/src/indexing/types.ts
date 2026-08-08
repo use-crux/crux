@@ -123,6 +123,25 @@ export interface CruxIngestPageTableBlock {
   readonly sourceRange?: CruxIngestPageBlockSourceRange
 }
 
+/** Exact spreadsheet cell facts owned by a structured table chunk. */
+export interface SpreadsheetCellProvenance {
+  readonly address: string
+  readonly row: number
+  readonly column: number
+  readonly displayedValue: string
+  readonly formula?: string
+  readonly mergeMaster?: string
+  readonly mergeRange?: string
+}
+
+/** Exact worksheet ownership retained through chunking and retrieval. */
+export interface SpreadsheetProvenance {
+  readonly sheet: string
+  readonly index: number
+  readonly range: string
+  readonly cells: readonly SpreadsheetCellProvenance[]
+}
+
 /** Typed content block nested beneath a page part. */
 export type CruxIngestPageBlock = CruxIngestPageTextBlock | CruxIngestPageTableBlock
 
@@ -156,6 +175,8 @@ export type CruxIngestPart = (
       sheetName?: string
       rowStart?: number
       rowEnd?: number
+      /** Schema-2 worksheet coordinate ownership for this logical table. */
+      spreadsheet?: SpreadsheetProvenance
       metadata?: Record<string, unknown>
     }
   | {
@@ -196,6 +217,8 @@ export interface ChunkProvenance {
   tables?: string[]
   jsonPaths?: string[]
   sourceLocations?: CruxSourceLocation[]
+  /** Exact worksheet/range/cell ownership, never inferred from rendered text. */
+  spreadsheets?: readonly SpreadsheetProvenance[]
   sourceSpans?: Array<{
     start: number
     end: number

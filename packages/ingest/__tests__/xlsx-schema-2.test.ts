@@ -1,5 +1,10 @@
 import ExcelJS from 'exceljs'
 import { expect, it } from 'vitest'
+import { indexer, normalizeIngestedDocument } from '@use-crux/core'
+import { embedding } from '@use-crux/core/embedding'
+import { chunker, indexingPipeline } from '@use-crux/core/indexing'
+import { retriever } from '@use-crux/core/retrieval'
+import { inMemoryRecordStore, inMemorySearchStore } from '@use-crux/core/storage'
 import {
   assertXlsxWorksheetCellBudget,
   buildXlsxMergeMembership,
@@ -8,6 +13,92 @@ import {
   projectXlsxSchema2DisplayValue,
   resolveXlsxMerge,
 } from '../src/xlsx'
+
+it('preserves exact XLSX provenance through normalization, structured indexing, storage, and retrieval', async () => {
+  const workbook = new ExcelJS.Workbook()
+  const revenue = workbook.addWorksheet('Revenue')
+  revenue.getCell('B2').value = 'Plan'
+  revenue.getCell('D2').value = 'Total'
+  revenue.getCell('B4').value = 'Pro'
+  revenue.getCell('D4').value = { formula: '10*2', result: 20 }
+  revenue.mergeCells('B6:C6')
+  revenue.getCell('B6').value = 'Annual plan'
+
+  const ingested = await parseXlsxDocument({ bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) })
+  const document = normalizeIngestedDocument(ingested, { namespace: 'finance', sourceId: 'revenue.xlsx' })
+  const records = inMemoryRecordStore()
+  const search = inMemorySearchStore()
+  const dense = embedding({
+    kind: 'dense',
+    name: 'xlsx-provenance',
+    dimensions: 1,
+    maxInputTokens: 100,
+    batch: { maxSize: 10 },
+    embed: async (inputs) => inputs.map(() => [1]),
+  })
+  const docs = indexer({
+    id: 'finance',
+    namespace: 'finance',
+    records,
+    search,
+    dense,
+    pipeline: indexingPipeline({ chunker: chunker.structured({ tableRowsPerChunk: 1 }) }),
+  })
+
+  const chunks = await docs.chunk([document])
+  const formulaChunk = chunks.find((chunk) => chunk.content.includes('Pro') && chunk.content.includes('20'))
+  const spreadsheet = formulaChunk?.provenance?.spreadsheets?.[0]
+  expect(spreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
+  expect(spreadsheet?.cells).toEqual(expect.arrayContaining([
+    expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
+  ]))
+  expect(spreadsheet?.cells.map((cell) => cell.address)).not.toContain('B6')
+
+  const mergeSpreadsheet = chunks.find((chunk) => chunk.content.includes('Annual plan'))?.provenance?.spreadsheets?.[0]
+  expect(mergeSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
+  expect(mergeSpreadsheet?.cells).toEqual(expect.arrayContaining([
+    expect.objectContaining({ address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+    expect.objectContaining({ address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+  ]))
+
+  await docs.indexDocuments([document])
+  const stored = await records.list('indexer:finance:namespace:finance:source:revenue.xlsx:')
+  expect(stored.entries.some((entry) => entry.value.provenance === undefined)).toBe(false)
+  expect(stored.entries.map((entry) => entry.value)).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      content: expect.stringContaining('Pro'),
+      provenance: expect.objectContaining({
+        spreadsheets: expect.arrayContaining([
+          expect.objectContaining({
+            sheet: 'Revenue',
+            index: 0,
+            range: 'B2:D6',
+            cells: expect.arrayContaining([
+              expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
+            ]),
+          }),
+        ]),
+      }),
+    }),
+  ]))
+
+  const hits = await retriever({ id: 'finance', namespace: 'finance', records, search, dense }).retrieve('Pro')
+  expect(hits[0]).toMatchObject({ source: { id: 'revenue.xlsx' } })
+  const retrieved = hits.find((hit) => hit.kind !== 'finding' && hit.content.includes('Pro'))
+  const retrievedSpreadsheet = retrieved?.kind === 'finding' ? undefined : retrieved?.provenance?.spreadsheets?.[0]
+  expect(retrievedSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
+  expect(retrievedSpreadsheet?.cells).toEqual(expect.arrayContaining([
+    expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
+  ]))
+
+  const mergeHit = (await retriever({ id: 'finance', namespace: 'finance', records, search, dense }).retrieve('Annual'))
+    .find((hit) => hit.kind !== 'finding' && hit.content.includes('Annual plan'))
+  const retrievedMerge = mergeHit?.kind === 'finding' ? undefined : mergeHit?.provenance?.spreadsheets?.[0]
+  expect(retrievedMerge?.cells).toEqual(expect.arrayContaining([
+    expect.objectContaining({ address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+    expect.objectContaining({ address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+  ]))
+})
 
 it('maps ExcelJS worksheet, sparse-cell, formula, and merge facts to schema 2', async () => {
   const workbook = new ExcelJS.Workbook()

@@ -357,19 +357,34 @@ function chunkTablePart(
     : part.content.split('\n').map((row) => row.split('|').map((cell) => cell.trim()))
   if (!rows.length) return []
   const header = part.columns ?? rows[0]
-  const bodyRows = rows.length > 1 && arraysEqual(rows[0], header) ? rows.slice(1) : rows
+  const includesHeaderRow = rows.length > 1 && arraysEqual(rows[0], header)
+  const bodyRows = includesHeaderRow ? rows.slice(1) : rows
   const chunks: CruxChunk[] = []
   for (let index = 0; index < bodyRows.length; index += rowsPerChunk) {
     const windowRows = bodyRows.slice(index, index + rowsPerChunk)
     const renderedRows = [header, ...windowRows].map((row) => row.join(' | ')).join('\n')
+    const sourceRowIndexes = [
+      ...(includesHeaderRow ? [0] : []),
+      ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
+    ]
     chunks.push(
       createPartChunk(document, renderedRows, chunks.length, {
         ...coarseProvenance([part]),
+        ...(part.spreadsheet ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, sourceRowIndexes)] } : {}),
         confidence: 'derived',
       }),
     )
   }
   return chunks
+}
+
+function spreadsheetWindow(
+  spreadsheet: NonNullable<Extract<CruxIngestPart, { kind: 'table' }>['spreadsheet']>,
+  sourceRowIndexes: readonly number[],
+): NonNullable<Extract<CruxIngestPart, { kind: 'table' }>['spreadsheet']> {
+  const rowNumbers = [...new Set(spreadsheet.cells.map((cell) => cell.row))]
+  const selectedRows = new Set(sourceRowIndexes.map((index) => rowNumbers[index]).filter((row): row is number => row !== undefined))
+  return { ...spreadsheet, cells: spreadsheet.cells.filter((cell) => selectedRows.has(cell.row)) }
 }
 
 function createPartChunk(

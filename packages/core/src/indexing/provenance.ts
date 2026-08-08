@@ -34,6 +34,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
     }),
   )
   const tables = parts.filter((part) => part.kind === 'table').map((part) => part.id)
+  const spreadsheets = parts.flatMap((part) => part.kind === 'table' && part.spreadsheet ? [part.spreadsheet] : [])
   const sourceLocations = uniqueSourceLocations(parts.flatMap((part) => part.sourceLocation ? [part.sourceLocation] : []))
 
   return {
@@ -42,6 +43,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
     ...(pages.length ? { pages } : {}),
     ...(sheets.length ? { sheets } : {}),
     ...(tables.length ? { tables } : {}),
+    ...(spreadsheets.length ? { spreadsheets } : {}),
     ...(sourceLocations.length ? { sourceLocations } : {}),
     confidence: 'exact',
   }
@@ -112,6 +114,7 @@ function uniqueContentStart(documentContent: string | undefined, content: string
 export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | undefined {
   if (!items.length) return undefined
   const blockIds = unique(items.flatMap((item) => item.blockIds ?? []))
+  const spreadsheets = uniqueSpreadsheets(items.flatMap((item) => item.spreadsheets ?? []))
   return {
     partIds: unique(items.flatMap((item) => item.partIds ?? [])),
     ...(blockIds.length ? { blockIds } : {}),
@@ -120,9 +123,27 @@ export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | und
     tables: unique(items.flatMap((item) => item.tables ?? [])),
     jsonPaths: unique(items.flatMap((item) => item.jsonPaths ?? [])),
     sourceLocations: uniqueSourceLocations(items.flatMap((item) => item.sourceLocations ?? [])),
+    ...(spreadsheets.length ? { spreadsheets } : {}),
     sourceSpans: items.flatMap((item) => item.sourceSpans ?? []),
     confidence: items.some((item) => item.confidence === 'derived') ? 'derived' : 'exact',
   }
+}
+
+function uniqueSpreadsheets(items: readonly import('./types').SpreadsheetProvenance[]): import('./types').SpreadsheetProvenance[] {
+  const bySheetRange = new Map<string, import('./types').SpreadsheetProvenance>()
+  for (const item of items) {
+    const key = `${item.index}:${item.sheet}:${item.range}`
+    const previous = bySheetRange.get(key)
+    if (!previous) {
+      bySheetRange.set(key, item)
+      continue
+    }
+    const cells = [...previous.cells, ...item.cells].filter((cell, index, all) =>
+      all.findIndex((candidate) => candidate.address === cell.address) === index,
+    )
+    bySheetRange.set(key, { ...item, cells })
+  }
+  return [...bySheetRange.values()]
 }
 
 function uniqueSourceLocations(locations: readonly CruxSourceLocation[]): CruxSourceLocation[] {
