@@ -15,6 +15,8 @@ const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadshe
 const XLSM_MEDIA_TYPE = 'application/vnd.ms-excel.sheet.macroEnabled.12'
 /** Bounds adapter-owned row/cell construction for one worksheet. */
 const MAX_XLSX_WORKSHEET_CELLS = 1_000_000
+/** Bounds merge-index construction after the worksheet cell budget has passed. */
+const MAX_XLSX_MERGE_MEMBERSHIP_OPERATIONS = 1_000_000
 
 /** Parse XLSX or XLSM through ExcelJS into exact schema-2 worksheet facts. */
 export async function parseXlsxDocument(input: {
@@ -36,14 +38,14 @@ export async function parseXlsxDocument(input: {
     assertXlsxWorksheetCellBudget(dimensions, worksheet.name)
     const range = dimensions.shortRange
     const sheetCoordinate: SourceCoordinate = { kind: 'sheet-range', sheet: worksheet.name, range }
-    const merges = projectXlsxMergeRectangles(worksheet.model.merges)
+    const merges = buildXlsxMergeMembership(projectXlsxMergeRectangles(worksheet.model.merges)).cells
     const rows: TableBlock['rows'][number][] = []
 
     worksheet.eachRow({ includeEmpty: false }, (row) => {
       const cells: TableCell[] = []
       for (let column = dimensions.left; column <= dimensions.right; column += 1) {
         const cell = row.getCell(column)
-        const merge = resolveXlsxMerge(merges, row.number, column)
+        const merge = merges.get(cell.address)
         const isMergeFollower = merge !== undefined && merge.master !== cell.address
         const coordinate: SourceCoordinate = { kind: 'sheet-range', sheet: worksheet.name, range: cell.address }
         const value = isMergeFollower ? '' : formatCell(cell, date1904, worksheet.name, diagnostics)
@@ -242,6 +244,31 @@ export function resolveXlsxMerge(
   return merges.find((merge) =>
     row >= merge.rowStart && row <= merge.rowEnd && column >= merge.columnStart && column <= merge.columnEnd,
   )
+}
+
+/**
+ * Materialize compact merges only after the worksheet-size guard has passed.
+ * The explicit operation cap also rejects overlapping merge rectangles that
+ * would otherwise multiply index work while retaining only a small final map.
+ */
+export function buildXlsxMergeMembership(
+  merges: readonly XlsxMergeRectangle[],
+): { readonly cells: ReadonlyMap<string, XlsxMergeRectangle>; readonly operations: number } {
+  let operations = 0
+  const cells = new Map<string, XlsxMergeRectangle>()
+  for (const merge of merges) {
+    const area = (merge.rowEnd - merge.rowStart + 1) * (merge.columnEnd - merge.columnStart + 1)
+    if (!Number.isSafeInteger(area) || area < 0 || operations + area > MAX_XLSX_MERGE_MEMBERSHIP_OPERATIONS) {
+      throw new Error(`XLSX merge membership exceeds the ${MAX_XLSX_MERGE_MEMBERSHIP_OPERATIONS}-operation ingest budget.`)
+    }
+    operations += area
+    for (let row = merge.rowStart; row <= merge.rowEnd; row += 1) {
+      for (let column = merge.columnStart; column <= merge.columnEnd; column += 1) {
+        cells.set(address(row, column), merge)
+      }
+    }
+  }
+  return { cells, operations }
 }
 
 /** Fail before adapter iteration could construct an attacker-sized cell grid. */

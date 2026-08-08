@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { expect, it } from 'vitest'
 import {
   assertXlsxWorksheetCellBudget,
+  buildXlsxMergeMembership,
   parseXlsxDocument,
   projectXlsxMergeRectangles,
   projectXlsxSchema2DisplayValue,
@@ -151,7 +152,19 @@ it('keeps huge merge rectangles compact and rejects huge worksheet iteration bef
     address: 'A1:XFD1048576',
     master: 'A1',
   })
+  expect(() => buildXlsxMergeMembership(merges)).toThrow('XLSX merge membership exceeds the 1000000-operation ingest budget.')
   expect(() => assertXlsxWorksheetCellBudget({ top: 1, bottom: 1_048_576, left: 1, right: 16_384 }, 'Hostile')).toThrow(
     'XLSX worksheet Hostile exceeds the 1000000-cell ingest budget.',
   )
+})
+
+it('indexes merge-heavy worksheets with bounded construction work and constant-time membership', () => {
+  const merges = projectXlsxMergeRectangles(
+    Array.from({ length: 500 }, (_, index) => `A${index * 2 + 1}:B${index * 2 + 1}`),
+  )
+  const membership = buildXlsxMergeMembership(merges)
+
+  expect(membership.operations).toBe(1_000)
+  expect(membership.cells.size).toBe(1_000)
+  expect(membership.cells.get('B999')).toMatchObject({ address: 'A999:B999', master: 'A999' })
 })
