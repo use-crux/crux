@@ -50,6 +50,18 @@ describe('Anydoc admission evidence', () => {
     const openP95 = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 }) as any
     openP95.results[0].candidates[0].p95.untrusted = 1
     expect(() => admissionRunAttestation(openP95)).toThrow('Invalid keys')
+
+    const invalidOutcome = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 }) as any
+    invalidOutcome.results[0].candidates[0].determinism.cold[0].outcome = { kind: 'failure', error: 'arbitrary' }
+    expect(() => admissionRunAttestation(invalidOutcome)).toThrow('Invalid admission outcome')
+
+    const invalidDiagnostics = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 }) as any
+    invalidDiagnostics.results[0].candidates[0].determinism.cold[0].diagnostics = [1]
+    expect(() => admissionRunAttestation(invalidDiagnostics)).toThrow('Invalid admission diagnostics')
+
+    const openRunner = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 }) as any
+    openRunner.runner.untrusted = true
+    expect(() => admissionRunAttestation(openRunner)).toThrow('Invalid keys')
   })
 
   it('replays the suite and keeps the baseline and ADR byte-consistent', async () => {
@@ -91,6 +103,14 @@ function syntheticEvidence(options: { readonly cacheIdentity: string; readonly w
   const fixture = fixtureManifests.find((item) => item.id === 'csv-control-v1')!
   const sourceHash = fixture.source.kind === 'file' ? fixture.source.sha256 : ''
   const assertions = { fixtureId: fixture.id, passed: true, admitted: true, assertions: [] }
+  const run = {
+    outcome: { kind: 'success' as const }, hashes: { native: 'b'.repeat(64), core: 'c'.repeat(64) }, diagnostics: [],
+    metadata: {
+      sourceBytes: 45, wallMilliseconds: options.wallMilliseconds, peakRssBytes: options.peakRssBytes,
+      cpuMilliseconds: 1, rssMeasurement: 'linux-procfs-process-group' as const,
+      productionEquivalent: false as const, maxConcurrentChildren: 1 as const, cleanedUp: true,
+    },
+  }
   return {
     schemaVersion: 1,
     runner: { maxConcurrentChildren: 1, productionEquivalent: false, hardMemoryContainment: false },
@@ -103,6 +123,7 @@ function syntheticEvidence(options: { readonly cacheIdentity: string; readonly w
         parser: 'csv-parse', selected: true, outcome: { kind: 'success' }, hashes: { native: 'b'.repeat(64), core: 'c'.repeat(64) },
         native: assertions, core: assertions, projectionLosses: [], rolloutBudgetGate: true,
         p95: { wallMilliseconds: options.wallMilliseconds, peakRssBytes: options.peakRssBytes },
+        determinism: { cold: [run, run, run], warm: [run, run, run, run, run], deterministic: true, hashes: run.hashes },
       }],
     }],
   }

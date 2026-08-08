@@ -52,7 +52,7 @@ describe('admission replay cache', () => {
     }
   }, 60_000)
 
-  it('keys every incumbent package, native artifact, and lock integrity', async () => {
+  it('keys every incumbent package, native artifact, and all lockfile bytes', async () => {
     const temporary = await mkdtemp(resolve(tmpdir(), 'crux-anydoc-incumbents-'))
     const cacheDirectory = resolve(temporary, 'cache')
     const mutable = [
@@ -86,7 +86,7 @@ describe('admission replay cache', () => {
         previous = next
       }
 
-      await writeFile(lockfile, (await readFile(lockfile, 'utf8')).replace('sha512-cwnK1RIc', 'sha512-mutatedc'))
+      await writeFile(lockfile, `${await readFile(lockfile, 'utf8')}# unrelated-transitive-lock-line\n`)
       const afterLockMutation = await run(directory, cacheDirectory, nativeArtifactPath(), overrides)
       expect(afterLockMutation.cacheIdentity).not.toBe(previous.cacheIdentity)
     } finally {

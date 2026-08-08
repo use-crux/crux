@@ -135,18 +135,8 @@ async function evidenceCacheIdentity() {
   await hashFile(hash, '@firecrawl/anydoc@0.1.7/package.json', packageJson)
   for (const [identity, path] of incumbentPackages) await hashFile(hash, `${identity}/package.json`, path)
   await hashFile(hash, '@firecrawl/pdf-inspector-linux-x64-gnu@1.12.0/native', pdfNativeArtifact)
-  const lockfile = await readFile(process.env.CRUX_ANYDOC_LOCKFILE ?? resolve(directory, '../../../../pnpm-lock.yaml'), 'utf8')
-  for (const identity of ['@firecrawl/anydoc@0.1.7', 'mammoth@1.12.0', 'csv-parse@6.2.1', 'exceljs@4.4.0', '@firecrawl/pdf-inspector@1.12.0', 'pdfjs-dist@5.7.284', '@firecrawl/pdf-inspector-linux-x64-gnu@1.12.0']) {
-    const integrity = lockfileIntegrity(lockfile, identity)
-    if (!integrity) throw new Error(`Could not determine the installed ${identity} tarball integrity.`)
-    hash.update(`${identity} tarball-integrity:${integrity}\n`)
-  }
+  await hashFile(hash, 'pnpm-lock.yaml', process.env.CRUX_ANYDOC_LOCKFILE ?? resolve(directory, '../../../../pnpm-lock.yaml'))
   return hash.digest('hex')
-}
-
-function lockfileIntegrity(lockfile, identity) {
-  const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return lockfile.match(new RegExp(`(?:'${escaped}'|${escaped}):\\n\\s+resolution: \\{integrity: ([^}]+)\\}`))?.[1]
 }
 
 async function fixtureFiles() {

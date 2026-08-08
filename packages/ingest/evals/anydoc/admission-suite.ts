@@ -16,6 +16,11 @@ const anydocWorkerPath = resolve(directory, 'anydoc-worker.mjs')
 const incumbentWorkerEntry = resolve(directory, 'incumbent-worker.ts')
 const incumbentWorkerPath = resolve(directory, '../../node_modules/.cache/crux-anydoc-eval/incumbent-worker.cjs')
 let incumbentBuild: Promise<void> | undefined
+const evaluatedFailureCodes = new Set([
+  'backend-unavailable', 'containment-unavailable', 'cpu-limit', 'encrypted', 'expanded-too-large', 'invalid-limit',
+  'invalid-result', 'memory-limit', 'cleanup-failed', 'result-too-large', 'source-too-large', 'pdf-control',
+  'stderr-too-large', 'stdout-too-large', 'timeout', 'unsupported-format', 'worker-crash',
+])
 
 export interface AdmissionCandidateEvidence {
   readonly parser: string
@@ -119,6 +124,8 @@ export function validateAdmissionRunAttestation(value: unknown, evidence: Admiss
     || typeof evidence.runner.hardMemoryContainment !== 'boolean') {
     throw new Error('Invalid admission run identity.')
   }
+  exactKeys(evidence.runner, ['maxConcurrentChildren', 'productionEquivalent', 'hardMemoryContainment'], 'runner')
+  validateWorkflow((value as { readonly workflow: unknown }).workflow)
 
   const fixtureIds = new Set<string>()
   for (const fixture of evidence.results) {
@@ -144,7 +151,15 @@ export function validateAdmissionRunAttestation(value: unknown, evidence: Admiss
       }
       validateHashes(candidate.hashes, `${fixture.fixtureId}/${candidate.parser}`)
       validateResourceSample(candidate.p95, `${fixture.fixtureId}/${candidate.parser}/p95`)
+      if (candidate.determinism !== undefined) {
+        exactKeys(candidate.determinism, ['cold', 'warm', 'deterministic', 'hashes'], `${fixture.fixtureId}/${candidate.parser}/determinism`)
+        if (typeof candidate.determinism.deterministic !== 'boolean' || candidate.determinism.cold.length !== 3 || candidate.determinism.warm.length !== 5) {
+          throw new Error(`Invalid determinism evidence for ${fixture.fixtureId}/${candidate.parser}.`)
+        }
+        validateHashes(candidate.determinism.hashes, `${fixture.fixtureId}/${candidate.parser}/determinism`)
+      }
       for (const [index, run] of [...(candidate.determinism?.cold ?? []), ...(candidate.determinism?.warm ?? [])].entries()) {
+        validateRun(run, `${fixture.fixtureId}/${candidate.parser}/run-${index}`)
         validateHashes(run.hashes, `${fixture.fixtureId}/${candidate.parser}/run-${index}`)
         validateRunMetadata(run.metadata, `${fixture.fixtureId}/${candidate.parser}/run-${index}`)
       }
@@ -154,6 +169,35 @@ export function validateAdmissionRunAttestation(value: unknown, evidence: Admiss
     }
   }
   return value
+}
+
+function validateWorkflow(value: unknown): void {
+  if (!isRecord(value)) {
+    throw new Error('Invalid admission workflow attestation.')
+  }
+  exactKeys(value, ['name', 'runId', 'runAttempt', 'commitSha'], 'workflow')
+  for (const key of ['name', 'runId', 'runAttempt', 'commitSha']) {
+    const field = value[key]
+    if (field !== null && (typeof field !== 'string' || field.length > 256)) {
+      throw new Error(`Invalid admission workflow field ${key}.`)
+    }
+  }
+}
+
+function validateRun(run: ParserRunResult, label: string): void {
+  exactKeys(run, ['outcome', 'hashes', 'diagnostics', 'metadata'], label)
+  if (run.outcome.kind === 'success') {
+    exactKeys(run.outcome, ['kind'], `${label}/outcome`)
+  } else if (run.outcome.kind === 'failure' && evaluatedFailureCodes.has(run.outcome.error)) {
+    exactKeys(run.outcome, ['kind', 'error'], `${label}/outcome`)
+  } else {
+    throw new Error(`Invalid admission outcome for ${label}.`)
+  }
+  if (!Array.isArray(run.diagnostics)
+    || run.diagnostics.some((diagnostic) => typeof diagnostic !== 'string')
+    || run.diagnostics.reduce((bytes, diagnostic) => bytes + Buffer.byteLength(diagnostic), 0) > ANydocFixtureResourceCeilings.stderrBytes) {
+    throw new Error(`Invalid admission diagnostics for ${label}.`)
+  }
 }
 
 function buildAdmissionRunAttestation(evidence: AdmissionSuiteEvidence): unknown {
@@ -202,8 +246,19 @@ function validateRunMetadata(value: ParserRunResult['metadata'], label: string):
     'rssMeasurement', 'productionEquivalent', 'maxConcurrentChildren', 'cleanedUp',
   ], label)
   validateResourceValues(value, label)
+  if (value.rssMeasurement !== 'linux-procfs-process-group' && value.rssMeasurement !== 'unsupported') {
+    throw new Error(`Invalid RSS measurement for ${label}.`)
+  }
+  if (value.productionEquivalent !== false
+    || (value.maxConcurrentChildren !== 0 && value.maxConcurrentChildren !== 1)
+    || typeof value.cleanedUp !== 'boolean') {
+    throw new Error(`Invalid runner metadata for ${label}.`)
+  }
   if (value.sourceBytes !== undefined) {
     boundedNumber(value.sourceBytes, ANydocFixtureResourceCeilings.sourceBytes, `${label}/sourceBytes`)
+  }
+  if (value.workerPid !== undefined && (!Number.isSafeInteger(value.workerPid) || value.workerPid <= 0)) {
+    throw new Error(`Invalid worker PID for ${label}.`)
   }
 }
 
@@ -218,9 +273,13 @@ function validateResourceValues(value: { readonly wallMilliseconds: number; read
 }
 
 function boundedNumber(value: number, ceiling: number, label: string): void {
-  if (!Number.isFinite(value) || value < 0 || value > ceiling) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > ceiling) {
     throw new Error(`Invalid admission resource sample ${label}.`)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function validateHashes(hashes: { readonly native?: string; readonly core?: string }, label: string): void {
