@@ -151,6 +151,8 @@ export interface SlideBlock extends BlockBase {
 export interface SheetBlock extends BlockBase {
   readonly kind: 'sheet'
   readonly sheet: string
+  /** Zero-based workbook worksheet index. */
+  readonly index: number
   readonly range: string
   readonly blocks: readonly TableBlock[]
 }
@@ -496,11 +498,12 @@ function block(value: unknown, path: string): DocumentBlock {
     })
   }
   if (kind === 'sheet') {
-    exact(record, path, ['id', 'kind', 'coordinate', 'headingPath', 'producer', 'sheet', 'range', 'blocks'])
+    exact(record, path, ['id', 'kind', 'coordinate', 'headingPath', 'producer', 'sheet', 'index', 'range', 'blocks'])
     return freeze({
       ...base,
       kind,
       sheet: nonEmpty(record.sheet, `${path}.sheet`),
+      index: nonNegative(record.index, `${path}.index`),
       range: nonEmpty(record.range, `${path}.range`),
       blocks: array(record.blocks, `${path}.blocks`, tableBlock),
     })

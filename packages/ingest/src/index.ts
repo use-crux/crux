@@ -30,6 +30,7 @@ export type {
 export { deriveContent } from './document'
 export { parseCsvDocument } from './csv'
 export { parseDocxDocument } from './docx'
+export { parseXlsxDocument } from './xlsx'
 export { builtInParsers } from './parsers'
 export { textSource } from './text'
 export { fileSource, filesSource } from './files'

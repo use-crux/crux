@@ -98,6 +98,7 @@ function document() {
         headingPath: [],
         producer: parser,
         sheet: 'Revenue',
+        index: 0,
         range: 'A1:A2',
         blocks: [table],
       },
@@ -207,6 +208,14 @@ describe('ingested document schema 2', () => {
   })
 
   it('rejects incomplete, invented, and open shapes', () => {
+    const missingSheetIndex = document()
+    missingSheetIndex.blocks[5] = {
+      ...missingSheetIndex.blocks[5],
+      // @ts-expect-error Sheet indexes are required schema-2 facts.
+      index: undefined,
+    }
+    expectContractError(() => validateIngestedDocument(missingSheetIndex))
+
     const badDocumentHash = document()
     badDocumentHash.source.documentSha256 = 'not-a-sha'
     expectContractError(() => validateIngestedDocument(badDocumentHash))
