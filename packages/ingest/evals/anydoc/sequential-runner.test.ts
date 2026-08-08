@@ -118,13 +118,21 @@ describe('runParserCandidate', () => {
     expect(result.metadata.cpuMilliseconds).toBeGreaterThan(1)
   })
 
-  it('reaps a timed-out Linux worker process group, including descendants', async () => {
+  it('enforces CPU spent after the result frame and before the ACK handshake', async () => {
+    const result = await runParserCandidate({ workerPath, source: new URL('./fixtures/csv-control-v1.csv', import.meta.url), workerArguments: ['cpu-after-result'], limits: { cpuMilliseconds: 1, wallMilliseconds: 1_000 } })
+    expect(result.outcome).toEqual({ kind: 'failure', error: 'cpu-limit' })
+  })
+
+  it.each([
+    ['descendant-ignore', 'timeout'],
+    ['descendant-crash', 'worker-crash'],
+  ] as const)('reaps descendants after a %s leader', async (mode, error) => {
     const temporary = await mkdtemp(join(tmpdir(), 'crux-anydoc-descendant-'))
     const pidPath = join(temporary, 'pid')
-    const result = await runParserCandidate({ workerPath, source: new URL('./fixtures/csv-control-v1.csv', import.meta.url), workerArguments: ['descendant', pidPath], limits: { wallMilliseconds: 300 } })
+    const result = await runParserCandidate({ workerPath, source: new URL('./fixtures/csv-control-v1.csv', import.meta.url), workerArguments: [mode, pidPath], limits: { wallMilliseconds: 300 } })
     const pid = Number(await readFile(pidPath, 'utf8'))
 
-    expect(result.outcome).toEqual({ kind: 'failure', error: 'timeout' })
+    expect(result.outcome).toEqual({ kind: 'failure', error })
     await new Promise((resolve) => setTimeout(resolve, 75))
     await expect(access(`/proc/${pid}`)).rejects.toThrow()
   })

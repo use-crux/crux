@@ -5,16 +5,24 @@ import { Socket } from 'node:net'
 
 const mode = process.argv[2] ?? 'success'
 const ipc = new Socket({ fd: 3, readable: true, writable: true })
+const control = new Socket({ fd: 4, readable: true, writable: true })
 
 if (mode === 'crash') {
   process.exit(2)
 }
 if (mode === 'timeout') {
   setInterval(() => {}, 1_000)
-} else if (mode === 'descendant') {
-  const descendant = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+} else if (mode === 'descendant' || mode === 'descendant-ignore' || mode === 'descendant-crash') {
+  const code = mode === 'descendant-ignore' || mode === 'descendant-crash'
+    ? "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
+    : 'setInterval(() => {}, 1000)'
+  const descendant = spawn(process.execPath, ['-e', code], { stdio: 'ignore' })
   void writeFile(process.argv[3], String(descendant.pid))
-  setInterval(() => {}, 1_000)
+  if (mode === 'descendant-crash') {
+    setTimeout(() => process.exit(2), 20)
+  } else {
+    setInterval(() => {}, 1_000)
+  }
 } else {
   const chunks = []
   process.stdin.on('data', (chunk) => chunks.push(chunk))
@@ -28,6 +36,7 @@ if (mode === 'timeout') {
   function sendResult(chunks) {
     if (mode === 'invalid') {
       ipc.end(Buffer.from([0, 0, 0, 1, 123]))
+      control.destroy()
       return
     }
     const sha = createHash('sha256').update(Buffer.concat(chunks)).digest('hex')
@@ -54,6 +63,15 @@ if (mode === 'timeout') {
     const header = Buffer.alloc(4)
     header.writeUInt32BE(body.length)
     ipc.end(Buffer.concat([header, body]))
+    if (mode === 'cpu-after-result') {
+      const until = Date.now() + 100
+      while (Date.now() < until) {}
+    }
+    control.once('data', (ack) => {
+      if (ack.toString() === 'ACK\n') {
+        control.end('ACKED\n', () => process.exit(0))
+      }
+    })
   }
 }
 

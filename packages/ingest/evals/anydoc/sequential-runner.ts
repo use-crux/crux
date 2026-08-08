@@ -90,17 +90,18 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
   let child: ReturnType<typeof spawn>
   try {
     child = spawn(process.execPath, [options.workerPath, ...(options.workerArguments ?? [])], {
-      detached: true, shell: false, stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+      detached: true, shell: false, stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
     })
   } catch {
     return failure('worker-crash', startedAt, 0, sourceBytes, options.cleanupPaths)
   }
   const source = createReadStream(sourcePath, { start: 0, end: Math.max(0, sourceBytes - 1) })
-  source.on('error', () => terminate(child))
+  source.on('error', () => child.kill('SIGTERM'))
   source.pipe(child.stdin!)
   // Attach lifecycle listeners before the first asynchronous /proc sample: a
   // tiny worker can otherwise exit before the parent observes its close event.
-  const worker = awaitWorker(child, limits)
+  const protocol = startWorkerProtocol(child, limits)
+  const group = new LinuxProcessGroup(child.pid!, ticks)
 
   let peakRssBytes: number | undefined
   let cpuMilliseconds: number | undefined
@@ -112,27 +113,34 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
     if (sampling || stopped) return
     sampling = true
     try {
-      const usage = await linuxProcessGroupUsage(child.pid, ticks)
+      const usage = await group.sample()
       if (usage === undefined) {
         resourceFailure = 'memory-limit'
-        terminate(child)
         return
       }
       peakRssBytes = Math.max(peakRssBytes ?? 0, usage.rssBytes)
       cpuMilliseconds = Math.max(cpuMilliseconds ?? 0, usage.cpuMilliseconds)
       if (usage.rssBytes > limits.peakRssBytes) resourceFailure = 'memory-limit'
       if (usage.cpuMilliseconds > limits.cpuMilliseconds) resourceFailure = 'cpu-limit'
-      if (resourceFailure !== undefined) terminate(child)
     } finally {
       sampling = false
       if (!stopped) timer = setTimeout(() => { void sample() }, 20)
     }
   }
   await sample()
-  const settled = await worker
+  const settled = await protocol.ready
   stopped = true
   if (timer !== undefined) clearTimeout(timer)
-  await sample()
+  if (settled.failure === undefined) await sample()
+  let protocolFailure = settled.failure ?? resourceFailure
+  if (protocolFailure === undefined) {
+    protocol.ack()
+    const remaining = Math.max(1, limits.wallMilliseconds - (Date.now() - startedAt))
+    const acknowledged = await waitFor(protocol.acknowledged, remaining)
+    const closed = acknowledged === true ? await waitFor(protocol.closed, Math.max(1, limits.wallMilliseconds - (Date.now() - startedAt))) : undefined
+    protocolFailure = acknowledged !== true ? 'invalid-result' : closed === undefined ? 'timeout' : closed === 0 ? undefined : 'worker-crash'
+  }
+  const reaped = await group.reap()
   source.destroy()
   const cleanedUp = await cleanup(options.cleanupPaths)
   const metadata = {
@@ -143,8 +151,8 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
     productionEquivalent: false as const, maxConcurrentChildren: 1 as const, cleanedUp,
     ...(child.pid === undefined ? {} : { workerPid: child.pid }),
   }
-  if (!cleanedUp) return { outcome: { kind: 'failure', error: 'cleanup-failed' }, hashes: {}, diagnostics: settled.diagnostics, metadata }
-  const error = resourceFailure ?? settled.failure
+  if (!cleanedUp || !reaped) return { outcome: { kind: 'failure', error: 'cleanup-failed' }, hashes: {}, diagnostics: settled.diagnostics, metadata }
+  const error = protocolFailure
   if (error !== undefined) return { outcome: { kind: 'failure', error }, hashes: {}, diagnostics: settled.diagnostics, metadata }
   const result = validateWorkerResult(settled.value, limits)
   if ('failure' in result) return { outcome: { kind: 'failure', error: result.failure }, hashes: {}, diagnostics: [], metadata }
@@ -173,8 +181,12 @@ function runSerially<Result>(operation: () => Promise<Result>): Promise<Result> 
   return next
 }
 
-async function awaitWorker(child: ReturnType<typeof spawn>, limits: ParserResourceLimits): Promise<{ readonly value?: unknown; readonly failure?: ParserRunFailure; readonly diagnostics: readonly string[] }> {
-  return new Promise((resolve) => {
+function startWorkerProtocol(child: ReturnType<typeof spawn>, limits: ParserResourceLimits): { readonly ready: Promise<{ readonly value?: unknown; readonly failure?: ParserRunFailure; readonly diagnostics: readonly string[] }>; readonly closed: Promise<number | undefined>; readonly acknowledged: Promise<boolean>; readonly ack: () => void } {
+  let resolveClosed: (code: number | undefined) => void = () => undefined
+  const closed = new Promise<number | undefined>((resolve) => { resolveClosed = resolve })
+  let resolveAcknowledged: (value: boolean) => void = () => undefined
+  const acknowledged = new Promise<boolean>((resolve) => { resolveAcknowledged = resolve })
+  const ready = new Promise<{ readonly value?: unknown; readonly failure?: ParserRunFailure; readonly diagnostics: readonly string[] }>((resolve) => {
     let finished = false
     let stdoutBytes = 0
     let stderrBytes = 0
@@ -184,16 +196,14 @@ async function awaitWorker(child: ReturnType<typeof spawn>, limits: ParserResour
       if (finished) return
       finished = true
       clearTimeout(timeout)
-      if (failure !== undefined && !reaped) {
-        terminate(child)
-        child.once('close', () => resolve({ failure, diagnostics }))
-        return
-      }
       resolve({ ...(failure === undefined ? { value: reader.value() } : {}), ...(failure === undefined ? {} : { failure }), diagnostics })
     }
     const timeout = setTimeout(() => complete('timeout'), limits.wallMilliseconds)
     child.on('error', () => complete('worker-crash'))
-    child.on('close', (code) => complete(reader.complete() && code === 0 ? undefined : code === 0 ? 'invalid-result' : 'worker-crash', true))
+    child.on('close', (code) => {
+      resolveClosed(code ?? undefined)
+      complete(code === 0 && reader.complete() ? 'invalid-result' : 'worker-crash', true)
+    })
     child.stdout!.on('data', (chunk: Buffer) => {
       stdoutBytes += chunk.byteLength
       if (stdoutBytes > limits.stdoutBytes) complete('stdout-too-large')
@@ -207,7 +217,21 @@ async function awaitWorker(child: ReturnType<typeof spawn>, limits: ParserResour
       const error = reader.push(chunk)
       if (error !== undefined) complete(error)
     })
+    ;(child.stdio[3] as Readable).on('end', () => {
+      if (reader.complete()) complete()
+      else if (reader.hasFrame()) complete('invalid-result')
+    })
+    ;(child.stdio[4] as Readable).on('data', (chunk: Buffer) => {
+      if (chunk.toString() === 'ACKED\n') resolveAcknowledged(true)
+    })
+    ;(child.stdio[4] as Readable).on('end', () => resolveAcknowledged(false))
   })
+  return { ready, closed, acknowledged, ack: () => { try { (child.stdio[4] as NodeJS.WritableStream).write('ACK\n') } catch {} } }
+}
+
+async function waitFor<Value>(promise: Promise<Value>, milliseconds: number): Promise<Value | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([promise, new Promise<undefined>((resolve) => { timer = setTimeout(resolve, milliseconds) as unknown as ReturnType<typeof setTimeout> })]).finally(() => { if (timer !== undefined) clearTimeout(timer) })
 }
 
 class BoundedFrameReader {
@@ -239,6 +263,7 @@ class BoundedFrameReader {
     return undefined
   }
   complete(): boolean { return !this.invalid && this.body !== undefined && this.bodyBytes === this.body.byteLength }
+  hasFrame(): boolean { return this.headerBytes > 0 }
   value(): unknown {
     if (!this.complete()) return undefined
     try { return JSON.parse(decoder.decode(this.body!)) } catch { return undefined }
@@ -285,37 +310,64 @@ function resolveLimits(input: Partial<ParserResourceLimits> | undefined): Parser
   return result
 }
 
-function terminate(child: ReturnType<typeof spawn>): void {
-  const pid = child.pid
-  if (pid === undefined || hasExited(child)) return
-  try { process.kill(-pid, 'SIGTERM') } catch { return }
-  const timer = setTimeout(() => { try { if (!hasExited(child)) process.kill(-pid, 'SIGKILL') } catch {} }, 50)
-  child.once('close', () => clearTimeout(timer))
-}
-function hasExited(child: ReturnType<typeof spawn>): boolean { return child.exitCode !== null && child.exitCode !== undefined || child.signalCode !== null && child.signalCode !== undefined }
-
-async function linuxProcessGroupUsage(pid: number | undefined, ticks: number): Promise<{ readonly rssBytes: number; readonly cpuMilliseconds: number } | undefined> {
-  if (pid === undefined) return undefined
-  try {
-    let rssBytes = 0
-    let cpuTicks = 0
-    for (const entry of await fs.readdir('/proc')) {
-      if (!/^\d+$/.test(entry)) continue
-      const stat = parseLinuxStat(await fs.readFile(`/proc/${entry}/stat`, 'utf8').catch(() => ''))
-      if (stat?.pgrp !== pid) continue
-      const status = await fs.readFile(`/proc/${entry}/status`, 'utf8').catch(() => '')
-      rssBytes += Number(/^VmRSS:\s+(\d+) kB$/m.exec(status)?.[1] ?? 0) * 1024
-      cpuTicks += stat.utime + stat.stime
+class LinuxProcessGroup {
+  private readonly members = new Map<number, number>()
+  private live = new Map<number, number>()
+  constructor(private readonly pgid: number, private readonly ticks: number) {}
+  async sample(): Promise<{ readonly rssBytes: number; readonly cpuMilliseconds: number } | undefined> {
+    try {
+      let rssBytes = 0
+      let cpuTicks = 0
+      this.live = new Map()
+      for (const entry of await fs.readdir('/proc')) {
+        if (!/^\d+$/.test(entry)) continue
+        const pid = Number(entry)
+        const stat = parseLinuxStat(await fs.readFile(`/proc/${entry}/stat`, 'utf8').catch(() => ''))
+        if (stat?.pgrp !== this.pgid) continue
+        this.members.set(pid, stat.starttime)
+        this.live.set(pid, stat.starttime)
+        const status = await fs.readFile(`/proc/${entry}/status`, 'utf8').catch(() => '')
+        rssBytes += Number(/^VmRSS:\s+(\d+) kB$/m.exec(status)?.[1] ?? 0) * 1024
+        cpuTicks += stat.utime + stat.stime
+      }
+      return { rssBytes, cpuMilliseconds: Math.floor(cpuTicks * 1_000 / this.ticks) }
+    } catch { return undefined }
+  }
+  async reap(): Promise<boolean> {
+    await this.sample()
+    await this.signal('SIGTERM')
+    if (await this.emptyAfter(60)) return true
+    await this.signal('SIGKILL')
+    return this.emptyAfter(120)
+  }
+  private async signal(signal: NodeJS.Signals): Promise<void> {
+    for (const [pid, starttime] of this.members) {
+      const stat = parseLinuxStat(await fs.readFile(`/proc/${pid}/stat`, 'utf8').catch(() => ''))
+      if (stat?.starttime !== starttime) continue
+      try { process.kill(pid, signal) } catch {}
     }
-    return { rssBytes, cpuMilliseconds: Math.floor(cpuTicks * 1_000 / ticks) }
-  } catch { return undefined }
+  }
+  private async emptyAfter(milliseconds: number): Promise<boolean> {
+    const deadline = Date.now() + milliseconds
+    while (Date.now() < deadline) {
+      const usage = await this.sample()
+      if (usage !== undefined && this.groupIsEmpty()) return true
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    await this.sample()
+    return this.groupIsEmpty()
+  }
+  private groupIsEmpty(): boolean {
+    return this.live.size === 0
+  }
 }
-function parseLinuxStat(value: string): { readonly pgrp: number; readonly utime: number; readonly stime: number } | undefined {
+
+function parseLinuxStat(value: string): { readonly pgrp: number; readonly utime: number; readonly stime: number; readonly starttime: number } | undefined {
   const close = value.lastIndexOf(')')
   if (close < 0) return undefined
   const fields = value.slice(close + 1).trim().split(/\s+/)
-  const pgrp = Number(fields[2]); const utime = Number(fields[11]); const stime = Number(fields[12])
-  return [pgrp, utime, stime].every(Number.isFinite) ? { pgrp, utime, stime } : undefined
+  const pgrp = Number(fields[2]); const utime = Number(fields[11]); const stime = Number(fields[12]); const starttime = Number(fields[19])
+  return [pgrp, utime, stime, starttime].every(Number.isFinite) ? { pgrp, utime, stime, starttime } : undefined
 }
 function linuxClockTicks(): Promise<number | undefined> {
   clockTicks ??= new Promise((resolve) => execFile('getconf', ['CLK_TCK'], (error, stdout) => {
