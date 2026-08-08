@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { signal } from "../../src/signal";
-import { polling, sse, stream, webhook } from "../../src/signal/transport";
+import {
+  polling,
+  sse,
+  stream,
+  webhook,
+  websocket,
+} from "../../src/signal/transport";
 import { signalProvider } from "../../src/signal/provider";
 
 const orderSubmitted = signal({
@@ -15,7 +21,7 @@ const orderSubmitted = signal({
 });
 
 const TRANSPORT_REQUIRED =
-  /signalProvider\(\{ transport \}\) requires a webhook\(\), polling\(\), stream\(\), or sse\(\) transport definition/;
+  /signalProvider\(\{ transport \}\) requires a webhook\(\), polling\(\), stream\(\), sse\(\), or websocket\(\) transport definition/;
 
 function baseOptions() {
   return {
@@ -80,6 +86,20 @@ describe("signalProvider transport validation", () => {
     expect(provider.transport.kind).toBe("sse");
   });
 
+  it("accepts websocket transports with a callable open", () => {
+    const provider = signalProvider({
+      ...baseOptions(),
+      transport: websocket({
+        async *open() {
+          yield { kind: "cursor" as const, cursor: null };
+        },
+      }),
+    });
+
+    expect(provider.transport._tag).toBe("WebSocketTransport");
+    expect(provider.transport.kind).toBe("websocket");
+  });
+
   it("rejects WebhookTransport discriminators without a callable handle", () => {
     expect(() =>
       signalProvider({
@@ -123,6 +143,18 @@ describe("signalProvider transport validation", () => {
         transport: {
           _tag: "SseTransport",
           kind: "sse",
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
+  });
+
+  it("rejects WebSocketTransport discriminators without a callable open", () => {
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "WebSocketTransport",
+          kind: "websocket",
         } as never,
       }),
     ).toThrow(TRANSPORT_REQUIRED);
@@ -174,6 +206,17 @@ describe("signalProvider transport validation", () => {
         } as never,
       }),
     ).toThrow(TRANSPORT_REQUIRED);
+
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "WebSocketTransport",
+          kind: "websocket",
+          poll: async () => ({ events: [], nextCursor: null }),
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
   });
 
   it("rejects non-function handlers even when the field is present", () => {
@@ -216,6 +259,17 @@ describe("signalProvider transport validation", () => {
         transport: {
           _tag: "SseTransport",
           kind: "sse",
+          open: "not-a-function",
+        } as never,
+      }),
+    ).toThrow(TRANSPORT_REQUIRED);
+
+    expect(() =>
+      signalProvider({
+        ...baseOptions(),
+        transport: {
+          _tag: "WebSocketTransport",
+          kind: "websocket",
           open: "not-a-function",
         } as never,
       }),

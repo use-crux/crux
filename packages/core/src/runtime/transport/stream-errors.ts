@@ -17,6 +17,16 @@ const SAFE_PROVIDER_ERROR_CODE = /^[A-Za-z0-9_.-]{1,64}$/;
 export const TRANSPORT_STREAM_TERMINAL_CODE = "TRANSPORT_STREAM_TERMINAL" as const;
 
 /**
+ * Durable lastErrorCode when optional post-accept acknowledgement fails.
+ *
+ * @remarks Acceptance and cursor checkpoint already succeeded. Ack failure is
+ * observable on the active checkpoint and treated as a transient connection
+ * fault so reconnect resumes from the durable cursor. It must never roll back
+ * acceptance or clear the cursor.
+ */
+export const TRANSPORT_ACK_FAILED = "TRANSPORT_ACK_FAILED" as const;
+
+/**
  * Non-reconnectable stream failure.
  *
  * @remarks Runtime sets durable checkpoint status to `faulted` and stops

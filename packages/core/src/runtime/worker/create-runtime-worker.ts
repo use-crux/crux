@@ -68,8 +68,9 @@ export interface RuntimeWorkerStopOptions {
  * loop. One worker may own a store and namespace in the current process.
  * When the program declares managed transports, each tick also supervises
  * polling bindings (lease, poll, durable accept, cursor checkpoint) and managed
- * stream bindings — including SSE after pure lowering onto the stream fiber
- * (lease, start/refresh connection fibers, durable accept, cursor checkpoint).
+ * stream bindings — including SSE and WebSocket after pure lowering onto the
+ * stream fiber (lease, start/refresh connection fibers, durable accept, cursor
+ * checkpoint, optional post-accept acknowledgement).
  * Stream fibers continue between ticks so long-lived connections never block
  * the maintenance loop. Each tick then claims a bounded batch of accepted
  * Signal-provider envelopes and normalizes them through the existing

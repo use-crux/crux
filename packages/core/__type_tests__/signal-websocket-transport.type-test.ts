@@ -1,18 +1,19 @@
 /**
- * Type-level coverage for SSE transport union membership and narrowing.
+ * Type-level coverage for WebSocket transport union membership and narrowing.
  */
 
-import { sse, stream } from "@use-crux/core/signal/transport";
+import { stream, websocket } from "@use-crux/core/signal/transport";
 import type {
   SignalProviderTransport,
-  SseTransport,
   StreamTransport,
+  WebSocketTransport,
 } from "@use-crux/core/signal/transport";
 import {
   isManagedStreamTransport,
   isPollingTransport,
   isSseTransport,
   isStreamTransport,
+  isWebSocketTransport,
   isWebhookTransport,
   signalProvider,
 } from "@use-crux/core/signal/provider";
@@ -31,52 +32,51 @@ const orderSubmitted = signal({
   schema: z.object({ orderId: z.string() }),
 });
 
-const transport = sse({
+const transport = websocket({
   async *open() {
-    yield { kind: "cursor" as const, lastEventId: null };
+    yield { kind: "cursor" as const, cursor: null };
   },
 });
 
-type _SseTag = Expect<Equal<(typeof transport)["_tag"], "SseTransport">>;
-type _SseKind = Expect<Equal<(typeof transport)["kind"], "sse">>;
-type _UnionIncludesSse = Expect<
+type _WsTag = Expect<Equal<(typeof transport)["_tag"], "WebSocketTransport">>;
+type _WsKind = Expect<Equal<(typeof transport)["kind"], "websocket">>;
+type _UnionIncludesWs = Expect<
   Equal<
     SignalProviderTransport,
     | import("@use-crux/core/signal/transport").WebhookTransport
     | import("@use-crux/core/signal/transport").PollingTransport
     | StreamTransport
-    | SseTransport
-    | import("@use-crux/core/signal/transport").WebSocketTransport
+    | import("@use-crux/core/signal/transport").SseTransport
+    | WebSocketTransport
   >
 >;
 
 const provider = signalProvider({
-  id: "orders.sse",
+  id: "orders.ws",
   transport,
   signals: { orderSubmitted },
   async onEvent() {},
 });
 
-// signalProvider widens transport to the public union (same as webhook/stream).
 type _ProviderTransportIsUnion = Expect<
   Equal<(typeof provider)["transport"], SignalProviderTransport>
 >;
-type _SseAssignableToUnion = Expect<
-  SseTransport extends SignalProviderTransport ? true : false
+type _WsAssignableToUnion = Expect<
+  WebSocketTransport extends SignalProviderTransport ? true : false
 >;
 
 declare const unknownTransport: SignalProviderTransport;
 
-if (isSseTransport(unknownTransport)) {
+if (isWebSocketTransport(unknownTransport)) {
   type _NarrowedTag = Expect<
-    Equal<(typeof unknownTransport)["_tag"], "SseTransport">
+    Equal<(typeof unknownTransport)["_tag"], "WebSocketTransport">
   >;
   type _NarrowedOpen = Expect<
-    Equal<typeof unknownTransport.open, SseTransport["open"]>
+    Equal<typeof unknownTransport.open, WebSocketTransport["open"]>
   >;
-  // @ts-expect-error SSE transport has no poll handle.
+  // @ts-expect-error WebSocket transport has no poll handle.
   unknownTransport.poll;
-  // @ts-expect-error SSE transport has no webhook handle.
+  // @ts-expect-error WebSocket transport has no webhook handle.
   unknownTransport.handle;
 }
 
@@ -84,8 +84,8 @@ if (isStreamTransport(unknownTransport)) {
   type _StreamOnly = Expect<
     Equal<(typeof unknownTransport)["_tag"], "StreamTransport">
   >;
-  // @ts-expect-error Stream transport is not SseTransport.
-  const _notSse: SseTransport = unknownTransport;
+  // @ts-expect-error Stream transport is not WebSocketTransport.
+  const _notWs: WebSocketTransport = unknownTransport;
 }
 
 if (isManagedStreamTransport(unknownTransport)) {
@@ -97,27 +97,12 @@ if (isManagedStreamTransport(unknownTransport)) {
       ? true
       : false
   >;
-  type _ManagedOpen = Expect<
-    Equal<
-      typeof unknownTransport.open,
-      | StreamTransport["open"]
-      | SseTransport["open"]
-      | import("@use-crux/core/signal/transport").WebSocketTransport["open"]
-    >
-  >;
 }
 
-// SSE is managed-stream but not stream().
-const streamOnly = stream({
-  async *open() {
-    yield { kind: "cursor" as const, cursor: null };
-  },
-});
-const sseOnly = transport;
-
-type _StreamIsManaged = Expect<
-  ReturnType<typeof isManagedStreamTransport> extends boolean ? true : false
->;
+if (isSseTransport(unknownTransport)) {
+  // @ts-expect-error SSE is not WebSocket.
+  const _notWs: WebSocketTransport = unknownTransport;
+}
 
 if (isPollingTransport(unknownTransport)) {
   // @ts-expect-error Polling transport has no open handle.
@@ -129,13 +114,39 @@ if (isWebhookTransport(unknownTransport)) {
   unknownTransport.open;
 }
 
-// Runtime narrowing: pure SseTransport is never StreamTransport at the type level.
-// Use isManagedStreamTransport / isSseTransport for SSE selection.
-if (isStreamTransport(sseOnly)) {
-  const unreachable: never = sseOnly;
+const streamOnly = stream({
+  async *open() {
+    yield { kind: "cursor" as const, cursor: null };
+  },
+});
+const wsOnly = transport;
+
+if (isStreamTransport(wsOnly)) {
+  const unreachable: never = wsOnly;
   void unreachable;
 }
 
-// Keep streamOnly referenced so unused-locals do not fire in strict type tests.
+// Optional acknowledge is allowed on envelope items.
+void websocket({
+  async *open() {
+    yield {
+      kind: "envelope" as const,
+      accountId: "a",
+      eventId: "e",
+      authenticatedRouting: {},
+      payload: {
+        kind: "inline-base64url" as const,
+        value: "YQ",
+        byteLength: 1,
+        sha256:
+          "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+      },
+      cursor: "c1",
+      acknowledge: async () => undefined,
+    };
+  },
+});
+
 void streamOnly;
-void sseOnly;
+void wsOnly;
+void provider;

@@ -43,6 +43,7 @@ type _UnionIncludesStream = Expect<
     | import("@use-crux/core/signal/transport").PollingTransport
     | StreamTransport
     | import("@use-crux/core/signal/transport").SseTransport
+    | import("@use-crux/core/signal/transport").WebSocketTransport
   >
 >;
 

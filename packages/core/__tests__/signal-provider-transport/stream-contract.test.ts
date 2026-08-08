@@ -68,6 +68,35 @@ describe("validateStreamItem / validateStreamCursor", () => {
     });
   });
 
+  it("accepts optional process-local acknowledge on envelope items", () => {
+    const acknowledge = async () => undefined;
+    const withAck = validateStreamItem({
+      kind: "envelope",
+      accountId: "acct_1",
+      eventId: "evt_ack",
+      authenticatedRouting: {},
+      payload: samplePayload,
+      cursor: "c-ack",
+      acknowledge,
+    });
+    expect(withAck.kind).toBe("envelope");
+    if (withAck.kind === "envelope") {
+      expect(withAck.acknowledge).toBe(acknowledge);
+      expect(withAck.cursor).toBe("c-ack");
+    }
+
+    expect(() =>
+      validateStreamItem({
+        kind: "envelope",
+        accountId: "acct_1",
+        eventId: "evt_bad_ack",
+        authenticatedRouting: {},
+        payload: samplePayload,
+        acknowledge: "nope",
+      }),
+    ).toThrow(/acknowledge must be a function/);
+  });
+
   it("accepts cursor-only items including null cursor", () => {
     expect(
       validateStreamItem({

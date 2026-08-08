@@ -19,6 +19,7 @@ export { extractManagedTransportBindingStaticFacts } from "./binding-static-fact
 export { extractPollingStaticFacts } from "./polling-static-facts";
 export { extractSseStaticFacts } from "./sse-static-facts";
 export { extractStreamStaticFacts } from "./stream-static-facts";
+export { extractWebSocketStaticFacts } from "./websocket-static-facts";
 
 /** Projects canonical exported Signal definitions and their authored schema. */
 export function extractSignalStaticFacts(ctx: ExtractContext) {

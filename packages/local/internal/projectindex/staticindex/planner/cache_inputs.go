@@ -16,7 +16,7 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core","version":"2"}`,
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core-mcp","version":"1"}`,
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core-media","version":"4"}`,
-		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core","version":"2","digest":"dd856afd3b3fab6b789ead8df6649fd349dbd4aafe15ce00aea2e830fd414412"}`,
+		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core","version":"2","digest":"7db1b1f5a6c8eee57102a8d260d2ce505768ed5557cb641ae4fb7daf84a486f6"}`,
 		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core-mcp","version":"1","digest":"823fcfe1464c7ace9ec4276a53f0e4178fa76dd51ecbd229979c60f51c1a21f1"}`,
 		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core-media","version":"4","digest":"653652a71ff30dd66aabcf0f616ce075b37344d800a158f5d4356b5968cb94ca"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"embedding"}`,
@@ -36,9 +36,9 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-mcp","name":"mcp.server"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"ingest.source"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core-media","name":"media.operation"}`,
-		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"1363c9e51282d3f720aa61c8ce6210a1cc9b49f6a5aa173b288e6a1c947a98cf"}`,
+		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"3eed37f3d3248c65bf73bbb0ebd4a3b21ba0160695134b7835740b87d5bf3e04"}`,
 		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"e99fdb3c02cd55624f53cc32dfa497e4b07c04eb091d736d5b2aee153da18927"}`,
-		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"38a97c4d9a282fbe75cb035fc39394a265883a5ba546fe3236f81979824c1377"}`,
+		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"b0a6b6c64e5b64d330d8d55adc08b8983947d1a313f020c6bfcc817d74057b48"}`,
 		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.139.0+crux_native_group3.13"}`,
 	}
 	out := make([]json.RawMessage, 0, len(inputs))

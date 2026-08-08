@@ -21,7 +21,7 @@ export interface SignalProviderFacts {
   /** Whether identity is a direct string literal. */
   readonly identity: "static" | "partial";
   /** Nested transport kind when statically proven. */
-  readonly transportKind?: "webhook" | "polling" | "stream" | "sse";
+  readonly transportKind?: "webhook" | "polling" | "stream" | "sse" | "websocket";
   /** Authored transport variable when the transport is not inline. */
   readonly transportVariable?: string;
   /** Literal Signal ids declared in the provider map when proven. */
@@ -32,17 +32,17 @@ export interface SignalProviderFacts {
   readonly hasOnEvent?: boolean;
 }
 
-/** Authored facts for one `webhook()`, `polling()`, `stream()`, or `sse()` transport declaration. */
+/** Authored facts for one `webhook()`, `polling()`, `stream()`, `sse()`, or `websocket()` transport declaration. */
 export interface SignalTransportFacts {
   readonly kind: "signal.transport";
   /** Transport kind retained for diagnostics. */
-  readonly transportKind: "webhook" | "polling" | "stream" | "sse";
+  readonly transportKind: "webhook" | "polling" | "stream" | "sse" | "websocket";
   /** Whether a `handle` property is present (webhook; never retains the body). */
   readonly hasHandle?: boolean;
   /** Whether a `poll` property is present (polling; never retains the body). */
   readonly hasPoll?: boolean;
   /**
-   * Whether an `open` property is present (stream/SSE; never retains the body).
+   * Whether an `open` property is present (stream/SSE/WebSocket; never retains the body).
    */
   readonly hasOpen?: boolean;
 }

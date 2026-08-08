@@ -60,7 +60,13 @@ export {
   managedTransportBinding,
   signalProvider,
 } from "./signal/provider";
-export { polling, sse, stream, webhook } from "./signal/transport";
+export {
+  polling,
+  sse,
+  stream,
+  webhook,
+  websocket,
+} from "./signal/transport";
 export {
   prompt,
   context,

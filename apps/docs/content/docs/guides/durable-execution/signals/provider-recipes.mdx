@@ -309,7 +309,8 @@ Operator notes:
 - Faulted bindings stay faulted across restart until config identity changes or
   an operator clears status — they do not silently reopen.
 - Prefer `sse({ open })` when the external system is SSE; it lowers onto this
-  same stream fiber. WebSocket remains a follow-on thin adapter.
+  same stream fiber. Prefer `websocket({ open })` for WebSocket ingress
+  (optional post-accept ack + bounded push buffer).
 
 ## Supervise a managed SSE connection
 
@@ -397,12 +398,14 @@ export const marketplaceSseBinding = managedTransportBinding(marketplaceSse, {
 
 ### Provider-ingress SSE is not React browser SSE
 
-| Surface | Package | Direction | Reconnect owner |
-| --- | --- | --- | --- |
-| Managed SSE `sse({ open })` | `@use-crux/core/signal/transport` | **Inbound** third-party SSE → durable envelopes → Signals | Runtime worker stream fiber |
-| React SSE `createSSETransport` / `cruxSSEHandler` | `@use-crux/react` | **Outbound** Crux RecordStore/state → browser hooks | Browser EventSource helper |
+| Surface                                           | Package                           | Direction                                                       | Reconnect owner             |
+| ------------------------------------------------- | --------------------------------- | --------------------------------------------------------------- | --------------------------- |
+| Managed SSE `sse({ open })`                       | `@use-crux/core/signal/transport` | **Inbound** third-party SSE → durable envelopes → Signals       | Runtime worker stream fiber |
+| Managed WebSocket `websocket({ open })`           | `@use-crux/core/signal/transport` | **Inbound** third-party WebSocket → durable envelopes → Signals | Runtime worker stream fiber |
+| React SSE `createSSETransport` / `cruxSSEHandler` | `@use-crux/react`                 | **Outbound** Crux RecordStore/state → browser hooks             | Browser EventSource helper  |
 
-Never share types, checkpoints, or supervision between these two.
+Never share types, checkpoints, or supervision between managed provider ingress
+and React browser egress.
 
 Operator notes for SSE:
 
@@ -414,6 +417,129 @@ Operator notes for SSE:
   envelope. No Runtime ack after accept for SSE.
 - EOF, transient throw, terminal fault, abort, and pull backpressure reuse the
   managed stream recipe above.
+
+## Supervise a managed WebSocket connection
+
+```ts
+import {
+  websocket,
+  createBoundedPushBuffer,
+  classifyWebSocketCloseCode,
+  webSocketCloseErrorCode,
+} from "@use-crux/core/signal/transport";
+import { ManagedStreamTerminalError } from "@use-crux/core/runtime";
+import {
+  managedTransportBinding,
+  signalProvider,
+} from "@use-crux/core/signal/provider";
+
+export const marketplaceWs = signalProvider({
+  id: "marketplace.ws",
+  transport: websocket({
+    async *open({ cursor, signal, configRef }) {
+      const socket = await connectMarketplaceWs({
+        resume: cursor,
+        revision: configRef.revision,
+        signal,
+      });
+      const buffer = createBoundedPushBuffer({ capacity: 64, signal });
+
+      let finalized = false;
+      const finalize = () => {
+        if (finalized) {
+          return;
+        }
+        finalized = true;
+        signal.removeEventListener("abort", onAbort);
+        socket.close();
+      };
+      const onAbort = () => {
+        finalize();
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = mapMarketplaceFrame(event);
+          if (message.kind === "heartbeat") {
+            buffer.push({ kind: "cursor", cursor: message.cursor });
+            return;
+          }
+
+          buffer.push({
+            kind: "envelope",
+            accountId: message.accountId,
+            eventId: message.eventId,
+            authenticatedRouting: { source: "websocket" },
+            payload: encodeInlinePayload(message.body),
+            cursor: message.cursor,
+            // Optional: Runtime calls this only after durable accept + checkpoint.
+            acknowledge: () => socket.sendAck(message.wireId),
+          });
+        } catch (error) {
+          // Fail first so a later clean onclose cannot mask parse/overflow faults.
+          buffer.fail(error);
+          finalize();
+        }
+      };
+
+      socket.onclose = (closeEvent) => {
+        const kind = classifyWebSocketCloseCode(closeEvent.code);
+        if (kind === "normal") {
+          // close() is a no-op after fail(), so prior failure stays authoritative.
+          buffer.close();
+          return;
+        }
+        if (kind === "terminal") {
+          buffer.fail(
+            new ManagedStreamTerminalError(
+              webSocketCloseErrorCode(closeEvent.code),
+              `WebSocket closed with code ${closeEvent.code}`,
+            ),
+          );
+          return;
+        }
+        buffer.fail(new Error(`WebSocket closed with code ${closeEvent.code}`));
+      };
+
+      signal.addEventListener("abort", onAbort);
+      try {
+        yield* buffer.items;
+      } finally {
+        // Early return, clean EOF, and throw all close the socket and detach abort.
+        finalize();
+      }
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+
+export const marketplaceWsBinding = managedTransportBinding(marketplaceWs, {
+  id: "binding.marketplace.ws",
+  configRef: { id: "config.marketplace.ws", revision: "1" },
+  signalId: "order.submitted",
+});
+```
+
+| Surface                                 | Package                           | Direction                                                | Reconnect owner             |
+| --------------------------------------- | --------------------------------- | -------------------------------------------------------- | --------------------------- |
+| Managed WebSocket `websocket({ open })` | `@use-crux/core/signal/transport` | **Inbound** third-party WS → durable envelopes → Signals | Runtime worker stream fiber |
+
+Operator notes for WebSocket:
+
+- Core does **not** own browser/Node `WebSocket`, ping/pong timers, or wire codecs.
+- Receive-only ingress omits `acknowledge`. When the provider needs an
+  application ack after durable progress, attach `acknowledge` on the envelope
+  item. Ack failure is observable and reconnects from the durable cursor; it
+  never rolls back acceptance.
+- Use `createBoundedPushBuffer` (or an equivalent bound). Overflow must fail the
+  connection — never silently drop messages.
+- EOF, transient throw, terminal fault, abort, config invalidation, and
+  accept-before-checkpoint reuse the managed stream recipe above.
 
 ## Out of scope
 

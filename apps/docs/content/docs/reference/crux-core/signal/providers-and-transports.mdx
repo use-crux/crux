@@ -1,6 +1,6 @@
 ---
 title: Providers and transports
-description: Exact public API for Signal providers, webhook, polling, managed stream, and SSE transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
+description: Exact public API for Signal providers, webhook, polling, managed stream, SSE, and WebSocket transports, managed bindings, accept/normalize lifecycle, statistics, and projections.
 ---
 
 Import authoring helpers from focused subpaths and lifecycle helpers from the
@@ -9,17 +9,23 @@ Runtime surface:
 ```ts
 import {
   classifySseHttpStatus,
+  classifyWebSocketCloseCode,
+  createBoundedPushBuffer,
   polling,
   sse,
   sseHttpStatusErrorCode,
   stream,
   webhook,
+  websocket,
+  webSocketCloseErrorCode,
   type PollingTransport,
   type SseItem,
   type SseTransport,
   type StreamItem,
   type StreamTransport,
   type WebhookTransport,
+  type WebSocketItem,
+  type WebSocketTransport,
 } from "@use-crux/core/signal/transport";
 import {
   managedTransportBinding,
@@ -124,8 +130,8 @@ provider event id; the #337 kernel dedupes.
 | Terminal fault | Throw `ManagedStreamTerminalError(code, message?)` or a duck-typed `{ terminal: true, code: string }`. Durable checkpoint `status: "faulted"`; automatic reconnect stops until config identity changes or an operator clears status. Unsafe codes map to `TRANSPORT_STREAM_TERMINAL`. |
 | Abort | `signal` aborts on worker stop, lease expiry/loss, or rebalance. Runtime calls `iterator.return?.()` and rejects stale accept/checkpoint after the lease fence. |
 | Config change | Checkpoint stores secret-free `configRef`. When live binding `configRef` differs, Runtime over-invalidates the stored cursor (does not inherit faulted status from the prior config). |
-| Backpressure | Pull iteration is serial: one item at a time on the connection fiber. Do not invent silent drop policies. |
-| Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API. |
+| Backpressure | Pull iteration is serial: one item at a time on the connection fiber. Push adapters must bound buffers and fail on overflow — never silent drop. |
+| Post-accept ack | Optional process-local `acknowledge` on envelope items. Runtime invokes only after durable accept (and cursor checkpoint when present). Failure is observable/transient and never rolls back accept or cursor. |
 
 ### `sse({ open })`
 
@@ -191,16 +197,81 @@ are adapter policy.
 #### Lifecycle
 
 EOF, transient throw, terminal fault, abort, config invalidation, pull
-backpressure, accept-before-checkpoint, and no post-accept ack all reuse the
-`stream({ open })` lifecycle table above. WebSocket remains a follow-on thin
-adapter over that seam.
+backpressure, accept-before-checkpoint, and no required post-accept ack all
+reuse the `stream({ open })` lifecycle table above.
+
+### `websocket({ open })`
+
+Returns a frozen `WebSocketTransport` (`_tag: "WebSocketTransport"`,
+`kind: "websocket"`). This is the managed **provider-ingress** WebSocket
+transport on `@use-crux/core/signal/transport`.
+
+Runtime lowers WebSocket items onto the managed stream fiber. There is no second
+reconnect loop, worker, checkpoint schema, or Runtime-owned socket API.
+Credentials, sockets, ping/pong, and wire codecs stay inside the `open` closure;
+inert bindings and program JSON remain secret-free.
+
+`open({ cursor, signal, configRef })` opens one WebSocket connection and returns
+an `AsyncIterable<WebSocketItem>` (or a Promise of one). Must honor `signal` and
+clean up sockets on abort / iterator `return`.
+
+#### `WebSocketItem`
+
+Exactly one protocol item per yield — never a batch:
+
+| Variant | Fields | After lowering |
+| --- | --- | --- |
+| Envelope | `kind: "envelope"`, identity fields, optional `cursor?`, optional `acknowledge?` | Stream envelope; process-local `acknowledge` preserved for the post-accept seam |
+| Cursor-only | `kind: "cursor"`, `cursor: string \| null` | Stream cursor-only item |
+
+#### Optional post-accept `acknowledge`
+
+Ordinary receive-only WebSocket ingress omits `acknowledge`. When a provider
+requires an application ack **only after durable progress**, attach
+`acknowledge: () => void | Promise<void>` on the envelope item.
+
+Runtime invokes it only after durable #337 accept (or same-digest duplicate)
+and, when `cursor` is present, after that cursor is successfully checkpointed
+(or checkpoint is skipped because the store port is absent).
+
+If `acknowledge` throws:
+
+- acceptance remains accepted (or remains a same-digest duplicate);
+- the durable cursor is **not** cleared or rolled back;
+- Runtime writes `lastErrorCode` (`TRANSPORT_ACK_FAILED` or a safe provider
+  code) on an **active** checkpoint;
+- the connection outcome is **transient** so reconnect resumes from the durable
+  cursor; provider redelivery is #337-deduped.
+
+#### Bounded push buffering
+
+Use `createBoundedPushBuffer({ capacity, signal })` (or an equivalent bound).
+There is no unlimited mode. Overflow fails the consumer with
+`TRANSPORT_PUSH_BUFFER_OVERFLOW` instead of dropping messages so Runtime can
+reconnect from the durable cursor.
+
+#### Pure close-code helpers
+
+| Helper | Role |
+| --- | --- |
+| `classifyWebSocketCloseCode(code)` | `"normal"`, `"transient"`, or `"terminal"` |
+| `webSocketCloseErrorCode(code)` | Safe durable code such as `WS_CLOSE_1008` |
+
+Map `"normal"` to clean iterator completion, `"transient"` to an ordinary
+`Error`, and `"terminal"` to `ManagedStreamTerminalError`.
+
+#### Lifecycle
+
+EOF, transient throw, terminal fault, abort, config invalidation, pull
+backpressure, and accept-before-checkpoint reuse the `stream({ open })`
+lifecycle table above.
 
 ### `signalProvider({ id, transport, signals, onEvent })`
 
 Returns a frozen `SignalProvider`. Live definitions retain `transport` and
 `onEvent` as process code. `transport` may be `webhook()`, `polling()`,
-`stream()`, or `sse()`. They perform no I/O at construction time and do not
-register globally.
+`stream()`, `sse()`, or `websocket()`. They perform no I/O at construction time
+and do not register globally.
 
 `onEvent(envelope, { signals })` may publish only the declared Signal map.
 Omitted publish idempotency keys default to the accepted provider/account/event
@@ -324,8 +395,7 @@ lease port with resource `transport-binding:{namespace}:{bindingId}`.
 - No Channel exclusive conversation ownership on this path (#302).
 - Webhook edge accept remains host-driven; polling and managed stream are
   worker-supervised.
-- Provider-ingress `sse({ open })` is shipped on this path. WebSocket and
-  provider-specific first-party helpers remain follow-on thin adapters over
-  `stream({ open })`.
+- Provider-ingress `sse({ open })` and `websocket({ open })` ship as thin
+  adapters over the managed stream fiber on this path.
 - Competing supervisors coordinate through Runtime leases on Memory and
   PostgreSQL.

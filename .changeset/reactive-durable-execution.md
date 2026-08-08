@@ -279,9 +279,9 @@ poison the provider cursor; other accept failures retain fail-without-checkpoint
 semantics and no parallel dead-letter store is introduced. Competing
 supervisors coordinate through Runtime leases; worker stop aborts in-flight
 polls and releases binding leases. Project Index discovers `polling()` with static/native
-parity and rejects live `poll` fields on inert bindings. Generic stream and managed
-SSE authoring ship below on the same lifecycle seam; WebSocket remains a follow-on
-thin adapter. Channel exclusive conversation ownership remains #302.
+parity and rejects live `poll` fields on inert bindings. Generic stream, managed SSE, and managed
+WebSocket authoring ship below on the same lifecycle seam. Channel exclusive
+conversation ownership remains #302.
 
 Add managed stream transport supervision beside polling: author `stream({ open })`
 on `@use-crux/core/signal/transport`, accept it from `signalProvider`, and let the
@@ -290,9 +290,9 @@ checkpoint cursor law, config-ref invalidation, and durable faulted/disabled
 status on binding checkpoints. Memory and PostgreSQL implement lease-fenced
 checkpoint fields (`configRef`, `status`) with multi-worker exclusivity.
 Project Index discovers `stream()` with static/native parity and rejects live
-`open` on inert bindings. Managed SSE (`sse({ open })`) ships as a thin adapter
-over this seam below; WebSocket remains the follow-on thin adapter, not a
-first-party helper in this release. Stream envelope validation detaches immutable
+`open` on inert bindings. Managed SSE (`sse({ open })`) and WebSocket
+(`websocket({ open })`) ship as thin adapters over this seam below. Stream
+envelope validation detaches immutable
 payload and routing snapshots; digest conflicts never advance stream cursors;
 checkpoint timestamps use a fresh clock at each write; and supervision faults
 after consecutive top-level rejected stream fibers with
@@ -306,8 +306,18 @@ and Runtime lowering onto the managed stream fiber (same lease, checkpoint,
 reconnect, fault, abort, and accept-before-cursor laws). Project Index and
 Devtools Catalog project `transportKind: "sse"`; live `open` on inert bindings
 stays rejected. This is provider-ingress SSE only — distinct from
-`@use-crux/react` browser `createSSETransport` / `cruxSSEHandler`. WebSocket and
-post-accept ack remain follow-on.
+`@use-crux/react` browser `createSSETransport` / `cruxSSEHandler`.
+
+Add first-party managed WebSocket transport authoring as a thin adapter over the
+same stream supervision seam: `websocket({ open })` freezes a distinct
+`kind: "websocket"` definition, pure close-code helpers, and
+`createBoundedPushBuffer` so push sockets never silently drop (overflow closes
+and reconnects from the durable cursor). Optional process-local
+`acknowledge` on envelope items runs only after durable #337 accept and cursor
+checkpoint; ack failure is observable (`TRANSPORT_ACK_FAILED` / safe provider
+code) and transient, and never rolls back acceptance or clears the cursor.
+Project Index and Devtools Catalog project `transportKind: "websocket"`; live
+`open` on inert bindings stays rejected.
 
 Document durable Agent Sessions with a progressive guide, copy-pasteable
 recipes, exact Session and GenerationModel API reference pages, Session

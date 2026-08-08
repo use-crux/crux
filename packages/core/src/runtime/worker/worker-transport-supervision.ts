@@ -6,10 +6,10 @@
  * mutable transport registry is introduced. Accepted events enter the shared
  * #337 envelope kernel; cursors advance only after durable acceptance.
  *
- * Supervises polling, stream, and SSE bindings (SSE lowers onto the existing
- * stream fiber — no second reconnect loop). Stream fibers are started from a
- * bounded {@link TransportSupervisionRunner.runOnce} and never block the
- * maintenance tick on long-lived `open`/iteration.
+ * Supervises polling, stream, SSE, and WebSocket bindings (SSE/WebSocket lower
+ * onto the existing stream fiber — no second reconnect loop). Stream fibers are
+ * started from a bounded {@link TransportSupervisionRunner.runOnce} and never
+ * block the maintenance tick on long-lived `open`/iteration.
  *
  * @module
  */
@@ -18,10 +18,12 @@ import {
   isManagedStreamTransport,
   isPollingTransport,
   isSseTransport,
+  isWebSocketTransport,
   type SignalProvider,
 } from "../../signal/provider";
 import {
   lowerSseOpen,
+  lowerWebSocketOpen,
   stream,
   type StreamTransport,
 } from "../../signal/transport";
@@ -126,9 +128,9 @@ export function createWorkerTransportSupervision(
   options: CreateWorkerTransportSupervisionOptions,
 ): TransportSupervisionRunner | undefined {
   // Webhook (and other non-polling/non-managed-stream) bindings do not need
-  // in-process supervision. Bindings that resolve to a polling, stream, or SSE
-  // provider are supervised; a managed binding whose provider is absent is still
-  // rejected at createRuntimeProgram() as CAPABILITY_MISSING.
+  // in-process supervision. Bindings that resolve to a polling, stream, SSE, or
+  // WebSocket provider are supervised; a managed binding whose provider is
+  // absent is still rejected at createRuntimeProgram() as CAPABILITY_MISSING.
   const supervisedBindings = options.program.transports.filter((binding) => {
     const provider = resolveProgramProvider(options.program.providers, binding);
     if (!provider) {
@@ -149,11 +151,11 @@ export function createWorkerTransportSupervision(
       code: "CAPABILITY_MISSING",
       whatFailed:
         "Runtime worker cannot supervise managed transports without a store transports capability.",
-      why: "Polling, stream, and SSE bindings require the optional Runtime store transports port before the worker starts.",
+      why: "Polling, stream, SSE, and WebSocket bindings require the optional Runtime store transports port before the worker starts.",
       whatStillWorks:
         "Queued Work maintenance still runs for executable targets when transports are omitted from the program.",
       nextStep:
-        "Use a Runtime store that implements the transports port, or remove polling/stream/SSE bindings from createRuntimeProgram({ transports }).",
+        "Use a Runtime store that implements the transports port, or remove polling/stream/SSE/WebSocket bindings from createRuntimeProgram({ transports }).",
     });
   }
 
@@ -165,9 +167,9 @@ export function createWorkerTransportSupervision(
       code: "CAPABILITY_MISSING",
       whatFailed:
         "Runtime worker cannot supervise managed transports without binding checkpoint methods.",
-      why: "Polling, stream, and SSE supervision resume cursors through the transport store checkpoint port.",
+      why: "Polling, stream, SSE, and WebSocket supervision resume cursors through the transport store checkpoint port.",
       whatStillWorks:
-        "Webhook envelope drain still runs when checkpoint methods are present or no polling/stream/SSE bindings exist.",
+        "Webhook envelope drain still runs when checkpoint methods are present or no polling/stream/SSE/WebSocket bindings exist.",
       nextStep:
         "Use Memory or PostgreSQL Runtime storage that implements getBindingCheckpoint/putBindingCheckpoint.",
     });
@@ -224,13 +226,17 @@ export function createWorkerTransportSupervision(
 
           if (isManagedStreamTransport(provider.transport)) {
             streamBinding = true;
-            // SSE authors with lastEventId; lower once at the fiber boundary so
-            // runManagedStream keeps a StreamTransport-only open surface.
+            // SSE/WebSocket lower once at the fiber boundary so runManagedStream
+            // keeps a StreamTransport-only open surface (including optional ack).
             const transport: StreamTransport = isSseTransport(
               provider.transport,
             )
               ? stream({ open: lowerSseOpen(provider.transport.open) })
-              : provider.transport;
+              : isWebSocketTransport(provider.transport)
+                ? stream({
+                    open: lowerWebSocketOpen(provider.transport.open),
+                  })
+                : provider.transport;
             const streamOutcome = await superviseStreamBinding({
               options,
               binding,

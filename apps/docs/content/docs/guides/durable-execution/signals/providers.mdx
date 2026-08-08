@@ -17,7 +17,7 @@ logical delivery for the same provider event ID.
 | `polling()` | One Runtime worker leases, polls, accepts, checkpoints |
 | `stream({ open })` | Managed async-stream seam: worker owns open, reconnect, accept-before-checkpoint, fault status |
 | `sse({ open })` | Thin managed **provider-ingress** SSE adapter: `lastEventId` authoring lowers onto the stream fiber |
-| WebSocket thin adapter | **Not shipped** — follow-on must compile to `stream({ open })`, not a second worker |
+| `websocket({ open })` | Thin managed **provider-ingress** WebSocket adapter: optional post-accept `acknowledge`, bounded push buffering, close-code helpers |
 | Channel exclusive conversation ownership | Not on this path; remains [#302](https://github.com/use-crux/crux/issues/302) |
 
 ## Why providers exist
@@ -222,10 +222,11 @@ transient errors reconnect with bounded backoff. Terminal faults mark durable
 | Transient error | Thrown errors reconnect by default (bounded backoff). Safe `lastErrorCode` may be stored without advancing the cursor. |
 | Terminal fault | `ManagedStreamTerminalError` (or `{ terminal: true, code }`) sets durable `status: "faulted"` and stops automatic reconnect until config identity changes or an operator clears status. |
 | Abort | Worker stop, lease loss, or rebalance aborts `signal`, calls `iterator.return?.()`, and prevents stale accept/checkpoint after the lease fence. |
-| Backpressure | Pull iteration is Runtime backpressure: one item at a time on the fiber. Future push adapters must bound buffers and disconnect on overflow — never drop events silently. |
-| Post-accept ack | Optional post-accept notification is reserved for later protocol adapters; it is not required API in this release. |
-| Deployment | Same as polling: Memory or PostgreSQL with binding checkpoints, `createRuntimeProgram({ providers, transports })`, one `createRuntimeWorker`. Live `open` / `onEvent` stay process-local; generated program JSON never embeds closures or secrets. |
-| SSE | Prefer `sse({ open })` when the external system is SSE (distinct Catalog/Index kind + `lastEventId` vocabulary). Lifecycle is this table via pure lowering. WebSocket remains a follow-on thin adapter. |
+| Backpressure | Pull iteration is Runtime backpressure: one item at a time on the fiber. Push adapters (WebSocket) must bound buffers and disconnect on overflow — never drop events silently. Prefer `createBoundedPushBuffer`. |
+| Post-accept ack | Optional process-local `acknowledge` on an envelope item. Runtime invokes it only after durable accept (and cursor checkpoint when present). Ack failure is observable (`TRANSPORT_ACK_FAILED` / safe provider code) and **transient**; it never rolls back accept or clears the durable cursor. |
+| Deployment | Same as polling: Memory or PostgreSQL with binding checkpoints, `createRuntimeProgram({ providers, transports })`, one `createRuntimeWorker`. Live `open` / `onEvent` / `acknowledge` stay process-local; generated program JSON never embeds closures or secrets. |
+| SSE | Prefer `sse({ open })` when the external system is SSE (distinct Catalog/Index kind + `lastEventId` vocabulary). Lifecycle is this table via pure lowering. |
+| WebSocket | Prefer `websocket({ open })` when the external system is WebSocket (distinct Catalog/Index kind, optional post-accept ack, push-buffer helper, close-code helpers). Lifecycle is this table via pure lowering. |
 
 ## Minimal managed SSE path
 
@@ -311,6 +312,98 @@ the same stream fiber, lease, checkpoint, reconnect, fault, and abort laws as
 errors, terminal faults, abort, and backpressure. Prefer `sse()` when the
 external system is SSE and tooling should project `transportKind: "sse"`;
 prefer `stream()` when the adapter already speaks generic cursors.
+
+## Minimal managed WebSocket path
+
+```ts
+import {
+  websocket,
+  createBoundedPushBuffer,
+  classifyWebSocketCloseCode,
+  webSocketCloseErrorCode,
+} from "@use-crux/core/signal/transport";
+import { ManagedStreamTerminalError } from "@use-crux/core/runtime";
+import {
+  managedTransportBinding,
+  signalProvider,
+} from "@use-crux/core/signal/provider";
+
+export const ordersWs = signalProvider({
+  id: "orders.ws",
+  transport: websocket({
+    async open({ cursor, signal, configRef }) {
+      // Adapter owns WebSocket connect / subscribe / ping-pong / close.
+      const socket = await connectOrdersWs({ cursor, signal, configRef });
+      const buffer = createBoundedPushBuffer({ capacity: 32, signal });
+
+      socket.onmessage = (event) => {
+        try {
+          const message = mapFrame(event);
+          buffer.push({
+            kind: "envelope",
+            accountId: message.accountId,
+            eventId: message.eventId,
+            authenticatedRouting: { source: "websocket" },
+            payload: message.payload,
+            cursor: message.cursor,
+            // Optional: only after durable accept + cursor checkpoint.
+            acknowledge: () => socket.ack(message.wireId),
+          });
+        } catch {
+          socket.close();
+          // Overflow already failed the buffer; Runtime reconnects from cursor.
+        }
+      };
+
+      socket.onclose = (closeEvent) => {
+        const kind = classifyWebSocketCloseCode(closeEvent.code);
+        if (kind === "normal") {
+          buffer.close();
+          return;
+        }
+        if (kind === "terminal") {
+          buffer.fail(
+            new ManagedStreamTerminalError(
+              webSocketCloseErrorCode(closeEvent.code),
+              `WebSocket closed with code ${closeEvent.code}`,
+            ),
+          );
+          return;
+        }
+        buffer.fail(new Error(`WebSocket closed with code ${closeEvent.code}`));
+      };
+
+      signal.addEventListener(
+        "abort",
+        () => {
+          socket.close();
+        },
+        { once: true },
+      );
+
+      return buffer.items;
+    },
+  }),
+  signals: { orderSubmitted },
+  async onEvent(envelope, { signals }) {
+    await signals.orderSubmitted.publish({
+      orderId: decodeOrderId(envelope.payload),
+    });
+  },
+});
+
+export const ordersWsBinding = managedTransportBinding(ordersWs, {
+  id: "binding.orders.ws",
+  configRef: { id: "config.orders.ws", revision: "1" },
+  signalId: "order.submitted",
+});
+```
+
+Ordinary receive-only WebSocket ingress omits `acknowledge`. When a provider
+requires application acks only after durable progress, attach `acknowledge` on
+the envelope item — never before accept, and never as a rollback of accept.
+Push overflow closes/reconnects from the durable cursor; it never silently drops
+messages.
 
 ## Guarantees
 

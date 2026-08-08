@@ -409,7 +409,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 37);
+    assert_eq!(coverage.identities.len(), 38);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -465,6 +465,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
                 | "signal.transport.polling"
                 | "signal.transport.stream"
                 | "signal.transport.sse"
+                | "signal.transport.websocket"
                 | "signal.transportBinding" => "signal-native-static.test.ts",
                 _ => "first-party-native-negative-fixtures.test.ts",
             }

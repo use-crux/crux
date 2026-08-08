@@ -12,6 +12,7 @@ import type {
   SseTransport,
   StreamTransport,
   WebhookTransport,
+  WebSocketTransport,
 } from "../transport";
 import type { RuntimeAcceptedTransportEnvelope } from "../../runtime/transport/contracts";
 
@@ -108,8 +109,9 @@ export interface SignalProviderOptions<
    * Transport that authenticates raw ingress before acceptance.
    *
    * @remarks Webhook transports are host-edge driven. Polling and managed
-   * stream / SSE transports are acquired by the single Runtime worker through
-   * the shared supervision loop (SSE lowers onto the stream fiber).
+   * stream / SSE / WebSocket transports are acquired by the single Runtime
+   * worker through the shared supervision loop (SSE and WebSocket lower onto
+   * the stream fiber).
    */
   readonly transport: SignalProviderTransport;
   /**
@@ -145,7 +147,7 @@ export interface SignalProvider<
   readonly _tag: "SignalProvider";
   /** Literal application-owned provider identity. */
   readonly id: TId;
-  /** Authored transport definition (webhook, polling, stream, or SSE). */
+  /** Authored transport definition (webhook, polling, stream, SSE, or WebSocket). */
   readonly transport: SignalProviderTransport;
   /** Exact declared Signal map. */
   readonly signals: TSignals;
@@ -199,7 +201,7 @@ export function signalProvider<
   }
   if (!isSignalProviderTransport(options.transport)) {
     throw new TypeError(
-      "signalProvider({ transport }) requires a webhook(), polling(), stream(), or sse() transport definition.",
+      "signalProvider({ transport }) requires a webhook(), polling(), stream(), sse(), or websocket() transport definition.",
     );
   }
   if (
@@ -253,6 +255,10 @@ function isSignalProviderTransport(
     return typeof transport.open === "function";
   }
 
+  if (transport._tag === "WebSocketTransport") {
+    return typeof transport.open === "function";
+  }
+
   return false;
 }
 
@@ -273,9 +279,9 @@ export function isWebhookTransport(
 /**
  * Type-narrow a provider transport to the generic managed stream form.
  *
- * @remarks Does **not** match {@link SseTransport}. Use
- * {@link isManagedStreamTransport} when selecting the stream fiber path for
- * either `stream()` or `sse()`.
+ * @remarks Does **not** match {@link SseTransport} or {@link WebSocketTransport}.
+ * Use {@link isManagedStreamTransport} when selecting the stream fiber path for
+ * `stream()`, `sse()`, or `websocket()`.
  */
 export function isStreamTransport(
   transport: SignalProviderTransport,
@@ -290,16 +296,26 @@ export function isSseTransport(
   return transport._tag === "SseTransport";
 }
 
+/** Type-narrow a provider transport to the managed WebSocket form. */
+export function isWebSocketTransport(
+  transport: SignalProviderTransport,
+): transport is WebSocketTransport {
+  return transport._tag === "WebSocketTransport";
+}
+
 /**
- * True for generic stream or SSE (both use the stream fiber path).
+ * True for generic stream, SSE, or WebSocket (all use the stream fiber path).
  *
  * @remarks Prefer this over {@link isStreamTransport} when worker supervision
- * decides whether to start a managed-stream fiber after optional SSE lowering.
+ * decides whether to start a managed-stream fiber after optional SSE/WebSocket
+ * lowering.
  */
 export function isManagedStreamTransport(
   transport: SignalProviderTransport,
-): transport is StreamTransport | SseTransport {
+): transport is StreamTransport | SseTransport | WebSocketTransport {
   return (
-    transport._tag === "StreamTransport" || transport._tag === "SseTransport"
+    transport._tag === "StreamTransport" ||
+    transport._tag === "SseTransport" ||
+    transport._tag === "WebSocketTransport"
   );
 }

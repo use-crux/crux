@@ -24,6 +24,7 @@ export {
   isSafeProviderErrorCode,
   ManagedStreamTerminalError,
   managedStreamTerminalErrorCode,
+  TRANSPORT_ACK_FAILED,
   TRANSPORT_STREAM_TERMINAL_CODE,
 } from "./stream-errors";
 export {
