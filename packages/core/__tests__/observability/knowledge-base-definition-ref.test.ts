@@ -8,6 +8,7 @@ import {
 } from '../../src/observability'
 import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 describe('knowledge-base contributor evidence', () => {
   afterEach(() => resetObservabilityRuntime())
@@ -27,7 +28,7 @@ describe('knowledge-base contributor evidence', () => {
         embed: async (inputs) => inputs.map(() => [1, 0]),
       }),
     })
-    await docs.index([{ namespace: 'docs', sourceId: 'one', content: 'One' }])
+    await docs.index([schema2TextDocument({ namespace: 'docs', sourceId: 'one', content: 'One' })])
     await docs.retriever().retrieve('one')
     await observe.flush()
 

@@ -4,6 +4,7 @@ import { corpus as createCorpus, indexer as createIndexer } from '../../src/inde
 import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryStorage, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 function createTopicEmbedding() {
   return embedding({
@@ -27,18 +28,18 @@ describe('knowledgeBase', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'pricing',
           content: 'Pricing guide',
           metadata: { topic: 'pricing' },
-        },
-        {
+        }),
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'support',
           content: 'Support handbook',
           metadata: { topic: 'support' },
-        },
+        }),
       ]),
     ).resolves.toMatchObject({
       namespace: 'docs',
@@ -82,19 +83,19 @@ describe('knowledgeBase', () => {
     })
 
     await docs.index([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'Old pricing guide',
-      },
+      }),
     ])
 
     await docs.reindex([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'New pricing guide',
-      },
+      }),
     ])
 
     const hits = await docs.retriever().retrieve('pricing', { limit: 5 })
@@ -116,18 +117,18 @@ describe('knowledgeBase', () => {
     })
 
     await docs.index([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'Old pricing guide',
-      },
+      }),
     ])
     await docs.reindex([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'New pricing guide',
-      },
+      }),
     ])
 
     await expect(docs.retriever().retrieve('pricing', { threshold: 0.5 })).resolves.toEqual([
@@ -148,11 +149,11 @@ describe('knowledgeBase', () => {
       embeddings: createTopicEmbedding(),
     })
     await docs.index([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'Pricing guide',
-      },
+      }),
     ])
 
     const grounded = docs.grounding({
@@ -175,16 +176,16 @@ describe('knowledgeBase', () => {
     })
 
     await docs.index([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing',
         content: 'Pricing guide',
-      },
-      {
+      }),
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'support',
         content: 'Support handbook',
-      },
+      }),
     ])
 
     await expect(docs.remove('pricing')).resolves.toMatchObject({
@@ -215,18 +216,18 @@ describe('knowledgeBase', () => {
     expect('scope' in tenantA).toBe(false)
 
     await tenantA.index([
-      {
+      schema2TextDocument({
         namespace: 'tenant-a',
         sourceId: 'guide',
         content: 'Pricing for tenant A',
-      },
+      }),
     ])
     await tenantB.index([
-      {
+      schema2TextDocument({
         namespace: 'tenant-b',
         sourceId: 'guide',
         content: 'Pricing for tenant B',
-      },
+      }),
     ])
 
     await expect(tenantA.retriever().retrieve('pricing', { threshold: 0.5 })).resolves.toEqual([
@@ -270,11 +271,11 @@ describe('knowledgeBase', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'pricing',
           content: 'Pricing guide',
-        },
+        }),
       ]),
     ).resolves.toMatchObject({
       corpusId: 'docs',

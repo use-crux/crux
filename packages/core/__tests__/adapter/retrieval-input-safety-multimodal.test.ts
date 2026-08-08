@@ -9,6 +9,7 @@ import { knowledgeBase } from "../../src/retrieval";
 import { boundary, guardrail } from "../../src/safety";
 import { inMemoryStorage } from "../../src/storage";
 import { capturingRetrievalAdapter } from "./retrieval-input-safety.fixture";
+import { schema2MediaDocument } from "../fixtures/schema2-stored-evidence";
 
 describe("multimodal direct retrieval input safety", () => {
   it("keeps empty-caption attribution text-only without hydrating assets", async () => {
@@ -42,7 +43,7 @@ describe("multimodal direct retrieval input safety", () => {
       mediaType: "image/png",
     };
     await docs.index([
-      {
+      schema2MediaDocument({
         namespace: "media-docs",
         sourceId: "photo",
         source: {
@@ -51,7 +52,7 @@ describe("multimodal direct retrieval input safety", () => {
           location: { type: "page", pageNumber: 7 },
         },
         asset: image,
-      },
+      }),
     ]);
     const search = docs.retriever();
     let mediaRuns = 0;
