@@ -83,10 +83,15 @@ const (
 	FormatPDF  Format = "pdf"
 )
 
-type SupervisorError struct{ Code ErrorCode }
+type SupervisorError struct {
+	Code  ErrorCode
+	cause error
+}
 
-func (e *SupervisorError) Error() string { return string(e.Code) }
-func closed(code ErrorCode) error        { return &SupervisorError{Code: code} }
+func (e *SupervisorError) Error() string           { return string(e.Code) }
+func closed(code ErrorCode) error                  { return &SupervisorError{Code: code} }
+func closedWith(code ErrorCode, cause error) error { return &SupervisorError{Code: code, cause: cause} }
+func (e *SupervisorError) Unwrap() error           { return e.cause }
 
 var errCPUAccounting = errors.New("cpu accounting unavailable")
 
@@ -590,7 +595,7 @@ func (s *Supervisor) start(ctx context.Context, input []byte, format Format, lau
 		read.Close()
 		write.Close()
 		_ = staged.Cleanup()
-		return nil, closed(ErrContainmentUnavailable)
+		return nil, closedWith(ErrContainmentUnavailable, e)
 	}
 	if adjusted, ok := unit.(verifiedServiceSpec); ok {
 		spec = adjusted.VerifiedServiceSpec(spec)

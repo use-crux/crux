@@ -25,6 +25,32 @@ import (
 
 const systemdService = "org.freedesktop.systemd1"
 
+// ContainmentError exposes only a stable stage and reason code. It is safe for
+// the env-gated integration gate to log without leaking host paths or input.
+type ContainmentError struct{ Stage, ReasonCode string }
+
+func (e *ContainmentError) Error() string { return "containment " + e.Stage + ":" + e.ReasonCode }
+func containment(stage string, err error) error {
+	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
+}
+func containmentReason(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+	var dbusErr dbus.Error
+	if errors.As(err, &dbusErr) {
+		switch dbusErr.Name {
+		case "org.freedesktop.DBus.Error.InvalidArgs":
+			return "dbus-invalid-args"
+		case "org.freedesktop.DBus.Error.AccessDenied":
+			return "dbus-access-denied"
+		default:
+			return "dbus-" + strings.ReplaceAll(strings.TrimPrefix(dbusErr.Name, "org.freedesktop.DBus.Error."), ".", "-")
+		}
+	}
+	return "io-or-systemd"
+}
+
 var blockedNodeEnvironment = []string{"NODE_OPTIONS", "NODE_PATH", "NAPI_RS_NATIVE_LIBRARY_PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"}
 
 // DBusProperty is the deliberately small subset of a systemd transient-unit
@@ -155,7 +181,7 @@ func NewSystemdBackendWith(options SystemdBackendOptions) Backend {
 
 func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.File) (Unit, error) {
 	if b == nil || b.bus == nil || b.fs == nil || b.now == nil || b.sockets == nil || b.peers == nil || stdin == nil || !validBackendSpec(spec) || ctx.Err() != nil {
-		return nil, errors.New("systemd unavailable")
+		return nil, containment("preflight", errors.New("unavailable"))
 	}
 	name, err := transientUnitName()
 	if err != nil {
@@ -163,7 +189,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	}
 	socketPath, listener, err := b.listen(spec, ".a-")
 	if err != nil {
-		return nil, errors.New("authorization channel unavailable")
+		return nil, containment("authorization-socket", err)
 	}
 	if err := b.fs.Chmod(socketPath, 0); err != nil {
 		_ = listener.Close()
@@ -178,7 +204,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 			_ = resultListener.Close()
 		}
 		_ = os.Remove(resultPath)
-		return nil, errors.New("result channel unavailable")
+		return nil, containment("result-socket", err)
 	}
 	defer func() {
 		if listener != nil {
@@ -194,8 +220,11 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	properties := systemdProperties(spec)
 	err = b.bus.StartTransientUnit(ctx, name, properties)
 	closeErr := stdin.Close()
-	if err != nil || closeErr != nil {
-		return nil, errors.New("transient unit unavailable")
+	if err != nil {
+		return nil, containment("start-transient-unit", err)
+	}
+	if closeErr != nil {
+		return nil, containment("close-stdin", closeErr)
 	}
 	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, procFS: b.procFS, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, resultListener: resultListener, resultSocket: resultPath, peers: b.peers, spec: spec}
 	if err := u.waitActive(ctx); err != nil {
