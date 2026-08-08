@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { mkdtemp, writeFile, access, readFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -133,6 +135,24 @@ describe('runParserCandidate', () => {
     expect(result.hashes.core).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('retains the real DOCX fixture footnote, image asset, and native relationships through projection', async () => {
+    const payload = await rawWorkerResult('docx', new URL('./fixtures/prose.docx', import.meta.url))
+    const native = payload.native.value as { readonly facts: { readonly notes: readonly { readonly id: string }[]; readonly assets: readonly unknown[]; readonly blocks: unknown } }
+    const core = payload.core.value as { readonly assets: readonly unknown[]; readonly metadata: { readonly anydocRelationships: string } }
+    const relationships = JSON.parse(core.metadata.anydocRelationships) as { readonly notes: readonly { readonly id: string }[]; readonly inlines: readonly { readonly kind: string; readonly noteId?: string; readonly source?: { readonly kind?: string } }[] }
+
+    expect(native.facts.notes).toHaveLength(1)
+    expect(native.facts.assets).toHaveLength(1)
+    expect(JSON.stringify(native.facts.blocks)).toContain('noteRef')
+    expect(JSON.stringify(native.facts.blocks)).toContain('image')
+    expect(core.assets).toHaveLength(1)
+    expect(relationships.notes).toEqual(native.facts.notes.map((note) => ({ id: note.id, kind: 'footnote' })))
+    expect(relationships.inlines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'noteRef' }),
+      expect.objectContaining({ kind: 'image', source: expect.objectContaining({ kind: 'asset' }) }),
+    ]))
+  })
+
   it('projects every documented Anydoc block and inline variant without loading native code', async () => {
     const result = await runParserCandidate({
       workerPath: anydocWorkerPath,
@@ -215,3 +235,18 @@ describe('runParserCandidate', () => {
     await expect(access(`/proc/${pid}`)).rejects.toThrow()
   })
 })
+
+async function rawWorkerResult(format: string, source: URL): Promise<{ readonly native: { readonly value: unknown }; readonly core: { readonly value: unknown } }> {
+  const child = spawn(process.execPath, [anydocWorkerPath, format], { stdio: ['pipe', 'ignore', 'ignore', 'pipe', 'pipe'] })
+  const sourceBytes = await readFile(source)
+  child.stdin!.end(sourceBytes)
+  const result = child.stdio[3]!
+  const chunks: Buffer[] = []
+  result.on('data', (chunk: Buffer) => chunks.push(chunk))
+  await once(result, 'end')
+  const frame = Buffer.concat(chunks)
+  const body = JSON.parse(frame.subarray(4, 4 + frame.readUInt32BE(0)).toString()) as { readonly native: { readonly value: unknown }; readonly core: { readonly value: unknown } }
+  ;(child.stdio[4] as NodeJS.WritableStream).write('ACK\n')
+  await once(child, 'close')
+  return body
+}
