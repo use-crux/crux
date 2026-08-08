@@ -10,7 +10,7 @@ const origin = (id: string, candidate = producer): StoredEvidenceOrigin => ({ co
 
 it('gives semantic and parent-child derived chunks one document coordinate when every contributor has one producer', async () => {
   const document: CruxDocument = {
-    namespace: 'kb', sourceId: 'same-producer', content: 'First sentence. Second sentence.', evidence: documentEvidence,
+    namespace: 'kb', sourceId: 'same-producer', content: 'First sentence.\n\nSecond sentence.', evidence: documentEvidence,
     parts: [
       { id: 'one', kind: 'text', content: 'First sentence.', evidence: origin('one') },
       { id: 'two', kind: 'text', content: 'Second sentence.', evidence: origin('two') },
@@ -21,6 +21,25 @@ it('gives semantic and parent-child derived chunks one document coordinate when 
 
   expect(semantic.chunks[0]?.evidence).toMatchObject({ coordinate: { kind: 'document', documentSha256: sha }, blockIds: ['one', 'two'] })
   expect(parentChild.chunks[0]?.evidence).toMatchObject({ coordinate: { kind: 'document', documentSha256: sha }, blockIds: ['one', 'two'] })
+})
+
+it('retains only blocks intersecting each semantic and parent-child slice', async () => {
+  const document: CruxDocument = {
+    namespace: 'kb', sourceId: 'slice-contributors', content: 'First sentence.\n\nSecond sentence.', evidence: documentEvidence,
+    parts: [
+      { id: 'one', kind: 'text', content: 'First sentence.', evidence: origin('one') },
+      { id: 'two', kind: 'text', content: 'Second sentence.', evidence: origin('two') },
+    ],
+  }
+  const semantic = await chunker.semantic({
+    strategy: 'custom',
+    segment: () => [{ start: 0, end: 15 }, { start: 17, end: document.content!.length }],
+  }).chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
+  const parentChild = await chunker.parentChild({ parentMaxChars: 100, childMaxChars: 15, childOverlapChars: 0 })
+    .chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+  expect(semantic.chunks.map((chunk) => chunk.evidence?.blockIds)).toEqual([['one'], ['two']])
+  expect(parentChild.chunks.map((chunk) => chunk.evidence?.blockIds)).toEqual([['one'], ['two'], ['two']])
 })
 
 it('does not fabricate persistable evidence for mixed-producer derived chunks', async () => {

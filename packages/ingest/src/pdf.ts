@@ -59,7 +59,7 @@ export async function parsePdfDocument(input: {
   readonly mediaType?: string
   readonly media?: IngestMediaOperations
   /** Required before application-derived visual text may become retrievable. */
-  readonly mediaProducer?: ApplicationOperationProducer
+  readonly mediaProducers?: Readonly<{ readonly describe?: ApplicationOperationProducer }>
 }): Promise<IngestedDocument> {
   const warnings: IngestWarning[] = []
   const parsed = await parsePdf({
@@ -69,12 +69,12 @@ export async function parsePdfDocument(input: {
     namespace: 'schema-2',
   }, {
     warn: (warning) => warnings.push(warning),
-    ...(input.mediaProducer ? { media: input.media } : {}),
+    ...(input.mediaProducers?.describe ? { media: input.media } : {}),
   })
   return adaptPdfParseResult({
     bytes: input.bytes,
     mediaType: input.mediaType,
-    mediaProducer: input.mediaProducer,
+    ...(input.mediaProducers?.describe ? { mediaProducers: { describe: pdfDescribeProducer(input.mediaProducers.describe) } } : {}),
     parsed: { ...parsed, warnings: [...(parsed.warnings ?? []), ...warnings] },
   })
 }
@@ -86,7 +86,7 @@ export async function parsePdfDocument(input: {
 export function adaptPdfParseResult(input: {
   readonly bytes: Uint8Array
   readonly mediaType?: string
-  readonly mediaProducer?: ApplicationOperationProducer
+  readonly mediaProducers?: Readonly<{ readonly describe?: ApplicationOperationProducer }>
   readonly parsed: ParseResult
 }): IngestedDocument {
   const documentSha256 = sha256(input.bytes)
@@ -96,7 +96,7 @@ export function adaptPdfParseResult(input: {
     if (part.kind !== 'page') {
       return []
     }
-    return [pdfPageBlock({ documentSha256, page: part, pageProducer, mediaProducer: input.mediaProducer })]
+    return [pdfPageBlock({ documentSha256, page: part, pageProducer, mediaProducer: pdfDescribeProducer(input.mediaProducers?.describe) })]
   })
   const diagnostics = pdfDiagnostics(input.parsed.warnings, fallback, pageProducer)
 
@@ -109,6 +109,18 @@ export function adaptPdfParseResult(input: {
     assets: [],
     diagnostics,
   })
+}
+
+function pdfDescribeProducer(producer: ApplicationOperationProducer | undefined): ApplicationOperationProducer | undefined {
+  if (!producer) {
+    return undefined
+  }
+  if (producer.operation !== 'media.describe') {
+    const error = new Error('PDF visual output requires a mediaProducers.describe identity with operation media.describe.') as Error & { code?: string }
+    error.code = 'evidence_required'
+    throw error
+  }
+  return producer
 }
 
 export async function parsePdf(input: ParseInput, ctx: PdfContext): Promise<ParseResult> {

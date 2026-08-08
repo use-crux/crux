@@ -154,7 +154,7 @@ async function parseSchema2Document(
       bytes: input.bytes,
       ...(mediaType ? { mediaType } : {}),
       media: input.options?.media,
-      ...(input.options?.mediaProducer ? { mediaProducer: input.options.mediaProducer } : {}),
+      ...(input.options?.mediaProducers ? { mediaProducers: input.options.mediaProducers } : {}),
     })
   }
   const parsed = await parser.parse(parseInput(input), { media: input.options?.media, warn: (warning) => warnings.push(warning) })

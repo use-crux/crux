@@ -110,7 +110,7 @@ it('attributes media descriptions to the supplied application operation producer
   const producer = { kind: 'application-operation' as const, operation: 'media.describe' as const, identity: 'vision:model-a', version: '2026-08-08' }
   const document = adaptPdfParseResult({
     bytes,
-    mediaProducer: producer,
+    mediaProducers: { describe: producer },
     parsed: {
       parts: [{ id: 'pdf:page:3:visual', kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: 'Diagram of the system.' }],
     },
@@ -118,6 +118,17 @@ it('attributes media descriptions to the supplied application operation producer
 
   expect(document.blocks[0]).toMatchObject({ producer, coordinate: { kind: 'page', page: 3 } })
   expect(document.blocks[0]?.id).toMatch(/^pdf:[0-9a-f]{64}:application-operation:media\.describe:vision:model-a:2026-08-08:page:3:derived$/)
+})
+
+it('rejects a transcription identity for PDF visual output', () => {
+  const producer = { kind: 'application-operation' as const, operation: 'media.transcribe' as const, identity: 'audio:model-a', version: '2026-08-08' }
+  expect(() => adaptPdfParseResult({
+    bytes,
+    mediaProducers: { describe: producer },
+    parsed: {
+      parts: [{ id: 'pdf:page:3:visual', kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: 'Diagram of the system.' }],
+    },
+  })).toThrow(/media\.describe/)
 })
 
 it('uses the installed inspector for real PDF page and layout facts', async () => {

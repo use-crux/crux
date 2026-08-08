@@ -576,7 +576,7 @@ export function chunkDocumentParentChild(
         ordinal: children.length,
         content: slice.content,
       })
-      const sourceEvidence = aggregateEvidence(currentParentChunks)
+      const sourceEvidence = aggregateEvidence(currentParentChunks, currentParentContent, slice)
       children.push({
         namespace: document.namespace,
         sourceId: document.sourceId,
@@ -642,9 +642,9 @@ export async function chunkDocumentSemantic(
   }
 
   const normalized = content ? normalizeBoundaries(boundaries, content.length) : []
-  const semanticOrigin = aggregatePartEvidence(document)
   const chunks: CruxChunk[] = normalized.map((boundary, ordinal) => {
     const chunkContent = content.slice(boundary.start, boundary.end)
+    const evidenceOrigin = aggregatePartEvidence(document, content, boundary)
     const sourceSpans = document.content === content
       ? [{ start: boundary.start, end: boundary.end }]
       : []
@@ -665,8 +665,8 @@ export async function chunkDocumentSemantic(
         ...(sourceSpans.length ? { sourceSpans } : {}),
         confidence: sourceSpans.length ? 'exact' as const : 'derived' as const,
       },
-      ...(document.evidence && semanticOrigin
-        ? { evidence: createStoredEvidence({ document: document.evidence, origin: semanticOrigin, chunkId: createStableId('chunk', { sourceId: document.sourceId, boundary, content: chunkContent }), normalizedContent: chunkContent, chunkerVersion: 'semantic:2' }) }
+      ...(document.evidence && evidenceOrigin
+        ? { evidence: createStoredEvidence({ document: document.evidence, origin: evidenceOrigin, chunkId: createStableId('chunk', { sourceId: document.sourceId, boundary, content: chunkContent }), normalizedContent: chunkContent, chunkerVersion: 'semantic:2' }) }
         : {}),
     }
   })
@@ -676,22 +676,39 @@ export async function chunkDocumentSemantic(
   return { chunks }
 }
 
-function aggregateEvidence(chunks: readonly CruxChunk[]): CruxIngestPart['evidence'] | undefined {
+function aggregateEvidence(
+  chunks: readonly CruxChunk[],
+  content: string,
+  slice: { readonly start: number; readonly end: number },
+): CruxIngestPart['evidence'] | undefined {
   const evidence = chunks.map((chunk) => chunk.evidence).filter((value): value is NonNullable<CruxChunk['evidence']> => value !== undefined)
-  if (!evidence.length || evidence.length !== chunks.length) {
+  if (!evidence.length || evidence.length !== chunks.length || joinChunkContent(chunks) !== content) {
     return undefined
   }
-  const [first] = evidence
-  if (!first || !evidence.every((value) => value.documentSha256 === first.documentSha256 && sameProducer(value.producer, first.producer))) {
+  const contributors = chunkContributors(chunks, slice)
+  if (!contributors.length) {
     return undefined
   }
-  return { coordinate: { kind: 'document', documentSha256: first.documentSha256 }, producer: first.producer, blockIds: [...new Set(evidence.flatMap((value) => value.blockIds))] }
+  const contributorEvidence = contributors.map((chunk) => chunk.evidence!)
+  const [first] = contributorEvidence
+  if (!first || !contributorEvidence.every((value) => value.documentSha256 === first.documentSha256 && sameProducer(value.producer, first.producer))) {
+    return undefined
+  }
+  return { coordinate: { kind: 'document', documentSha256: first.documentSha256 }, producer: first.producer, blockIds: [...new Set(contributorEvidence.flatMap((value) => value.blockIds))] }
 }
 
-function aggregatePartEvidence(document: CruxDocument): CruxIngestPart['evidence'] | undefined {
-  const parts = (document.parts ?? []).filter((part) => part.kind !== 'media')
-  const origins = parts.map((part) => part.evidence).filter((value): value is NonNullable<CruxIngestPart['evidence']> => value !== undefined)
-  if (!origins.length || origins.length !== parts.length || !document.evidence) {
+function aggregatePartEvidence(
+  document: CruxDocument,
+  content: string,
+  slice: { readonly start: number; readonly end: number },
+): CruxIngestPart['evidence'] | undefined {
+  const parts = (document.parts ?? []).filter((part): part is ContentPart => part.kind !== 'media')
+  if (!parts.length || !document.evidence || parts.map((part) => part.content).join('\n\n') !== content) {
+    return undefined
+  }
+  const contributors = partContributors(parts, slice)
+  const origins = contributors.map((part) => part.evidence).filter((value): value is NonNullable<CruxIngestPart['evidence']> => value !== undefined)
+  if (!origins.length || origins.length !== contributors.length) {
     return undefined
   }
   const [first] = origins
@@ -699,6 +716,33 @@ function aggregatePartEvidence(document: CruxDocument): CruxIngestPart['evidence
     return undefined
   }
   return { coordinate: { kind: 'document', documentSha256: document.evidence.documentSha256 }, producer: first.producer, blockIds: [...new Set(origins.flatMap((value) => value.blockIds))] }
+}
+
+function joinChunkContent(chunks: readonly CruxChunk[]): string {
+  return chunks.map((chunk) => chunk.content).join('\n\n')
+}
+
+function chunkContributors(chunks: readonly CruxChunk[], slice: { readonly start: number; readonly end: number }): CruxChunk[] {
+  return contributors(chunks, slice, (chunk) => chunk.content)
+}
+
+type ContentPart = Exclude<CruxIngestPart, { kind: 'media' }>
+
+function partContributors(parts: readonly ContentPart[], slice: { readonly start: number; readonly end: number }): ContentPart[] {
+  return contributors(parts, slice, (part) => part.content)
+}
+
+function contributors<T>(items: readonly T[], slice: { readonly start: number; readonly end: number }, content: (item: T) => string): T[] {
+  let start = 0
+  const result: T[] = []
+  for (const [index, item] of items.entries()) {
+    const end = start + content(item).length
+    if (slice.start < end && start < slice.end) {
+      result.push(item)
+    }
+    start = end + (index === items.length - 1 ? 0 : 2)
+  }
+  return result
 }
 
 function sameProducer(left: NonNullable<CruxIngestPart['evidence']>['producer'], right: NonNullable<CruxIngestPart['evidence']>['producer']): boolean {
