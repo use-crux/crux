@@ -130,8 +130,6 @@ const (
 type ResultAccounting struct {
 	SourceBytes     int64 `json:"sourceBytes"`
 	RawBytes        int64 `json:"rawBytes"`
-	NativeBytes     int64 `json:"nativeBytes"`
-	CoreBytes       int64 `json:"coreBytes"`
 	ExpandedBytes   int64 `json:"expandedBytes"`
 	AssetCount      int64 `json:"assetCount"`
 	AssetBytes      int64 `json:"assetBytes"`
@@ -558,9 +556,9 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, lau
 	return s.start(ctx, input, format, launch, tmp, l)
 }
 
-// StartEvaluation is the private evidence path. It exposes parser capabilities
-// without admitting any format into production ingestion routing.
-func (s *Supervisor) StartEvaluation(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+// startEvaluation is reachable only by same-package evidence tests. Production
+// callers can use only Start, which rejects every format until admission.
+func (s *Supervisor) startEvaluation(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
 	return s.start(ctx, input, format, launch, tmp, l)
 }
 

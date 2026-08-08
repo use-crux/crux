@@ -60,7 +60,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	supervisor := NewWithStager(backend, NewStager(stagingRoot))
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	run, err := supervisor.StartEvaluation(ctx, input, FormatDOCX, launch, privateTemp, Limits{
+	run, err := supervisor.startEvaluation(ctx, input, FormatDOCX, launch, privateTemp, Limits{
 		MemoryMax:       128 << 20,
 		TasksMax:        8,
 		CPUQuotaPercent: 50,
@@ -327,7 +327,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	supervisor := NewWithStager(backend, NewStager(stagingRoot))
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	run, err := supervisor.StartEvaluation(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
+	run, err := supervisor.startEvaluation(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
 	if err != nil {
 		t.Fatalf("start canceled probe: %v", err)
 	}

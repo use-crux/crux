@@ -20,7 +20,7 @@ import (
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	b := &fakeBackend{}
-	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -61,7 +61,7 @@ func TestPrepareLocalHostBuildsOpaqueLaunchDependencyWithoutRouting(t *testing.T
 }
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
-	r, _ := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, _ := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	ch := make(chan error, 2)
 	go func() { ch <- r.Authorize() }()
 	go func() { ch <- r.Authorize() }()
@@ -76,7 +76,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	assert(t, e, ErrInvalidRequest)
 	b := &fakeBackend{bad: true}
 	supervisor := newTestSupervisor(t, b)
-	_, e = supervisor.StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	_, e = supervisor.startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
 	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
@@ -88,7 +88,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
-	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -109,7 +109,7 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 
 func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 	request := validTestRequest(FormatDOCX)
-	payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png"}]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[],"native":null,"core":null}`)
+	payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png"}]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[]}`)
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 		t.Fatal("worker accounting was trusted")
 	}
 	valid.Accounting = &accounting
-	valid.Payload = []byte(`{"schemaVersion":1,"document":{},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+	valid.Payload = []byte(`{"kind":"anydoc-raw-v1","document":{},"assets":[],"diagnostics":[]}`)
 	if err := EncodeResult(bytes.NewBuffer(nil), valid); err == nil {
 		t.Fatal("malformed wire payload accepted")
 	}
@@ -159,7 +159,7 @@ func validTestRequest(format Format) Request {
 }
 
 func validWireResult(request Request) Result {
-	payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+	payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[]}`)
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		panic(err)
@@ -169,7 +169,7 @@ func validWireResult(request Request) Result {
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	b := &fakeBackend{}
 	supervisor := newTestSupervisor(t, b)
-	r, err := supervisor.StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, err := supervisor.startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,11 +189,11 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 		if request.Format != FormatODT {
 			t.Fatalf("result expected format = %q", request.Format)
 		}
-		payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+		payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[]}`)
 		accounting, err := recomputePayloadAccounting(request, payload)
 		return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}, err
 	}}
-	run, err := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatODT, testLaunch(), "/run/tmp", Limits{})
+	run, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatODT, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 		<-ctx.Done()
 		return Result{}, ctx.Err()
 	}}
-	r, err := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 		t.Fatal("service quota can exceed CPU budget")
 	}
 	b := &fakeBackend{cpuErr: true}
-	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -261,7 +261,7 @@ func TestTerminalReportCopiesConcurrentAccounting(t *testing.T) {
 
 func TestTerminalReportSeparatesPreStopSnapshotFromTerminationEvidence(t *testing.T) {
 	backend := &fakeBackend{}
-	run, err := newTestSupervisor(t, backend).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	run, err := newTestSupervisor(t, backend).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

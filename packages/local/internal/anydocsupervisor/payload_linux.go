@@ -9,19 +9,11 @@ import (
 	"io"
 )
 
-const (
-	payloadSchemaVersion = 1
-	payloadNodeCeiling   = 1_000_000
-	payloadDepthCeiling  = 128
-)
-
 type wirePayload struct {
-	SchemaVersion int             `json:"schemaVersion"`
-	Document      json.RawMessage `json:"document"`
-	Assets        []wireAsset     `json:"assets"`
-	Diagnostics   []string        `json:"diagnostics"`
-	Native        json.RawMessage `json:"native"`
-	Core          json.RawMessage `json:"core"`
+	Kind        string          `json:"kind"`
+	Document    json.RawMessage `json:"document"`
+	Assets      []wireAsset     `json:"assets"`
+	Diagnostics []string        `json:"diagnostics"`
 }
 
 type wireDocument struct {
@@ -43,7 +35,7 @@ type wireAsset struct {
 
 func recomputePayloadAccounting(request Request, payload []byte) (ResultAccounting, error) {
 	var wire wirePayload
-	if err := decodeStrict(payload, &wire); err != nil || wire.SchemaVersion != payloadSchemaVersion || len(wire.Document) == 0 || wire.Assets == nil || wire.Diagnostics == nil || len(wire.Native) == 0 || len(wire.Core) == 0 {
+	if err := decodeStrict(payload, &wire); err != nil || wire.Kind != "anydoc-raw-v1" || len(wire.Document) == 0 || wire.Assets == nil || wire.Diagnostics == nil {
 		return ResultAccounting{}, errors.New("invalid wire payload")
 	}
 
@@ -51,7 +43,7 @@ func recomputePayloadAccounting(request Request, payload []byte) (ResultAccounti
 	if err := decodeStrict(wire.Document, &document); err != nil || !jsonArray(document.Blocks) || !jsonArray(document.Notes) || document.Assets == nil || len(document.Assets) != len(wire.Assets) {
 		return ResultAccounting{}, errors.New("invalid wire document")
 	}
-	if err := validateBoundedJSON(wire.Document); err != nil || validateOptionalProjection(wire.Native) != nil || validateOptionalProjection(wire.Core) != nil {
+	if err := validateBoundedJSON(wire.Document, request.Limits); err != nil {
 		return ResultAccounting{}, errors.New("unbounded wire payload")
 	}
 
@@ -74,19 +66,15 @@ func recomputePayloadAccounting(request Request, payload []byte) (ResultAccounti
 		}
 	}
 
-	nativeBytes := projectionBytes(wire.Native)
-	coreBytes := projectionBytes(wire.Core)
 	accounting := ResultAccounting{
 		SourceBytes:     request.SourceBytes,
 		RawBytes:        int64(len(wire.Document)),
-		NativeBytes:     nativeBytes,
-		CoreBytes:       coreBytes,
 		AssetCount:      int64(len(wire.Assets)),
 		AssetBytes:      assetBytes,
 		DiagnosticCount: int64(len(wire.Diagnostics)),
 		DiagnosticBytes: diagnosticBytes,
 	}
-	accounting.ExpandedBytes = accounting.SourceBytes + accounting.RawBytes + accounting.NativeBytes + accounting.CoreBytes + accounting.AssetBytes + accounting.DiagnosticBytes
+	accounting.ExpandedBytes = accounting.SourceBytes + accounting.RawBytes + accounting.AssetBytes + accounting.DiagnosticBytes
 	if accounting.ExpandedBytes > request.Limits.ExpandedBytes || accounting.AssetCount > request.Limits.AssetCount {
 		return ResultAccounting{}, errors.New("expanded limit")
 	}
@@ -110,50 +98,45 @@ func jsonArray(raw json.RawMessage) bool {
 	return len(trimmed) >= 2 && trimmed[0] == '[' && trimmed[len(trimmed)-1] == ']'
 }
 
-func validateOptionalProjection(raw json.RawMessage) error {
-	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return nil
-	}
-	return validateBoundedJSON(raw)
-}
-
-func projectionBytes(raw json.RawMessage) int64 {
-	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return 0
-	}
-	return int64(len(raw))
-}
-
-func validateBoundedJSON(raw json.RawMessage) error {
+func validateBoundedJSON(raw json.RawMessage, limits JobLimits) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
 		return err
 	}
-	type entry struct {
-		value any
-		depth int
+	structuralBudget := limits.ExpandedBytes
+	if limits.ResultBytes < structuralBudget {
+		structuralBudget = limits.ResultBytes
 	}
-	stack := []entry{{value: value, depth: 1}}
-	nodes := 0
-	for len(stack) > 0 {
-		current := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
+	nodeCeiling := structuralBudget / 2
+	keyCeiling := structuralBudget / 4
+	nodes, keys := int64(0), int64(0)
+	var visit func(any, int) error
+	visit = func(current any, depth int) error {
 		nodes++
-		if nodes > payloadNodeCeiling || current.depth > payloadDepthCeiling {
+		if nodes > nodeCeiling || depth > 128 {
 			return errors.New("structural limit")
 		}
-		switch typed := current.value.(type) {
+		switch typed := current.(type) {
 		case []any:
 			for _, child := range typed {
-				stack = append(stack, entry{value: child, depth: current.depth + 1})
+				if err := visit(child, depth+1); err != nil {
+					return err
+				}
 			}
 		case map[string]any:
 			for _, child := range typed {
-				stack = append(stack, entry{value: child, depth: current.depth + 1})
+				keys++
+				if keys > keyCeiling {
+					return errors.New("structural limit")
+				}
+				if err := visit(child, depth+1); err != nil {
+					return err
+				}
 			}
 		}
+		return nil
 	}
-	return nil
+	return visit(value, 1)
 }
