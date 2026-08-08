@@ -20,12 +20,13 @@ import (
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	b := &fakeBackend{}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
 	d := sha256.Sum256([]byte("x"))
-	v := Request{Version: 1, Nonce: r.nonce, RequestDigest: requestDigest(1, r.nonce, "docx", hex.EncodeToString(d[:]), 1, JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}), SourceSHA256: hex.EncodeToString(d[:]), Format: "docx", SourceBytes: 1, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
+	limits := testJobLimits()
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: requestDigest(ProtocolVersion, r.nonce, FormatDOCX, hex.EncodeToString(d[:]), 1, limits), SourceSHA256: hex.EncodeToString(d[:]), Format: FormatDOCX, SourceBytes: 1, Limits: limits}
 	if e = r.Authorize(); e != nil {
 		t.Fatal(e)
 	}
@@ -60,7 +61,7 @@ func TestPrepareLocalHostBuildsOpaqueLaunchDependencyWithoutRouting(t *testing.T
 }
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
-	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	ch := make(chan error, 2)
 	go func() { ch <- r.Authorize() }()
 	go func() { ch <- r.Authorize() }()
@@ -75,7 +76,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	assert(t, e, ErrInvalidRequest)
 	b := &fakeBackend{bad: true}
 	supervisor := newTestSupervisor(t, b)
-	_, e = supervisor.Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	_, e = supervisor.Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
 	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
@@ -87,7 +88,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -102,13 +103,35 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 	binary.BigEndian.PutUint32(oversized, MaxFrameBytes+1)
 	_, err := DecodeResult(bytes.NewReader(oversized))
 	assert(t, err, ErrInvalidFrame)
-	err = EncodeResult(bytes.NewBuffer(nil), Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}, OK: true, Error: ErrTimeout})
+	err = EncodeResult(bytes.NewBuffer(nil), Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}, OK: true, Error: ErrTimeout})
 	assert(t, err, ErrInvalidRequest)
+}
+
+func TestResultFailureKindsKeepParserOutcomesDistinct(t *testing.T) {
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	for _, result := range []Result{
+		{Request: request, OK: false, FailureKind: FailureParser, Error: ErrEncrypted},
+		{Request: request, OK: false, FailureKind: FailureInfrastructure, Error: ErrTimeout},
+	} {
+		if err := EncodeResult(bytes.NewBuffer(nil), result); err != nil {
+			t.Fatalf("valid typed failure rejected: %v", err)
+		}
+	}
+	for _, result := range []Result{
+		{Request: request, OK: false, FailureKind: FailureParser, Error: ErrTimeout},
+		{Request: request, OK: false, FailureKind: FailureInfrastructure, Error: ErrEncrypted},
+		{Request: request, OK: false, Error: ErrEncrypted},
+	} {
+		if err := EncodeResult(bytes.NewBuffer(nil), result); err == nil {
+			t.Fatalf("mismatched failure accepted: %#v", result)
+		}
+	}
 }
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	b := &fakeBackend{}
 	supervisor := newTestSupervisor(t, b)
-	r, err := supervisor.Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, err := supervisor.Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,12 +146,35 @@ func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	}
 }
 
+func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
+	b := &fakeBackend{receive: func(_ context.Context, request Request) (Result, error) {
+		if request.Format != FormatODT {
+			t.Fatalf("result expected format = %q", request.Format)
+		}
+		return Result{Request: request, OK: true, Payload: []byte("{}"), Accounting: &ResultAccounting{SourceBytes: request.SourceBytes}}, nil
+	}}
+	run, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatODT, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Authorize(); err != nil {
+		t.Fatal(err)
+	}
+	request, err := DecodeRequest(b.read)
+	if err != nil || request.Format != FormatODT {
+		t.Fatalf("authorized format = %q, %v", request.Format, err)
+	}
+	if _, err := run.ReceiveResult(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 	b := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {
 		<-ctx.Done()
 		return Result{}, ctx.Err()
 	}}
-	r, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +191,7 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 		t.Fatal("service quota can exceed CPU budget")
 	}
 	b := &fakeBackend{cpuErr: true}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -175,7 +221,7 @@ func TestTerminalReportCopiesConcurrentAccounting(t *testing.T) {
 
 func TestTerminalReportSeparatesPreStopSnapshotFromTerminationEvidence(t *testing.T) {
 	backend := &fakeBackend{}
-	run, err := newTestSupervisor(t, backend).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	run, err := newTestSupervisor(t, backend).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,24 +263,58 @@ func newTestServiceSpec(hostSource, runtime, tmp string, limits Limits) (Service
 }
 
 func TestRequestDigestBindsEveryJobField(t *testing.T) {
-	limits := JobLimits{SourceBytes: 1024, ResultBytes: 2048}
-	base := requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, limits)
-	if base != "4e4347a464cdcead83d42ecbfbbe90a15bc0c95cfeb01b5b9158b2c5af2220c2" {
+	limits := JobLimits{SourceBytes: 1024, ResultBytes: 2048, ExpandedBytes: 4096, AssetCount: 8, AssetBytes: 3072, DiagnosticBytes: 512, MemoryBytes: 64 << 20, CPUMilliseconds: 900, WallMilliseconds: 1500, PIDs: 4}
+	base := requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, limits)
+	if base != "332d6b7ec71ed71c0ca4de37239ea3f8746d669feb80cbac7600e83f123d603f" {
 		t.Fatalf("fixed digest = %s", base)
 	}
 	for _, changed := range []string{
-		requestDigest(1, strings.Repeat("c", 32), "docx", strings.Repeat("b", 64), 3, limits),
-		requestDigest(1, strings.Repeat("a", 32), "odt", strings.Repeat("b", 64), 3, limits),
-		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("c", 64), 3, limits),
-		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 4, limits),
-		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, JobLimits{SourceBytes: 1025, ResultBytes: 2048}),
-		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, JobLimits{SourceBytes: 1024, ResultBytes: 2049}),
+		requestDigest(ProtocolVersion, strings.Repeat("c", 32), FormatDOCX, strings.Repeat("b", 64), 3, limits),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatODT, strings.Repeat("b", 64), 3, limits),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("c", 64), 3, limits),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 4, limits),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withSourceBytes(limits, 1025)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withResultBytes(limits, 2049)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withExpandedBytes(limits, 4097)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withAssetCount(limits, 9)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withAssetBytes(limits, 3073)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withDiagnosticBytes(limits, 513)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withMemoryBytes(limits, (64<<20)+1)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withCPUMilliseconds(limits, 901)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withWallMilliseconds(limits, 1501)),
+		requestDigest(ProtocolVersion, strings.Repeat("a", 32), FormatDOCX, strings.Repeat("b", 64), 3, withPIDs(limits, 5)),
 	} {
 		if changed == base {
 			t.Fatal("digest omitted a job field")
 		}
 	}
 }
+
+func TestClosedAnydocFormatsRejectUnknownValues(t *testing.T) {
+	for _, format := range []Format{FormatDOC, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPTX, FormatXLS, FormatXLSX, FormatODS} {
+		if !validFormat(format) {
+			t.Fatalf("available manifest format rejected: %q", format)
+		}
+	}
+	if validFormat(Format("pdf")) || validFormat(Format("unknown")) {
+		t.Fatal("non-candidate format accepted")
+	}
+}
+
+func testJobLimits() JobLimits {
+	return jobLimits(Limits{})
+}
+
+func withSourceBytes(l JobLimits, value int64) JobLimits      { l.SourceBytes = value; return l }
+func withResultBytes(l JobLimits, value int64) JobLimits      { l.ResultBytes = value; return l }
+func withExpandedBytes(l JobLimits, value int64) JobLimits    { l.ExpandedBytes = value; return l }
+func withAssetCount(l JobLimits, value int64) JobLimits       { l.AssetCount = value; return l }
+func withAssetBytes(l JobLimits, value int64) JobLimits       { l.AssetBytes = value; return l }
+func withDiagnosticBytes(l JobLimits, value int64) JobLimits  { l.DiagnosticBytes = value; return l }
+func withMemoryBytes(l JobLimits, value int64) JobLimits      { l.MemoryBytes = value; return l }
+func withCPUMilliseconds(l JobLimits, value int64) JobLimits  { l.CPUMilliseconds = value; return l }
+func withWallMilliseconds(l JobLimits, value int64) JobLimits { l.WallMilliseconds = value; return l }
+func withPIDs(l JobLimits, value int64) JobLimits             { l.PIDs = value; return l }
 
 func TestStagerCreatesVerifiedPrivateSourceAndCleansIt(t *testing.T) {
 	stager := NewStager(t.TempDir())

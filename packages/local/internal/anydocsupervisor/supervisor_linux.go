@@ -21,11 +21,16 @@ import (
 )
 
 const (
-	OutcomeSuccess  ErrorCode = "success"
-	ProtocolVersion           = 1
-	MaxFrameBytes             = 8 << 20
-	MemoryCeiling             = 512 << 20
-	TasksCeiling              = 64
+	OutcomeSuccess         ErrorCode = "success"
+	ProtocolVersion                  = 2
+	MaxFrameBytes                    = 8 << 20
+	SourceCeiling                    = 32 << 20
+	ExpandedCeiling                  = 256 << 20
+	AssetCountCeiling                = 128
+	AssetBytesCeiling                = 64 << 20
+	DiagnosticBytesCeiling           = 64 << 10
+	MemoryCeiling                    = 512 << 20
+	TasksCeiling                     = 64
 	// This caps aggregate cgroup CPU at 18 seconds during RuntimeCeiling.
 	CPUQuotaPercent = 60
 	CPUPeriodUSec   = 1_000_000
@@ -46,6 +51,27 @@ const (
 	ErrWorkerCrash            ErrorCode = "worker-crash"
 	ErrTimeout                ErrorCode = "timeout"
 	ErrAborted                ErrorCode = "aborted"
+	ErrInvalidResult          ErrorCode = "invalid-result"
+	ErrMalformed              ErrorCode = "malformed"
+	ErrEncrypted              ErrorCode = "encrypted"
+	ErrExpandedTooLarge       ErrorCode = "expanded-too-large"
+	ErrUnsupportedFormat      ErrorCode = "unsupported-format"
+	ErrResourceLimit          ErrorCode = "resource-limit"
+	ErrMissingPart            ErrorCode = "missing-part"
+)
+
+type Format string
+
+const (
+	FormatDOC  Format = "doc"
+	FormatDOCX Format = "docx"
+	FormatRTF  Format = "rtf"
+	FormatODT  Format = "odt"
+	FormatEPUB Format = "epub"
+	FormatPPTX Format = "pptx"
+	FormatXLS  Format = "xls"
+	FormatXLSX Format = "xlsx"
+	FormatODS  Format = "ods"
 )
 
 type SupervisorError struct{ Code ErrorCode }
@@ -59,54 +85,75 @@ type Request struct {
 	Version       int       `json:"version"`
 	Nonce         string    `json:"nonce"`
 	RequestDigest string    `json:"requestDigest"`
-	Format        string    `json:"format"`
+	Format        Format    `json:"format"`
 	SourceSHA256  string    `json:"sourceSha256"`
 	SourceBytes   int64     `json:"sourceBytes"`
 	Limits        JobLimits `json:"limits"`
 }
 type JobLimits struct {
-	SourceBytes int64 `json:"sourceBytes"`
-	ResultBytes int64 `json:"resultBytes"`
+	SourceBytes      int64 `json:"sourceBytes"`
+	ResultBytes      int64 `json:"resultBytes"`
+	ExpandedBytes    int64 `json:"expandedBytes"`
+	AssetCount       int64 `json:"assetCount"`
+	AssetBytes       int64 `json:"assetBytes"`
+	DiagnosticBytes  int64 `json:"diagnosticBytes"`
+	MemoryBytes      int64 `json:"memoryBytes"`
+	CPUMilliseconds  int64 `json:"cpuMilliseconds"`
+	WallMilliseconds int64 `json:"wallMilliseconds"`
+	PIDs             int64 `json:"pids"`
 }
 type Result struct {
 	Request
-	OK         bool              `json:"ok"`
-	Error      ErrorCode         `json:"error,omitempty"`
-	Payload    []byte            `json:"payload,omitempty"`
-	Accounting *ResultAccounting `json:"accounting,omitempty"`
+	OK          bool              `json:"ok"`
+	FailureKind FailureKind       `json:"failureKind,omitempty"`
+	Error       ErrorCode         `json:"error,omitempty"`
+	Payload     []byte            `json:"payload,omitempty"`
+	Accounting  *ResultAccounting `json:"accounting,omitempty"`
 }
+
+type FailureKind string
+
+const (
+	FailureParser         FailureKind = "parser"
+	FailureInfrastructure FailureKind = "infrastructure"
+)
+
 type ResultAccounting struct {
-	SourceBytes int64 `json:"sourceBytes"`
+	SourceBytes     int64 `json:"sourceBytes"`
+	ExpandedBytes   int64 `json:"expandedBytes"`
+	AssetCount      int64 `json:"assetCount"`
+	AssetBytes      int64 `json:"assetBytes"`
+	DiagnosticBytes int64 `json:"diagnosticBytes"`
 }
 
 func validRequest(v Request) bool {
-	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= MaxFrameBytes*8 && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes && v.RequestDigest == requestDigest(v.Version, v.Nonce, v.Format, v.SourceSHA256, v.SourceBytes, v.Limits)
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= SourceCeiling && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes && v.Limits.ExpandedBytes > 0 && v.Limits.ExpandedBytes <= ExpandedCeiling && v.Limits.AssetCount > 0 && v.Limits.AssetCount <= AssetCountCeiling && v.Limits.AssetBytes > 0 && v.Limits.AssetBytes <= AssetBytesCeiling && v.Limits.DiagnosticBytes > 0 && v.Limits.DiagnosticBytes <= DiagnosticBytesCeiling && v.Limits.MemoryBytes > 0 && v.Limits.MemoryBytes <= MemoryCeiling && v.Limits.CPUMilliseconds > 0 && v.Limits.CPUMilliseconds <= CPUCeiling.Milliseconds() && v.Limits.WallMilliseconds > 0 && v.Limits.WallMilliseconds <= RuntimeCeiling.Milliseconds() && v.Limits.PIDs > 0 && v.Limits.PIDs <= TasksCeiling && v.RequestDigest == requestDigest(v.Version, v.Nonce, v.Format, v.SourceSHA256, v.SourceBytes, v.Limits)
 }
 
 // requestDigest is SHA-256 over this language-independent encoding:
-// "crux-anydoc-job-digest-v1\\x00", u32be(version), u32be(len(nonce)), nonce,
+// "crux-anydoc-job-digest-v2\\x00", u32be(version), u32be(len(nonce)), nonce,
 // u32be(len(format)), format, u32be(len(sourceSha256)), sourceSha256,
-// u64be(sourceBytes), u64be(limits.sourceBytes), u64be(limits.resultBytes).
-func requestDigest(version int, nonce, format, sourceSHA256 string, sourceBytes int64, limits JobLimits) string {
+// u64be(sourceBytes), followed by every JobLimits field in declaration order.
+func requestDigest(version int, nonce string, format Format, sourceSHA256 string, sourceBytes int64, limits JobLimits) string {
 	h := sha256.New()
-	_, _ = h.Write([]byte("crux-anydoc-job-digest-v1\x00"))
+	_, _ = h.Write([]byte("crux-anydoc-job-digest-v2\x00"))
 	var word [8]byte
 	binary.BigEndian.PutUint32(word[:4], uint32(version))
 	_, _ = h.Write(word[:4])
-	for _, field := range []string{nonce, format, sourceSHA256} {
+	for _, field := range []string{nonce, string(format), sourceSHA256} {
 		binary.BigEndian.PutUint32(word[:4], uint32(len(field)))
 		_, _ = h.Write(word[:4])
 		_, _ = h.Write([]byte(field))
 	}
-	for _, value := range []int64{sourceBytes, limits.SourceBytes, limits.ResultBytes} {
+	for _, value := range []int64{sourceBytes, limits.SourceBytes, limits.ResultBytes, limits.ExpandedBytes, limits.AssetCount, limits.AssetBytes, limits.DiagnosticBytes, limits.MemoryBytes, limits.CPUMilliseconds, limits.WallMilliseconds, limits.PIDs} {
 		binary.BigEndian.PutUint64(word[:], uint64(value))
 		_, _ = h.Write(word[:])
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
-func validFormat(format string) bool {
+func validFormat(format Format) bool {
 	switch format {
-	case "doc", "docm", "rtf", "odt", "epub", "ppt", "pps", "pot", "pptx", "pptm", "ppsx", "ppsm", "odp", "docx", "xls", "xlsb", "ods":
+	case FormatDOC, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPTX, FormatXLS, FormatXLSX, FormatODS:
 		return true
 	}
 	return false
@@ -206,11 +253,24 @@ func validResult(v Result) bool {
 		return false
 	}
 	if v.OK {
-		return v.Error == "" && len(v.Payload) > 0 && int64(len(v.Payload)) <= v.Limits.ResultBytes && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes
+		return v.FailureKind == "" && v.Error == "" && len(v.Payload) > 0 && int64(len(v.Payload)) <= v.Limits.ResultBytes && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes && v.Accounting.ExpandedBytes >= 0 && v.Accounting.ExpandedBytes <= v.Limits.ExpandedBytes && v.Accounting.AssetCount >= 0 && v.Accounting.AssetCount <= v.Limits.AssetCount && v.Accounting.AssetBytes >= 0 && v.Accounting.AssetBytes <= v.Limits.AssetBytes && v.Accounting.DiagnosticBytes >= 0 && v.Accounting.DiagnosticBytes <= v.Limits.DiagnosticBytes
 	}
-	return v.Error != "" && known(v.Error) && len(v.Payload) == 0 && v.Accounting == nil
+	return v.Error != "" && validFailure(v.FailureKind, v.Error) && len(v.Payload) == 0 && v.Accounting == nil
 }
-func known(c ErrorCode) bool {
+func validFailure(kind FailureKind, code ErrorCode) bool {
+	if kind == FailureParser {
+		switch code {
+		case ErrInvalidResult, ErrMalformed, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat, ErrResourceLimit, ErrMissingPart:
+			return true
+		}
+	}
+	if kind == FailureInfrastructure {
+		return knownInfrastructure(code)
+	}
+	return false
+}
+
+func knownInfrastructure(c ErrorCode) bool {
 	switch c {
 	case ErrContainmentUnavailable, ErrInvalidFrame, ErrInvalidRequest, ErrReplay, ErrWorkerCrash, ErrTimeout, ErrAborted:
 		return true
@@ -238,6 +298,27 @@ func (l Limits) Clamp() Limits {
 		l.RuntimeMax = RuntimeCeiling
 	}
 	return l
+}
+
+func jobLimits(l Limits) JobLimits {
+	l = l.Clamp()
+	cpuMilliseconds := l.RuntimeMax.Milliseconds() * int64(l.CPUQuotaPercent) / 100
+	if cpuMilliseconds > CPUCeiling.Milliseconds() {
+		cpuMilliseconds = CPUCeiling.Milliseconds()
+	}
+
+	return JobLimits{
+		SourceBytes:      SourceCeiling,
+		ResultBytes:      MaxFrameBytes,
+		ExpandedBytes:    ExpandedCeiling,
+		AssetCount:       AssetCountCeiling,
+		AssetBytes:       AssetBytesCeiling,
+		DiagnosticBytes:  DiagnosticBytesCeiling,
+		MemoryBytes:      l.MemoryMax,
+		CPUMilliseconds:  cpuMilliseconds,
+		WallMilliseconds: l.RuntimeMax.Milliseconds(),
+		PIDs:             int64(l.TasksMax),
+	}
 }
 
 type ServiceSpec struct {
@@ -439,6 +520,7 @@ type Run struct {
 	nonce, digest string
 	sourceSHA     string
 	sourceBytes   int64
+	format        Format
 	limits        JobLimits
 	staged        *StagedSource
 	mu            sync.Mutex
@@ -452,11 +534,15 @@ type Run struct {
 	stop          chan struct{}
 }
 
-func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
 	if s == nil || s.backend == nil || s.stager == nil {
 		return nil, closed(ErrContainmentUnavailable)
 	}
-	limits := JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}
+	if !validFormat(format) {
+		return nil, closed(ErrInvalidRequest)
+	}
+	l = l.Clamp()
+	limits := jobLimits(l)
 	staged, e := s.stager.Stage(input, limits.SourceBytes)
 	if e != nil {
 		return nil, closed(ErrInvalidRequest)
@@ -505,7 +591,7 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDepen
 	d := sha256.Sum256(input)
 	nonce := hex.EncodeToString(n[:])
 	sourceSHA := hex.EncodeToString(d[:])
-	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, "docx", sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: s.now()}
+	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, format, sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), format: format, limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: s.now()}
 	go r.monitor()
 	return r, nil
 }
@@ -520,7 +606,7 @@ func (r *Run) Authorize() error {
 		return closed(ErrReplay)
 	}
 	r.done = true
-	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.sourceSHA, Format: "docx", SourceBytes: r.sourceBytes, Limits: r.limits}
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.sourceSHA, Format: r.format, SourceBytes: r.sourceBytes, Limits: r.limits}
 	var e error
 	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -546,7 +632,7 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	if !ok {
 		return Result{}, closed(ErrContainmentUnavailable)
 	}
-	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: "docx", SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
 	result, err := receiver.ReceiveResult(ctx, expected)
 	if err != nil {
 		if ctx.Err() != nil {

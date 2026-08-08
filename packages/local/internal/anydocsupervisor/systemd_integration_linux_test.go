@@ -33,7 +33,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 		t.Fatalf("system bus unavailable: %v", err)
 	}
 
-	input, err := os.ReadFile(filepath.Join("..", "..", "..", "ingest", "evals", "anydoc", "fixtures", "prose.docx"))
+	input, err := loadSystemdFixture(os.Getenv("CRUX_SYSTEMD_FIXTURE_PATH"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	supervisor := NewWithStager(backend, NewStager(stagingRoot))
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	run, err := supervisor.Start(ctx, input, launch, privateTemp, Limits{
+	run, err := supervisor.Start(ctx, input, FormatDOCX, launch, privateTemp, Limits{
 		MemoryMax:       128 << 20,
 		TasksMax:        8,
 		CPUQuotaPercent: 50,
@@ -196,7 +196,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 		t.Fatalf("%s probe could not prepare its production authorization channel", name)
 	}
 	sourceSHA := sha256Hex([]byte("probe"))
-	jobLimits := JobLimits{SourceBytes: 1024, ResultBytes: 1024}
+	jobLimits := testJobLimits()
 	nonce := "00000000000000000000000000000000"
 	request := Request{Version: ProtocolVersion, Nonce: nonce, Format: "docx", SourceSHA256: sourceSHA, SourceBytes: 5, Limits: jobLimits}
 	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
@@ -327,7 +327,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	supervisor := NewWithStager(backend, NewStager(stagingRoot))
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	run, err := supervisor.Start(ctx, []byte("probe"), launch, privateTemp, limits)
+	run, err := supervisor.Start(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
 	if err != nil {
 		t.Fatalf("start canceled probe: %v", err)
 	}
@@ -618,7 +618,7 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 		Hostile              []hostileEvidence `json:"hostile"`
 		TerminationEmpty     bool              `json:"terminationEmpty"`
 		TerminationAbsent    bool              `json:"terminationAbsent"`
-	}{result.Format, result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
+	}{string(result.Format), result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
 	if evidence.PreStopMemoryMax > MemoryCeiling/2 {
 		t.Fatal("integration memory ceiling exceeds half the production ceiling")
 	}

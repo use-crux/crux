@@ -25,16 +25,28 @@ describe('anydoc runner trust boundary', () => {
   })
 
   it('uses the shared canonical job digest vector and verifies it before loading Anydoc', () => {
-    const request = { version: 1, nonce: 'a'.repeat(32), format: 'docx', sourceSha256: 'b'.repeat(64), sourceBytes: 3, limits: { sourceBytes: 1024, resultBytes: 2048 } }
+    const request = { version: 2, nonce: 'a'.repeat(32), format: 'docx', sourceSha256: 'b'.repeat(64), sourceBytes: 3, limits: { sourceBytes: 1024, resultBytes: 2048, expandedBytes: 4096, assetCount: 8, assetBytes: 3072, diagnosticBytes: 512, memoryBytes: 64 << 20, cpuMilliseconds: 900, wallMilliseconds: 1500, pids: 4 } }
     const digest = canonicalDigest(request)
-    expect(digest).toBe('4e4347a464cdcead83d42ecbfbbe90a15bc0c95cfeb01b5b9158b2c5af2220c2')
+    expect(digest).toBe('332d6b7ec71ed71c0ca4de37239ea3f8746d669feb80cbac7600e83f123d603f')
     expect(canonicalDigest({ ...request, nonce: 'c'.repeat(32) })).not.toBe(digest)
     expect(canonicalDigest({ ...request, format: 'odt' })).not.toBe(digest)
     expect(canonicalDigest({ ...request, sourceSha256: 'c'.repeat(64) })).not.toBe(digest)
     expect(canonicalDigest({ ...request, sourceBytes: 4 })).not.toBe(digest)
     expect(canonicalDigest({ ...request, limits: { ...request.limits, resultBytes: 2049 } })).not.toBe(digest)
+    for (const key of ['expandedBytes', 'assetCount', 'assetBytes', 'diagnosticBytes', 'memoryBytes', 'cpuMilliseconds', 'wallMilliseconds', 'pids'] as const) {
+      expect(canonicalDigest({ ...request, limits: { ...request.limits, [key]: request.limits[key] + 1 } })).not.toBe(digest)
+    }
     expect(source).toContain('(value as Request).requestDigest === requestDigest(value as Request)')
-    expect(source).toContain("'crux-anydoc-job-digest-v1\\0'")
+    expect(source).toContain("'crux-anydoc-job-digest-v2\\0'")
+  })
+
+  it('uses a closed format union and maps native parser failures to typed outcomes', () => {
+    expect(source).toContain("const candidateFormats = new Set<AnydocFormat>(['doc', 'docx', 'rtf', 'odt', 'epub', 'pptx', 'xls', 'xlsx', 'ods'])")
+    expect(source).toContain("case 'encrypted': return 'encrypted'")
+    expect(source).toContain("case 'resourceLimit': return 'resource-limit'")
+    expect(source).toContain("case 'missingPart': return 'missing-part'")
+    expect(source).toContain("case 'unsupported': return 'unsupported-format'")
+    expect(source).toContain("failureKind: 'parser'")
   })
 
   it('ships a self-contained, integrity-described native runtime tree', async () => {
@@ -61,8 +73,10 @@ describe('anydoc runner trust boundary', () => {
   })
 })
 
-function canonicalDigest(request: { version: number; nonce: string; format: string; sourceSha256: string; sourceBytes: number; limits: { sourceBytes: number; resultBytes: number } }): string {
-  const hash = createHash('sha256').update('crux-anydoc-job-digest-v1\0')
+type DigestRequest = { version: number; nonce: string; format: string; sourceSha256: string; sourceBytes: number; limits: { sourceBytes: number; resultBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticBytes: number; memoryBytes: number; cpuMilliseconds: number; wallMilliseconds: number; pids: number } }
+
+function canonicalDigest(request: DigestRequest): string {
+  const hash = createHash('sha256').update('crux-anydoc-job-digest-v2\0')
   const u32 = (value: number): Buffer => { const buffer = Buffer.alloc(4); buffer.writeUInt32BE(value); return buffer }
   const u64 = (value: number): Buffer => { const buffer = Buffer.alloc(8); buffer.writeBigUInt64BE(BigInt(value)); return buffer }
   hash.update(u32(request.version))
@@ -70,6 +84,6 @@ function canonicalDigest(request: { version: number; nonce: string; format: stri
     const bytes = Buffer.from(value)
     hash.update(u32(bytes.byteLength)).update(bytes)
   }
-  for (const value of [request.sourceBytes, request.limits.sourceBytes, request.limits.resultBytes]) hash.update(u64(value))
+  for (const value of [request.sourceBytes, request.limits.sourceBytes, request.limits.resultBytes, request.limits.expandedBytes, request.limits.assetCount, request.limits.assetBytes, request.limits.diagnosticBytes, request.limits.memoryBytes, request.limits.cpuMilliseconds, request.limits.wallMilliseconds, request.limits.pids]) hash.update(u64(value))
   return hash.digest('hex')
 }

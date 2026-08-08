@@ -1,29 +1,42 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { Socket } from 'node:net'
+import type { Format as NativeFormat } from '@firecrawl/anydoc'
 
-const protocolVersion = 1
-const maxSourceBytes = 64 << 20
+const protocolVersion = 2
+const maxSourceBytes = 32 << 20
 const maxResultBytes = 8 << 20
+const maxExpandedBytes = 256 << 20
+const maxAssetCount = 128
+const maxAssetBytes = 64 << 20
+const maxDiagnosticBytes = 64 << 10
+const maxMemoryBytes = 512 << 20
+const maxCpuMilliseconds = 20_000
+const maxWallMilliseconds = 30_000
+const maxPids = 64
 const inputPath = '/run/crux-anydoc/input/source'
 const timeoutMilliseconds = 25_000
-const candidateFormats = new Set(['doc', 'docm', 'rtf', 'odt', 'epub', 'ppt', 'pps', 'pot', 'pptx', 'pptm', 'ppsx', 'ppsm', 'odp', 'docx', 'xls', 'xlsb', 'ods'])
+const candidateFormats = new Set<AnydocFormat>(['doc', 'docx', 'rtf', 'odt', 'epub', 'pptx', 'xls', 'xlsx', 'ods'])
 
-type Request = { version: number; nonce: string; requestDigest: string; format: string; sourceSha256: string; sourceBytes: number; limits: { sourceBytes: number; resultBytes: number } }
-type Result = Request & { ok: boolean; error?: string; payload?: string; accounting?: { sourceBytes: number } }
+type AnydocFormat = 'doc' | 'docx' | 'rtf' | 'odt' | 'epub' | 'pptx' | 'xls' | 'xlsx' | 'ods'
+type ParserError = 'invalid-result' | 'malformed' | 'encrypted' | 'expanded-too-large' | 'unsupported-format' | 'resource-limit' | 'missing-part'
+type JobLimits = { sourceBytes: number; resultBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticBytes: number; memoryBytes: number; cpuMilliseconds: number; wallMilliseconds: number; pids: number }
+type Accounting = { sourceBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticBytes: number }
+type Request = { version: number; nonce: string; requestDigest: string; format: AnydocFormat; sourceSha256: string; sourceBytes: number; limits: JobLimits }
+type Result = (Request & { ok: true; payload: string; accounting: Accounting }) | (Request & { ok: false; failureKind: 'parser'; error: ParserError })
 
 const [capabilityPath, resultPath] = process.argv.slice(2)
 
 void main()
 
 async function main(): Promise<void> {
-  if (!capabilityPath || !resultPath) return fail('invalid-request')
+  if (!capabilityPath || !resultPath) return abort()
   const request = await receiveRequest(capabilityPath).catch(() => undefined)
-  if (!validRequest(request)) return fail('replay')
+  if (!validRequest(request)) return abort()
 
   const bytes = await readSource(inputPath, request.limits.sourceBytes).catch(() => undefined)
-  if (!bytes) return fail('invalid-request')
-  if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return fail('replay')
+  if (!bytes) return abort()
+  if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return abort()
 
   let payload: unknown
   try {
@@ -31,11 +44,15 @@ async function main(): Promise<void> {
     // top level has only Node builtins, so untrusted launches cannot load the
     // native addon before proving possession of this run's nonce and digest.
     const anydoc = await import('@firecrawl/anydoc')
-    payload = await anydoc.toDocument(bytes, request.format as never)
-  } catch {
-    return fail('invalid-result', request)
+    payload = await anydoc.toDocument(bytes, request.format as NativeFormat)
+  } catch (error) {
+    return fail(parserError(error), request)
   }
-  await send({ ...request, ok: true, payload: Buffer.from(JSON.stringify(payload)).toString('base64'), accounting: { sourceBytes: bytes.byteLength } })
+  const inspected = inspectPayload(payload, request.limits)
+  if ('error' in inspected) return fail(inspected.error, request)
+  const result = { ...request, ok: true as const, payload: inspected.bytes.toString('base64'), accounting: { sourceBytes: bytes.byteLength, ...inspected.accounting } }
+  if (encodeResult(result).byteLength > request.limits.resultBytes) return fail('resource-limit', request)
+  await send(result)
 }
 
 async function receiveRequest(path: string): Promise<Request> {
@@ -63,7 +80,8 @@ async function readSource(path: string, limit: number): Promise<Buffer> {
 }
 
 function validRequest(value: unknown): value is Request {
-  return !!value && typeof value === 'object'
+  return isRecord(value) && exactKeys(value, ['version', 'nonce', 'requestDigest', 'format', 'sourceSha256', 'sourceBytes', 'limits'])
+    && isRecord(value.limits) && exactKeys(value.limits, ['sourceBytes', 'resultBytes', 'expandedBytes', 'assetCount', 'assetBytes', 'diagnosticBytes', 'memoryBytes', 'cpuMilliseconds', 'wallMilliseconds', 'pids'])
     && (value as Request).version === protocolVersion
     && /^[a-f0-9]{32}$/.test((value as Request).nonce)
     && /^[a-f0-9]{64}$/.test((value as Request).requestDigest)
@@ -72,16 +90,26 @@ function validRequest(value: unknown): value is Request {
     && Number.isSafeInteger((value as Request).sourceBytes) && (value as Request).sourceBytes >= 0
     && Number.isSafeInteger((value as Request).limits?.sourceBytes) && (value as Request).limits.sourceBytes >= (value as Request).sourceBytes && (value as Request).limits.sourceBytes <= maxSourceBytes
     && Number.isSafeInteger((value as Request).limits?.resultBytes) && (value as Request).limits.resultBytes > 0 && (value as Request).limits.resultBytes <= maxResultBytes
+    && boundedPositive((value as Request).limits?.expandedBytes, maxExpandedBytes)
+    && boundedPositive((value as Request).limits?.assetCount, maxAssetCount)
+    && boundedPositive((value as Request).limits?.assetBytes, maxAssetBytes)
+    && boundedPositive((value as Request).limits?.diagnosticBytes, maxDiagnosticBytes)
+    && boundedPositive((value as Request).limits?.memoryBytes, maxMemoryBytes)
+    && boundedPositive((value as Request).limits?.cpuMilliseconds, maxCpuMilliseconds)
+    && boundedPositive((value as Request).limits?.wallMilliseconds, maxWallMilliseconds)
+    && boundedPositive((value as Request).limits?.pids, maxPids)
     && (value as Request).requestDigest === requestDigest(value as Request)
 }
 
-async function fail(error: string, request?: Request): Promise<void> {
-  if (request) await send({ ...request, ok: false, error }).catch(() => undefined)
+async function fail(error: ParserError, request: Request): Promise<void> {
+  if (request) await send({ ...request, ok: false, failureKind: 'parser', error }).catch(() => undefined)
   process.exitCode = 1
 }
 
+function abort(): void { process.exitCode = 1 }
+
 async function send(result: Result): Promise<void> {
-  const payload = Buffer.from(JSON.stringify(result))
+  const payload = encodeResult(result)
   if (payload.byteLength === 0 || payload.byteLength > maxResultBytes || payload.byteLength > result.limits.resultBytes) throw new Error('result')
   const socket = await connect(resultPath)
   try {
@@ -91,18 +119,70 @@ async function send(result: Result): Promise<void> {
   } finally { socket.destroy() }
 }
 
-// SHA-256 encoding: "crux-anydoc-job-digest-v1\\0", u32be(version), then
+function encodeResult(result: Result): Buffer { return Buffer.from(JSON.stringify(result)) }
+
+// SHA-256 encoding: "crux-anydoc-job-digest-v2\\0", u32be(version), then
 // u32be(length)+UTF-8 bytes for nonce, format, sourceSha256, followed by
-// u64be(sourceBytes), u64be(limits.sourceBytes), u64be(limits.resultBytes).
+// u64be(sourceBytes), then every JobLimits field in declaration order.
 function requestDigest(request: Request): string {
-  const hash = createHash('sha256').update('crux-anydoc-job-digest-v1\0', 'utf8')
+  const hash = createHash('sha256').update('crux-anydoc-job-digest-v2\0', 'utf8')
   hash.update(u32(request.version))
   for (const value of [request.nonce, request.format, request.sourceSha256]) {
     const bytes = Buffer.from(value, 'utf8')
     hash.update(u32(bytes.byteLength)).update(bytes)
   }
-  for (const value of [request.sourceBytes, request.limits.sourceBytes, request.limits.resultBytes]) hash.update(u64(value))
+  for (const value of [request.sourceBytes, request.limits.sourceBytes, request.limits.resultBytes, request.limits.expandedBytes, request.limits.assetCount, request.limits.assetBytes, request.limits.diagnosticBytes, request.limits.memoryBytes, request.limits.cpuMilliseconds, request.limits.wallMilliseconds, request.limits.pids]) hash.update(u64(value))
   return hash.digest('hex')
+}
+
+function boundedPositive(value: unknown, ceiling: number): boolean {
+  return Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= ceiling
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value)
+  return keys.length === expected.length && expected.every((key) => Object.hasOwn(value, key))
+}
+
+function parserError(error: unknown): ParserError {
+  const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined
+  switch (code) {
+    case 'malformed': return 'malformed'
+    case 'encrypted': return 'encrypted'
+    case 'resourceLimit': return 'resource-limit'
+    case 'missingPart': return 'missing-part'
+    case 'unsupported': return 'unsupported-format'
+    default: return 'invalid-result'
+  }
+}
+
+function inspectPayload(payload: unknown, limits: JobLimits): { bytes: Buffer; accounting: Omit<Accounting, 'sourceBytes'> } | { error: ParserError } {
+  if (!payload || typeof payload !== 'object') return { error: 'invalid-result' }
+  const document = payload as { assets?: unknown; diagnostics?: unknown }
+  if (!Array.isArray(document.assets)) return { error: 'invalid-result' }
+  if (document.assets.length > limits.assetCount) return { error: 'resource-limit' }
+
+  let assetBytes = 0
+  for (const asset of document.assets) {
+    if (!asset || typeof asset !== 'object' || !('data' in asset)) return { error: 'invalid-result' }
+    const data = (asset as { data: unknown }).data
+    if (!Buffer.isBuffer(data) && !(data instanceof Uint8Array)) return { error: 'invalid-result' }
+    assetBytes += data.byteLength
+    if (assetBytes > limits.assetBytes) return { error: 'resource-limit' }
+  }
+
+  const diagnostics = document.diagnostics === undefined ? [] : document.diagnostics
+  if (!Array.isArray(diagnostics)) return { error: 'invalid-result' }
+  const diagnosticBytes = Buffer.byteLength(JSON.stringify(diagnostics))
+  if (diagnosticBytes > limits.diagnosticBytes) return { error: 'resource-limit' }
+
+  const bytes = Buffer.from(JSON.stringify(payload))
+  if (bytes.byteLength > limits.expandedBytes) return { error: 'expanded-too-large' }
+  return { bytes, accounting: { expandedBytes: bytes.byteLength, assetCount: document.assets.length, assetBytes, diagnosticBytes } }
 }
 
 function connect(path: string): Promise<Socket> {

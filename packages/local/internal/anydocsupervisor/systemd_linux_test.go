@@ -335,7 +335,7 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	go func() {
-		done <- u.AuthorizeCapability(ctx, Request{Version: 1, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}})
+		done <- u.AuthorizeCapability(ctx, Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()})
 	}()
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -370,7 +370,7 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 		result Result
 		err    error
 	}, 1)
-	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
 	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
 	go func() {
 		result, receiveErr := u.ReceiveResult(context.Background(), request)
@@ -407,7 +407,7 @@ func TestSystemdResultRejectsMismatchedCapabilityBeforeAcknowledging(t *testing.
 		t.Fatal(err)
 	}
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
-	expected := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
+	expected := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
 	expected.RequestDigest = requestDigest(expected.Version, expected.Nonce, expected.Format, expected.SourceSHA256, expected.SourceBytes, expected.Limits)
 	done := make(chan error, 1)
 	go func() { _, receiveErr := u.ReceiveResult(context.Background(), expected); done <- receiveErr }()

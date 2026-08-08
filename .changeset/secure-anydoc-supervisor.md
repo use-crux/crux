@@ -23,3 +23,8 @@ Deny visibility of unrelated host data, grant the dynamic worker access only
 to its private runtime directory, and gate the real systemd sandbox against
 network, filesystem, privilege, task, memory, CPU, timeout, crash, abort, and
 descendant-escape probes.
+
+Bind the selected closed document format and every source, result, expansion,
+asset, diagnostic, memory, CPU, wall-time, and process ceiling into the
+one-shot worker capability. Return parser failures as strict typed outcomes
+that remain distinct from containment and worker infrastructure failures.
