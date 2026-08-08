@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/godbus/dbus/v5"
 )
 
 // TestSystemdContainmentIntegration is intentionally a real system-bus test.
@@ -67,7 +69,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 		RuntimeMax:      20 * time.Second,
 	})
 	if err != nil {
-		t.Fatalf("start transient service: %v", err)
+		t.Fatal(safeContainmentDiagnostic(err))
 	}
 
 	if err := run.Authorize(); err != nil {
@@ -84,6 +86,77 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	assertIntegrationCleanup(t, root, stagingRoot, privateTemp, run)
 	hostile := runHostileContainmentCases(t, launch, root)
 	writeContainmentEvidence(t, result, run.TerminalReport(), hostile)
+}
+
+func safeContainmentDiagnostic(err error) string {
+	const unavailable = "containment-unavailable"
+
+	var supervisorError *SupervisorError
+	if !errors.As(err, &supervisorError) || supervisorError.Code != ErrContainmentUnavailable {
+		return unavailable
+	}
+
+	var containmentError *ContainmentError
+	if !errors.As(err, &containmentError) || !safeContainmentStage(containmentError.Stage) || !safeContainmentReason(containmentError.ReasonCode) {
+		return unavailable
+	}
+
+	return unavailable + " stage=" + containmentError.Stage + " reason=" + containmentError.ReasonCode
+}
+
+func safeContainmentStage(stage string) bool {
+	switch stage {
+	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active":
+		return true
+	default:
+		return false
+	}
+}
+
+func safeContainmentReason(reason string) bool {
+	switch reason {
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "io-or-systemd":
+		return true
+	default:
+		return false
+	}
+}
+
+func TestSafeContainmentDiagnosticTraversesTypedCauseAndRedactsDetails(t *testing.T) {
+	unsafe := "/private/path nonce=secret input=customer.docx"
+	err := closedWith(ErrContainmentUnavailable, containment("start-transient-unit", dbus.Error{
+		Name: "org.freedesktop.DBus.Error.InvalidArgs",
+		Body: []any{unsafe},
+	}))
+
+	var supervisorError *SupervisorError
+	if !errors.As(err, &supervisorError) {
+		t.Fatal("typed supervisor error was not preserved")
+	}
+	var containmentError *ContainmentError
+	if !errors.As(err, &containmentError) {
+		t.Fatal("typed containment cause was not preserved")
+	}
+
+	got := safeContainmentDiagnostic(err)
+	const want = "containment-unavailable stage=start-transient-unit reason=dbus-invalid-args"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+	if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
+		t.Fatalf("diagnostic leaked unsafe details: %q", got)
+	}
+
+	for _, unsafeError := range []error{
+		closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: unsafe, ReasonCode: "dbus-other"}),
+		closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "preflight", ReasonCode: unsafe}),
+		closedWith(ErrContainmentUnavailable, errors.New(unsafe)),
+		errors.New(unsafe),
+	} {
+		if got := safeContainmentDiagnostic(unsafeError); got != "containment-unavailable" {
+			t.Fatalf("unsafe diagnostic was not redacted: %q", got)
+		}
+	}
 }
 
 type hostileEvidence struct {
