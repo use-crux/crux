@@ -225,6 +225,8 @@ type SandboxReport struct {
 	RestrictAddressFamiliesAllow                                            bool
 	DynamicUser                                                             bool
 	UID                                                                     uint64
+	PrivateUsers                                                            bool
+	ProtectProc, ProcSubset                                                 string
 	Populated                                                               bool
 }
 type Unit interface {
@@ -240,6 +242,7 @@ type Backend interface {
 type capabilityAuthorizer interface {
 	AuthorizeCapability(context.Context, Request) error
 }
+type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
 type verifiedServiceSpec interface {
 	VerifiedServiceSpec(ServiceSpec) ServiceSpec
 }
@@ -290,6 +293,13 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 		write.Close()
 		cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
+	}
+	if preparer, ok := unit.(authorizationPreparer); ok {
+		if preparer.PrepareAuthorization(ctx) != nil {
+			write.Close()
+			cleanup(unit)
+			return nil, closed(ErrContainmentUnavailable)
+		}
 	}
 	var n [16]byte
 	if _, e = rand.Read(n[:]); e != nil {
@@ -418,7 +428,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if e != nil {
 		return false
 	}
-	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

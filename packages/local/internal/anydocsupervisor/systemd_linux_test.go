@@ -260,7 +260,9 @@ func (f *fakeFS) WriteFile(path string, contents []byte) error {
 	f.writes[path] = append([]byte(nil), contents...)
 	return nil
 }
-func (f *fakeFS) RemoveAll(path string) error { f.removed[path] = true; return nil }
+func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return nil }
+func (f *fakeFS) Chown(string, int, int) error    { return nil }
+func (f *fakeFS) Chmod(string, os.FileMode) error { return nil }
 
 type immediateClock struct{}
 

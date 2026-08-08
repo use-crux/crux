@@ -43,6 +43,8 @@ type FileSystem interface {
 	ReadFile(string) ([]byte, error)
 	WriteFile(string, []byte) error
 	RemoveAll(string) error
+	Chown(string, int, int) error
+	Chmod(string, os.FileMode) error
 }
 
 type Clock interface {
@@ -139,6 +141,11 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	}
 	socketPath, listener, err := b.listen(spec)
 	if err != nil {
+		return nil, errors.New("authorization channel unavailable")
+	}
+	if err := b.fs.Chmod(socketPath, 0); err != nil {
+		_ = listener.Close()
+		_ = os.Remove(socketPath)
 		return nil, errors.New("authorization channel unavailable")
 	}
 	defer func() {
@@ -333,7 +340,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, errors.New("invalid sandbox properties")
 	}
-	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) error {
@@ -348,7 +355,7 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = u.listener.SetDeadline(deadline)
 	}
-	for attempt := 0; attempt < 8; attempt++ {
+	for {
 		conn, err := u.listener.AcceptUnix()
 		if err != nil {
 			return errors.New("authorization unavailable")
@@ -364,8 +371,26 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 			return nil
 		}
 		_ = conn.Close()
+		select {
+		case <-ctx.Done():
+			return errors.New("authorization unavailable")
+		case <-u.now.After(10 * time.Millisecond):
+		}
 	}
-	return errors.New("authorization unavailable")
+}
+
+func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
+	report, err := u.Report(ctx)
+	if err != nil || !report.DynamicUser || report.UID == 0 || !report.PrivateUsers || report.ProtectProc != "invisible" || report.ProcSubset != "pid" {
+		return errors.New("authorization unavailable")
+	}
+	if err := u.fs.Chown(u.socket, int(report.UID), 0); err != nil {
+		return errors.New("authorization unavailable")
+	}
+	if err := u.fs.Chmod(u.socket, 0600); err != nil {
+		return errors.New("authorization unavailable")
+	}
+	return nil
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
@@ -451,7 +476,9 @@ func (osFS) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
 func (osFS) WriteFile(path string, contents []byte) error {
 	return os.WriteFile(path, contents, 0)
 }
-func (osFS) RemoveAll(path string) error { return os.RemoveAll(path) }
+func (osFS) RemoveAll(path string) error               { return os.RemoveAll(path) }
+func (osFS) Chown(path string, uid, gid int) error     { return os.Chown(path, uid, gid) }
+func (osFS) Chmod(path string, mode os.FileMode) error { return os.Chmod(path, mode) }
 
 func validCgroup(path string) bool {
 	return strings.HasPrefix(path, "/") && filepath.Clean(path) == path && !strings.Contains(path, "..")
