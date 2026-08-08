@@ -494,6 +494,40 @@ func TestSystemdResultReportsTerminalWorkerCrash(t *testing.T) {
 	}
 }
 
+func TestSystemdResultHasExactlyOneReceiver(t *testing.T) {
+	path := t.TempDir() + "/result.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	first := make(chan error, 1)
+	go func() { _, receiveErr := u.ReceiveResult(ctx, request); first <- receiveErr }()
+	for {
+		u.resultMu.Lock()
+		claimed := u.resultClaimed
+		u.resultMu.Unlock()
+		if claimed {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	_, err = u.ReceiveResult(context.Background(), request)
+	var supervisorErr *SupervisorError
+	if !errors.As(err, &supervisorErr) || supervisorErr.Code != ErrReplay {
+		t.Fatalf("second receiver error = %T %v, want typed %q", err, err, ErrReplay)
+	}
+	cancel()
+	if err := <-first; !errors.Is(err, context.Canceled) {
+		t.Fatalf("first receiver error = %v, want context cancellation", err)
+	}
+}
+
 type fakePeer struct{ pid int }
 
 func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) { return p.pid, 1000, nil }
@@ -615,7 +649,7 @@ type fakeFS struct {
 }
 
 func newFakeFS() *fakeFS {
-	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("64\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
+	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("32\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	if strings.HasSuffix(path, "/.complete") {

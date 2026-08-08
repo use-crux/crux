@@ -439,6 +439,8 @@ type systemdUnit struct {
 	socket         string
 	resultListener *net.UnixListener
 	resultSocket   string
+	resultMu       sync.Mutex
+	resultClaimed  bool
 	peers          PeerVerifier
 	spec           ServiceSpec
 	reportMu       sync.Mutex
@@ -743,15 +745,23 @@ func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
 }
 
 func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Result, error) {
+	u.resultMu.Lock()
+	if u.resultClaimed {
+		u.resultMu.Unlock()
+		return Result{}, closed(ErrReplay)
+	}
 	if u.resultListener == nil || u.peers == nil {
+		u.resultMu.Unlock()
 		return Result{}, errors.New("result unavailable")
 	}
+	listener := u.resultListener
+	u.resultListener = nil
+	u.resultClaimed = true
+	u.resultMu.Unlock()
 	defer func() {
-		_ = u.resultListener.Close()
-		u.resultListener = nil
+		_ = listener.Close()
 		_ = os.Remove(u.resultSocket)
 	}()
-	listener := u.resultListener
 	stopCancel := context.AfterFunc(ctx, func() { _ = listener.SetDeadline(time.Now()) })
 	defer stopCancel()
 	for {
@@ -759,8 +769,8 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
 			deadline = contextDeadline
 		}
-		_ = u.resultListener.SetDeadline(deadline)
-		conn, err := u.resultListener.AcceptUnix()
+		_ = listener.SetDeadline(deadline)
+		conn, err := listener.AcceptUnix()
 		if err != nil {
 			if ctx.Err() != nil {
 				return Result{}, ctx.Err()
@@ -1002,9 +1012,12 @@ func (u *systemdUnit) Cleanup(ctx context.Context) error {
 	if u.socket != "" {
 		_ = os.Remove(u.socket)
 	}
-	if u.resultListener != nil {
-		_ = u.resultListener.Close()
-		u.resultListener = nil
+	u.resultMu.Lock()
+	resultListener := u.resultListener
+	u.resultListener = nil
+	u.resultMu.Unlock()
+	if resultListener != nil {
+		_ = resultListener.Close()
 	}
 	if u.resultSocket != "" {
 		_ = os.Remove(u.resultSocket)
