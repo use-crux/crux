@@ -26,13 +26,9 @@ describe('runAdmissionSuite', () => {
     })
   })
 
-  it('selects the DOCX primary only from completed candidate quality evidence', async () => {
+  it('keeps DOCX quality leadership separate from format-wide primary admission', async () => {
     const evidence = await runAdmissionSuite({ fixtureIds: ['docx-structure-v1'], determinismRuns: false })
 
-    expect(evidence.docxDecision).toMatchObject({ primary: 'anydoc' })
-    expect(evidence.results[0]?.candidates.map((candidate) => ({ parser: candidate.parser, selected: candidate.selected }))).toEqual([
-      { parser: 'anydoc', selected: true },
-      { parser: 'mammoth', selected: false },
-    ])
+    expect(evidence.docxDecision).toEqual({ primary: null, reason: 'No candidate passed every format-wide gate.' })
   })
 })

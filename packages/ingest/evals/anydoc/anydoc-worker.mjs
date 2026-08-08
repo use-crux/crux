@@ -141,7 +141,7 @@ function projectDocument(document, bytes, sourceFormat) {
           displayedValue: content.map((child) => child.text).join(''),
         }
       }))
-      const columns = rows[0]?.map((cell) => cell.displayedValue ?? '') ?? []
+      const columns = block.table.headerRows > 0 ? rows[0]?.map((cell) => cell.displayedValue ?? '') ?? [] : []
       return [{ id: tableId, kind: 'table', coordinate, headingPath: [], producer, columns, headerRows: block.table.headerRows, rows }]
     }
     if (block.kind === 'rule') return [textBlock('---', 'code', blockPath)]
@@ -159,13 +159,52 @@ function projectDocument(document, bytes, sourceFormat) {
     notes: document.notes.map((note) => ({ id: note.id, kind: note.kind })),
     inlines: collectInlineFacts(document.blocks, document.notes),
   }
+  const facts = extractNativeFacts({ documentSha256, producer, blocks, assets, diagnostics: [] })
   const core = { schemaVersion: 2, source: { documentSha256, mediaType: mediaType(sourceFormat), format: sourceFormat }, producer, metadata: { anydocRelationships: JSON.stringify(relationships) }, blocks, assets, diagnostics: [] }
   const native = {
     kind: 'anydoc-native-v1', source: { documentSha256, format: sourceFormat },
-    facts: { blocks: document.blocks, notes: document.notes, assets: document.assets.map((asset) => ({ id: asset.id, mediaType: asset.mediaType, originPart: asset.originPart, byteLength: asset.data.byteLength })) },
-    projection: core,
+    observed: { blocks: document.blocks, notes: document.notes, assets: document.assets.map((asset) => ({ id: asset.id, mediaType: asset.mediaType, originPart: asset.originPart, byteLength: asset.data.byteLength })) },
+    facts,
   }
   return success(native, core, saturatedSum(bytes.byteLength, jsonBytes(document), jsonBytes(native), jsonBytes(core), assets.reduce((total, asset) => saturatedAdd(total, asset.byteLength), 0)), assets)
+}
+
+function extractNativeFacts(input) {
+  const facts = []
+  const add = (factPath, fact) => facts.push({ ...fact, factPath })
+  const provenance = (factPath, target) => add(factPath, { kind: 'provenance', path: factPath, coordinate: target.coordinate, producer: target.producer })
+  const textBlocks = (items) => items.flatMap((block) => block.kind === 'text' ? [block] : block.kind === 'list' ? block.items.flatMap((item) => textBlocks(item.blocks)) : block.kind === 'table' ? block.rows.flatMap((row) => row.flatMap((cell) => textBlocks(cell.blocks))) : textBlocks(block.blocks))
+  const tableValue = (table) => ({ columns: table.columns, rows: table.rows.map((row) => row.map((cell) => cell.displayedValue ?? textBlocks(cell.blocks).map((block) => block.text).join(''))) })
+  const coordinates = []
+  const visit = (block, path) => {
+    coordinates.push(block.coordinate)
+    provenance(path, block)
+    if (block.kind === 'text') {
+      if (block.role === 'heading') add(path, { kind: 'heading', level: block.level, text: block.text })
+      if (block.role === 'note') add(path, { kind: 'notes', text: [block.text] })
+      block.inlines.filter((inline) => inline.kind === 'link').forEach((inline) => add(path, { kind: 'link', text: inline.text, target: inline.target }))
+      return
+    }
+    if (block.kind === 'list') {
+      add(path, { kind: 'list', ordered: block.ordered, depth: path.split('/').filter((part) => part === 'items').length + 1, text: textBlocks(block.items.flatMap((item) => item.blocks)).map((item) => item.text) })
+      block.items.forEach((item, itemIndex) => item.blocks.forEach((child, childIndex) => visit(child, `${path}/items/${itemIndex + 1}/blocks/${childIndex + 1}`)))
+      return
+    }
+    if (block.kind === 'table') {
+      add(path, { kind: 'table', ...tableValue(block) })
+      return
+    }
+    block.blocks.forEach((child, index) => visit(child, `${path}/blocks/${index + 1}`))
+  }
+  add('document', { kind: 'ordered-text', text: textBlocks(input.blocks).filter((block) => block.role !== 'note').map((block) => block.text) })
+  add('document', { kind: 'notes', text: textBlocks(input.blocks).filter((block) => block.role === 'note').map((block) => block.text) })
+  add('document', { kind: 'asset-count', count: input.assets.length })
+  add('document', { kind: 'no-parser-downgrade' })
+  provenance('document', { coordinate: { kind: 'document', documentSha256: input.documentSha256 }, producer: input.producer })
+  input.blocks.forEach((block, index) => visit(block, `blocks/${index + 1}`))
+  input.assets.forEach((asset, index) => { coordinates.push(asset.coordinate); add(`assets/${index + 1}`, { kind: 'asset-count', count: input.assets.length }); provenance(`assets/${index + 1}`, asset) })
+  add('document', { kind: 'coordinate-kinds', kinds: [...new Set(coordinates.map((coordinate) => coordinate.kind))].sort() })
+  return facts
 }
 
 function isListChild(block) { return block.kind === 'text' || block.kind === 'list' }

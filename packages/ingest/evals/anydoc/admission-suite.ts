@@ -8,7 +8,7 @@ import type { IngestedDocument } from '@use-crux/core/indexing'
 import { expectedFactsForCandidate, expectedFactsForFixture } from './expected-facts.js'
 import { fixtureManifests, validateFixtureSourceHash, type AnydocFixtureManifest } from './fixture-manifest.js'
 import { collectDeterminismEvidence, runParserCandidate, type DeterminismEvidence, type ParserRunResult } from './sequential-runner.js'
-import { assertCoreProjectionFacts, assertParserNativeFacts, extractParserNativeFacts, type ParserNativeFacts, type StructuralAssertionResult } from './structural-assertions.js'
+import { assertCoreProjectionFacts, assertParserNativeFacts, type ParserNativeFact, type ParserNativeFacts, type StructuralAssertionResult } from './structural-assertions.js'
 
 const directory = process.env.CRUX_ANYDOC_EVAL_DIRECTORY ?? dirname(fileURLToPath(import.meta.url))
 const anydocWorkerPath = resolve(directory, 'anydoc-worker.mjs')
@@ -43,7 +43,8 @@ export interface AdmissionSuiteEvidence {
   readonly runner: { readonly maxConcurrentChildren: 1; readonly productionEquivalent: false; readonly hardMemoryContainment?: boolean }
   readonly results: readonly AdmissionFixtureEvidence[]
   readonly formats: readonly AdmissionFormatDecision[]
-  readonly docxDecision: { readonly primary: string | null; readonly reason: string }
+  readonly docxDecision: { readonly primary: string | null; readonly qualityLeader?: string; readonly reason: string }
+  readonly cacheIdentity?: string
 }
 
 export interface AdmissionFormatDecision {
@@ -62,6 +63,12 @@ export async function admissionBaseline(evidence: AdmissionSuiteEvidence): Promi
       anydoc: '0.1.7',
       native: { package: '@firecrawl/anydoc-linux-x64-gnu@0.1.7', sha256: createHash('sha256').update(nativeArtifact).digest('hex') },
       adapters: { mammoth: '1.12.0', 'csv-parse': '6.2.1', exceljs: '4.4.0', 'pdf-inspector': '1.12.0' },
+    },
+    evidenceIdentity: {
+      cacheIdentity: evidence.cacheIdentity ?? 'in-process-unkeyed',
+      runtime: `${process.platform}-${process.arch}-node-${process.versions.node}`,
+      hardMemoryContainment: evidence.runner.hardMemoryContainment ?? false,
+      fixtureSha256: evidence.results.map((result) => ({ fixtureId: result.fixtureId, sha256: result.sourceHash })),
     },
     runner: evidence.runner,
     formats: evidence.formats,
@@ -146,7 +153,22 @@ export async function runAdmissionSuite(options: {
       candidates,
     })
   }
-  return { schemaVersion: 1, runner: { maxConcurrentChildren: 1, productionEquivalent: false }, results, formats: decideFormats(results), docxDecision: decideDocxPrimary(results) }
+  const quality = decideDocxQualityLeader(results)
+  const formats = decideFormats(results).map((decision) => decision.parser === 'anydoc'
+    ? { ...decision, admitted: false, blockers: [...new Set([...decision.blockers, 'hard-memory-containment'])] }
+    : decision)
+  const admittedDocx = formats.filter((decision) => decision.format === 'docx' && decision.admitted)
+  return {
+    schemaVersion: 1,
+    runner: { maxConcurrentChildren: 1, productionEquivalent: false, hardMemoryContainment: false },
+    results,
+    formats,
+    docxDecision: {
+      primary: admittedDocx.length === 1 ? admittedDocx[0]!.parser : null,
+      ...(quality.primary ? { qualityLeader: quality.primary } : {}),
+      reason: admittedDocx.length === 1 ? 'Exactly one candidate passed every format-wide gate.' : 'No candidate passed every format-wide gate.',
+    },
+  }
 }
 
 async function runCandidate(fixture: AnydocFixtureManifest, bytes: Uint8Array, parser: string, determinismRuns: boolean): Promise<AdmissionCandidateEvidence> {
@@ -211,8 +233,8 @@ function evidence(parser: string, fixture: AnydocFixtureManifest, run: ParserRun
 
 function nativeFacts(run: ParserRunResult): ParserNativeFacts {
   const outcome = run.outcome.kind === 'success' ? { kind: 'success' as const } : run.outcome
-  const native = run.payload?.native.value as { readonly outcome?: ParserNativeFacts['outcome']; readonly projection?: IngestedDocument } | undefined
-  return { outcome: native?.outcome ?? outcome, facts: native?.projection ? extractParserNativeFacts(native.projection) : [] }
+  const native = run.payload?.native.value as { readonly outcome?: ParserNativeFacts['outcome']; readonly facts?: readonly ParserNativeFact[] } | undefined
+  return { outcome: native?.outcome ?? outcome, facts: Array.isArray(native?.facts) ? native.facts : [] }
 }
 function localFailure(): ParserRunResult { return { outcome: { kind: 'failure', error: 'invalid-result' }, hashes: {}, diagnostics: [], metadata: { wallMilliseconds: 0, rssMeasurement: 'unsupported', productionEquivalent: false, maxConcurrentChildren: 0, cleanedUp: true } } }
 
@@ -268,7 +290,7 @@ function decideFormats(results: readonly AdmissionFixtureEvidence[]): AdmissionF
 }
 
 /** Select DOCX quality independently from rollout-only missing stress recipes. */
-export function decideDocxPrimary(results: readonly AdmissionFixtureEvidence[]): { readonly primary: string | null; readonly reason: string } {
+export function decideDocxQualityLeader(results: readonly AdmissionFixtureEvidence[]): { readonly primary: string | null; readonly reason: string } {
   const fixture = results.find((result) => result.fixtureId === 'docx-structure-v1')
   if (!fixture || !fixture.sourceHashMatches) return { primary: null, reason: 'DOCX quality fixture is missing or has a source-hash mismatch.' }
   const passing = fixture.candidates.filter((candidate) => candidate.selected)

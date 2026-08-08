@@ -13,6 +13,101 @@
       "pdf-inspector": "1.12.0"
     }
   },
+  "evidenceIdentity": {
+    "cacheIdentity": "4fe6d6ec658141a154d1532ae82098d3ececdc47d60d7109f8b28dfc08bc2ecb",
+    "runtime": "linux-x64-node-24.16.0",
+    "hardMemoryContainment": false,
+    "fixtureSha256": [
+      {
+        "fixtureId": "csv-control-v1",
+        "sha256": "416a2ff58e53cb4196bff8bbd9c67ec4253788f2e86fca317628b15e092b02e5"
+      },
+      {
+        "fixtureId": "doc-legacy-v1",
+        "sha256": "43d7f00b1bd7d0784b20245176327690137891a6e65577ca0f2e2dbb3ab9b1c1"
+      },
+      {
+        "fixtureId": "docm-macro-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "docx-structure-v1",
+        "sha256": "5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd"
+      },
+      {
+        "fixtureId": "encrypted-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "truncated-v1",
+        "sha256": "64f765c7aa8e2e5f4f4a7c90d1cc2b7afcaa29bea87493a490ff5b5e75ad9b58"
+      },
+      {
+        "fixtureId": "malformed-v1",
+        "sha256": "76b88821421dc40df237bee3a69fecd76003240e5bac3fe31b5f5cedc700e90f"
+      },
+      {
+        "fixtureId": "mislabeled-v1",
+        "sha256": "ed7e13db986967d27375e3aa61e6984c45449d3d6da69f573031a1fa3a375556"
+      },
+      {
+        "fixtureId": "expansion-heavy-v1",
+        "sha256": "f545dc2f93f8df769547a78a23cf54cc0f5c35bb8c591876ed7708c48c64e970"
+      },
+      {
+        "fixtureId": "external-link-v1",
+        "sha256": "edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574"
+      },
+      {
+        "fixtureId": "timeout-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "memory-limit-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "containment-unavailable-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "epub-prose-v1",
+        "sha256": "2a53090553242888578e45e11472ff6010ef508afc9c2edce4003a35ffda7fab"
+      },
+      {
+        "fixtureId": "ods-spreadsheet-v1",
+        "sha256": "27a0636ae8b699921d9ce14e9f2df5e272c5648408a688804eacf0ba11c0152e"
+      },
+      {
+        "fixtureId": "odt-prose-v1",
+        "sha256": "96446747eee321ec556b3cb3633d24158014c455d0e0a05bb1a6e24b0a19482b"
+      },
+      {
+        "fixtureId": "pdf-control-v1",
+        "sha256": "e4e51f0e57540b08b28b5379f6bfa4d32ec2097fe5490b7fe1133638756f0924"
+      },
+      {
+        "fixtureId": "ppt-legacy-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "pptx-structure-v1",
+        "sha256": "a41f60064fc760ee95fa78d0217a672f504f3d12a6da7435775e7666c497f80e"
+      },
+      {
+        "fixtureId": "rtf-prose-v1",
+        "sha256": "1be57882b7e295a39e752d865ae228315d804c165d8eead8e6f6e0b2ca9596d3"
+      },
+      {
+        "fixtureId": "xls-spreadsheet-v1",
+        "sha256": "89716212ee3279cdbda34421da01242df7917e09a624f80f116181514faa6975"
+      },
+      {
+        "fixtureId": "xlsx-control-v1",
+        "sha256": "3eab7f712ee5bc6f00d044040afb79f0fe9d885e1cf47a7a1d89aa445b7a113c"
+      }
+    ]
+  },
   "runner": {
     "maxConcurrentChildren": 1,
     "productionEquivalent": false,
@@ -30,6 +125,7 @@
       "parser": "anydoc",
       "admitted": false,
       "blockers": [
+        "doc-legacy-v1",
         "hard-memory-containment"
       ]
     },
@@ -47,7 +143,12 @@
       "parser": "anydoc",
       "admitted": false,
       "blockers": [
+        "docx-structure-v1",
         "encrypted-v1",
+        "truncated-v1",
+        "malformed-v1",
+        "mislabeled-v1",
+        "expansion-heavy-v1",
         "external-link-v1",
         "timeout-v1",
         "memory-limit-v1",
@@ -86,6 +187,7 @@
       "parser": "anydoc",
       "admitted": false,
       "blockers": [
+        "odt-prose-v1",
         "hard-memory-containment"
       ]
     },
@@ -118,6 +220,7 @@
       "parser": "anydoc",
       "admitted": false,
       "blockers": [
+        "rtf-prose-v1",
         "hard-memory-containment"
       ]
     },
@@ -147,8 +250,8 @@
     }
   ],
   "docxDecision": {
-    "primary": "anydoc",
-    "reason": "Only one candidate passed the completed DOCX quality gates."
+    "primary": null,
+    "reason": "No candidate passed every format-wide gate."
   },
   "results": [
     {
@@ -165,7 +268,7 @@
             "kind": "success"
           },
           "hashes": {
-            "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+            "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
             "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
           },
           "native": {
@@ -183,7 +286,7 @@
           "determinism": {
             "deterministic": true,
             "hashes": {
-              "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+              "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
               "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
             },
             "cold": [
@@ -192,7 +295,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -209,7 +312,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -226,7 +329,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -245,7 +348,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -262,7 +365,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -279,7 +382,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -296,7 +399,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -313,7 +416,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "f1efd0ee7b9f727e6d6ff41d0953ba87d2f5e7c6c25fa3862c2dff14a1ccc1f8",
+                  "native": "4e8ae89cb388ca222f926c37c7eebe6c1775a3722178a8f50f1904a486ccc699",
                   "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
                 },
                 "diagnostics": [],
@@ -344,177 +447,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-            "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-          },
+          "hashes": {},
           "native": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-              "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "21872522371b8df185095b1965e81410068165e2fed31e70902b74730862453b",
-                  "core": "ba227673fbc523ba534e1a506e3c00f157dbdbd588aeb579b97d3b14d5c89665"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 11264,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -530,18 +486,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -560,177 +521,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-            "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-          },
+          "hashes": {},
           "native": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-              "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "d94f621d9d3d02960a0652bd0f697ea7fb59dde1eaf6fd65c6bc5f4763b56a9e",
-                  "core": "d0ac2513c0f3fc063431c12475060e70d8b03167f39fb417a114cb6bf88293e8"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         },
         {
@@ -740,7 +554,7 @@
             "kind": "success"
           },
           "hashes": {
-            "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+            "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
             "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
           },
           "native": {
@@ -751,7 +565,8 @@
               "prose-link",
               "prose-notes",
               "prose-assets",
-              "provenance:prose-assets"
+              "provenance:prose-assets",
+              "prose-coordinates"
             ]
           },
           "core": {
@@ -762,7 +577,8 @@
               "prose-link",
               "prose-notes",
               "prose-assets",
-              "provenance:prose-assets"
+              "provenance:prose-assets",
+              "prose-coordinates"
             ]
           },
           "projectionLosses": [],
@@ -770,7 +586,7 @@
           "determinism": {
             "deterministic": true,
             "hashes": {
-              "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+              "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
               "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
             },
             "cold": [
@@ -779,7 +595,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -796,7 +612,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -813,7 +629,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -832,7 +648,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -849,7 +665,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -866,7 +682,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -883,7 +699,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -900,7 +716,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "731a7fa70a3b434e9460b8fe1611ea5f1150a5852163a28494eebfb98d63b291",
+                  "native": "bdb66b7efc3b3e9857370ac94251111e4bb2802d5a0947989fb175d62746a5d8",
                   "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
                 },
                 "diagnostics": [],
@@ -933,18 +749,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -963,172 +784,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
             "kind": "failure",
-            "error": "invalid-result"
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
-            "passed": true,
+            "passed": false,
             "admitted": false,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": false,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {},
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 32,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -1142,172 +821,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
             "kind": "failure",
-            "error": "invalid-result"
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
-            "passed": true,
+            "passed": false,
             "admitted": false,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": false,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {},
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 18,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -1321,172 +858,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
             "kind": "failure",
-            "error": "invalid-result"
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
-            "passed": true,
+            "passed": false,
             "admitted": false,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": false,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {},
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "malformed document: not a readable zip archive: invalid Zip archive: Could not find EOCD"
-                ],
-                "metadata": {
-                  "sourceBytes": 76,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -1500,156 +895,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
             "kind": "failure",
-            "error": "expanded-too-large"
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
-            "passed": true,
+            "passed": false,
             "admitted": false,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": false,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {},
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "expanded-too-large"
-                },
-                "hashes": {},
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2150,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -1665,187 +934,28 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-            "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-          },
+          "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "prose-text",
-              "prose-notes",
-              "prose-assets",
-              "prose-coordinates"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "prose-text",
-              "prose-notes",
-              "prose-assets",
-              "prose-coordinates"
+              "containment"
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-              "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "b1b0257091a0faec9b07e99b1ad998079d166bf5549bb8b64754b948e198c9cd",
-                  "core": "4a9451ef5b0db7c22cc5c9b7470526b4cbf1404f06e02d781f288a55515d3508"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6525,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -1861,18 +971,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -1893,18 +1008,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -1925,18 +1045,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -1957,191 +1082,28 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-            "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-          },
+          "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "prose-text",
-              "prose-heading",
-              "prose-list",
-              "prose-nested-list",
-              "provenance:prose-nested-list",
-              "prose-table",
-              "prose-link"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "prose-text",
-              "prose-heading",
-              "prose-list",
-              "prose-nested-list",
-              "provenance:prose-nested-list",
-              "prose-table",
-              "prose-link"
+              "containment"
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-              "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "59c6247ddfb4487cd7ec6c9cd5d1b1dc568f948b68c9d03f789fcae41139dce5",
-                  "core": "d4c70bba89846da55506e170dfebda96384bcb09d5fc459d358e90e68f84cdd1"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2961,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -2157,235 +1119,28 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-            "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-          },
+          "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "workbook-sheets",
-              "workbook-coordinates",
-              "workbook-text",
-              "pricing-range",
-              "provenance:pricing-range",
-              "regions-range",
-              "provenance:regions-range",
-              "pricing-a1",
-              "provenance:pricing-a1",
-              "pricing-b1",
-              "provenance:pricing-b1",
-              "pricing-c1",
-              "provenance:pricing-c1",
-              "pricing-a2",
-              "provenance:pricing-a2",
-              "pricing-b2",
-              "provenance:pricing-b2",
-              "pricing-c2",
-              "provenance:pricing-c2",
-              "pricing-c4",
-              "provenance:pricing-c4",
-              "regions-a1",
-              "provenance:regions-a1",
-              "regions-a2",
-              "provenance:regions-a2",
-              "pricing-merge",
-              "provenance:pricing-merge",
-              "pricing-merge-follower",
-              "provenance:pricing-merge-follower"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "workbook-sheets",
-              "workbook-coordinates",
-              "workbook-text",
-              "pricing-range",
-              "provenance:pricing-range",
-              "regions-range",
-              "provenance:regions-range",
-              "pricing-a1",
-              "provenance:pricing-a1",
-              "pricing-b1",
-              "provenance:pricing-b1",
-              "pricing-c1",
-              "provenance:pricing-c1",
-              "pricing-a2",
-              "provenance:pricing-a2",
-              "pricing-b2",
-              "provenance:pricing-b2",
-              "pricing-c2",
-              "provenance:pricing-c2",
-              "pricing-c4",
-              "provenance:pricing-c4",
-              "regions-a1",
-              "provenance:regions-a1",
-              "regions-a2",
-              "provenance:regions-a2",
-              "pricing-merge",
-              "provenance:pricing-merge",
-              "pricing-merge-follower",
-              "provenance:pricing-merge-follower"
+              "containment"
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-              "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c3e046f8cd03cd43b6485abff7bf3ad36094ed2676b117d28954e5493920d150",
-                  "core": "8b1252370fcef0d1431ebfd8394798beade663d016caaf8fa9e33c9c98559587"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 2779,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -2399,177 +1154,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-            "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-          },
+          "hashes": {},
           "native": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-              "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "dbea3ad7943b894fc922afdb156998ea1d2122a7d67f175e77540f1c272b4641",
-                  "core": "3dc7dad59025b17b133377eee33d2095daeaeee7d5e1490f1447e8f4ee50a605"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 9982,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -2588,7 +1196,7 @@
             "kind": "success"
           },
           "hashes": {
-            "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+            "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
             "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
           },
           "native": {
@@ -2606,7 +1214,7 @@
           "determinism": {
             "deterministic": true,
             "hashes": {
-              "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+              "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
               "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
             },
             "cold": [
@@ -2615,7 +1223,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2632,7 +1240,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2649,7 +1257,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2668,7 +1276,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2685,7 +1293,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2702,7 +1310,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2719,7 +1327,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2736,7 +1344,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "d2718efa102faecf077a87a60381c2e4797b714f47000cd85e6b0b1ab48f287f",
+                  "native": "cc5f75f570ee8b71022a370089845abe75ce9da9a759cd0f1dd1bff85ba38f64",
                   "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
                 },
                 "diagnostics": [],
@@ -2769,18 +1377,23 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "missing"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "core": {
             "passed": false,
             "admitted": false,
-            "requiredFailures": []
+            "requiredFailures": [
+              "containment"
+            ]
           },
           "projectionLosses": [],
           "rolloutBudgetGate": false,
@@ -2809,50 +1422,14 @@
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "slides",
-              "provenance:slides",
-              "slide-coordinates",
-              "provenance:slide-coordinates",
-              "slide-1-boundary",
-              "provenance:slide-1-boundary",
-              "slide-2-boundary",
-              "provenance:slide-2-boundary",
-              "slide-text",
-              "provenance:slide-text",
-              "slide-table",
-              "provenance:slide-table",
-              "slide-1-note",
-              "provenance:slide-1-note",
-              "slide-2-note",
-              "provenance:slide-2-note",
-              "slide-assets",
-              "provenance:slide-assets"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "slides",
-              "provenance:slides",
-              "slide-coordinates",
-              "provenance:slide-coordinates",
-              "slide-1-boundary",
-              "provenance:slide-1-boundary",
-              "slide-2-boundary",
-              "provenance:slide-2-boundary",
-              "slide-text",
-              "provenance:slide-text",
-              "slide-table",
-              "provenance:slide-table",
-              "slide-1-note",
-              "provenance:slide-1-note",
-              "slide-2-note",
-              "provenance:slide-2-note",
-              "slide-assets",
-              "provenance:slide-assets"
+              "containment"
             ]
           },
           "projectionLosses": [],
@@ -2872,177 +1449,30 @@
       "candidates": [
         {
           "parser": "anydoc",
-          "selected": true,
+          "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-            "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-          },
+          "hashes": {},
           "native": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "core": {
-            "passed": true,
-            "admitted": true,
-            "requiredFailures": []
-          },
-          "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-              "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "2519412edf8855b27c36b010027ba039896309b0b28a0da3341c37c2c118e616",
-                  "core": "f840df36afe996419d90ffb1b64d99262d738d099659e48b6d0ce71e48ac3778"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6230,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
             ]
           },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -3059,237 +1489,27 @@
           "selected": false,
           "outcome": {
             "kind": "failure",
-            "error": "invalid-result"
+            "error": "containment-unavailable"
           },
           "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "workbook-sheets",
-              "provenance:workbook-sheets",
-              "workbook-coordinates",
-              "provenance:workbook-coordinates",
-              "workbook-text",
-              "provenance:workbook-text",
-              "pricing-range",
-              "provenance:pricing-range",
-              "regions-range",
-              "provenance:regions-range",
-              "pricing-a1",
-              "provenance:pricing-a1",
-              "pricing-b1",
-              "provenance:pricing-b1",
-              "pricing-c1",
-              "provenance:pricing-c1",
-              "pricing-a2",
-              "provenance:pricing-a2",
-              "pricing-b2",
-              "provenance:pricing-b2",
-              "pricing-c2",
-              "provenance:pricing-c2",
-              "pricing-c4",
-              "provenance:pricing-c4",
-              "regions-a1",
-              "provenance:regions-a1",
-              "regions-a2",
-              "provenance:regions-a2",
-              "pricing-merge",
-              "provenance:pricing-merge",
-              "pricing-merge-follower",
-              "provenance:pricing-merge-follower"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "outcome",
-              "workbook-sheets",
-              "provenance:workbook-sheets",
-              "workbook-coordinates",
-              "provenance:workbook-coordinates",
-              "workbook-text",
-              "provenance:workbook-text",
-              "pricing-range",
-              "provenance:pricing-range",
-              "regions-range",
-              "provenance:regions-range",
-              "pricing-a1",
-              "provenance:pricing-a1",
-              "pricing-b1",
-              "provenance:pricing-b1",
-              "pricing-c1",
-              "provenance:pricing-c1",
-              "pricing-a2",
-              "provenance:pricing-a2",
-              "pricing-b2",
-              "provenance:pricing-b2",
-              "pricing-c2",
-              "provenance:pricing-c2",
-              "pricing-c4",
-              "provenance:pricing-c4",
-              "regions-a1",
-              "provenance:regions-a1",
-              "regions-a2",
-              "provenance:regions-a2",
-              "pricing-merge",
-              "provenance:pricing-merge",
-              "pricing-merge-follower",
-              "provenance:pricing-merge-follower"
+              "containment"
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {},
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "failure",
-                  "error": "invalid-result"
-                },
-                "hashes": {},
-                "diagnostics": [
-                  "value `\"xls\"` does not match any variant of enum `Format`"
-                ],
-                "metadata": {
-                  "sourceBytes": 4096,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         }
       ]
@@ -3305,201 +1525,28 @@
           "parser": "anydoc",
           "selected": false,
           "outcome": {
-            "kind": "success"
+            "kind": "failure",
+            "error": "containment-unavailable"
           },
-          "hashes": {
-            "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-            "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-          },
+          "hashes": {},
           "native": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "xlsx-sheets",
-              "xlsx-coordinates",
-              "xlsx-range",
-              "provenance:xlsx-range",
-              "xlsx-a1",
-              "provenance:xlsx-a1",
-              "xlsx-b1",
-              "provenance:xlsx-b1",
-              "xlsx-a2",
-              "provenance:xlsx-a2",
-              "xlsx-b2",
-              "provenance:xlsx-b2"
+              "containment"
             ]
           },
           "core": {
             "passed": false,
             "admitted": false,
             "requiredFailures": [
-              "xlsx-sheets",
-              "xlsx-coordinates",
-              "xlsx-range",
-              "provenance:xlsx-range",
-              "xlsx-a1",
-              "provenance:xlsx-a1",
-              "xlsx-b1",
-              "provenance:xlsx-b1",
-              "xlsx-a2",
-              "provenance:xlsx-a2",
-              "xlsx-b2",
-              "provenance:xlsx-b2"
+              "containment"
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": true,
-          "determinism": {
-            "deterministic": true,
-            "hashes": {
-              "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-              "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "c13eb33b68316a98728831b83fa9f345a9f4f969ed2e3f79ffb9f0c08116b1de",
-                  "core": "90152f6aaa1c5ff988dcd39ee301058531af9a5af59eabe2c20493aa3ea5f6ad"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
+          "rolloutBudgetGate": false,
           "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 134217728,
-            "cpuMilliseconds": 1000
+            "wallMilliseconds": 0
           }
         },
         {
@@ -3509,7 +1556,7 @@
             "kind": "success"
           },
           "hashes": {
-            "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+            "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
             "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
           },
           "native": {
@@ -3527,7 +1574,7 @@
           "determinism": {
             "deterministic": true,
             "hashes": {
-              "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+              "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
               "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
             },
             "cold": [
@@ -3536,7 +1583,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3553,7 +1600,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3570,7 +1617,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3589,7 +1636,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3606,7 +1653,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3623,7 +1670,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3640,7 +1687,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],
@@ -3657,7 +1704,7 @@
                   "kind": "success"
                 },
                 "hashes": {
-                  "native": "6ecde41a2fff615f61e947c0f328ea65e5ff9a41c0549129360fafa57f274034",
+                  "native": "1ad8ca7ac3e15ea73d512844b408fa1bebd420afb4a4e96f758ea34ee120f91f",
                   "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
                 },
                 "diagnostics": [],

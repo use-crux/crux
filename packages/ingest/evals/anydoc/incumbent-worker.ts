@@ -7,6 +7,7 @@ import { parseCsvDocument } from '../../src/csv'
 import { adaptMammothDocxResult } from '../../src/docx'
 import { parsePdfDocument } from '../../src/pdf'
 import { parseXlsxDocument } from '../../src/xlsx'
+import { extractParserNativeFacts } from './structural-assertions'
 
 const result = new Socket({ fd: 3, readable: true, writable: true })
 const control = new Socket({ fd: 4, readable: true, writable: true })
@@ -20,8 +21,10 @@ process.stdin.on('end', () => void convert(Buffer.concat(chunks)))
 async function convert(bytes: Buffer): Promise<void> {
   try {
     const observed = await observeNative(parser, bytes)
+    const nativeDocument = await projectObservedNative(parser, format, bytes, observed)
+    const facts = extractParserNativeFacts(nativeDocument as never)
     const core = await projectCore(parser, format, bytes, observed)
-    send(success({ ...(observed as object), projection: core }, core, bytes.byteLength + byteLength(observed) + byteLength(core)))
+    send(success({ ...(observed as object), facts }, core, bytes.byteLength + byteLength(observed) + byteLength(core)))
   } catch (error) {
     send(success(
       { kind: 'incumbent-native-v1', parser, outcome: { kind: 'failure', error: 'invalid-result', diagnosis: message(error) } },
@@ -29,6 +32,14 @@ async function convert(bytes: Buffer): Promise<void> {
       bytes.byteLength,
     ))
   }
+}
+
+async function projectObservedNative(owner: string | undefined, sourceFormat: string | undefined, bytes: Buffer, observed: any): Promise<unknown> {
+  if (owner === 'mammoth') return adaptMammothDocxResult({ bytes, html: observed.html, messages: observed.messages })
+  if (owner === 'csv-parse') return parseCsvDocument({ bytes })
+  if (owner === 'exceljs') return parseXlsxDocument({ bytes, format: sourceFormat === 'xlsx' ? 'xlsx' : 'xlsm' })
+  if (owner === 'pdf-inspector') return parsePdfDocument({ bytes })
+  throw new Error(`Unknown incumbent parser: ${owner ?? '<missing>'}`)
 }
 
 async function observeNative(owner: string | undefined, bytes: Buffer): Promise<unknown> {

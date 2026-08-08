@@ -14,7 +14,7 @@ function proseAssertions(options: { readonly notes?: readonly string[]; readonly
     ...fact({ id: 'prose-heading', role: 'required', kind: 'heading', level: 1, text: 'Release Notes' }, 'blocks/1', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-list', role: 'required', kind: 'list', ordered: false, depth: 1, text: ['First', 'Nested'] }, 'blocks/3', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-nested-list', role: 'required', kind: 'list', ordered: false, depth: 2, text: ['Nested'] }, 'blocks/3/items/1/blocks/2', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-table', role: 'required', kind: 'table', columns: ['Plan'], rows: [['Plan'], ['Pro']] }, 'blocks/4', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-table', role: 'required', kind: 'table', columns: [], rows: [['Plan'], ['Pro']] }, 'blocks/4', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-link', role: 'required', kind: 'link', text: 'reference', target: 'https://cruxjs.dev/' }, 'blocks/2', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-notes', role: 'required', kind: 'notes', text: options.notes ?? [] }, options.notes?.length ? 'blocks/6' : 'document', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-assets', role: 'required', kind: 'asset-count', count: options.assetCount ?? 0 }, options.assetCount ? 'assets/1' : 'document', options.assetCount ? { kind: 'package-part', part: 'word/media/crux.png' } : documentCoordinate, anydocProducer),
@@ -151,12 +151,7 @@ export function expectedFactsForCandidate(
   const expected = expectedFactsForFixture(fixture)
   return {
     ...expected,
-    assertions: expected.assertions.map((assertion) => {
-      if (assertion.kind === 'provenance') return { ...assertion, producer: observed }
-      if (candidate === 'mammoth' && assertion.id === 'prose-table' && assertion.kind === 'table') return { ...assertion, columns: [] }
-      if (candidate === 'mammoth' && assertion.id === 'prose-coordinates' && assertion.kind === 'coordinate-kinds') return { ...assertion, kinds: ['document'] }
-      return assertion
-    }),
+    assertions: expected.assertions.map((assertion) => assertion.kind === 'provenance' ? { ...assertion, producer: observed } : assertion),
   }
 }
 
