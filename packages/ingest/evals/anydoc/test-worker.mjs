@@ -27,6 +27,13 @@ if (mode === 'timeout') {
   const chunks = []
   process.stdin.on('data', (chunk) => chunks.push(chunk))
   process.stdin.on('end', () => {
+    if (mode === 'runaway') {
+      setInterval(() => {
+        const until = Date.now() + 25
+        while (Date.now() < until) {}
+      }, 0)
+      return
+    }
     if (mode === 'slow') {
       setTimeout(() => sendResult(chunks), 60)
       return

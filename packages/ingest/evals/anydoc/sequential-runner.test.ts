@@ -123,6 +123,13 @@ describe('runParserCandidate', () => {
     expect(result.outcome).toEqual({ kind: 'failure', error: 'cpu-limit' })
   })
 
+  it('terminates a runaway group on a resource breach well before its wall cap', async () => {
+    const startedAt = Date.now()
+    const result = await runParserCandidate({ workerPath, source: new URL('./fixtures/csv-control-v1.csv', import.meta.url), workerArguments: ['runaway'], limits: { cpuMilliseconds: 1, wallMilliseconds: 2_000 } })
+    expect(result.outcome).toEqual({ kind: 'failure', error: 'cpu-limit' })
+    expect(Date.now() - startedAt).toBeLessThan(800)
+  })
+
   it.each([
     ['descendant-ignore', 'timeout'],
     ['descendant-crash', 'worker-crash'],

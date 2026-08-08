@@ -106,33 +106,41 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
   let peakRssBytes: number | undefined
   let cpuMilliseconds: number | undefined
   let resourceFailure: Extract<ParserRunFailure, 'memory-limit' | 'cpu-limit'> | undefined
-  let sampling = false
+  let samplingPromise: Promise<void> | undefined
+  let terminationPromise: Promise<boolean> | undefined
   let stopped = false
   let timer: NodeJS.Timeout | undefined
-  const sample = async (): Promise<void> => {
-    if (sampling || stopped) return
-    sampling = true
-    try {
+  const breach = async (failure: Extract<ParserRunFailure, 'memory-limit' | 'cpu-limit'>): Promise<void> => {
+    resourceFailure ??= failure
+    terminationPromise ??= group.reap()
+    await terminationPromise
+  }
+  const sample = (force = false): Promise<void> => {
+    if (samplingPromise !== undefined) return samplingPromise
+    if (stopped && !force) return Promise.resolve()
+    samplingPromise = (async () => {
       const usage = await group.sample()
       if (usage === undefined) {
-        resourceFailure = 'memory-limit'
+        await breach('memory-limit')
         return
       }
       peakRssBytes = Math.max(peakRssBytes ?? 0, usage.rssBytes)
       cpuMilliseconds = Math.max(cpuMilliseconds ?? 0, usage.cpuMilliseconds)
-      if (usage.rssBytes > limits.peakRssBytes) resourceFailure = 'memory-limit'
-      if (usage.cpuMilliseconds > limits.cpuMilliseconds) resourceFailure = 'cpu-limit'
-    } finally {
-      sampling = false
-      if (!stopped) timer = setTimeout(() => { void sample() }, 20)
-    }
+      if (usage.rssBytes > limits.peakRssBytes) await breach('memory-limit')
+      if (usage.cpuMilliseconds > limits.cpuMilliseconds) await breach('cpu-limit')
+    })().finally(() => {
+      samplingPromise = undefined
+      if (!stopped && resourceFailure === undefined) timer = setTimeout(() => { void sample() }, 20)
+    })
+    return samplingPromise
   }
   await sample()
   const settled = await protocol.ready
+  if (samplingPromise !== undefined) await samplingPromise
+  if (settled.failure === undefined && resourceFailure === undefined) await sample(true)
   stopped = true
   if (timer !== undefined) clearTimeout(timer)
-  if (settled.failure === undefined) await sample()
-  let protocolFailure = settled.failure ?? resourceFailure
+  let protocolFailure = resourceFailure ?? settled.failure
   if (protocolFailure === undefined) {
     protocol.ack()
     const remaining = Math.max(1, limits.wallMilliseconds - (Date.now() - startedAt))
@@ -140,7 +148,7 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
     const closed = acknowledged === true ? await waitFor(protocol.closed, Math.max(1, limits.wallMilliseconds - (Date.now() - startedAt))) : undefined
     protocolFailure = acknowledged !== true ? 'invalid-result' : closed === undefined ? 'timeout' : closed === 0 ? undefined : 'worker-crash'
   }
-  const reaped = await group.reap()
+  const reaped = await (terminationPromise ?? group.reap())
   source.destroy()
   const cleanedUp = await cleanup(options.cleanupPaths)
   const metadata = {
