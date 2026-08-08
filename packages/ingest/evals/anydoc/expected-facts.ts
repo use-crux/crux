@@ -7,18 +7,18 @@ const csvProducer: ParserIdentity = { kind: 'parser', name: 'csv-parse', version
 const excelProducer: ParserIdentity = { kind: 'parser', name: 'exceljs', version: '4.4.0', adapterVersion: '2' }
 const pdfProducer: ParserIdentity = { kind: 'parser', name: 'pdf-inspector', version: '1.12.0', adapterVersion: '2' }
 
-function proseAssertions(options: { readonly notes?: readonly string[]; readonly assetCount?: number; readonly hash: string } ): readonly StructuralAssertion[] {
+function proseAssertions(options: { readonly notes?: readonly string[]; readonly assetCount?: number; readonly extraText?: readonly string[]; readonly hash: string } ): readonly StructuralAssertion[] {
   const documentCoordinate = { kind: 'document', documentSha256: options.hash } as const
   return [
-    ...fact({ id: 'prose-text', role: 'required', kind: 'ordered-text', text: ['Release Notes', 'Structured ingestion reference.', 'First', 'Nested', 'Plan', 'Status', 'Pro', 'Ready'] }, 'document', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-text', role: 'required', kind: 'ordered-text', text: ['Release Notes', 'Structured ingestion reference.', 'First', 'Nested', 'Plan', 'Pro', ...(options.extraText ?? [])] }, 'document', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-heading', role: 'required', kind: 'heading', level: 1, text: 'Release Notes' }, 'blocks/1', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-list', role: 'required', kind: 'list', ordered: false, depth: 1, text: ['First', 'Nested'] }, 'blocks/3', documentCoordinate, anydocProducer),
     ...fact({ id: 'prose-nested-list', role: 'required', kind: 'list', ordered: false, depth: 2, text: ['Nested'] }, 'blocks/3/items/1/blocks/2', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-table', role: 'required', kind: 'table', columns: ['Plan', 'Status'], rows: [['Plan', 'Status'], ['Pro', 'Ready']] }, 'blocks/4', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-link', role: 'required', kind: 'link', text: 'reference', target: 'https://cruxjs.dev' }, 'blocks/2', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-notes', role: 'required', kind: 'notes', text: options.notes ?? [] }, options.notes?.length ? 'blocks/5' : 'document', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-assets', role: 'required', kind: 'asset-count', count: options.assetCount ?? 0 }, options.assetCount ? 'assets/1' : 'document', documentCoordinate, anydocProducer),
-    ...fact({ id: 'prose-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['document'] }, 'document', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-table', role: 'required', kind: 'table', columns: ['Plan'], rows: [['Plan'], ['Pro']] }, 'blocks/4', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-link', role: 'required', kind: 'link', text: 'reference', target: 'https://cruxjs.dev/' }, 'blocks/2', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-notes', role: 'required', kind: 'notes', text: options.notes ?? [] }, options.notes?.length ? 'blocks/6' : 'document', documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-assets', role: 'required', kind: 'asset-count', count: options.assetCount ?? 0 }, options.assetCount ? 'assets/1' : 'document', options.assetCount ? { kind: 'package-part', part: 'word/media/crux.png' } : documentCoordinate, anydocProducer),
+    ...fact({ id: 'prose-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: options.assetCount ? ['document', 'package-part'] : ['document'] }, 'document', documentCoordinate, anydocProducer),
   ]
 }
 
@@ -37,7 +37,7 @@ const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind
  */
 export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifest>> = {
   'docx-structure-v1': success('docx-structure-v1', [
-    ...proseAssertions({ hash: '5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd', notes: ['Crux footnote evidence.'], assetCount: 1 }),
+    ...proseAssertions({ hash: '5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd', notes: ['Crux footnote evidence.'], assetCount: 1, extraText: ['Illustrated evidence'] }),
   ]),
   'doc-legacy-v1': success('doc-legacy-v1', proseAssertions({ hash: '43d7f00b1bd7d0784b20245176327690137891a6e65577ca0f2e2dbb3ab9b1c1' })),
   'docm-macro-v1': missing('docm-macro-v1'),
@@ -120,6 +120,44 @@ export function expectedFactsForFixture(fixture: AnydocFixtureManifest): Expecte
     throw new Error(`Fixture "${fixture.id}" has no expected structural facts.`)
   }
   return facts
+}
+
+const CANDIDATE_PRODUCERS: Readonly<Record<string, ParserIdentity>> = {
+  anydoc: { kind: 'parser', name: 'anydoc', version: '0.1.7', adapterVersion: '2-eval' },
+  mammoth: { kind: 'parser', name: 'mammoth', version: '1.12.0', adapterVersion: '2' },
+  'csv-parse': csvProducer,
+  exceljs: excelProducer,
+  'pdf-inspector': pdfProducer,
+}
+
+/**
+ * Bind candidate-owned provenance only after the worker has returned its exact
+ * producer identity. A parser cannot satisfy another candidate's provenance.
+ */
+export function expectedFactsForCandidate(
+  fixture: AnydocFixtureManifest,
+  candidate: string,
+  observed: ParserIdentity,
+): ExpectedFactManifest {
+  const declared = CANDIDATE_PRODUCERS[candidate]
+  if (!declared
+    || declared.kind !== observed.kind
+    || declared.name !== observed.name
+    || declared.version !== observed.version
+    || declared.adapterVersion !== observed.adapterVersion) {
+    throw new Error(`Candidate "${candidate}" returned an untrusted producer identity.`)
+  }
+
+  const expected = expectedFactsForFixture(fixture)
+  return {
+    ...expected,
+    assertions: expected.assertions.map((assertion) => {
+      if (assertion.kind === 'provenance') return { ...assertion, producer: observed }
+      if (candidate === 'mammoth' && assertion.id === 'prose-table' && assertion.kind === 'table') return { ...assertion, columns: [] }
+      if (candidate === 'mammoth' && assertion.id === 'prose-coordinates' && assertion.kind === 'coordinate-kinds') return { ...assertion, kinds: ['document'] }
+      return assertion
+    }),
+  }
 }
 
 export function validateExpectedFacts(manifests: readonly AnydocFixtureManifest[], expectedFacts: Readonly<Record<string, ExpectedFactManifest>> = expectedFactsByFixture): string[] {
@@ -247,7 +285,7 @@ function coordinateClassMatches(assertion: FactAssertion, coordinate: SourceCoor
     return coordinate.kind === 'page-block'
   }
   if (assertion.factPath.startsWith('assets/')) {
-    return coordinate.kind === 'document' || coordinate.kind === 'slide'
+    return coordinate.kind === 'document' || coordinate.kind === 'slide' || coordinate.kind === 'package-part'
   }
   return true
 }

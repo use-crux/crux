@@ -8,6 +8,7 @@ import {
   assertCoreProjectionFacts,
   assertParserNativeFacts,
   compareProjectionFacts,
+  extractParserNativeFacts,
   pageContentHash,
   type ParserNativeFact,
   type ParserNativeFacts,
@@ -72,10 +73,7 @@ it('asserts typed presentation and spreadsheet facts through both schema-2 entry
   const coreResult = assertCoreProjectionFacts(expected, document)
   expect(coreResult.assertions.filter((assertion) => !assertion.passed && assertion.role === 'required')).toEqual([])
   expect(coreResult).toMatchObject({ passed: true, admitted: true })
-  const native: ParserNativeFacts = {
-    outcome: { kind: 'success' },
-    facts: expected.assertions.map(({ id, role: _role, ...fact }) => ({ ...fact, assertionId: id, factPath: fact.kind === 'provenance' ? fact.path : fact.factPath })),
-  }
+  const native: ParserNativeFacts = { outcome: { kind: 'success' }, facts: extractParserNativeFacts(document) }
   expect(assertParserNativeFacts(expected, native)).toMatchObject({ passed: true, admitted: true })
 })
 
@@ -84,7 +82,7 @@ it('detects facts retained by a native parser but lost by the Core projection', 
     fixtureId: 'projection-loss', expectedOutcome: { kind: 'success' },
     assertions: [{ id: 'asset', role: 'required', kind: 'asset-count', factPath: 'assets/1', count: 1 }],
   }
-  const native = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [{ kind: 'asset-count', count: 1, assertionId: 'asset', factPath: 'assets/1' }] })
+  const native = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [{ kind: 'asset-count', count: 1, factPath: 'assets/1' }] })
   const core = assertCoreProjectionFacts(expected, { ...document, assets: [] })
 
   expect(native).toMatchObject({ passed: true, admitted: true })
@@ -92,7 +90,7 @@ it('detects facts retained by a native parser but lost by the Core projection', 
   expect(compareProjectionFacts(native, core)).toEqual([{ id: 'asset', role: 'required' }])
 })
 
-it('matches native facts by their unique assertion ID rather than their kind', () => {
+it('matches independently extracted native facts by their parser-owned path and value', () => {
   const expected: ExpectedFactManifest = {
     fixtureId: 'repeated-cells', expectedOutcome: { kind: 'success' },
     assertions: [
@@ -101,13 +99,25 @@ it('matches native facts by their unique assertion ID rather than their kind', (
     ],
   }
   const facts: ParserNativeFact[] = [
-    { assertionId: 'a1', factPath: 'blocks/1/blocks/1/rows/1/cells/1', kind: 'cell', sheet: 'Pricing', address: 'A1', displayedValue: 'Plan' },
-    { assertionId: 'b1', factPath: 'blocks/1/blocks/1/rows/1/cells/2', kind: 'cell', sheet: 'Pricing', address: 'B1', displayedValue: 'Price' },
+    { factPath: 'blocks/1/blocks/1/rows/1/cells/1', kind: 'cell', sheet: 'Pricing', address: 'A1', displayedValue: 'Plan' },
+    { factPath: 'blocks/1/blocks/1/rows/1/cells/2', kind: 'cell', sheet: 'Pricing', address: 'B1', displayedValue: 'Price' },
   ]
 
   expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts })).toMatchObject({ passed: true, admitted: true })
-  expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [...facts, { ...facts[1]!, factPath: 'duplicate' }] })).toMatchObject({ passed: false, admitted: false })
+  expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [...facts, { ...facts[1]!, factPath: 'duplicate' }] })).toMatchObject({ passed: true, admitted: true })
   expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: facts.slice(0, 1) })).toMatchObject({ passed: false, admitted: false })
+})
+
+it('extracts native facts independently of later expectation mutations', () => {
+  const facts = extractParserNativeFacts(document)
+  const expected: ExpectedFactManifest = {
+    fixtureId: 'mutated-expectation',
+    expectedOutcome: { kind: 'success' },
+    assertions: [{ id: 'heading', role: 'required', kind: 'heading', factPath: 'blocks/1/blocks/1', level: 1, text: 'Wrong value' }],
+  }
+
+  expect(facts.find((fact) => fact.factPath === 'blocks/1/blocks/1' && fact.kind === 'heading')).toMatchObject({ text: 'Slide One' })
+  expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts })).toMatchObject({ passed: false, admitted: false })
 })
 
 it('keeps presentation notes scoped to their owning slide', () => {
@@ -169,7 +179,7 @@ it('binds provenance to one fact path, full coordinate, and producer ownership',
     fixtureId: 'provenance', expectedOutcome: { kind: 'success' },
     assertions: [{ id: 'slide-1-provenance', role: 'required', kind: 'provenance', for: 'slide-1-provenance', path: 'blocks/1', coordinate: { kind: 'slide', slide: 1 }, producer }],
   }
-  const nativeFact: ParserNativeFact = { assertionId: 'slide-1-provenance', factPath: 'blocks/1', path: 'blocks/1', kind: 'provenance', for: 'slide-1-provenance', coordinate: { kind: 'slide', slide: 1 }, producer }
+  const nativeFact: ParserNativeFact = { factPath: 'blocks/1', path: 'blocks/1', kind: 'provenance', coordinate: { kind: 'slide', slide: 1 }, producer }
   const detached = { ...document, blocks: [{ ...(document.blocks[0] as Extract<typeof document.blocks[number], { kind: 'slide' }>), coordinate: { kind: 'document' as const, documentSha256: 'c'.repeat(64) } }, ...document.blocks.slice(1)] }
 
   const nativeResult = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [nativeFact] })
@@ -222,14 +232,14 @@ it('deeply bounds and canonically orders retained assertion evidence', () => {
     fixtureId: 'bounded', expectedOutcome: { kind: 'success' },
     assertions: [{ id: 'asset', role: 'required', kind: 'asset-count', factPath: 'assets/1', count: 1 }],
   }
-  const actual = { kind: 'asset-count', count: 1, assertionId: 'asset', factPath: 'assets/1', z: { deeply: { nested: { value: 'x'.repeat(4_000) } } }, a: Array.from({ length: 30 }, () => 'y'.repeat(400)) } as unknown as ParserNativeFact
+  const actual = { kind: 'asset-count', count: 1, factPath: 'assets/1', z: { deeply: { nested: { value: 'x'.repeat(4_000) } } }, a: Array.from({ length: 30 }, () => 'y'.repeat(400)) } as unknown as ParserNativeFact
   const result = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [actual] })
   const evidence = result.assertions.find((assertion) => assertion.id === 'asset')?.actual
 
   expect(evidence).toMatchObject({ a: expect.any(Array), z: expect.any(Object) })
   expect(JSON.stringify(evidence)).toContain('truncated')
   expect(JSON.stringify(evidence).length).toBeLessThan(8_000)
-  expect(Object.keys(evidence as Record<string, unknown>)).toEqual(['a', 'assertionId', 'count', 'factPath', 'kind', 'z'])
+  expect(Object.keys(evidence as Record<string, unknown>)).toEqual(['a', 'count', 'factPath', 'kind', 'z'])
 })
 
 it('fails closed for missing or hostile fixtures and bounds assertion evidence', () => {

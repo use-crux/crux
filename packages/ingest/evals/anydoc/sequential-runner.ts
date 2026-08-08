@@ -180,12 +180,21 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
 export async function collectDeterminismEvidence(options: ParserRunOptions): Promise<DeterminismEvidence> {
   const cold: ParserRunResult[] = []
   const warm: ParserRunResult[] = []
-  for (let index = 0; index < 3; index += 1) cold.push(await runParserCandidate(options))
-  for (let index = 0; index < 5; index += 1) warm.push(await runParserCandidate(options))
+  for (let index = 0; index < 3; index += 1) cold.push(withoutPayload(await runParserCandidate(options)))
+  for (let index = 0; index < 5; index += 1) warm.push(withoutPayload(await runParserCandidate(options)))
   const all = [...cold, ...warm]
-  const first = all[0]?.hashes
-  const deterministic = all.length === 8 && all.every((run) => run.outcome.kind === 'success' && run.hashes.native === first?.native && run.hashes.core === first?.core)
+  const firstRun = all[0]
+  const first = firstRun?.hashes
+  const deterministic = all.length === 8 && firstRun !== undefined && all.every((run) =>
+    sameJson(run.outcome, firstRun.outcome)
+    && run.hashes.native === first.native
+    && run.hashes.core === first.core)
   return { cold, warm, deterministic, hashes: deterministic ? first! : {} }
+}
+
+function withoutPayload(run: ParserRunResult): ParserRunResult {
+  const { payload: _payload, ...bounded } = run
+  return bounded
 }
 
 function runSerially<Result>(operation: () => Promise<Result>): Promise<Result> {

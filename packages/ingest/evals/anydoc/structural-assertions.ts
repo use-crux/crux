@@ -58,9 +58,11 @@ export interface StructuralAssertionResult {
 }
 
 /** Parser-adapter facts are typed but intentionally independent from Core's document model. */
-export type ParserNativeFact = WithoutIdentity<StructuralAssertion> & {
-  /** Exactly one native fact must identify each expected assertion. */
-  readonly assertionId: string
+type ParserNativeFactValue = StructuralAssertion extends infer Fact
+  ? Fact extends unknown ? Omit<Fact, 'id' | 'role' | 'factPath' | 'for'> : never
+  : never
+
+export type ParserNativeFact = ParserNativeFactValue & {
   /** Parser-owned structural location, retained for duplicate-kind disambiguation. */
   readonly factPath: string
 }
@@ -72,19 +74,89 @@ export interface ParserNativeFacts {
 
 /** Assert a parser's native typed fact surface before its Core projection exists. */
 export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: ParserNativeFacts): StructuralAssertionResult {
-  const expectedIds = expected.assertions.map((assertion) => assertion.id)
-  const uniqueIds = new Set(actual.facts.map((fact) => fact.assertionId))
-  const completeIdSet = uniqueIds.size === actual.facts.length
-    && actual.facts.length === expectedIds.length
-    && expectedIds.every((id) => uniqueIds.has(id))
-  const results = [outcomeResult(expected.expectedOutcome, actual.outcome), result('native-fact-ids', 'required', completeIdSet, expectedIds, actual.facts.map((fact) => ({ assertionId: fact.assertionId, path: fact.factPath })))]
+  const results = [outcomeResult(expected.expectedOutcome, actual.outcome)]
   for (const assertion of expected.assertions) {
-    const matches = actual.facts.filter((fact) => fact.assertionId === assertion.id)
-    const native = matches[0]
     const expectedPath = assertion.kind === 'provenance' ? assertion.path : assertion.factPath
-    results.push(result(assertion.id, assertion.role, matches.length === 1 && native !== undefined && native.factPath === expectedPath && equal(nativeFactValue(native), withoutIdentity(assertion)), { factPath: expectedPath, value: withoutIdentity(assertion) }, native))
+    const expectedValue = assertion.kind === 'provenance'
+      ? (({ for: _for, ...value }) => value)(withoutIdentity(assertion) as WithoutIdentity<Extract<StructuralAssertion, { kind: 'provenance' }>>)
+      : withoutIdentity(assertion)
+    const candidates = actual.facts.filter((fact) => fact.factPath === expectedPath && fact.kind === assertion.kind)
+    const match = candidates.find((fact) => equal(nativeFactValue(fact), expectedValue))
+    results.push(result(assertion.id, assertion.role, match !== undefined, { factPath: expectedPath, value: expectedValue }, match ?? candidates[0]))
   }
   return completedResult(expected.fixtureId, actual.outcome, results, actual.facts.length > 0)
+}
+
+/** Extract a stable fact inventory without consulting an expected manifest. */
+export function extractParserNativeFacts(document: IngestedDocument): readonly ParserNativeFact[] {
+  const facts: ParserNativeFact[] = []
+  const add = (factPath: string, fact: ParserNativeFactValue) => facts.push({ ...fact, factPath } as ParserNativeFact)
+  const provenance = (factPath: string, target: { readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }) =>
+    add(factPath, { kind: 'provenance', path: factPath, coordinate: target.coordinate, producer: target.producer })
+
+  add('document', { kind: 'ordered-text', text: orderedText(document) })
+  add('document', { kind: 'notes', text: noteText(document) })
+  add('document', { kind: 'asset-count', count: document.assets.length })
+  add('document', { kind: 'coordinate-kinds', kinds: coordinateKinds(document) })
+  add('document', { kind: 'slide-order', slides: document.blocks.filter(isSlide).map((slide) => slide.slide) })
+  add('document', { kind: 'sheet-order', sheets: document.blocks.filter(isSheet).sort((a, b) => a.index - b.index).map((sheet) => sheet.sheet) })
+  add('document', { kind: 'page-order', pages: document.blocks.filter(isPage).map((page) => page.page) })
+  add('document', document.diagnostics.some((item) => item.code === 'parser-downgrade')
+    ? { kind: 'parser-downgrade', from: String(document.diagnostics.find((item) => item.code === 'parser-downgrade')?.from), to: String(document.diagnostics.find((item) => item.code === 'parser-downgrade')?.to) }
+    : { kind: 'no-parser-downgrade' })
+  for (const [key, value] of Object.entries(document.metadata)) {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') add('document', { kind: 'metadata', key, value })
+  }
+  provenance('document', { coordinate: { kind: 'document', documentSha256: document.source.documentSha256 }, producer: document.producer })
+  document.blocks.forEach((block, index) => visitNativeBlock(block, `blocks/${index + 1}`, add, provenance))
+  document.assets.forEach((asset, index) => {
+    add(`assets/${index + 1}`, { kind: 'asset-count', count: document.assets.length })
+    provenance(`assets/${index + 1}`, asset)
+  })
+  return facts
+}
+
+function visitNativeBlock(
+  block: DocumentBlock | TextBlock | ListBlock | TableBlock,
+  path: string,
+  add: (path: string, fact: ParserNativeFactValue) => void,
+  provenance: (path: string, target: { readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }) => void,
+): void {
+  provenance(path, block)
+  if (block.kind === 'text') {
+    if (block.role === 'heading' && block.level !== undefined) add(path, { kind: 'heading', level: block.level, text: block.text })
+    if (block.role === 'note') add(path, { kind: 'notes', text: [block.text] })
+    if (block.coordinate.kind === 'page-block') add(path, { kind: 'page-block', page: block.coordinate.page, block: block.coordinate.block, text: block.text })
+    block.inlines.filter((inline) => inline.kind === 'link').forEach((inline) => add(path, { kind: 'link', text: inline.text, target: inline.target }))
+    return
+  }
+  if (block.kind === 'list') {
+    add(path, { kind: 'list', ordered: block.ordered, depth: listDepth(path), text: textBlocks(block.items.flatMap((item) => item.blocks)).map((item) => item.text) })
+    block.items.forEach((item, itemIndex) => item.blocks.forEach((child, childIndex) => visitNativeBlock(child, `${path}/items/${itemIndex + 1}/blocks/${childIndex + 1}`, add, provenance)))
+    return
+  }
+  if (block.kind === 'table') {
+    add(path, { kind: 'table', ...tableValue(block) })
+    if (block.coordinate.kind === 'logical-table') {
+      add(path, { kind: 'csv-matrix', matrix: tableValue(block).rows })
+      add(path, { kind: 'logical-row-bounds', start: block.coordinate.rowStart, end: block.coordinate.rowEnd })
+    }
+    block.rows.forEach((row, rowIndex) => row.forEach((cell, cellIndex) => {
+      const cellPath = `${path}/rows/${rowIndex + 1}/cells/${cellIndex + 1}`
+      provenance(cellPath, cell)
+      if (cell.coordinate.kind === 'sheet-range') add(cellPath, { kind: 'cell', sheet: cell.coordinate.sheet, address: cell.coordinate.range, displayedValue: cell.displayedValue ?? '', ...(cell.formula ? { formula: cell.formula } : {}), ...(cell.mergeRange ? { mergeRange: cell.mergeRange } : {}) })
+    }))
+    return
+  }
+  if (block.kind === 'sheet') add(path, { kind: 'sheet-range', sheet: block.sheet, range: block.range })
+  if (block.kind === 'slide') add(path, { kind: 'slide-boundary', slide: block.slide, text: textBlocks(block.blocks).map((item) => item.text) })
+  if (block.kind === 'page') add(path, { kind: 'page-content-hash', page: block.page, sha256: createHash('sha256').update(JSON.stringify(block.blocks)).digest('hex') })
+  block.blocks.forEach((child, index) => visitNativeBlock(child, `${path}/blocks/${index + 1}`, add, provenance))
+  if (block.kind === 'slide') block.notes.forEach((note, index) => {
+    add(`${path}/notes/${index + 1}`, { kind: 'slide-note', slide: block.slide, text: note.text })
+    add(`${path}/notes/${index + 1}`, { kind: 'notes', text: [note.text] })
+    provenance(`${path}/notes/${index + 1}`, note)
+  })
 }
 
 /** Assert the same facts after Core's schema-2 projection. */
@@ -248,7 +320,7 @@ function coreProvenance(document: IngestedDocument, path: string): { readonly co
 }
 
 function orderedText(document: IngestedDocument): readonly string[] {
-  return textBlocks(document.blocks).map((block) => block.text)
+  return textBlocks(document.blocks).filter((block) => block.role !== 'note').map((block) => block.text)
 }
 
 function noteText(document: IngestedDocument): readonly string[] {
@@ -319,7 +391,7 @@ function withoutIdentity(assertion: StructuralAssertion): WithoutIdentity<Struct
   }
   return fact as WithoutIdentity<StructuralAssertion>
 }
-function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { assertionId: _id, factPath: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
+function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { factPath: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
 type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role' | 'factPath'> : never
 
 const MAX_EVIDENCE_DEPTH = 3

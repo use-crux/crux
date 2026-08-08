@@ -97,9 +97,9 @@ function projectDocument(document, bytes, sourceFormat) {
   const inlineText = (inlines) => inlines.map((inline) => {
     if (inline.kind === 'text') return inline.text ?? ''
     if (inline.kind === 'link') return inlineText(inline.content ?? [])
-    if (inline.kind === 'image') return inline.alt ? `[image:${inline.alt}]` : '[image]'
+    if (inline.kind === 'image') return ''
     if (inline.kind === 'anchor') return inline.anchor ? `[anchor:${inline.anchor}]` : '[anchor]'
-    if (inline.kind === 'noteRef') return inline.noteId ? `[note:${inline.noteId}]` : '[note]'
+    if (inline.kind === 'noteRef') return ''
     if (inline.kind === 'lineBreak') return '\n'
     return ''
   }).join('')
@@ -163,6 +163,7 @@ function projectDocument(document, bytes, sourceFormat) {
   const native = {
     kind: 'anydoc-native-v1', source: { documentSha256, format: sourceFormat },
     facts: { blocks: document.blocks, notes: document.notes, assets: document.assets.map((asset) => ({ id: asset.id, mediaType: asset.mediaType, originPart: asset.originPart, byteLength: asset.data.byteLength })) },
+    projection: core,
   }
   return success(native, core, saturatedSum(bytes.byteLength, jsonBytes(document), jsonBytes(native), jsonBytes(core), assets.reduce((total, asset) => saturatedAdd(total, asset.byteLength), 0)), assets)
 }

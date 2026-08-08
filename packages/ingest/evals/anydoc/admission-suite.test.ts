@@ -15,4 +15,24 @@ describe('runAdmissionSuite', () => {
       candidates: [{ parser: 'csv-parse', selected: true, core: { admitted: true } }],
     })
   })
+
+  it('runs the PDF control through only its isolated direct-inspector owner', async () => {
+    const evidence = await runAdmissionSuite({ fixtureIds: ['pdf-control-v1'], determinismRuns: false })
+
+    expect(evidence.results[0]?.candidates[0]).toMatchObject({
+      parser: 'pdf-inspector',
+      selected: true,
+      outcome: { kind: 'success' },
+    })
+  })
+
+  it('selects the DOCX primary only from completed candidate quality evidence', async () => {
+    const evidence = await runAdmissionSuite({ fixtureIds: ['docx-structure-v1'], determinismRuns: false })
+
+    expect(evidence.docxDecision).toMatchObject({ primary: 'anydoc' })
+    expect(evidence.results[0]?.candidates.map((candidate) => ({ parser: candidate.parser, selected: candidate.selected }))).toEqual([
+      { parser: 'anydoc', selected: true },
+      { parser: 'mammoth', selected: false },
+    ])
+  })
 })
