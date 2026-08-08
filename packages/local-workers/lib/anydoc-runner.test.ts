@@ -41,12 +41,26 @@ describe('anydoc runner trust boundary', () => {
   })
 
   it('uses a closed format union and maps native parser failures to typed outcomes', () => {
-    expect(source).toContain("const candidateFormats = new Set<AnydocFormat>(['doc', 'docx', 'rtf', 'odt', 'epub', 'pptx', 'xls', 'xlsx', 'ods'])")
+    expect(source).toContain("const parserFormats = new Set<AnydocFormat>(['doc', 'docm', 'docx', 'rtf', 'odt', 'epub', 'ppt', 'pps', 'pot', 'pptx', 'pptm', 'ppsx', 'ppsm', 'odp', 'xls', 'xlsb', 'xlsx', 'xlsm', 'ods', 'csv', 'pdf'])")
+    expect(source).toContain("if (request.format === 'pdf') return fail('unsupported-format', request)")
     expect(source).toContain("case 'encrypted': return 'encrypted'")
-    expect(source).toContain("case 'resourceLimit': return 'resource-limit'")
-    expect(source).toContain("case 'missingPart': return 'missing-part'")
+    expect(source).toContain("case 'resourceLimit': return 'expanded-too-large'")
+    expect(source).toContain("case 'malformed':")
+    expect(source).toContain("case 'missingPart':")
+    expect(source).toContain("case 'io': return 'invalid-result'")
     expect(source).toContain("case 'unsupported': return 'unsupported-format'")
     expect(source).toContain("failureKind: 'parser'")
+  })
+
+  it('bounds the native graph before serializing or projecting it', () => {
+    const conversion = source.indexOf('await anydoc.toDocument')
+    const preflight = source.indexOf('preflightDocument(payload, request.limits)')
+    const serialization = source.indexOf('JSON.stringify(wireDocument)')
+    expect(conversion).toBeGreaterThan(-1)
+    expect(preflight).toBeGreaterThan(conversion)
+    expect(serialization).toBeGreaterThan(preflight)
+    expect(source).toContain('maxStructuralNodes')
+    expect(source).toContain('maxStructuralDepth')
   })
 
   it('ships a self-contained, integrity-described native runtime tree', async () => {

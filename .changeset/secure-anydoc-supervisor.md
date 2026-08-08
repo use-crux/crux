@@ -28,3 +28,7 @@ Bind the selected closed document format and every source, result, expansion,
 asset, diagnostic, memory, CPU, wall-time, and process ceiling into the
 one-shot worker capability. Return parser failures as strict typed outcomes
 that remain distinct from containment and worker infrastructure failures.
+
+Preflight the native document graph before serialization, recompute worker
+accounting in the Go supervisor from a strict bounded wire payload, and keep
+the parser capability set separate from the evidence-gated admission policy.

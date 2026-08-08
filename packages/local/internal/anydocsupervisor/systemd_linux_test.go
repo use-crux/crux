@@ -3,6 +3,7 @@
 package anydocsupervisor
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -383,7 +384,7 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := EncodeResult(conn, Result{Request: request, OK: true, Payload: []byte("ok"), Accounting: &ResultAccounting{}}); err != nil {
+	if err := EncodeResult(conn, validWireResult(request)); err != nil {
 		t.Fatal(err)
 	}
 	ack := make([]byte, 4)
@@ -392,7 +393,7 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	}
 	_ = conn.Close()
 	got := <-done
-	if got.err != nil || string(got.result.Payload) != "ok" {
+	if got.err != nil || !bytes.Equal(got.result.Payload, validWireResult(request).Payload) {
 		t.Fatalf("result = %#v, %v", got.result, got.err)
 	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
@@ -418,7 +419,7 @@ func TestSystemdResultRejectsMismatchedCapabilityBeforeAcknowledging(t *testing.
 	mismatched := expected
 	mismatched.Limits.ResultBytes--
 	mismatched.RequestDigest = requestDigest(mismatched.Version, mismatched.Nonce, mismatched.Format, mismatched.SourceSHA256, mismatched.SourceBytes, mismatched.Limits)
-	if err := EncodeResult(conn, Result{Request: mismatched, OK: true, Payload: []byte("ok"), Accounting: &ResultAccounting{}}); err != nil {
+	if err := EncodeResult(conn, validWireResult(mismatched)); err != nil {
 		t.Fatal(err)
 	}
 	ack := make([]byte, 4)

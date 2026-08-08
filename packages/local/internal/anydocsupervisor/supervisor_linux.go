@@ -52,26 +52,35 @@ const (
 	ErrTimeout                ErrorCode = "timeout"
 	ErrAborted                ErrorCode = "aborted"
 	ErrInvalidResult          ErrorCode = "invalid-result"
-	ErrMalformed              ErrorCode = "malformed"
 	ErrEncrypted              ErrorCode = "encrypted"
 	ErrExpandedTooLarge       ErrorCode = "expanded-too-large"
 	ErrUnsupportedFormat      ErrorCode = "unsupported-format"
-	ErrResourceLimit          ErrorCode = "resource-limit"
-	ErrMissingPart            ErrorCode = "missing-part"
 )
 
 type Format string
 
 const (
 	FormatDOC  Format = "doc"
+	FormatDOCM Format = "docm"
 	FormatDOCX Format = "docx"
 	FormatRTF  Format = "rtf"
 	FormatODT  Format = "odt"
 	FormatEPUB Format = "epub"
+	FormatPPT  Format = "ppt"
+	FormatPPS  Format = "pps"
+	FormatPOT  Format = "pot"
 	FormatPPTX Format = "pptx"
+	FormatPPTM Format = "pptm"
+	FormatPPSX Format = "ppsx"
+	FormatPPSM Format = "ppsm"
+	FormatODP  Format = "odp"
 	FormatXLS  Format = "xls"
+	FormatXLSB Format = "xlsb"
 	FormatXLSX Format = "xlsx"
+	FormatXLSM Format = "xlsm"
 	FormatODS  Format = "ods"
+	FormatCSV  Format = "csv"
+	FormatPDF  Format = "pdf"
 )
 
 type SupervisorError struct{ Code ErrorCode }
@@ -120,9 +129,13 @@ const (
 
 type ResultAccounting struct {
 	SourceBytes     int64 `json:"sourceBytes"`
+	RawBytes        int64 `json:"rawBytes"`
+	NativeBytes     int64 `json:"nativeBytes"`
+	CoreBytes       int64 `json:"coreBytes"`
 	ExpandedBytes   int64 `json:"expandedBytes"`
 	AssetCount      int64 `json:"assetCount"`
 	AssetBytes      int64 `json:"assetBytes"`
+	DiagnosticCount int64 `json:"diagnosticCount"`
 	DiagnosticBytes int64 `json:"diagnosticBytes"`
 }
 
@@ -153,7 +166,7 @@ func requestDigest(version int, nonce string, format Format, sourceSHA256 string
 }
 func validFormat(format Format) bool {
 	switch format {
-	case FormatDOC, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPTX, FormatXLS, FormatXLSX, FormatODS:
+	case FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatXLSX, FormatXLSM, FormatODS, FormatCSV, FormatPDF:
 		return true
 	}
 	return false
@@ -253,14 +266,18 @@ func validResult(v Result) bool {
 		return false
 	}
 	if v.OK {
-		return v.FailureKind == "" && v.Error == "" && len(v.Payload) > 0 && int64(len(v.Payload)) <= v.Limits.ResultBytes && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes && v.Accounting.ExpandedBytes >= 0 && v.Accounting.ExpandedBytes <= v.Limits.ExpandedBytes && v.Accounting.AssetCount >= 0 && v.Accounting.AssetCount <= v.Limits.AssetCount && v.Accounting.AssetBytes >= 0 && v.Accounting.AssetBytes <= v.Limits.AssetBytes && v.Accounting.DiagnosticBytes >= 0 && v.Accounting.DiagnosticBytes <= v.Limits.DiagnosticBytes
+		if v.FailureKind != "" || v.Error != "" || len(v.Payload) == 0 || int64(len(v.Payload)) > v.Limits.ResultBytes || v.Accounting == nil {
+			return false
+		}
+		accounting, err := recomputePayloadAccounting(v.Request, v.Payload)
+		return err == nil && accounting == *v.Accounting
 	}
 	return v.Error != "" && validFailure(v.FailureKind, v.Error) && len(v.Payload) == 0 && v.Accounting == nil
 }
 func validFailure(kind FailureKind, code ErrorCode) bool {
 	if kind == FailureParser {
 		switch code {
-		case ErrInvalidResult, ErrMalformed, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat, ErrResourceLimit, ErrMissingPart:
+		case ErrInvalidResult, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat:
 			return true
 		}
 	}
@@ -535,6 +552,19 @@ type Run struct {
 }
 
 func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+	if !admittedFormat(format) {
+		return nil, closed(ErrInvalidRequest)
+	}
+	return s.start(ctx, input, format, launch, tmp, l)
+}
+
+// StartEvaluation is the private evidence path. It exposes parser capabilities
+// without admitting any format into production ingestion routing.
+func (s *Supervisor) StartEvaluation(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+	return s.start(ctx, input, format, launch, tmp, l)
+}
+
+func (s *Supervisor) start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
 	if s == nil || s.backend == nil || s.stager == nil {
 		return nil, closed(ErrContainmentUnavailable)
 	}
@@ -594,6 +624,19 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, lau
 	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, format, sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), format: format, limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: s.now()}
 	go r.monitor()
 	return r, nil
+}
+
+func admissionCandidateFormat(format Format) bool {
+	switch format {
+	case FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatODS:
+		return true
+	}
+	return false
+}
+
+func admittedFormat(Format) bool {
+	// The Phase 2 ADR currently admits no Anydoc primary.
+	return false
 }
 
 func (r *Run) Authorize() error {

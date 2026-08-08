@@ -14,14 +14,16 @@ const maxMemoryBytes = 512 << 20
 const maxCpuMilliseconds = 20_000
 const maxWallMilliseconds = 30_000
 const maxPids = 64
+const maxStructuralNodes = 1_000_000
+const maxStructuralDepth = 128
 const inputPath = '/run/crux-anydoc/input/source'
 const timeoutMilliseconds = 25_000
-const candidateFormats = new Set<AnydocFormat>(['doc', 'docx', 'rtf', 'odt', 'epub', 'pptx', 'xls', 'xlsx', 'ods'])
+const parserFormats = new Set<AnydocFormat>(['doc', 'docm', 'docx', 'rtf', 'odt', 'epub', 'ppt', 'pps', 'pot', 'pptx', 'pptm', 'ppsx', 'ppsm', 'odp', 'xls', 'xlsb', 'xlsx', 'xlsm', 'ods', 'csv', 'pdf'])
 
-type AnydocFormat = 'doc' | 'docx' | 'rtf' | 'odt' | 'epub' | 'pptx' | 'xls' | 'xlsx' | 'ods'
-type ParserError = 'invalid-result' | 'malformed' | 'encrypted' | 'expanded-too-large' | 'unsupported-format' | 'resource-limit' | 'missing-part'
+type AnydocFormat = 'doc' | 'docm' | 'docx' | 'rtf' | 'odt' | 'epub' | 'ppt' | 'pps' | 'pot' | 'pptx' | 'pptm' | 'ppsx' | 'ppsm' | 'odp' | 'xls' | 'xlsb' | 'xlsx' | 'xlsm' | 'ods' | 'csv' | 'pdf'
+type ParserError = 'invalid-result' | 'encrypted' | 'expanded-too-large' | 'unsupported-format'
 type JobLimits = { sourceBytes: number; resultBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticBytes: number; memoryBytes: number; cpuMilliseconds: number; wallMilliseconds: number; pids: number }
-type Accounting = { sourceBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticBytes: number }
+type Accounting = { sourceBytes: number; rawBytes: number; nativeBytes: number; coreBytes: number; expandedBytes: number; assetCount: number; assetBytes: number; diagnosticCount: number; diagnosticBytes: number }
 type Request = { version: number; nonce: string; requestDigest: string; format: AnydocFormat; sourceSha256: string; sourceBytes: number; limits: JobLimits }
 type Result = (Request & { ok: true; payload: string; accounting: Accounting }) | (Request & { ok: false; failureKind: 'parser'; error: ParserError })
 
@@ -37,6 +39,7 @@ async function main(): Promise<void> {
   const bytes = await readSource(inputPath, request.limits.sourceBytes).catch(() => undefined)
   if (!bytes) return abort()
   if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return abort()
+  if (request.format === 'pdf') return fail('unsupported-format', request)
 
   let payload: unknown
   try {
@@ -44,14 +47,40 @@ async function main(): Promise<void> {
     // top level has only Node builtins, so untrusted launches cannot load the
     // native addon before proving possession of this run's nonce and digest.
     const anydoc = await import('@firecrawl/anydoc')
-    payload = await anydoc.toDocument(bytes, request.format as NativeFormat)
+    payload = await anydoc.toDocument(bytes, nativeFormat(request.format))
   } catch (error) {
     return fail(parserError(error), request)
   }
-  const inspected = inspectPayload(payload, request.limits)
-  if ('error' in inspected) return fail(inspected.error, request)
-  const result = { ...request, ok: true as const, payload: inspected.bytes.toString('base64'), accounting: { sourceBytes: bytes.byteLength, ...inspected.accounting } }
-  if (encodeResult(result).byteLength > request.limits.resultBytes) return fail('resource-limit', request)
+  const preflight = preflightDocument(payload, request.limits)
+  if ('error' in preflight) return fail(preflight.error, request)
+  const wireDocument = { ...preflight.document, assets: preflight.assets.map(({ id, mediaType, originPart }) => ({ id, mediaType, originPart })) }
+  const raw = Buffer.from(JSON.stringify(wireDocument))
+  const expandedBytes = bytes.byteLength + raw.byteLength + preflight.assetBytes
+  if (expandedBytes > request.limits.expandedBytes) return fail('expanded-too-large', request)
+  if (2 * raw.byteLength + base64Bytes(preflight.assetBytes) + 4096 > request.limits.resultBytes) return fail('invalid-result', request)
+  const diagnostics: string[] = []
+  const wirePayload = {
+    schemaVersion: 1,
+    document: wireDocument,
+    assets: preflight.assets.map(({ id, mediaType, originPart, data }) => ({ id, mediaType, originPart, data: data.toString('base64') })),
+    diagnostics,
+    native: null,
+    core: null,
+  }
+  const wirePayloadBytes = Buffer.from(JSON.stringify(wirePayload))
+  const accounting: Accounting = {
+    sourceBytes: bytes.byteLength,
+    rawBytes: raw.byteLength,
+    nativeBytes: 0,
+    coreBytes: 0,
+    expandedBytes,
+    assetCount: preflight.assets.length,
+    assetBytes: preflight.assetBytes,
+    diagnosticCount: diagnostics.length,
+    diagnosticBytes: 0,
+  }
+  const result = { ...request, ok: true as const, payload: wirePayloadBytes.toString('base64'), accounting }
+  if (encodeResult(result).byteLength > request.limits.resultBytes) return fail('invalid-result', request)
   await send(result)
 }
 
@@ -86,7 +115,7 @@ function validRequest(value: unknown): value is Request {
     && /^[a-f0-9]{32}$/.test((value as Request).nonce)
     && /^[a-f0-9]{64}$/.test((value as Request).requestDigest)
     && /^[a-f0-9]{64}$/.test((value as Request).sourceSha256)
-    && candidateFormats.has((value as Request).format)
+    && parserFormats.has((value as Request).format)
     && Number.isSafeInteger((value as Request).sourceBytes) && (value as Request).sourceBytes >= 0
     && Number.isSafeInteger((value as Request).limits?.sourceBytes) && (value as Request).limits.sourceBytes >= (value as Request).sourceBytes && (value as Request).limits.sourceBytes <= maxSourceBytes
     && Number.isSafeInteger((value as Request).limits?.resultBytes) && (value as Request).limits.resultBytes > 0 && (value as Request).limits.resultBytes <= maxResultBytes
@@ -151,39 +180,79 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[]):
 function parserError(error: unknown): ParserError {
   const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined
   switch (code) {
-    case 'malformed': return 'malformed'
     case 'encrypted': return 'encrypted'
-    case 'resourceLimit': return 'resource-limit'
-    case 'missingPart': return 'missing-part'
+    case 'resourceLimit': return 'expanded-too-large'
     case 'unsupported': return 'unsupported-format'
+    case 'malformed':
+    case 'missingPart':
+    case 'io': return 'invalid-result'
     default: return 'invalid-result'
   }
 }
 
-function inspectPayload(payload: unknown, limits: JobLimits): { bytes: Buffer; accounting: Omit<Accounting, 'sourceBytes'> } | { error: ParserError } {
-  if (!payload || typeof payload !== 'object') return { error: 'invalid-result' }
-  const document = payload as { assets?: unknown; diagnostics?: unknown }
-  if (!Array.isArray(document.assets)) return { error: 'invalid-result' }
-  if (document.assets.length > limits.assetCount) return { error: 'resource-limit' }
+function nativeFormat(format: AnydocFormat): NativeFormat {
+  switch (format) {
+    case 'docm': return 'docx' as NativeFormat
+    case 'pps':
+    case 'pot': return 'ppt' as NativeFormat
+    case 'pptm':
+    case 'ppsx':
+    case 'ppsm': return 'pptx' as NativeFormat
+    case 'xls':
+    case 'xlsb':
+    case 'xlsm': return 'xlsx' as NativeFormat
+    default: return format as NativeFormat
+  }
+}
 
+type NativeAsset = { id: number; mediaType: string; originPart: string; data: Buffer }
+type NativeDocument = Record<string, unknown> & { blocks: unknown[]; notes: unknown[]; assets: NativeAsset[] }
+
+function preflightDocument(payload: unknown, limits: JobLimits): { document: NativeDocument; assets: NativeAsset[]; assetBytes: number } | { error: ParserError } {
+  if (!isRecord(payload) || !exactKeys(payload, ['blocks', 'notes', 'assets']) || !Array.isArray(payload.blocks) || !Array.isArray(payload.notes) || !Array.isArray(payload.assets)) return { error: 'invalid-result' }
+  if (payload.assets.length > limits.assetCount) return { error: 'invalid-result' }
+  const assets: NativeAsset[] = []
+  const allowedBinary = new Set<Uint8Array>()
   let assetBytes = 0
-  for (const asset of document.assets) {
-    if (!asset || typeof asset !== 'object' || !('data' in asset)) return { error: 'invalid-result' }
-    const data = (asset as { data: unknown }).data
-    if (!Buffer.isBuffer(data) && !(data instanceof Uint8Array)) return { error: 'invalid-result' }
-    assetBytes += data.byteLength
-    if (assetBytes > limits.assetBytes) return { error: 'resource-limit' }
+  for (const value of payload.assets) {
+    if (!isRecord(value) || !exactKeys(value, ['id', 'mediaType', 'originPart', 'data']) || !Number.isSafeInteger(value.id) || typeof value.mediaType !== 'string' || typeof value.originPart !== 'string' || !Buffer.isBuffer(value.data)) return { error: 'invalid-result' }
+    const asset = value as NativeAsset
+    assetBytes += asset.data.byteLength
+    if (assetBytes > limits.assetBytes || base64Bytes(assetBytes) > limits.resultBytes) return { error: 'invalid-result' }
+    assets.push(asset)
+    allowedBinary.add(asset.data)
   }
 
-  const diagnostics = document.diagnostics === undefined ? [] : document.diagnostics
-  if (!Array.isArray(diagnostics)) return { error: 'invalid-result' }
-  const diagnosticBytes = Buffer.byteLength(JSON.stringify(diagnostics))
-  if (diagnosticBytes > limits.diagnosticBytes) return { error: 'resource-limit' }
-
-  const bytes = Buffer.from(JSON.stringify(payload))
-  if (bytes.byteLength > limits.expandedBytes) return { error: 'expanded-too-large' }
-  return { bytes, accounting: { expandedBytes: bytes.byteLength, assetCount: document.assets.length, assetBytes, diagnosticBytes } }
+  let nodes = 0
+  let jsonUpperBound = 0
+  const stack: Array<{ value: unknown; depth: number }> = [{ value: payload, depth: 1 }]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    nodes++
+    if (nodes > maxStructuralNodes || current.depth > maxStructuralDepth) return { error: 'expanded-too-large' }
+    if (typeof current.value === 'string') jsonUpperBound += 2 + 6 * current.value.length
+    else if (typeof current.value === 'number') jsonUpperBound += 32
+    else if (typeof current.value === 'boolean') jsonUpperBound += 5
+    else if (current.value === null) jsonUpperBound += 4
+    else if (current.value instanceof Uint8Array) {
+      if (!allowedBinary.has(current.value)) return { error: 'invalid-result' }
+    } else if (Array.isArray(current.value)) {
+      jsonUpperBound += current.value.length + 2
+      for (const child of current.value) stack.push({ value: child, depth: current.depth + 1 })
+    } else if (isRecord(current.value)) {
+      const entries = Object.entries(current.value)
+      jsonUpperBound += entries.length + 2
+      for (const [key, child] of entries) {
+        jsonUpperBound += 3 + 6 * key.length
+        stack.push({ value: child, depth: current.depth + 1 })
+      }
+    } else return { error: 'invalid-result' }
+    if (jsonUpperBound + assetBytes > limits.expandedBytes) return { error: 'expanded-too-large' }
+  }
+  return { document: payload as NativeDocument, assets, assetBytes }
 }
+
+function base64Bytes(value: number): number { return Math.ceil(value / 3) * 4 }
 
 function connect(path: string): Promise<Socket> {
   return new Promise((resolve, reject) => {

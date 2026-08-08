@@ -20,7 +20,7 @@ import (
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	b := &fakeBackend{}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -61,7 +61,7 @@ func TestPrepareLocalHostBuildsOpaqueLaunchDependencyWithoutRouting(t *testing.T
 }
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
-	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, _ := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	ch := make(chan error, 2)
 	go func() { ch <- r.Authorize() }()
 	go func() { ch <- r.Authorize() }()
@@ -76,7 +76,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	assert(t, e, ErrInvalidRequest)
 	b := &fakeBackend{bad: true}
 	supervisor := newTestSupervisor(t, b)
-	_, e = supervisor.Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	_, e = supervisor.StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
 	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
@@ -88,7 +88,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -107,9 +107,32 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 	assert(t, err, ErrInvalidRequest)
 }
 
+func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png"}]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[],"native":null,"core":null}`)
+	accounting, err := recomputePayloadAccounting(request, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}
+	if err := EncodeResult(bytes.NewBuffer(nil), valid); err != nil {
+		t.Fatalf("valid payload rejected: %v", err)
+	}
+	tampered := accounting
+	tampered.AssetBytes++
+	valid.Accounting = &tampered
+	if err := EncodeResult(bytes.NewBuffer(nil), valid); err == nil {
+		t.Fatal("worker accounting was trusted")
+	}
+	valid.Accounting = &accounting
+	valid.Payload = []byte(`{"schemaVersion":1,"document":{},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+	if err := EncodeResult(bytes.NewBuffer(nil), valid); err == nil {
+		t.Fatal("malformed wire payload accepted")
+	}
+}
+
 func TestResultFailureKindsKeepParserOutcomesDistinct(t *testing.T) {
-	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
-	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	request := validTestRequest(FormatDOCX)
 	for _, result := range []Result{
 		{Request: request, OK: false, FailureKind: FailureParser, Error: ErrEncrypted},
 		{Request: request, OK: false, FailureKind: FailureInfrastructure, Error: ErrTimeout},
@@ -128,10 +151,25 @@ func TestResultFailureKindsKeepParserOutcomesDistinct(t *testing.T) {
 		}
 	}
 }
+
+func validTestRequest(format Format) Request {
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: format, Limits: testJobLimits()}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	return request
+}
+
+func validWireResult(request Request) Result {
+	payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+	accounting, err := recomputePayloadAccounting(request, payload)
+	if err != nil {
+		panic(err)
+	}
+	return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}
+}
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	b := &fakeBackend{}
 	supervisor := newTestSupervisor(t, b)
-	r, err := supervisor.Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, err := supervisor.StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,9 +189,11 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 		if request.Format != FormatODT {
 			t.Fatalf("result expected format = %q", request.Format)
 		}
-		return Result{Request: request, OK: true, Payload: []byte("{}"), Accounting: &ResultAccounting{SourceBytes: request.SourceBytes}}, nil
+		payload := []byte(`{"schemaVersion":1,"document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[],"native":null,"core":null}`)
+		accounting, err := recomputePayloadAccounting(request, payload)
+		return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}, err
 	}}
-	run, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatODT, testLaunch(), "/run/tmp", Limits{})
+	run, err := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatODT, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +214,7 @@ func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 		<-ctx.Done()
 		return Result{}, ctx.Err()
 	}}
-	r, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, err := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +231,7 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 		t.Fatal("service quota can exceed CPU budget")
 	}
 	b := &fakeBackend{cpuErr: true}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -221,7 +261,7 @@ func TestTerminalReportCopiesConcurrentAccounting(t *testing.T) {
 
 func TestTerminalReportSeparatesPreStopSnapshotFromTerminationEvidence(t *testing.T) {
 	backend := &fakeBackend{}
-	run, err := newTestSupervisor(t, backend).Start(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	run, err := newTestSupervisor(t, backend).StartEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,13 +331,34 @@ func TestRequestDigestBindsEveryJobField(t *testing.T) {
 }
 
 func TestClosedAnydocFormatsRejectUnknownValues(t *testing.T) {
-	for _, format := range []Format{FormatDOC, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPTX, FormatXLS, FormatXLSX, FormatODS} {
+	for _, format := range []Format{FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatXLSX, FormatXLSM, FormatODS, FormatCSV, FormatPDF} {
 		if !validFormat(format) {
-			t.Fatalf("available manifest format rejected: %q", format)
+			t.Fatalf("parser capability rejected: %q", format)
 		}
 	}
-	if validFormat(Format("pdf")) || validFormat(Format("unknown")) {
-		t.Fatal("non-candidate format accepted")
+	if validFormat(Format("unknown")) {
+		t.Fatal("unknown parser format accepted")
+	}
+	for _, control := range []Format{FormatPDF, FormatCSV, FormatXLSX, FormatXLSM} {
+		if admissionCandidateFormat(control) {
+			t.Fatalf("incumbent control became an Anydoc admission candidate: %q", control)
+		}
+	}
+	for _, candidate := range []Format{FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatODS} {
+		if !admissionCandidateFormat(candidate) || admittedFormat(candidate) {
+			t.Fatalf("candidate policy drifted before admission evidence: %q", candidate)
+		}
+	}
+}
+
+func TestAdmissionStartRejectsControlsAndUnadmittedCandidatesBeforeLaunch(t *testing.T) {
+	for _, format := range []Format{FormatCSV, FormatXLSX, FormatPDF, FormatDOCX, FormatPPTX} {
+		backend := &fakeBackend{}
+		_, err := newTestSupervisor(t, backend).Start(context.Background(), []byte("x"), format, testLaunch(), "/run/tmp", Limits{})
+		assert(t, err, ErrInvalidRequest)
+		if backend.u != nil {
+			t.Fatalf("admission rejection launched worker for %q", format)
+		}
 	}
 }
 
