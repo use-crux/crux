@@ -74,6 +74,7 @@ it('requires missing coverage to say why its source bytes are unavailable', () =
 
   expect(validateFixtureManifest([fixture])).toEqual([
     'fixture "csv-control-v1" marks coverage missing without a reason.',
+    'fixture "csv-control-v1" has no source bytes but does not declare missing coverage.',
   ])
 })
 
@@ -92,6 +93,7 @@ it('requires a deterministic generator recipe to have an immutable SHA-256', () 
   })
 
   expect(validateFixtureManifest([fixture])).toEqual([
+    'fixture "csv-control-v1" has no source bytes but does not declare missing coverage.',
     'fixture "csv-control-v1" generator recipe has no immutable SHA-256.',
   ])
 })
@@ -122,6 +124,11 @@ function validFixture(overrides: Partial<AnydocFixtureManifest> = {}): AnydocFix
       sha256: '416a2ff58e53cb4196bff8bbd9c67ec4253788f2e86fca317628b15e092b02e5',
       byteLength: 45,
       license: { kind: 'project-owned' },
+      provenance: {
+        kind: 'project-fixture',
+        reference: 'fixtures/csv-control-v1.csv',
+        license: { kind: 'project-owned' },
+      },
     },
     declaredFormat: 'csv',
     actualFormat: 'csv',
