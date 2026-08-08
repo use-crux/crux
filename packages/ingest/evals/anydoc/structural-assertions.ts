@@ -18,7 +18,7 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-note'; readonly slide: number; readonly text: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'asset-count'; readonly count: number }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'coordinate-kinds'; readonly kinds: readonly SourceCoordinate['kind'][] }
-  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'provenance'; readonly path: string; readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'provenance'; readonly for: string; readonly path: string; readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-order'; readonly slides: readonly number[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-boundary'; readonly slide: number; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'sheet-order'; readonly sheets: readonly string[] }

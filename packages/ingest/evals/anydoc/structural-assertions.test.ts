@@ -130,9 +130,9 @@ it('keeps presentation notes scoped to their owning slide', () => {
 it('binds provenance to one fact path, full coordinate, and producer ownership', () => {
   const expected: ExpectedFactManifest = {
     fixtureId: 'provenance', expectedOutcome: { kind: 'success' },
-    assertions: [{ id: 'slide-1-provenance', role: 'required', kind: 'provenance', path: 'blocks/1', coordinate: { kind: 'slide', slide: 1 }, producer }],
+    assertions: [{ id: 'slide-1-provenance', role: 'required', kind: 'provenance', for: 'slide-1-provenance', path: 'blocks/1', coordinate: { kind: 'slide', slide: 1 }, producer }],
   }
-  const nativeFact: ParserNativeFact = { assertionId: 'slide-1-provenance', factPath: 'blocks/1', path: 'blocks/1', kind: 'provenance', coordinate: { kind: 'slide', slide: 1 }, producer }
+  const nativeFact: ParserNativeFact = { assertionId: 'slide-1-provenance', factPath: 'blocks/1', path: 'blocks/1', kind: 'provenance', for: 'slide-1-provenance', coordinate: { kind: 'slide', slide: 1 }, producer }
   const detached = { ...document, blocks: [{ ...(document.blocks[0] as Extract<typeof document.blocks[number], { kind: 'slide' }>), coordinate: { kind: 'document' as const, documentSha256: 'c'.repeat(64) } }, ...document.blocks.slice(1)] }
 
   const nativeResult = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [nativeFact] })
@@ -229,4 +229,14 @@ it('requires fact-scoped provenance and canonical page content hashes for coordi
 
   expect(validateExpectedFacts(fixtureManifests, withoutProvenance)).toContain('fixture "csv-control-v1" required fact "coordinates" has no required structural assertion.')
   expect(validateExpectedFacts(fixtureManifests, withoutPageHashes)).toContain('fixture "pdf-control-v1" required fact "page-content" has no required structural assertion.')
+})
+
+it('rejects a manifest when a non-first structural fact loses its provenance link', () => {
+  const csv = expectedFactsByFixture['csv-control-v1']!
+  const missingLink = {
+    ...expectedFactsByFixture,
+    'csv-control-v1': { ...csv, assertions: csv.assertions.filter((assertion) => !(assertion.kind === 'provenance' && assertion.for === 'csv-table')) },
+  }
+
+  expect(validateExpectedFacts(fixtureManifests, missingLink)).toContain('fixture "csv-control-v1" required assertion "csv-table" has no provenance assertion.')
 })

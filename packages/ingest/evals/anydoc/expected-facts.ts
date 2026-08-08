@@ -104,7 +104,8 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
   'mislabeled-v1': failure('mislabeled-v1', 'invalid-result'),
   'expansion-heavy-v1': failure('expansion-heavy-v1', 'expanded-too-large'),
   'external-link-v1': {
-    fixtureId: 'external-link-v1', expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' }, assertions: proseAssertions({ hash: 'edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574' }),
+    ...success('external-link-v1', proseAssertions({ hash: 'edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574' })),
+    expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' },
   },
   'timeout-v1': missing('timeout-v1'),
   'memory-limit-v1': missing('memory-limit-v1'),
@@ -143,6 +144,12 @@ export function validateExpectedFacts(manifests: readonly AnydocFixtureManifest[
         errors.push(`fixture "${fixture.id}" required fact "${requiredFact}" has no required structural assertion.`)
       }
     }
+    const linked = new Set(expected.assertions.filter((assertion): assertion is Extract<StructuralAssertion, { kind: 'provenance' }> => assertion.kind === 'provenance').map((assertion) => assertion.for))
+    for (const assertion of expected.assertions) {
+      if (assertion.role === 'required' && assertion.kind !== 'provenance' && !linked.has(assertion.id)) {
+        errors.push(`fixture "${fixture.id}" required assertion "${assertion.id}" has no provenance assertion.`)
+      }
+    }
   }
   return errors
 }
@@ -173,11 +180,22 @@ function spreadsheet(fixtureId: string, hasMerge: boolean): ExpectedFactManifest
 }
 
 function provenance(id: string, path: string, coordinate: SourceCoordinate, producer: ParserIdentity): StructuralAssertion {
-  return { id, role: 'required', kind: 'provenance', path, coordinate, producer }
+  return { id, role: 'required', kind: 'provenance', for: '', path, coordinate, producer }
 }
 
 function success(fixtureId: string, assertions: readonly StructuralAssertion[]): ExpectedFactManifest {
-  return { fixtureId, expectedOutcome: { kind: 'success' }, assertions }
+  return { fixtureId, expectedOutcome: { kind: 'success' }, assertions: linkProvenance(assertions) }
+}
+
+/** Every required structural assertion gets a statically declared provenance twin. */
+function linkProvenance(assertions: readonly StructuralAssertion[]): readonly StructuralAssertion[] {
+  const template = assertions.find((assertion): assertion is Extract<StructuralAssertion, { kind: 'provenance' }> => assertion.kind === 'provenance')
+  if (!template) return assertions
+  const linked = assertions.map((assertion) => assertion.kind === 'provenance' ? { ...assertion, for: assertion.for || assertion.id } : assertion)
+  const covered = new Set(linked.filter((assertion) => assertion.kind === 'provenance').map((assertion) => assertion.for))
+  return [...linked, ...linked
+    .filter((assertion) => assertion.role === 'required' && assertion.kind !== 'provenance' && !covered.has(assertion.id))
+    .map((assertion) => ({ ...template, id: `provenance:${assertion.id}`, for: assertion.id, path: template.path, coordinate: template.coordinate, producer: template.producer }))]
 }
 
 function failure(fixtureId: string, error: string): ExpectedFactManifest {
