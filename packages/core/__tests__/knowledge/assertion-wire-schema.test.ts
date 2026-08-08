@@ -86,8 +86,8 @@ describe("generated assertion wire schema", () => {
 
   it("decodes typed and JSON-string slots together", async () => {
     const model = fixedModel([{
-      type_0: [{ dataJson: '{"value":"fallback"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
-      type_1: [{ data: { value: "typed" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+      type_0: [{ dataJson: '{"value":"fallback"}', evidence: ["e0"], provenance: "exact" }],
+      type_1: [{ data: { value: "typed" }, evidence: ["e0"], provenance: "exact" }],
     }]);
     const stage = assertions({
       id: "facts", version: 1, model,
@@ -102,12 +102,12 @@ describe("generated assertion wire schema", () => {
     const prompts: string[] = [];
     const model = fixedModel([
       {
-        type_0: [{ data: { value: "keep" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
-        type_1: [{ data: { count: "bad" }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+        type_0: [{ data: { value: "keep" }, evidence: ["e0"], provenance: "exact" }],
+        type_1: [{ data: { count: "bad" }, evidence: ["e0"], provenance: "exact" }],
       },
       {
         type_0: [],
-        type_1: [{ data: { count: 2 }, evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }],
+        type_1: [{ data: { count: 2 }, evidence: ["e0"], provenance: "exact" }],
       },
     ], prompts);
     const stage = assertions({ id: "facts", version: 1, model, types: {
@@ -123,8 +123,8 @@ describe("generated assertion wire schema", () => {
   it("repairs malformed JSON and unknown slots locally", async () => {
     const prompts: string[] = [];
     const model = fixedModel([
-      { type_0: [{ dataJson: "{bad", evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }], unexpected: [] },
-      { type_0: [{ dataJson: '{"value":"fixed"}', evidence: [{ kind: "chunk", sourceId, chunkId: "target" }], provenance: "exact" }] },
+      { type_0: [{ dataJson: "{bad", evidence: ["e0"], provenance: "exact" }], unexpected: [] },
+      { type_0: [{ dataJson: '{"value":"fixed"}', evidence: ["e0"], provenance: "exact" }] },
     ], prompts);
     const stage = assertions({ id: "facts", version: 1, model, types: { fact: z.union([z.object({ value: z.string() }), z.string()]) } });
 
@@ -134,16 +134,13 @@ describe("generated assertion wire schema", () => {
     expect(prompts[1]).toContain("unexpected: unknown assertion slot");
   });
 
-  it("is constant in chunk count and uses generic evidence references", async () => {
-    const small = await captureSchema(chunks(2));
-    const large = await captureSchema(chunks(40));
-    const smallJson = z.toJSONSchema(small);
-    const largeJson = z.toJSONSchema(large);
-    const serialized = JSON.stringify(smallJson);
+  it("closes evidence over deterministic batch-local labels", async () => {
+    const schema = z.toJSONSchema(await captureSchema(chunks(2)));
+    const serialized = JSON.stringify(schema);
 
-    expect(serialized.length).toBe(JSON.stringify(largeJson).length);
-    expect(serialized).not.toContain("chunk-7");
-    expect(hasPlainStringEvidenceRefs(smallJson)).toBe(true);
+    expect(serialized).toContain('"enum":["e0","e1"]');
+    expect(serialized).not.toContain("chunk-0");
+    expect(serialized).not.toContain("chunk-1");
   });
 
   it("requires every wire object property, including provenance", async () => {
@@ -161,8 +158,8 @@ describe("generated assertion wire schema", () => {
   });
 
   it.each([
-    ["fabricated", "missing", "invalid evidence"],
-    ["context-only", "context", "invalid evidence — context-only chunk"],
+    ["fabricated", "missing", "unknown or context-only evidence label"],
+    ["context-only", "c0", "unknown or context-only evidence label"],
   ] as const)(
     "repairs then rejects %s evidence locally",
     async (_name, chunkId, message) => {
@@ -193,13 +190,13 @@ describe("generated assertion wire schema", () => {
       expect(model.generateObject).toHaveBeenCalledTimes(2);
       expect(prompts[1]).toContain(message);
       expect((error as ValidationExhaustedError).issues).toEqual([
-        { path: "type_0.evidence", depth: 2, code: "custom" },
+        { path: "type_0", depth: 1, code: "custom" },
       ]);
     },
   );
 
   it("accepts valid generic evidence with one generation call", async () => {
-    const model = fixedModel([generatedClaim("target")]);
+    const model = fixedModel([generatedClaim("e0")]);
     const stage = assertions({ id: "facts", version: 1, types, model });
 
     const result = await runDeriveStages({
@@ -260,12 +257,12 @@ function fixedModel(
   };
 }
 
-function generatedClaim(chunkId: string) {
+function generatedClaim(evidenceLabel: string) {
   return {
     type_0: [
       {
         data: { value: "fact" },
-        evidence: [{ kind: "chunk" as const, sourceId, chunkId }],
+        evidence: [evidenceLabel],
         provenance: "derived" as const,
       },
     ],
@@ -314,23 +311,6 @@ function allPropertiesRequired(value: unknown): boolean {
       return false;
   }
   return Object.values(value).every(allPropertiesRequired);
-}
-
-function hasPlainStringEvidenceRefs(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(hasPlainStringEvidenceRefs);
-  if (!isRecord(value)) return false;
-  const properties = value.properties;
-  if (
-    isRecord(properties) &&
-    isRecord(properties.sourceId) &&
-    isRecord(properties.chunkId)
-  ) {
-    return (
-      properties.sourceId.type === "string" &&
-      properties.chunkId.type === "string"
-    );
-  }
-  return Object.values(value).some(hasPlainStringEvidenceRefs);
 }
 
 function findPropertySchema(value: unknown, name: string): unknown {

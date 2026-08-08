@@ -24,7 +24,12 @@ import {
   type RawAssertionRelationClaim,
 } from './assertion-relation-claims'
 import { generateObjectWithEvidence } from './modality-validation'
-import { renderBoundedAssertionBatches, renderBoundedRepairPrompt, type DerivePromptBatch } from './prompt-bounds'
+import {
+  renderBoundedAssertionBatches,
+  renderBoundedRepairPrompt,
+  type DerivePromptBatch,
+  type EvidenceRef,
+} from './prompt-bounds'
 import { compileAssertionWire, type AssertionWireManifest } from './assertion-wire'
 
 /** Run one assertion stage and return cached claim records. Internal. */
@@ -177,12 +182,15 @@ async function readGeneratedAssertionClaims(
   const { stage } = input
   const model = stage.model
   if (!model) throw new Error(`Derive ${stage.id} cannot generate assertions.`)
-  const compiled = compileAssertionWire(stage.types)
+  const citeableLabels = batch.evidenceRefs
+    .filter(({ citeable }) => citeable)
+    .map(({ label }) => label)
+  const compiled = compileAssertionWire(stage.types, citeableLabels)
   const manifest = compiled.manifest
   const schema = compiled.schema
   const result = await generateObjectWithEvidence({
     model,
-    system: 'Return only assertions that match the requested schema. Cite evidence only from the chunk ids listed in the prompt; when target chunks are marked, cite only [TARGET:] chunk ids.',
+    system: 'Return only assertions that match the requested schema. Cite evidence only with the e-labels listed on [TARGET:] chunks. Never cite c-labels from [CONTEXT:] chunks.',
     prompt: batch.prompt,
     schema,
     sourceId: input.document.sourceId,
@@ -191,7 +199,7 @@ async function readGeneratedAssertionClaims(
     ...(input.targetKeys !== undefined ? { targetKeys: input.targetKeys } : {}),
     ...(input.assets ? { assets: input.assets } : {}),
   })
-  const decoded = decodeWire(result.object, manifest, repairSlots)
+  const decoded = decodeWire(result.object, manifest, batch.evidenceRefs, repairSlots)
   const validated = validateAssertionClaims(stage, decoded.claims, batch.chunks, input.targetKeys)
   const errors = [
     ...decoded.errors,
@@ -225,7 +233,12 @@ function validationErrors(
   return messages.map((message, index) => ({ slot: claimSlots[failedIndexes[index] ?? -1] ?? '<root>', message }))
 }
 
-function decodeWire(value: unknown, manifest: AssertionWireManifest, repairSlots?: readonly string[]): {
+function decodeWire(
+  value: unknown,
+  manifest: AssertionWireManifest,
+  evidenceRefs: readonly EvidenceRef[],
+  repairSlots?: readonly string[],
+): {
   claims: RawAssertionClaim[]; claimSlots: string[]; errors: { slot: string; message: string }[]
 } {
   const claims: RawAssertionClaim[] = []
@@ -249,7 +262,7 @@ function decodeWire(value: unknown, manifest: AssertionWireManifest, repairSlots
     items.forEach((item, index) => {
       const envelope = z.object({
         ...(entry.mode === 'typed' ? { data: z.unknown() } : { dataJson: z.string() }),
-        evidence: z.array(z.object({ kind: z.literal('chunk'), sourceId: z.string(), chunkId: z.string() }).strict()).min(1),
+        evidence: z.array(z.string()).min(1),
         provenance: z.enum(['exact', 'derived']),
       }).strict().safeParse(item)
       if (!envelope.success) {
@@ -261,7 +274,19 @@ function decodeWire(value: unknown, manifest: AssertionWireManifest, repairSlots
         try { data = JSON.parse((envelope.data as { dataJson: string }).dataJson) }
         catch { errors.push({ slot: entry.slot, message: `${entry.slot}[${index}]: malformed dataJson` }); return }
       } else data = (envelope.data as { data: unknown }).data
-      claims.push({ type: entry.type, data, evidence: envelope.data.evidence, provenance: envelope.data.provenance })
+      const evidence = envelope.data.evidence.flatMap((label) => {
+        const match = evidenceRefs.find((candidate) => candidate.citeable && candidate.label === label)
+
+        return match === undefined
+          ? []
+          : [{ kind: 'chunk' as const, sourceId: match.chunk.sourceId, chunkId: match.chunk.chunkId }]
+      })
+      if (evidence.length !== envelope.data.evidence.length) {
+        errors.push({ slot: entry.slot, message: `${entry.slot}[${index}]: unknown or context-only evidence label` })
+        return
+      }
+
+      claims.push({ type: entry.type, data, evidence, provenance: envelope.data.provenance })
       claimSlots.push(entry.slot)
     })
   }

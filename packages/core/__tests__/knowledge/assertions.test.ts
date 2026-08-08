@@ -203,11 +203,11 @@ describe('assertions', () => {
     await persistChunks(records, [chunk('doc-1', 'c1', 'Fact')])
     const model = countingModel([
       { type_0: [
-        { data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' },
-        { data: { value: 12 }, evidence: [chunkRef], provenance: 'derived' },
+        { data: { value: 'valid' }, evidence: ['e0'], provenance: 'derived' },
+        { data: { value: 12 }, evidence: ['e0'], provenance: 'derived' },
         { data: { value: 'missing evidence' }, evidence: [], provenance: 'derived' },
       ], type_1: [] },
-      { type_0: [{ data: { value: 'valid' }, evidence: [chunkRef], provenance: 'derived' }], type_1: [] },
+      { type_0: [{ data: { value: 'valid' }, evidence: ['e0'], provenance: 'derived' }], type_1: [] },
     ])
     const stage = assertions({ id: 'facts', version: 1, types: schemas, model })
     const args = { records, indexerId, namespace, stages: [stage], document: document('doc-1'), chunks: [
@@ -228,7 +228,7 @@ describe('assertions', () => {
     expect(model.generateObject).toHaveBeenCalledTimes(2)
   })
 
-  it('sends authored data with generic evidence references to the model', async () => {
+  it('sends authored data with closed evidence labels to the model', async () => {
     const { records } = inMemoryStorage()
     const chunks = [
       chunk('doc-1', 'c1', 'Fact'),
@@ -239,7 +239,7 @@ describe('assertions', () => {
       type_0: [],
       type_1: [{
         data: { amount: 12, currency: 'EUR' },
-        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
+        evidence: ['e1'],
         provenance: 'exact',
       }],
     }
@@ -247,14 +247,14 @@ describe('assertions', () => {
       expect(schema.safeParse(valid).success).toBe(true)
       expect(schema.safeParse({ type_0: [], type_1: [{
         data: { value: 'wrong schema' },
-        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'c2' }],
+        evidence: ['e1'],
         provenance: 'derived',
       }] }).success).toBe(false)
       expect(schema.safeParse({ type_0: [{
         data: { value: 'unoffered evidence' },
-        evidence: [{ kind: 'chunk', sourceId: 'doc-1', chunkId: 'not-offered' }],
+        evidence: ['missing'],
         provenance: 'derived',
-      }], type_1: [] }).success).toBe(true)
+      }], type_1: [] }).success).toBe(false)
       expect(schema.safeParse({ type_0: [{
         data: { value: 'missing evidence' },
         provenance: 'derived',

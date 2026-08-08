@@ -16,7 +16,7 @@ const assertionTypes = {
 }
 
 describe('connected knowledge context vs target chunks', () => {
-  it('renders role labels while the evidence schema stays generic', async () => {
+  it('renders deterministic aliases while the evidence schema excludes context', async () => {
     const prompts: string[] = []
     const schemas: z.ZodType<unknown>[] = []
     const model = assertionModel(prompts, schemas)
@@ -38,16 +38,16 @@ describe('connected knowledge context vs target chunks', () => {
       chunks: sourceChunks,
     })
 
-    expect(prompts[0]).toContain('[TARGET:] [doc-1/c1] alpha')
-    expect(prompts[0]).toContain('[CONTEXT:] [doc-1/c2] beta')
+    expect(prompts[0]).toContain('[TARGET:] [e0 | doc-1/c1] alpha')
+    expect(prompts[0]).toContain('[CONTEXT:] [c0 | doc-1/c2] beta')
 
     const schema = schemas[0]!
     expect(schema.safeParse({
-      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }],
+      type_0: [{ data: { value: 'x' }, evidence: ['e0'], provenance: 'derived' }],
     }).success).toBe(true)
     expect(schema.safeParse({
-      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
-    }).success).toBe(true)
+      type_0: [{ data: { value: 'x' }, evidence: ['c0'], provenance: 'derived' }],
+    }).success).toBe(false)
   })
 
   it('deterministic run rejects evidence pointing at a context-only chunk', async () => {
@@ -99,7 +99,7 @@ describe('connected knowledge context vs target chunks', () => {
   it('generated context-only citation repairs once then exhausts with local validation', async () => {
     const prompts: string[] = []
     const invalid = {
-      type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c2')], provenance: 'derived' }],
+      type_0: [{ data: { value: 'x' }, evidence: ['c0'], provenance: 'derived' }],
     }
     const model = fixedAssertionModel([invalid, invalid], prompts)
     const stage = assertions({
@@ -123,16 +123,16 @@ describe('connected knowledge context vs target chunks', () => {
     expect(error).toBeInstanceOf(ValidationExhaustedError)
     expect(model.generateObject).toHaveBeenCalledTimes(2)
     // The authored diagnostic reaches the repair prompt so the model can self-correct.
-    expect(prompts[1]).toContain('invalid evidence — context-only chunk')
+    expect(prompts[1]).toContain('unknown or context-only evidence label')
     expect((error as ValidationExhaustedError).issues).toEqual([
-      { path: 'type_0.evidence', depth: 2, code: 'custom' },
+      { path: 'type_0', depth: 1, code: 'custom' },
     ])
   })
 
   it('generated citation of a target chunk passes validation', async () => {
     const prompts: string[] = []
     const model = fixedAssertionModel([
-      { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 'x' }, evidence: ['e0'], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',
@@ -167,7 +167,7 @@ describe('connected knowledge context vs target chunks', () => {
         prompts.push(prompt)
         const object = [
           null,
-          { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('c1')], provenance: 'derived' }] },
+          { type_0: [{ data: { value: 'x' }, evidence: ['e0'], provenance: 'derived' }] },
         ][index++]
         return { object }
       }),
@@ -200,7 +200,7 @@ describe('connected knowledge context vs target chunks', () => {
     const invalid = {
       type_0: [{
         data: { value: 'x' },
-        evidence: [chunkRef('c2')],
+        evidence: ['c0'],
         provenance: 'derived',
         stray: true,
       }],
@@ -208,7 +208,7 @@ describe('connected knowledge context vs target chunks', () => {
     const fixed = {
       type_0: [{
         data: { value: 'x' },
-        evidence: [chunkRef('c1')],
+        evidence: ['e0'],
         provenance: 'derived',
         stray: true,
       }],
@@ -244,14 +244,14 @@ describe('connected knowledge context vs target chunks', () => {
     const invalid = {
       type_0: [{
         data: { value: 'x' },
-        evidence: [{ kind: 'chunk', sourceId, chunkId: 'c2', stray: true }],
+        evidence: [{ label: 'c0', stray: true }],
         provenance: 'derived',
       }],
     }
     const fixed = {
       type_0: [{
         data: { value: 'x' },
-        evidence: [{ kind: 'chunk', sourceId, chunkId: 'c1', stray: true }],
+        evidence: [{ label: 'e0', stray: true }],
         provenance: 'derived',
       }],
     }
@@ -310,7 +310,7 @@ describe('connected knowledge context vs target chunks', () => {
 
     // The oversized neighbor is dropped with a warning; the farther small context stays visible.
     expect(model.generateObject).toHaveBeenCalledTimes(1)
-    expect(prompts[0]).toContain('[TARGET:] [doc-1/t1]')
+    expect(prompts[0]).toContain('[TARGET:] [e0 | doc-1/t1]')
     expect(prompts[0]).toContain('near-context')
     expect(prompts[0]).toContain('far-context')
     expect(prompts[0]).not.toContain('HUGE')
@@ -376,25 +376,25 @@ describe('connected knowledge context vs target chunks', () => {
     expect(prompts).toHaveLength(2)
 
     // Batch 1 (t1): target t1 + nearest context c1, c2; not c3.
-    expect(prompts[0]).toContain('[TARGET:] [doc-1/t1]')
-    expect(prompts[0]).toContain('[CONTEXT:] [doc-1/c1]')
-    expect(prompts[0]).toContain('[CONTEXT:] [doc-1/c2]')
-    expect(prompts[0]).not.toContain('[doc-1/c3]')
-    expect(prompts[0]).not.toContain('[doc-1/t2]')
+    expect(prompts[0]).toContain('[TARGET:] [e0 | doc-1/t1]')
+    expect(prompts[0]).toContain('[CONTEXT:] [c0 | doc-1/c1]')
+    expect(prompts[0]).toContain('[CONTEXT:] [c1 | doc-1/c2]')
+    expect(prompts[0]).not.toContain('doc-1/c3')
+    expect(prompts[0]).not.toContain('doc-1/t2')
 
     // Batch 2 (t2): target t2 + nearest context c2, c3; not c1.
-    expect(prompts[1]).toContain('[TARGET:] [doc-1/t2]')
-    expect(prompts[1]).toContain('[CONTEXT:] [doc-1/c2]')
-    expect(prompts[1]).toContain('[CONTEXT:] [doc-1/c3]')
-    expect(prompts[1]).not.toContain('[doc-1/c1]')
-    expect(prompts[1]).not.toContain('[doc-1/t1]')
+    expect(prompts[1]).toContain('[TARGET:] [e0 | doc-1/t2]')
+    expect(prompts[1]).toContain('[CONTEXT:] [c0 | doc-1/c2]')
+    expect(prompts[1]).toContain('[CONTEXT:] [c1 | doc-1/c3]')
+    expect(prompts[1]).not.toContain('doc-1/c1')
+    expect(prompts[1]).not.toContain('doc-1/t1')
 
     // Each target appears exactly once across all batches (as a TARGET label).
     const allPrompts = prompts.join('\n')
-    expect(allPrompts.match(/\[TARGET:\] \[doc-1\/t1\]/g)).toHaveLength(1)
-    expect(allPrompts.match(/\[TARGET:\] \[doc-1\/t2\]/g)).toHaveLength(1)
+    expect(allPrompts.match(/\[TARGET:\] \[e0 \| doc-1\/t1\]/g)).toHaveLength(1)
+    expect(allPrompts.match(/\[TARGET:\] \[e0 \| doc-1\/t2\]/g)).toHaveLength(1)
     // Shared context c2 repeats across both batches.
-    expect(allPrompts.match(/\[CONTEXT:\] \[doc-1\/c2\]/g)).toHaveLength(2)
+    expect(allPrompts.match(/\[CONTEXT:\] \[c\d \| doc-1\/c2\]/g)).toHaveLength(2)
   })
 
   it('produces identical batches regardless of mixed-role chunk input order (property)', async () => {
@@ -448,7 +448,7 @@ describe('connected knowledge context vs target chunks', () => {
 
     // One target => one batch; the farthest context chunk is dropped.
     expect(model.generateObject).toHaveBeenCalledTimes(1)
-    expect(prompts[0]).toContain('[TARGET:] [doc-1/t1]')
+    expect(prompts[0]).toContain('[TARGET:] [e0 | doc-1/t1]')
     expect(prompts[0]).toContain('near-context')
     expect(prompts[0]).not.toContain('far-context')
 
@@ -463,7 +463,7 @@ describe('connected knowledge context vs target chunks', () => {
     const prompts: string[] = []
     // Model cites the (truncated) target chunk t1 — must remain admissible evidence.
     const model = fixedAssertionModel([
-      { type_0: [{ data: { value: 'x' }, evidence: [chunkRef('t1')], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 'x' }, evidence: ['e0'], provenance: 'derived' }] },
     ], prompts)
     const stage = assertions({
       id: 'facts',

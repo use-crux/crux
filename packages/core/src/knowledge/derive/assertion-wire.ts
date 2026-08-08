@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 
-export const ASSERTION_WIRE_COMPILER_VERSION = 3
+export const ASSERTION_WIRE_COMPILER_VERSION = 4
 
 const MAX_SCHEMA_DEPTH = 8
 const MAX_SCHEMA_NODES = 128
@@ -36,14 +36,16 @@ export interface CompiledAssertionWire {
   readonly manifest: AssertionWireManifest
 }
 
-export function compileAssertionWire(types: Record<string, z.ZodType<unknown>>): CompiledAssertionWire {
-  const slots = Object.entries(types).sort(([left], [right]) => left.localeCompare(right))
+export function compileAssertionWire(
+  types: Record<string, z.ZodType<unknown>>,
+  evidenceLabels?: readonly string[],
+): CompiledAssertionWire {
+  const slots = Object.entries(types).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .map(([type, schema], index) => compileSlot(type, schema, index))
-  const evidence = z.array(z.object({
-    kind: z.literal('chunk').describe('Evidence kind; always chunk.'),
-    sourceId: z.string().describe('Source id shown in the prompt.'),
-    chunkId: z.string().describe('Target chunk id shown in the prompt.'),
-  }).strict().describe('One target chunk supporting this assertion.')).min(1)
+  const evidenceLabel = evidenceLabels === undefined
+    ? z.string().describe('Citeable evidence label shown in the prompt.')
+    : z.enum(evidenceLabels as [string, ...string[]]).describe('Citeable evidence label shown in the prompt.')
+  const evidence = z.array(evidenceLabel).min(1)
   const provenance = z.enum(['exact', 'derived']).describe('Use exact for explicit claims and derived for supported inference.')
   const shape = Object.fromEntries(slots.map((entry) => {
     const data = entry.mode === 'typed'

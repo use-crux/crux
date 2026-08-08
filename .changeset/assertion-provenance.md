@@ -13,3 +13,5 @@ Assertion wire schemas now use a strict portable allowlist, isolate unsupported 
 Closed required Zod objects, arrays, primitives, and enums now retain typed wire data and authored descriptions, while unconstrained or unsupported schemas continue to use slot-local JSON strings.
 
 Unrepresentable assertion schemas now require a non-empty `schema.meta().cruxFingerprint` so validation semantics remain part of assertion cache identity.
+
+Generated assertion evidence now uses closed, batch-local labels in provider schemas and decodes them back to canonical chunk references. This prevents models from fabricating chunk identifiers or citing context-only chunks while preserving exact persisted provenance.

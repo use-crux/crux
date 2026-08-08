@@ -30,6 +30,14 @@ export interface DerivePromptBatch extends BoundedDerivePrompt {
   readonly chunks: readonly CruxChunk[]
   /** The subset of chunk in {@link DerivePromptBatch.chunks} that may be cited as evidence. */
   readonly targetChunks: readonly CruxChunk[]
+  /** Transport-only labels decoded to canonical chunks before claim validation. */
+  readonly evidenceRefs: readonly EvidenceRef[]
+}
+
+export interface EvidenceRef {
+  readonly label: string
+  readonly chunk: CruxChunk
+  readonly citeable: boolean
 }
 
 /** Sort chunks into the deterministic derive processing order. */
@@ -71,7 +79,8 @@ export function renderBoundedAssertionBatches(
     chunks,
     targetKeys,
     vocabulary: assertionWireVocabulary(manifest),
-    chunkLabel: (chunk) => `[${chunk.sourceId}/${chunk.chunkId}]`,
+    chunkLabel: (chunk) => `${chunk.sourceId}/${chunk.chunkId}`,
+    evidenceAliases: true,
     instructions: stage.instructions,
   })
 }
@@ -113,6 +122,7 @@ function renderBatches(args: {
   readonly chunkLabel: (chunk: CruxChunk) => string
   readonly instructions?: string
   readonly targetKeys?: ReadonlySet<string>
+  readonly evidenceAliases?: boolean
 }): readonly DerivePromptBatch[] {
   const ordered = orderDeriveChunks(args.chunks)
   const groups = chunkBatches(args, ordered)
@@ -194,6 +204,7 @@ function renderBatch(
   ordinal: number,
 ): DerivePromptBatch {
   const { chunks } = group
+  const evidenceRefs = batchEvidenceRefs(chunks, args.targetKeys)
   const warnings = [
     ...chunks.flatMap((chunk) => truncationWarning(args.stageId, chunk)),
     ...group.dropped.map((chunk) =>
@@ -205,6 +216,7 @@ function renderBatch(
     ordinal,
     chunks,
     targetChunks: targetKeys === undefined ? chunks : chunks.filter((chunk) => targetKeys.has(chunkKey(chunk))),
+    evidenceRefs,
     prompt: promptText(args, chunks, documentExcerpt),
     warnings,
   }
@@ -245,7 +257,11 @@ function promptText(
   chunks: readonly CruxChunk[],
   documentExcerpt: string,
 ): string {
-  const chunkLines = chunks.map((chunk) => `${roleLabel(args.targetKeys, chunks, chunk)}${args.chunkLabel(chunk)} ${chunk.content}`)
+  const evidenceRefs = batchEvidenceRefs(chunks, args.targetKeys)
+  const chunkLines = args.evidenceAliases === true
+    ? evidenceRefs.map(({ label, chunk, citeable }) =>
+        `${citeable ? '[TARGET:]' : '[CONTEXT:]'} [${label} | ${args.chunkLabel(chunk)}] ${chunk.content}`)
+    : chunks.map((chunk) => `${roleLabel(args.targetKeys, chunks, chunk)}${args.chunkLabel(chunk)} ${chunk.content}`)
   return [
     args.instructions ?? '',
     `Source: ${args.document.sourceId}`,
@@ -254,6 +270,21 @@ function promptText(
     documentExcerpt ? `Document:\n${documentExcerpt}` : '',
     `Chunks:\n${chunkLines.join('\n')}`,
   ].filter(Boolean).join('\n\n')
+}
+
+function batchEvidenceRefs(
+  chunks: readonly CruxChunk[],
+  targetKeys: ReadonlySet<string> | undefined,
+): readonly EvidenceRef[] {
+  let evidenceOrdinal = 0
+  let contextOrdinal = 0
+
+  return chunks.map((chunk) => {
+    const citeable = targetKeys === undefined || targetKeys.has(chunkKey(chunk))
+    const label = citeable ? `e${evidenceOrdinal++}` : `c${contextOrdinal++}`
+
+    return { label, chunk, citeable }
+  })
 }
 
 /** Render a role marker only when a batch actually mixes target and context chunks. */
