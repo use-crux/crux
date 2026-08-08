@@ -13,6 +13,8 @@ const EXCELJS_PRODUCER: ParserIdentity = {
 const EXCELJS_IDENTITY = `${EXCELJS_PRODUCER.kind}:${EXCELJS_PRODUCER.name}:${EXCELJS_PRODUCER.version}:${EXCELJS_PRODUCER.adapterVersion}`
 const XLSX_MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const XLSM_MEDIA_TYPE = 'application/vnd.ms-excel.sheet.macroEnabled.12'
+/** Bounds adapter-owned row/cell construction for one worksheet. */
+const MAX_XLSX_WORKSHEET_CELLS = 1_000_000
 
 /** Parse XLSX or XLSM through ExcelJS into exact schema-2 worksheet facts. */
 export async function parseXlsxDocument(input: {
@@ -31,17 +33,18 @@ export async function parseXlsxDocument(input: {
 
   workbook.worksheets.forEach((worksheet, index) => {
     const dimensions = worksheet.dimensions
+    assertXlsxWorksheetCellBudget(dimensions, worksheet.name)
     const range = dimensions.shortRange
     const sheetCoordinate: SourceCoordinate = { kind: 'sheet-range', sheet: worksheet.name, range }
-    const merges = mergeMap(worksheet)
+    const merges = projectXlsxMergeRectangles(worksheet.model.merges)
     const rows: TableBlock['rows'][number][] = []
 
     worksheet.eachRow({ includeEmpty: false }, (row) => {
       const cells: TableCell[] = []
       for (let column = dimensions.left; column <= dimensions.right; column += 1) {
         const cell = row.getCell(column)
-        const mergeRange = merges.get(cell.address)
-        const isMergeFollower = mergeRange !== undefined && mergeMaster(mergeRange) !== cell.address
+        const merge = resolveXlsxMerge(merges, row.number, column)
+        const isMergeFollower = merge !== undefined && merge.master !== cell.address
         const coordinate: SourceCoordinate = { kind: 'sheet-range', sheet: worksheet.name, range: cell.address }
         const value = isMergeFollower ? '' : formatCell(cell, date1904, worksheet.name, diagnostics)
         const id = xlsxId(documentSha256, `sheet:${index + 1}:table:1:row:${row.number}:column:${column}`)
@@ -51,12 +54,12 @@ export async function parseXlsxDocument(input: {
           producer: EXCELJS_PRODUCER,
           row: row.number,
           column,
-          rowSpan: !isMergeFollower && mergeRange ? mergeHeight(mergeRange) : 1,
-          columnSpan: !isMergeFollower && mergeRange ? mergeWidth(mergeRange) : 1,
+          rowSpan: !isMergeFollower && merge ? merge.rowEnd - merge.rowStart + 1 : 1,
+          columnSpan: !isMergeFollower && merge ? merge.columnEnd - merge.columnStart + 1 : 1,
           blocks: [cellText({ id: `${id}:text`, coordinate, text: value })],
           displayedValue: value,
           ...(!isMergeFollower && cell.formula ? { formula: cell.formula } : {}),
-          ...(mergeRange ? { mergeRange } : {}),
+          ...(merge ? { mergeRange: merge.address } : {}),
         })
       }
       rows.push(cells)
@@ -202,35 +205,55 @@ function isRichTextRun(value: unknown): value is { readonly text: string } {
   return typeof value === 'object' && value !== null && typeof (value as { text?: unknown }).text === 'string'
 }
 
-function mergeMap(worksheet: ExcelJS.Worksheet): Map<string, string> {
-  const merges = new Map<string, string>()
-  const ranges = Array.isArray(worksheet.model.merges) ? worksheet.model.merges : []
+interface XlsxMergeRectangle {
+  readonly address: string
+  readonly master: string
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly columnStart: number
+  readonly columnEnd: number
+}
+
+/**
+ * Preserve merge topology as compact rectangles. Never expand a merge into one
+ * entry per address: ranges come from untrusted workbook XML and can be huge.
+ */
+export function projectXlsxMergeRectangles(ranges: unknown): readonly XlsxMergeRectangle[] {
+  if (!Array.isArray(ranges)) {
+    return []
+  }
+  const merges: XlsxMergeRectangle[] = []
   for (const range of ranges) {
     const parsed = parseRange(range)
     if (!parsed) {
       continue
     }
-    for (let row = parsed.rowStart; row <= parsed.rowEnd; row += 1) {
-      for (let column = parsed.columnStart; column <= parsed.columnEnd; column += 1) {
-        merges.set(address(row, column), parsed.address)
-      }
-    }
+    merges.push({ ...parsed, master: address(parsed.rowStart, parsed.columnStart) })
   }
   return merges
 }
 
-function mergeMaster(range: string): string {
-  return range.split(':', 1)[0]!
+/** Resolve one emitted cell against compact merge rectangles. */
+export function resolveXlsxMerge(
+  merges: readonly XlsxMergeRectangle[],
+  row: number,
+  column: number,
+): XlsxMergeRectangle | undefined {
+  return merges.find((merge) =>
+    row >= merge.rowStart && row <= merge.rowEnd && column >= merge.columnStart && column <= merge.columnEnd,
+  )
 }
 
-function mergeHeight(range: string): number {
-  const parsed = parseRange(range)
-  return parsed ? parsed.rowEnd - parsed.rowStart + 1 : 1
-}
-
-function mergeWidth(range: string): number {
-  const parsed = parseRange(range)
-  return parsed ? parsed.columnEnd - parsed.columnStart + 1 : 1
+/** Fail before adapter iteration could construct an attacker-sized cell grid. */
+export function assertXlsxWorksheetCellBudget(
+  dimensions: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number },
+  sheet: string,
+): void {
+  const rows = dimensions.bottom - dimensions.top + 1
+  const columns = dimensions.right - dimensions.left + 1
+  if (!Number.isSafeInteger(rows) || !Number.isSafeInteger(columns) || rows < 0 || columns < 0 || rows * columns > MAX_XLSX_WORKSHEET_CELLS) {
+    throw new Error(`XLSX worksheet ${sheet} exceeds the ${MAX_XLSX_WORKSHEET_CELLS}-cell ingest budget.`)
+  }
 }
 
 function parseRange(value: unknown): { readonly address: string; readonly rowStart: number; readonly rowEnd: number; readonly columnStart: number; readonly columnEnd: number } | undefined {

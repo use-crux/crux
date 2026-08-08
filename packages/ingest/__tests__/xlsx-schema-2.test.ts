@@ -1,6 +1,12 @@
 import ExcelJS from 'exceljs'
 import { expect, it } from 'vitest'
-import { parseXlsxDocument, projectXlsxSchema2DisplayValue } from '../src/xlsx'
+import {
+  assertXlsxWorksheetCellBudget,
+  parseXlsxDocument,
+  projectXlsxMergeRectangles,
+  projectXlsxSchema2DisplayValue,
+  resolveXlsxMerge,
+} from '../src/xlsx'
 
 it('maps ExcelJS worksheet, sparse-cell, formula, and merge facts to schema 2', async () => {
   const workbook = new ExcelJS.Workbook()
@@ -135,4 +141,17 @@ it('warns with an exact cell coordinate for malformed structured ExcelJS values'
       producer: { kind: 'parser', name: 'exceljs', version: '4.4.0', adapterVersion: '2' },
     },
   ])
+})
+
+it('keeps huge merge rectangles compact and rejects huge worksheet iteration before allocation', () => {
+  const merges = projectXlsxMergeRectangles(['A1:XFD1048576'])
+
+  expect(merges).toHaveLength(1)
+  expect(resolveXlsxMerge(merges, 1_048_576, 16_384)).toMatchObject({
+    address: 'A1:XFD1048576',
+    master: 'A1',
+  })
+  expect(() => assertXlsxWorksheetCellBudget({ top: 1, bottom: 1_048_576, left: 1, right: 16_384 }, 'Hostile')).toThrow(
+    'XLSX worksheet Hostile exceeds the 1000000-cell ingest budget.',
+  )
 })
