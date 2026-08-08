@@ -3,6 +3,7 @@
 package anydocsupervisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -41,6 +42,9 @@ func TestAdmissionHarnessRunsFreshSequentialColdAndWarmEvidence(t *testing.T) {
 	if len(report.Fixtures) != 1 || len(report.Fixtures[0].Cold) != 3 || len(report.Fixtures[0].Warm) != 5 {
 		t.Fatalf("unexpected repetition report: %#v", report)
 	}
+	if !report.Fixtures[0].RolloutBudgetGate || report.Fixtures[0].P95.MemoryPeakBytes != 1024 || report.Fixtures[0].P95.CPUMilliseconds != 5 {
+		t.Fatalf("fixture p95 rollout evidence missing: %#v", report.Fixtures[0])
+	}
 	first := report.Fixtures[0].First
 	if first == nil || first.NativeSHA256 == "" || first.CoreSHA256 == "" || len(first.Facts) == 0 || first.Facts[0].FactPathSHA256 == "" {
 		t.Fatalf("first-run compact facts missing: %#v", first)
@@ -78,6 +82,55 @@ func TestAdmissionHarnessRequiresSystemdIntegrationGate(t *testing.T) {
 	if _, err := RunAdmissionHarness(context.Background(), newTestSupervisor(t, &harnessBackend{}), launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
 		t.Fatal("ungated harness execution accepted")
 	}
+}
+
+func TestAdmissionHarnessUsesNearestRankP95AgainstEffectiveLimits(t *testing.T) {
+	samples := []AdmissionRunEvidence{
+		{MemoryPeakBytes: 1, CPUMilliseconds: 1, WallMilliseconds: 1},
+		{MemoryPeakBytes: 2, CPUMilliseconds: 2, WallMilliseconds: 2},
+		{MemoryPeakBytes: 3, CPUMilliseconds: 3, WallMilliseconds: 3},
+		{MemoryPeakBytes: 4, CPUMilliseconds: 4, WallMilliseconds: 4},
+		{MemoryPeakBytes: 5, CPUMilliseconds: 5, WallMilliseconds: 5},
+		{MemoryPeakBytes: 6, CPUMilliseconds: 6, WallMilliseconds: 6},
+		{MemoryPeakBytes: 7, CPUMilliseconds: 7, WallMilliseconds: 7},
+		{MemoryPeakBytes: 99, CPUMilliseconds: 99, WallMilliseconds: 99},
+	}
+	p95 := admissionP95(samples)
+	if p95.MemoryPeakBytes != 99 || p95.CPUMilliseconds != 99 || p95.WallMilliseconds != 99 {
+		t.Fatalf("nearest-rank p95 = %#v", p95)
+	}
+	limits := JobLimits{MemoryBytes: 200, CPUMilliseconds: 200, WallMilliseconds: 200}
+	if !withinAdmissionRolloutP95(p95, limits) {
+		t.Fatal("p95 within half effective limits was rejected")
+	}
+	if withinAdmissionRolloutP95(AdmissionP95{MemoryPeakBytes: 101, CPUMilliseconds: 99, WallMilliseconds: 99}, limits) {
+		t.Fatal("p95 above half effective memory limit accepted")
+	}
+}
+
+func TestCompactFirstRunHashesCompleteNativeFacts(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	baseline, err := compactFirstRun(validAdmissionPayloadWithBlock(request))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutatedPayload := bytes.Replace(validAdmissionPayloadWithBlock(request), []byte(`"level":1,"text":"Title"`), []byte(`"level":2,"text":"Changed"`), 1)
+	mutated, err := compactFirstRun(mutatedPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compactFactHash(baseline.Facts, "heading") == compactFactHash(mutated.Facts, "heading") {
+		t.Fatal("value-only native heading mutation retained its compact fact hash")
+	}
+}
+
+func compactFactHash(facts []AdmissionFact, kind string) string {
+	for _, fact := range facts {
+		if fact.Kind == kind {
+			return fact.StructuralSHA256
+		}
+	}
+	return ""
 }
 
 func testDigest(value byte) string {

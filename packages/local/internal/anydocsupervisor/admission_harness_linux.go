@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -45,15 +46,21 @@ func (l AdmissionHarnessLimits) supervisorLimits() (Limits, error) {
 }
 
 type AdmissionRunEvidence struct {
-	RequestSHA256     string    `json:"requestSha256"`
-	Outcome           ErrorCode `json:"outcome"`
-	MemoryPeakBytes   int64     `json:"memoryPeakBytes"`
-	CPUMilliseconds   int64     `json:"cpuMilliseconds"`
-	WallMilliseconds  int64     `json:"wallMilliseconds"`
-	Cleaned           bool      `json:"cleaned"`
-	TerminationEmpty  bool      `json:"terminationEmpty"`
-	TerminationAbsent bool      `json:"terminationAbsent"`
-	WithinRolloutGate bool      `json:"withinRolloutGate"`
+	RequestSHA256       string    `json:"requestSha256"`
+	Outcome             ErrorCode `json:"outcome"`
+	MemoryPeakBytes     int64     `json:"memoryPeakBytes"`
+	CPUMilliseconds     int64     `json:"cpuMilliseconds"`
+	WallMilliseconds    int64     `json:"wallMilliseconds"`
+	Cleaned             bool      `json:"cleaned"`
+	TerminationEmpty    bool      `json:"terminationEmpty"`
+	TerminationAbsent   bool      `json:"terminationAbsent"`
+	ContainmentVerified bool      `json:"containmentVerified"`
+}
+
+type AdmissionP95 struct {
+	MemoryPeakBytes  int64 `json:"memoryPeakBytes"`
+	CPUMilliseconds  int64 `json:"cpuMilliseconds"`
+	WallMilliseconds int64 `json:"wallMilliseconds"`
 }
 
 type AdmissionFirstRunEvidence struct {
@@ -72,17 +79,19 @@ type AdmissionFact struct {
 }
 
 type AdmissionFixtureEvidence struct {
-	ID              string                     `json:"id"`
-	Format          Format                     `json:"format"`
-	SourceSHA256    string                     `json:"sourceSha256"`
-	PackageSHA256   string                     `json:"packageSha256"`
-	RuntimeSHA256   string                     `json:"runtimeSha256"`
-	CodeSHA256      string                     `json:"codeSha256"`
-	BindingSHA256   string                     `json:"bindingSha256"`
-	JobLimitsSHA256 string                     `json:"jobLimitsSha256"`
-	First           *AdmissionFirstRunEvidence `json:"first"`
-	Cold            []AdmissionRunEvidence     `json:"cold"`
-	Warm            []AdmissionRunEvidence     `json:"warm"`
+	ID                string                     `json:"id"`
+	Format            Format                     `json:"format"`
+	SourceSHA256      string                     `json:"sourceSha256"`
+	PackageSHA256     string                     `json:"packageSha256"`
+	RuntimeSHA256     string                     `json:"runtimeSha256"`
+	CodeSHA256        string                     `json:"codeSha256"`
+	BindingSHA256     string                     `json:"bindingSha256"`
+	JobLimitsSHA256   string                     `json:"jobLimitsSha256"`
+	First             *AdmissionFirstRunEvidence `json:"first"`
+	Cold              []AdmissionRunEvidence     `json:"cold"`
+	Warm              []AdmissionRunEvidence     `json:"warm"`
+	P95               AdmissionP95               `json:"p95"`
+	RolloutBudgetGate bool                       `json:"rolloutBudgetGate"`
 }
 
 type AdmissionHarnessReport struct {
@@ -140,6 +149,11 @@ func RunAdmissionHarness(ctx context.Context, supervisor *Supervisor, launch Lau
 				entry.Warm = append(entry.Warm, runEvidence)
 			}
 		}
+		entry.P95 = admissionP95(append(append([]AdmissionRunEvidence(nil), entry.Cold...), entry.Warm...))
+		entry.RolloutBudgetGate = withinAdmissionRolloutP95(entry.P95, jobLimits(serviceLimits))
+		if !entry.RolloutBudgetGate {
+			return AdmissionHarnessReport{}, errors.New("admission fixture exceeded rollout budget")
+		}
 		report.Fixtures = append(report.Fixtures, entry)
 	}
 	if _, err := report.MarshalJSON(); err != nil {
@@ -176,8 +190,8 @@ func runAdmissionCase(ctx context.Context, supervisor *Supervisor, launch Launch
 	result, executeErr := run.Execute(ctx)
 	terminal := run.TerminalReport()
 	evidence := AdmissionRunEvidence{RequestSHA256: run.digest, Outcome: terminal.Outcome, MemoryPeakBytes: terminal.PreStop.MemoryPeak, CPUMilliseconds: terminal.CPU.Milliseconds(), WallMilliseconds: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
-	evidence.WithinRolloutGate = terminal.PreStop.ControlGroup != "" && terminal.Termination.ControlGroup == terminal.PreStop.ControlGroup && terminal.PreStop.MemoryPeak > 0 && terminal.PreStop.MemoryPeak <= MemoryCeiling/2 && terminal.CPU <= CPUCeiling/2 && terminal.Wall <= RuntimeCeiling/2 && terminal.PreStop.TasksMax <= TasksCeiling/2 && terminal.Cleaned && (terminal.Termination.Empty != terminal.Termination.Absent)
-	if executeErr != nil || !result.OK || result.SourceSHA256 != fixture.SourceSHA256 || result.Format != fixture.Format || terminal.PreStop.RuntimeTreeDigest != fixture.RuntimeSHA256 || !evidence.WithinRolloutGate {
+	evidence.ContainmentVerified = terminal.PreStop.ControlGroup != "" && terminal.Termination.ControlGroup == terminal.PreStop.ControlGroup && terminal.PreStop.MemoryPeak > 0 && terminal.Cleaned && (terminal.Termination.Empty != terminal.Termination.Absent)
+	if executeErr != nil || !result.OK || result.SourceSHA256 != fixture.SourceSHA256 || result.Format != fixture.Format || terminal.PreStop.RuntimeTreeDigest != fixture.RuntimeSHA256 || !evidence.ContainmentVerified {
 		return AdmissionRunEvidence{}, nil, errors.New("admission run failed rollout gate")
 	}
 	accounting, err := recomputePayloadAccounting(result.Request, result.Payload)
@@ -203,18 +217,25 @@ func compactFirstRun(payload []byte) (*AdmissionFirstRunEvidence, error) {
 		return nil, errors.New("invalid admission result projection")
 	}
 	var native struct {
-		Facts []struct {
+		Facts []json.RawMessage `json:"facts"`
+	}
+	if err := json.Unmarshal(envelope.Native, &native); err != nil || len(native.Facts) > 4096 {
+		return nil, errors.New("invalid native facts")
+	}
+	facts := make([]AdmissionFact, 0, len(native.Facts))
+	for _, rawFact := range native.Facts {
+		if len(rawFact) == 0 || len(rawFact) > MaxFrameBytes {
+			return nil, errors.New("invalid compact fact")
+		}
+		var fact struct {
 			Kind       string          `json:"kind"`
 			FactPath   string          `json:"factPath"`
 			Coordinate json.RawMessage `json:"coordinate"`
 			Producer   json.RawMessage `json:"producer"`
-		} `json:"facts"`
-	}
-	if err := json.Unmarshal(envelope.Native, &native); err != nil {
-		return nil, errors.New("invalid native facts")
-	}
-	facts := make([]AdmissionFact, 0, len(native.Facts))
-	for _, fact := range native.Facts {
+		}
+		if json.Unmarshal(rawFact, &fact) != nil {
+			return nil, errors.New("invalid compact fact")
+		}
 		if fact.Kind == "" || len(fact.Kind) > 64 || fact.FactPath == "" {
 			return nil, errors.New("invalid compact fact")
 		}
@@ -232,11 +253,7 @@ func compactFirstRun(payload []byte) (*AdmissionFirstRunEvidence, error) {
 		if len(fact.Producer) != 0 {
 			producerHash = sha256Hex(fact.Producer)
 		}
-		encoded, err := json.Marshal(fact)
-		if err != nil {
-			return nil, errors.New("invalid compact fact")
-		}
-		facts = append(facts, AdmissionFact{Kind: fact.Kind, FactPathSHA256: sha256Hex([]byte(fact.FactPath)), CoordinateKind: coordinateKind, ProducerSHA256: producerHash, StructuralSHA256: sha256Hex(encoded)})
+		facts = append(facts, AdmissionFact{Kind: fact.Kind, FactPathSHA256: sha256Hex([]byte(fact.FactPath)), CoordinateKind: coordinateKind, ProducerSHA256: producerHash, StructuralSHA256: sha256Hex(rawFact)})
 	}
 	return &AdmissionFirstRunEvidence{NativeSHA256: sha256Hex(envelope.Native), CoreSHA256: sha256Hex(envelope.Core), Facts: facts}, nil
 }
@@ -261,6 +278,35 @@ func admissionBindingDigest(fixture AdmissionFixtureCase, limitsDigest string) s
 func jobLimitsDigest(limits JobLimits) string {
 	encoded, _ := json.Marshal(limits)
 	return sha256Hex(encoded)
+}
+
+func admissionP95(samples []AdmissionRunEvidence) AdmissionP95 {
+	if len(samples) != 8 {
+		return AdmissionP95{}
+	}
+	memory := make([]int64, 0, len(samples))
+	cpu := make([]int64, 0, len(samples))
+	wall := make([]int64, 0, len(samples))
+	for _, sample := range samples {
+		memory = append(memory, sample.MemoryPeakBytes)
+		cpu = append(cpu, sample.CPUMilliseconds)
+		wall = append(wall, sample.WallMilliseconds)
+	}
+	return AdmissionP95{MemoryPeakBytes: nearestRankP95(memory), CPUMilliseconds: nearestRankP95(cpu), WallMilliseconds: nearestRankP95(wall)}
+}
+
+func nearestRankP95(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := append([]int64(nil), values...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	rank := (95*len(sorted) + 99) / 100
+	return sorted[rank-1]
+}
+
+func withinAdmissionRolloutP95(p95 AdmissionP95, limits JobLimits) bool {
+	return p95.MemoryPeakBytes > 0 && p95.MemoryPeakBytes <= limits.MemoryBytes/2 && p95.CPUMilliseconds >= 0 && p95.CPUMilliseconds <= limits.CPUMilliseconds/2 && p95.WallMilliseconds >= 0 && p95.WallMilliseconds <= limits.WallMilliseconds/2
 }
 
 func validSHA256(value string) bool {
