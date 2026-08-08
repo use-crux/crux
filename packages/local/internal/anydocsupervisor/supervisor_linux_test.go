@@ -375,6 +375,45 @@ func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 		t.Fatalf("cancellation terminal report = %#v", report)
 	}
 }
+func TestReceiveResultPreservesTypedErrorOverExpiredContext(t *testing.T) {
+	typed := closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
+	b := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {
+		return Result{}, typed
+	}}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = r.ReceiveResult(ctx)
+	var sup *SupervisorError
+	if !errors.As(err, &sup) || sup.Code != ErrInvalidResult {
+		t.Fatalf("typed error overwritten by ctx cancellation: %T %v", err, err)
+	}
+	var validation *ResultValidationError
+	if !errors.As(err, &validation) || validation.Stage != "request-binding" || validation.ReasonCode != "mismatch" {
+		t.Fatalf("inner ResultValidationError lost: %T %v", err, err)
+	}
+
+	deadlineErr := closedWith(ErrInvalidResult, resultValidation("ack-write", "io"))
+	b2 := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {
+		return Result{}, deadlineErr
+	}}
+	r2, err := newTestSupervisor(t, b2).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadlineCtx, deadlineCancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+	defer deadlineCancel()
+	_, err = r2.ReceiveResult(deadlineCtx)
+	if !errors.As(err, &sup) || sup.Code != ErrInvalidResult {
+		t.Fatalf("typed error overwritten by ctx deadline: %T %v", err, err)
+	}
+	if !errors.As(err, &validation) || validation.Stage != "ack-write" || validation.ReasonCode != "io" {
+		t.Fatalf("inner ResultValidationError lost for deadline: %T %v", err, err)
+	}
+}
 func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 	if time.Duration(CPUQuotaPercent)*RuntimeCeiling/100 >= CPUCeiling {
 		t.Fatal("service quota can exceed CPU budget")

@@ -794,9 +794,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr != nil {
 				var sup *SupervisorError
 				if errors.As(decodeErr, &sup) && sup.Code == ErrInvalidFrame {
-					decodeErr = resultValidation("decode/frame-json", "invalid-json")
+					decodeErr = resultValidation("decode/frame-json", "invalid-frame")
 				} else {
-					decodeErr = resultValidation("payload/accounting-validation", "invalid-accounting")
+					decodeErr = resultValidation("payload/validation", "invalid-result")
 				}
 			}
 			if decodeErr == nil && result.Request != expected {
@@ -805,7 +805,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr == nil {
 				_, err := u.RefreshAccounting(ctx)
 				if err != nil {
-					decodeErr = resultValidation("accounting-refresh", "io")
+					decodeErr = resultValidation("accounting-refresh", "unavailable")
 				}
 			}
 			if decodeErr == nil {

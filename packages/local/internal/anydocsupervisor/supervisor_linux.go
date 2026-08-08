@@ -115,7 +115,7 @@ func resultValidation(stage, reason string) error {
 
 func validResultValidationStage(stage string) bool {
 	switch stage {
-	case "decode/frame-json", "request-binding", "payload/accounting-validation", "accounting-refresh", "ack-write":
+	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write":
 		return true
 	}
 	return false
@@ -123,7 +123,7 @@ func validResultValidationStage(stage string) bool {
 
 func validResultValidationReason(reason string) bool {
 	switch reason {
-	case "mismatch", "invalid-json", "invalid-accounting", "io":
+	case "mismatch", "invalid-frame", "invalid-result", "io", "unavailable":
 		return true
 	}
 	return false
@@ -729,12 +729,12 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
 	result, err := receiver.ReceiveResult(ctx, expected)
 	if err != nil {
-		if ctx.Err() != nil {
-			return Result{}, ctx.Err()
-		}
 		var sup *SupervisorError
 		if errors.As(err, &sup) {
 			return Result{}, err
+		}
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
 		}
 		return Result{}, closed(ErrWorkerCrash)
 	}
