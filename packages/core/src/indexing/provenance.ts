@@ -130,34 +130,31 @@ export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | und
 }
 
 function uniqueSpreadsheets(items: readonly import('./types').SpreadsheetProvenance[]): import('./types').SpreadsheetProvenance[] {
-  const bySheetRange = new Map<string, import('./types').SpreadsheetProvenance>()
+  const accumulators = new Map<string, {
+    readonly spreadsheet: import('./types').SpreadsheetProvenance
+    readonly cells: Map<string, import('./types').SpreadsheetCellProvenance>
+  }>()
   for (const item of items) {
-    const key = `${item.index}:${item.sheet}:${item.range}`
-    const previous = bySheetRange.get(key)
-    if (!previous) {
-      bySheetRange.set(key, item)
-      continue
-    }
-    const cells = uniqueSpreadsheetCells(previous, item)
-    bySheetRange.set(key, { ...item, cells })
-  }
-  return [...bySheetRange.values()]
-}
-
-function uniqueSpreadsheetCells(
-  first: import('./types').SpreadsheetProvenance,
-  second: import('./types').SpreadsheetProvenance,
-): import('./types').SpreadsheetCellProvenance[] {
-  const cells = new Map<string, import('./types').SpreadsheetCellProvenance>()
-  for (const spreadsheet of [first, second]) {
-    for (const cell of spreadsheet.cells) {
-      const key = `${spreadsheet.sheetBlockId}:${spreadsheet.tableBlockId}:${cell.id}`
-      if (!cells.has(key)) {
-        cells.set(key, cell)
+    const key = `${item.index}:${item.sheetBlockId}:${item.tableBlockId}:${item.range}`
+    const accumulator = accumulators.get(key) ?? createSpreadsheetAccumulator(item)
+    accumulators.set(key, accumulator)
+    for (const cell of item.cells) {
+      if (!accumulator.cells.has(cell.id)) {
+        accumulator.cells.set(cell.id, cell)
       }
     }
   }
-  return [...cells.values()]
+  return [...accumulators.values()].map(({ spreadsheet, cells }) => ({
+    ...spreadsheet,
+    cells: [...cells.values()],
+  }))
+}
+
+function createSpreadsheetAccumulator(spreadsheet: import('./types').SpreadsheetProvenance): {
+  readonly spreadsheet: import('./types').SpreadsheetProvenance
+  readonly cells: Map<string, import('./types').SpreadsheetCellProvenance>
+} {
+  return { spreadsheet, cells: new Map() }
 }
 
 function uniqueSourceLocations(locations: readonly CruxSourceLocation[]): CruxSourceLocation[] {
