@@ -6,8 +6,19 @@ import type { RuntimeTransportBindingHealthRow } from "../types";
 export function RuntimeTransportBindingsTable({
   rows,
 }: {
-  rows: readonly RuntimeTransportBindingHealthRow[];
+  rows: readonly RuntimeTransportBindingHealthRow[] | undefined;
 }) {
+  if (rows === undefined) {
+    return (
+      <div
+        className="px-4 py-6 text-[12px]"
+        style={{ color: "var(--devtools-fg-muted)" }}
+      >
+        Transport health is unavailable for this Runtime status snapshot.
+      </div>
+    );
+  }
+
   if (rows.length === 0) {
     return (
       <div

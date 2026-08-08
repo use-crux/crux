@@ -34,7 +34,7 @@ import type {
 import { TransportStoreMissingError } from "./lifecycle-errors";
 import {
   emptyTransportEnvelopeStats,
-  transportStatistics,
+  transportStatisticsFromExport,
   transportStatisticsIdentity,
 } from "./statistics";
 
@@ -226,37 +226,32 @@ export async function transportBindingHealth(
 
   const checkpointPort =
     typeof options.store.transports.getBindingCheckpoint === "function";
+  const statisticsPort =
+    typeof options.store.transports.getStatistics === "function";
 
   let statsCoverage: RuntimeTransportBindingHealthSnapshot["coverage"]["statistics"] =
     "available";
   let stats = emptyTransportEnvelopeStats();
 
-  try {
-    stats = await transportStatistics({
-      store: options.store,
-      namespace: options.namespace,
-    });
-    if (
-      stats.total.accepted === 0 &&
-      stats.total.deduplicated === 0 &&
-      stats.total.normalized === 0 &&
-      stats.total.delivered === 0 &&
-      stats.total.retried === 0 &&
-      stats.total.deadLettered === 0 &&
-      Object.keys(stats.byIdentity).length === 0 &&
-      stats.otherIdentities === undefined
-    ) {
-      // Empty ledger is honest "missing" rather than fabricated activity.
-      const exported = await options.store.transact(async (tx) => {
-        return tx.transports!.getStatistics(options.namespace);
-      });
-      statsCoverage = exported ? "available" : "missing";
-    }
-  } catch (error) {
-    if (error instanceof TransportStoreMissingError) {
-      throw error;
-    }
+  if (!statisticsPort) {
+    // Adapter/port does not implement the statistics capability.
     statsCoverage = "missing_port";
+  } else {
+    // Single ledger read: derive both counters and coverage. Unexpected
+    // transaction/read failures propagate; do not map them to missing_port.
+    const exported = await options.store.transact(async (tx) => {
+      if (!tx.transports) {
+        throw new TransportStoreMissingError();
+      }
+      return tx.transports.getStatistics(options.namespace);
+    });
+
+    if (exported) {
+      stats = transportStatisticsFromExport(exported, options.namespace);
+    } else {
+      // Honest "missing" for an empty/absent ledger, not fabricated activity.
+      statsCoverage = "missing";
+    }
   }
 
   // Deterministic first-64 by binding id (codepoint order), independent of the

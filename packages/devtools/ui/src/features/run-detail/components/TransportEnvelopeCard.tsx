@@ -7,11 +7,14 @@ import { CardShell, KeyValue } from "./SpanDetailPanelAtoms";
 export function isTransportEnvelopeDetail(
   node: ObservabilityRunDetailNode,
 ): boolean {
+  if (node.primitive !== "custom.operation") {
+    return false;
+  }
+
   const attributes = record(node.attributes);
   return (
     attributes?.kind === "transport.envelope" ||
-    (node.primitive === "custom.operation" &&
-      record(attributes?.envelope) !== undefined &&
+    (record(attributes?.envelope) !== undefined &&
       stringValue(record(attributes?.envelope)?.bindingId) !== undefined)
   );
 }

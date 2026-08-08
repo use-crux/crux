@@ -352,4 +352,47 @@ describe("transport binding health", () => {
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/cursor:|lease_|secret/);
   });
+
+  it("marks statistics missing_port only when getStatistics is absent", async () => {
+    const fixture = createPollingFixture();
+    const base = inMemoryRuntimeStore();
+    const store = {
+      ...base,
+      transports: {
+        ...base.transports!,
+        getStatistics: undefined,
+      },
+    };
+
+    const snapshot = await transportBindingHealth({
+      store,
+      namespace: "no-stats",
+      program: fixture.program,
+      now: new Date("2026-08-08T12:00:00.000Z"),
+    });
+
+    expect(snapshot.coverage.statistics).toBe("missing_port");
+    expect(snapshot.totals).toEqual(emptyTransportEnvelopeStats().total);
+    expect(snapshot.bindings[0]!.outcomes.coverage).toBe("unavailable");
+  });
+
+  it("rethrows unexpected statistics ledger read failures", async () => {
+    const fixture = createPollingFixture();
+    const base = inMemoryRuntimeStore();
+    const store = {
+      ...base,
+      async transact() {
+        throw new Error("connection lost");
+      },
+    };
+
+    await expect(
+      transportBindingHealth({
+        store,
+        namespace: "broken",
+        program: fixture.program,
+        now: new Date("2026-08-08T12:00:00.000Z"),
+      }),
+    ).rejects.toThrow("connection lost");
+  });
 });

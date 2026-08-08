@@ -388,8 +388,9 @@ Coverage markers report last-owner lease diagnostics, cursor presence/age,
 fault/reconnect exhaustion when durable, and explicitly unavailable live
 reconnect backoff, provider lag, and shutdown outcome. Accept/normalize emit
 payload-free envelope lineage through the existing observability transport for
-Devtools Run detail; Runtime status exposes a Transports tab when a generated
-program is present. Progressive guides, recipes, API reference, and architecture
-docs cover statistics and health semantics for operators, including
-troubleshooting coverage markers, shutdown/recovery, and Convex's honest
-rejection of managed-transport accept/checkpoint capabilities.
+Devtools Run detail; Runtime status provides transport-health data when a
+generated program is present, and Devtools renders that data in a Transports
+tab. Progressive guides, recipes, API reference, and architecture docs cover
+statistics and health semantics for operators, including troubleshooting
+coverage markers, shutdown/recovery, and Convex's honest rejection of
+managed-transport accept/checkpoint capabilities.

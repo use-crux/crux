@@ -52,7 +52,8 @@ export function RuntimeView() {
   const workRows = status?.work ?? [];
   const timers = status?.timers ?? [];
   const outbox = status?.outbox ?? [];
-  const transportBindings = status?.transports?.bindings ?? [];
+  // Keep omitted transport health distinct from an empty bindings snapshot.
+  const transportBindings = status?.transports?.bindings;
   const deadLetters = useMemo(
     () => workRows.filter((row) => row.status === "dead-letter"),
     [workRows],
@@ -160,7 +161,7 @@ export function RuntimeView() {
         },
         {
           label: "Transports",
-          count: transportBindings.length,
+          count: transportBindings?.length,
           iconName: "inbox",
           active: tab === "transports",
           onClick: () => setTab("transports"),
