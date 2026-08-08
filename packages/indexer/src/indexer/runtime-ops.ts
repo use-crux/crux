@@ -379,7 +379,10 @@ async function loadTransportBindingHealth(
 
   try {
     const modulePath = join(root, '.crux/generated/runtime/program.ts')
-    const loaded = (await importUserModule(modulePath)) as {
+    // Match other runtime-ops imports: always pass an explicit timeout so the
+    // bound import cannot race `setTimeout(undefined)` (~1ms) and silently drop
+    // transport health from Runtime status / Devtools.
+    const loaded = (await importUserModule(modulePath, 8_000, root)) as {
       readonly runtimeProgram?: RuntimeProgram
       readonly default?: RuntimeProgram
     }

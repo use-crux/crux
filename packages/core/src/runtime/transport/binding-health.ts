@@ -259,22 +259,24 @@ export async function transportBindingHealth(
     statsCoverage = "missing_port";
   }
 
-  const limited = bindings.slice(0, MAX_TRANSPORT_BINDING_HEALTH);
+  // Deterministic first-64 by binding id (codepoint order), independent of the
+  // caller array order when bindings are supplied without a program.
+  const ordered = orderBindingsById(bindings);
+  const limited = ordered.slice(0, MAX_TRANSPORT_BINDING_HEALTH);
+  const checkpointCoverage: ProjectTransportBindingHealthOptions["checkpointCoverage"] =
+    checkpointPort ? "available" : "unsupported";
+  const checkpoints = checkpointPort
+    ? await loadBindingCheckpoints(
+        options.store,
+        options.namespace,
+        limited,
+      )
+    : undefined;
+
   const rows: RuntimeTransportBindingHealth[] = [];
 
   for (const binding of limited) {
-    let checkpoint: RuntimeTransportBindingCheckpoint | null = null;
-    let checkpointCoverage: ProjectTransportBindingHealthOptions["checkpointCoverage"] =
-      checkpointPort ? "available" : "unsupported";
-
-    if (checkpointPort) {
-      checkpoint = await options.store.transact(async (tx) => {
-        return tx.transports!.getBindingCheckpoint!({
-          namespace: options.namespace,
-          bindingId: binding.id,
-        });
-      });
-    }
+    const checkpoint = checkpoints?.get(binding.id) ?? null;
 
     const provider = resolveProgramProvider(providers, binding);
     const identity = transportStatisticsIdentity(
@@ -439,6 +441,47 @@ function resolveBindings(
     return options.bindings;
   }
   return Object.freeze([]);
+}
+
+/** Stable codepoint order used for max-64 truncation coverage. */
+function orderBindingsById(
+  bindings: readonly RuntimeManagedTransportBinding[],
+): readonly RuntimeManagedTransportBinding[] {
+  return [...bindings].sort((left, right) =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+  );
+}
+
+/**
+ * Load checkpoints for every projected binding in one store transaction.
+ *
+ * @remarks Avoids an N+1 of per-binding transactions (up to 64 sequential
+ * commits) when reading status for Devtools or operators.
+ */
+async function loadBindingCheckpoints(
+  store: RuntimeStoreAdapter,
+  namespace: string,
+  bindings: readonly RuntimeManagedTransportBinding[],
+): Promise<Map<string, RuntimeTransportBindingCheckpoint | null>> {
+  return store.transact(async (tx) => {
+    const getCheckpoint = tx.transports?.getBindingCheckpoint;
+    const result = new Map<string, RuntimeTransportBindingCheckpoint | null>();
+    if (!getCheckpoint) {
+      return result;
+    }
+
+    for (const binding of bindings) {
+      result.set(
+        binding.id,
+        await getCheckpoint({
+          namespace,
+          bindingId: binding.id,
+        }),
+      );
+    }
+
+    return result;
+  });
 }
 
 function classifyTransportKind(

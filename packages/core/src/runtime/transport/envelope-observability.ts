@@ -46,25 +46,31 @@ export function emitTransportEnvelopeObservability(
   record: RuntimeTransportEnvelopeRecord,
   outcome: TransportEnvelopeObservabilityAttributes["outcome"],
 ): void {
-  if (!hasActiveObservabilitySinks()) {
-    return;
+  // Observability is best-effort: never let sink/registry failures change the
+  // accept/normalize return path after durable commit.
+  try {
+    if (!hasActiveObservabilitySinks()) {
+      return;
+    }
+
+    const envelope = projectTransportEnvelope(record);
+    const attributes = Object.freeze({
+      kind: "transport.envelope",
+      outcome,
+      envelope,
+    }) satisfies TransportEnvelopeObservabilityAttributes;
+
+    const run = observe.openRun({
+      name: "transport envelope",
+      rootPrimitive: "custom.operation",
+      attributes: attributes as CruxAttributes,
+    });
+
+    run.end({
+      status: outcome === "dead-lettered" ? "error" : "ok",
+      attributes: attributes as CruxAttributes,
+    });
+  } catch {
+    // Intentionally empty: durable envelope lifecycle already committed.
   }
-
-  const envelope = projectTransportEnvelope(record);
-  const attributes = Object.freeze({
-    kind: "transport.envelope",
-    outcome,
-    envelope,
-  }) satisfies TransportEnvelopeObservabilityAttributes;
-
-  const run = observe.openRun({
-    name: "transport envelope",
-    rootPrimitive: "custom.operation",
-    attributes: attributes as CruxAttributes,
-  });
-
-  run.end({
-    status: outcome === "dead-lettered" ? "error" : "ok",
-    attributes: attributes as CruxAttributes,
-  });
 }

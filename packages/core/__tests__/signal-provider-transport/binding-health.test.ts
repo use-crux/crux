@@ -235,6 +235,45 @@ describe("transport binding health", () => {
     expect(truncated.coverage.bindingLimit).toBe(64);
   });
 
+  it("truncates bindings by deterministic id order regardless of input order", async () => {
+    const fixture = createPollingFixture();
+    const store = inMemoryRuntimeStore();
+    const provider = fixture.program.providers[0]!;
+    const now = new Date("2026-08-08T12:00:00.000Z");
+
+    const descending = Array.from({ length: 70 }, (_, index) =>
+      managedTransportBinding(provider, {
+        id: `binding.z.${String(69 - index).padStart(3, "0")}`,
+        configRef: { id: `cfg.${index}`, revision: "1" },
+        signalId: "order.submitted",
+      }),
+    );
+    const ascending = [...descending].reverse();
+
+    const fromDesc = await transportBindingHealth({
+      store,
+      namespace: "order-a",
+      bindings: descending,
+      providers: [provider],
+      now,
+    });
+    const fromAsc = await transportBindingHealth({
+      store,
+      namespace: "order-b",
+      bindings: ascending,
+      providers: [provider],
+      now,
+    });
+
+    expect(fromDesc.bindings.map((row) => row.bindingId)).toEqual(
+      fromAsc.bindings.map((row) => row.bindingId),
+    );
+    expect(fromDesc.bindings).toHaveLength(64);
+    expect(fromDesc.bindings[0]!.bindingId).toBe("binding.z.000");
+    expect(fromDesc.bindings[63]!.bindingId).toBe("binding.z.063");
+    expect(fromDesc.coverage.bindings).toBe("truncated");
+  });
+
   it("accepts webhook binding health without inventing supervised fields", async () => {
     const fixture = createPollingFixture();
     // Re-use polling fixture store path with a webhook-only style accept for
