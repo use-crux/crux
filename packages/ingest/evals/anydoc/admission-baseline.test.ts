@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { admissionBaseline, admissionRunAttestation, renderAdmissionArtifacts, type AdmissionSuiteEvidence } from './admission-suite.js'
+import { admissionBaseline, admissionRunAttestation, renderAdmissionArtifacts, validateAdmissionRunAttestation, type AdmissionSuiteEvidence } from './admission-suite.js'
 import { fixtureManifests } from './fixture-manifest.js'
 
 const baselinePath = resolve(dirname(fileURLToPath(import.meta.url)), 'evidence-baseline-v1.json')
@@ -16,13 +16,40 @@ const execute = promisify(execFile)
 
 describe('Anydoc admission evidence', () => {
   it('keeps host measurements in run attestation rather than the admission decision', async () => {
-    const first = syntheticEvidence({ cacheIdentity: 'host-a-cache', wallMilliseconds: 100, peakRssBytes: 128 })
-    const second = syntheticEvidence({ cacheIdentity: 'host-b-cache', wallMilliseconds: 900, peakRssBytes: 256 })
+    const first = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 })
+    const second = syntheticEvidence({ cacheIdentity: 'b'.repeat(64), wallMilliseconds: 900, peakRssBytes: 256 })
 
     expect(await admissionBaseline(first)).toEqual(await admissionBaseline(second))
     expect(admissionRunAttestation(first)).not.toEqual(admissionRunAttestation(second))
     expect(JSON.stringify(await admissionBaseline(first))).not.toContain('wallMilliseconds')
     expect(JSON.stringify(admissionRunAttestation(first))).toContain('wallMilliseconds')
+  })
+
+  it('rejects open, unbound, and out-of-range run attestations', () => {
+    const evidence = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 })
+    const valid = admissionRunAttestation(evidence) as any
+    expect(validateAdmissionRunAttestation(valid, evidence)).toEqual(valid)
+
+    for (const mutate of [
+      (value: any) => { value.authorizesRouting = true },
+      (value: any) => { value.unexpected = true },
+      (value: any) => { value.runtime = 'linux-x64-node-arbitrary' },
+      (value: any) => { value.results[0].sourceHash = 'd'.repeat(64) },
+      (value: any) => { value.results[0].candidates[0].parser = 'arbitrary' },
+      (value: any) => { value.results[0].candidates[0].hashes.core = 'e'.repeat(64) },
+      (value: any) => { value.results[0].candidates[0].p95.wallMilliseconds = 101 },
+    ]) {
+      const mutated = structuredClone(valid)
+      mutate(mutated)
+      expect(() => validateAdmissionRunAttestation(mutated, evidence)).toThrow('Invalid admission run attestation')
+    }
+
+    const overLimit = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 30_001, peakRssBytes: 128 })
+    expect(() => admissionRunAttestation(overLimit)).toThrow('Invalid admission resource sample')
+
+    const openP95 = syntheticEvidence({ cacheIdentity: 'a'.repeat(64), wallMilliseconds: 100, peakRssBytes: 128 }) as any
+    openP95.results[0].candidates[0].p95.untrusted = 1
+    expect(() => admissionRunAttestation(openP95)).toThrow('Invalid keys')
   })
 
   it('replays the suite and keeps the baseline and ADR byte-consistent', async () => {
@@ -61,17 +88,19 @@ describe('Anydoc admission evidence', () => {
 })
 
 function syntheticEvidence(options: { readonly cacheIdentity: string; readonly wallMilliseconds: number; readonly peakRssBytes: number }): AdmissionSuiteEvidence {
-  const assertions = { fixtureId: 'fixture-v1', passed: true, admitted: true, assertions: [] }
+  const fixture = fixtureManifests.find((item) => item.id === 'csv-control-v1')!
+  const sourceHash = fixture.source.kind === 'file' ? fixture.source.sha256 : ''
+  const assertions = { fixtureId: fixture.id, passed: true, admitted: true, assertions: [] }
   return {
     schemaVersion: 1,
     runner: { maxConcurrentChildren: 1, productionEquivalent: false, hardMemoryContainment: false },
     cacheIdentity: options.cacheIdentity,
-    formats: [{ format: 'docx', parser: 'mammoth', admitted: true, blockers: [] }],
-    docxDecision: { primary: 'mammoth', reason: 'passed' },
+    formats: [{ format: 'csv', parser: 'csv-parse', admitted: true, blockers: [] }],
+    docxDecision: { primary: null, reason: 'not evaluated' },
     results: [{
-      fixtureId: 'fixture-v1', format: 'docx', role: 'candidate', sourceHash: 'source-hash', sourceHashMatches: true,
+      fixtureId: fixture.id, format: 'csv', role: 'control', sourceHash, sourceHashMatches: true,
       candidates: [{
-        parser: 'mammoth', selected: true, outcome: { kind: 'success' }, hashes: { native: 'native', core: 'core' },
+        parser: 'csv-parse', selected: true, outcome: { kind: 'success' }, hashes: { native: 'b'.repeat(64), core: 'c'.repeat(64) },
         native: assertions, core: assertions, projectionLosses: [], rolloutBudgetGate: true,
         p95: { wallMilliseconds: options.wallMilliseconds, peakRssBytes: options.peakRssBytes },
       }],

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import type { IngestedDocument } from '@use-crux/core/indexing'
 import { expectedFactsForCandidate, expectedFactsForFixture } from './expected-facts.js'
-import { fixtureManifests, validateFixtureSourceHash, type AnydocFixtureManifest } from './fixture-manifest.js'
+import { ANydocFixtureResourceCeilings, fixtureManifests, validateFixtureSourceHash, type AnydocFixtureManifest } from './fixture-manifest.js'
 import { collectDeterminismEvidence, runParserCandidate, type DeterminismEvidence, type ParserRunResult } from './sequential-runner.js'
 import { assertCoreProjectionFacts, assertParserNativeFacts, type ParserNativeFact, type ParserNativeFacts, type StructuralAssertionResult } from './structural-assertions.js'
 import { phase2AnydocWorkerContainment } from './containment.js'
@@ -103,6 +103,60 @@ export async function admissionBaseline(evidence: AdmissionSuiteEvidence): Promi
 
 /** Captures variable execution provenance without participating in admission authorization. */
 export function admissionRunAttestation(evidence: AdmissionSuiteEvidence): unknown {
+  return validateAdmissionRunAttestation(buildAdmissionRunAttestation(evidence), evidence)
+}
+
+/** Rejects unbounded, open, or evidence-unbound CI attestations. */
+export function validateAdmissionRunAttestation(value: unknown, evidence: AdmissionSuiteEvidence): unknown {
+  const expected = buildAdmissionRunAttestation(evidence)
+  const serialized = JSON.stringify(value)
+  if (serialized.length > 1024 * 1024 || serialized !== JSON.stringify(expected)) {
+    throw new Error('Invalid admission run attestation.')
+  }
+  if ((evidence.cacheIdentity !== undefined && !isSha256(evidence.cacheIdentity))
+    || evidence.runner.maxConcurrentChildren !== 1
+    || evidence.runner.productionEquivalent !== false
+    || typeof evidence.runner.hardMemoryContainment !== 'boolean') {
+    throw new Error('Invalid admission run identity.')
+  }
+
+  const fixtureIds = new Set<string>()
+  for (const fixture of evidence.results) {
+    const manifest = fixtureManifests.find((item) => item.id === fixture.fixtureId)
+    if (!manifest || fixtureIds.has(fixture.fixtureId)) {
+      throw new Error(`Invalid fixture membership for ${fixture.fixtureId}.`)
+    }
+    fixtureIds.add(fixture.fixtureId)
+    if (!isSha256OrEmpty(fixture.sourceHash)) {
+      throw new Error(`Invalid source hash for ${fixture.fixtureId}.`)
+    }
+    if (fixture.sourceHashMatches && (manifest.source.kind !== 'file' || fixture.sourceHash !== manifest.source.sha256)) {
+      throw new Error(`Unbound source hash for ${fixture.fixtureId}.`)
+    }
+    const parsers = new Set<string>()
+    for (const candidate of fixture.candidates) {
+      if (!manifest.parserApplicability.candidates.includes(candidate.parser) || parsers.has(candidate.parser)) {
+        throw new Error(`Invalid candidate membership for ${fixture.fixtureId}/${candidate.parser}.`)
+      }
+      parsers.add(candidate.parser)
+      if (typeof candidate.rolloutBudgetGate !== 'boolean') {
+        throw new Error(`Invalid rollout gate for ${fixture.fixtureId}/${candidate.parser}.`)
+      }
+      validateHashes(candidate.hashes, `${fixture.fixtureId}/${candidate.parser}`)
+      validateResourceSample(candidate.p95, `${fixture.fixtureId}/${candidate.parser}/p95`)
+      for (const [index, run] of [...(candidate.determinism?.cold ?? []), ...(candidate.determinism?.warm ?? [])].entries()) {
+        validateHashes(run.hashes, `${fixture.fixtureId}/${candidate.parser}/run-${index}`)
+        validateRunMetadata(run.metadata, `${fixture.fixtureId}/${candidate.parser}/run-${index}`)
+      }
+    }
+    if (parsers.size !== manifest.parserApplicability.candidates.length) {
+      throw new Error(`Incomplete candidate membership for ${fixture.fixtureId}.`)
+    }
+  }
+  return value
+}
+
+function buildAdmissionRunAttestation(evidence: AdmissionSuiteEvidence): unknown {
   return {
     schemaVersion: 1,
     artifactKind: 'run-attestation',
@@ -118,16 +172,95 @@ export function admissionRunAttestation(evidence: AdmissionSuiteEvidence): unkno
     runner: evidence.runner,
     results: evidence.results.map((fixture) => ({
       fixtureId: fixture.fixtureId,
+      sourceHash: fixture.sourceHash,
       candidates: fixture.candidates.map((candidate) => ({
         parser: candidate.parser,
+        hashes: candidate.hashes,
         rolloutBudgetGate: candidate.rolloutBudgetGate,
         p95: candidate.p95,
         determinism: candidate.determinism && {
-          cold: candidate.determinism.cold.map(compactRun),
-          warm: candidate.determinism.warm.map(compactRun),
+          cold: candidate.determinism.cold.map(attestationRun),
+          warm: candidate.determinism.warm.map(attestationRun),
         },
       })),
     })),
+  }
+}
+
+function validateResourceSample(value: { readonly wallMilliseconds: number; readonly peakRssBytes?: number; readonly cpuMilliseconds?: number }, label: string): void {
+  exactKeys(value, ['wallMilliseconds', ...(value.peakRssBytes === undefined ? [] : ['peakRssBytes']), ...(value.cpuMilliseconds === undefined ? [] : ['cpuMilliseconds'])], label)
+  validateResourceValues(value, label)
+}
+
+function validateRunMetadata(value: ParserRunResult['metadata'], label: string): void {
+  exactKeys(value, [
+    ...(value.sourceBytes === undefined ? [] : ['sourceBytes']),
+    'wallMilliseconds',
+    ...(value.peakRssBytes === undefined ? [] : ['peakRssBytes']),
+    ...(value.cpuMilliseconds === undefined ? [] : ['cpuMilliseconds']),
+    ...(value.workerPid === undefined ? [] : ['workerPid']),
+    'rssMeasurement', 'productionEquivalent', 'maxConcurrentChildren', 'cleanedUp',
+  ], label)
+  validateResourceValues(value, label)
+  if (value.sourceBytes !== undefined) {
+    boundedNumber(value.sourceBytes, ANydocFixtureResourceCeilings.sourceBytes, `${label}/sourceBytes`)
+  }
+}
+
+function validateResourceValues(value: { readonly wallMilliseconds: number; readonly peakRssBytes?: number; readonly cpuMilliseconds?: number }, label: string): void {
+  boundedNumber(value.wallMilliseconds, ANydocFixtureResourceCeilings.wallMilliseconds, `${label}/wallMilliseconds`)
+  if (value.peakRssBytes !== undefined) {
+    boundedNumber(value.peakRssBytes, ANydocFixtureResourceCeilings.peakRssBytes, `${label}/peakRssBytes`)
+  }
+  if (value.cpuMilliseconds !== undefined) {
+    boundedNumber(value.cpuMilliseconds, ANydocFixtureResourceCeilings.cpuMilliseconds, `${label}/cpuMilliseconds`)
+  }
+}
+
+function boundedNumber(value: number, ceiling: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0 || value > ceiling) {
+    throw new Error(`Invalid admission resource sample ${label}.`)
+  }
+}
+
+function validateHashes(hashes: { readonly native?: string; readonly core?: string }, label: string): void {
+  exactKeys(hashes, [...(hashes.native === undefined ? [] : ['native']), ...(hashes.core === undefined ? [] : ['core'])], `${label}/hashes`)
+  if ((hashes.native !== undefined && !isSha256(hashes.native)) || (hashes.core !== undefined && !isSha256(hashes.core))) {
+    throw new Error(`Invalid admission hashes for ${label}.`)
+  }
+}
+
+function exactKeys(value: object, allowed: readonly string[], label: string): void {
+  const actual = Object.keys(value).sort()
+  const expected = [...allowed].sort()
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new Error(`Invalid keys for ${label}.`)
+  }
+}
+
+function isSha256(value: string): boolean {
+  return /^[a-f0-9]{64}$/.test(value)
+}
+
+function isSha256OrEmpty(value: string): boolean {
+  return value === '' || isSha256(value)
+}
+
+function attestationRun(run: ParserRunResult): unknown {
+  return {
+    outcome: run.outcome,
+    hashes: run.hashes,
+    diagnostics: run.diagnostics,
+    metadata: {
+      sourceBytes: run.metadata.sourceBytes,
+      wallMilliseconds: run.metadata.wallMilliseconds,
+      peakRssBytes: run.metadata.peakRssBytes,
+      cpuMilliseconds: run.metadata.cpuMilliseconds,
+      rssMeasurement: run.metadata.rssMeasurement,
+      productionEquivalent: run.metadata.productionEquivalent,
+      maxConcurrentChildren: run.metadata.maxConcurrentChildren,
+      cleanedUp: run.metadata.cleanedUp,
+    },
   }
 }
 

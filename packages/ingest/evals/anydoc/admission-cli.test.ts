@@ -50,10 +50,52 @@ describe('admission replay cache', () => {
     } finally {
       await rm(temporary, { recursive: true, force: true })
     }
-  }, 30_000)
+  }, 60_000)
+
+  it('keys every incumbent package, native artifact, and lock integrity', async () => {
+    const temporary = await mkdtemp(resolve(tmpdir(), 'crux-anydoc-incumbents-'))
+    const cacheDirectory = resolve(temporary, 'cache')
+    const mutable = [
+      ['CRUX_MAMMOTH_PACKAGE_JSON', packagePath('mammoth@1.12.0/node_modules/mammoth/package.json')],
+      ['CRUX_CSV_PARSE_PACKAGE_JSON', packagePath('csv-parse@6.2.1/node_modules/csv-parse/package.json')],
+      ['CRUX_EXCELJS_PACKAGE_JSON', packagePath('exceljs@4.4.0/node_modules/exceljs/package.json')],
+      ['CRUX_PDF_INSPECTOR_PACKAGE_JSON', packagePath('@firecrawl+pdf-inspector@1.12.0/node_modules/@firecrawl/pdf-inspector/package.json')],
+      ['CRUX_PDFJS_PACKAGE_JSON', packagePath('pdfjs-dist@5.7.284/node_modules/pdfjs-dist/package.json')],
+      ['CRUX_PDF_INSPECTOR_NATIVE_PACKAGE_JSON', packagePath('@firecrawl+pdf-inspector-linux-x64-gnu@1.12.0/node_modules/@firecrawl/pdf-inspector-linux-x64-gnu/package.json')],
+      ['CRUX_PDF_INSPECTOR_NATIVE_ARTIFACT', packagePath('@firecrawl+pdf-inspector-linux-x64-gnu@1.12.0/node_modules/@firecrawl/pdf-inspector-linux-x64-gnu/pdf-inspector.linux-x64-gnu.node')],
+    ] as const
+
+    try {
+      await symlink(resolve(repository, 'node_modules'), resolve(temporary, 'node_modules'), 'dir')
+      const overrides: Record<string, string> = {}
+      overrides.CRUX_ANYDOC_IDENTITY_ONLY = '1'
+      for (const [environment, source] of mutable) {
+        const target = resolve(temporary, `${environment}.identity`)
+        await copyFile(source, target)
+        overrides[environment] = target
+      }
+      const lockfile = resolve(temporary, 'pnpm-lock.yaml')
+      await copyFile(resolve(repository, 'pnpm-lock.yaml'), lockfile)
+      overrides.CRUX_ANYDOC_LOCKFILE = lockfile
+
+      let previous = await run(directory, cacheDirectory, nativeArtifactPath(), overrides)
+      for (const [environment] of mutable) {
+        await writeFile(overrides[environment]!, Buffer.from(`mutated:${environment}`))
+        const next = await run(directory, cacheDirectory, nativeArtifactPath(), overrides)
+        expect(next.cacheIdentity, environment).not.toBe(previous.cacheIdentity)
+        previous = next
+      }
+
+      await writeFile(lockfile, (await readFile(lockfile, 'utf8')).replace('sha512-cwnK1RIc', 'sha512-mutatedc'))
+      const afterLockMutation = await run(directory, cacheDirectory, nativeArtifactPath(), overrides)
+      expect(afterLockMutation.cacheIdentity).not.toBe(previous.cacheIdentity)
+    } finally {
+      await rm(temporary, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
 
-async function run(directory: string, cacheDirectory: string, nativeArtifact: string): Promise<any> {
+async function run(directory: string, cacheDirectory: string, nativeArtifact: string, overrides: Readonly<Record<string, string>> = {}): Promise<any> {
   const { stdout } = await execute(process.execPath, [resolve(directory, 'admission-cli.mjs')], {
     cwd: repository,
     env: {
@@ -64,10 +106,15 @@ async function run(directory: string, cacheDirectory: string, nativeArtifact: st
       CRUX_ANYDOC_PACKAGE_JSON: resolve(repository, 'node_modules/.pnpm/@firecrawl+anydoc@0.1.7/node_modules/@firecrawl/anydoc/package.json'),
       CRUX_ANYDOC_LOCKFILE: resolve(repository, 'pnpm-lock.yaml'),
       CRUX_ANYDOC_FORMATS: 'csv',
+      ...overrides,
     },
     maxBuffer: 32 * 1024 * 1024,
   })
   return JSON.parse(stdout)
+}
+
+function packagePath(path: string): string {
+  return resolve(repository, `node_modules/.pnpm/${path}`)
 }
 
 function nativeArtifactPath(): string {

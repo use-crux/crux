@@ -15,6 +15,10 @@ const formats = process.env.CRUX_ANYDOC_FORMATS?.split(',').filter((format) => a
 const execute = promisify(execFile)
 const hardMemoryContainment = false
 const cacheIdentity = await evidenceCacheIdentity()
+if (process.env.CRUX_ANYDOC_IDENTITY_ONLY === '1') {
+  process.stdout.write(JSON.stringify({ cacheIdentity }))
+  process.exit(0)
+}
 const sourceHashes = await currentFixtureHashes()
 
 await mkdir(dirname(worker), { recursive: true })
@@ -112,6 +116,16 @@ async function evidenceCacheIdentity() {
     ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc-linux-x64-gnu@0.1.7/node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node')
   const packageJson = process.env.CRUX_ANYDOC_PACKAGE_JSON
     ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc@0.1.7/node_modules/@firecrawl/anydoc/package.json')
+  const incumbentPackages = [
+    ['mammoth@1.12.0', process.env.CRUX_MAMMOTH_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/mammoth@1.12.0/node_modules/mammoth/package.json')],
+    ['csv-parse@6.2.1', process.env.CRUX_CSV_PARSE_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/csv-parse@6.2.1/node_modules/csv-parse/package.json')],
+    ['exceljs@4.4.0', process.env.CRUX_EXCELJS_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/exceljs@4.4.0/node_modules/exceljs/package.json')],
+    ['@firecrawl/pdf-inspector@1.12.0', process.env.CRUX_PDF_INSPECTOR_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+pdf-inspector@1.12.0/node_modules/@firecrawl/pdf-inspector/package.json')],
+    ['pdfjs-dist@5.7.284', process.env.CRUX_PDFJS_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/pdfjs-dist@5.7.284/node_modules/pdfjs-dist/package.json')],
+    ['@firecrawl/pdf-inspector-linux-x64-gnu@1.12.0', process.env.CRUX_PDF_INSPECTOR_NATIVE_PACKAGE_JSON ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+pdf-inspector-linux-x64-gnu@1.12.0/node_modules/@firecrawl/pdf-inspector-linux-x64-gnu/package.json')],
+  ]
+  const pdfNativeArtifact = process.env.CRUX_PDF_INSPECTOR_NATIVE_ARTIFACT
+    ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+pdf-inspector-linux-x64-gnu@1.12.0/node_modules/@firecrawl/pdf-inspector-linux-x64-gnu/pdf-inspector.linux-x64-gnu.node')
   const hash = createHash('sha256')
   hash.update('admission-evidence-schema:3\nrunner:family-v3\nassertions:native-raw-v3\n')
   hash.update(`${process.platform}:${process.arch}:node-${process.versions.node.split('.')[0]}\ncontainment:${hardMemoryContainment}\n`)
@@ -119,11 +133,20 @@ async function evidenceCacheIdentity() {
   for (const [label, file] of await fixtureFiles()) await hashFile(hash, label, file)
   await hashFile(hash, '@firecrawl/anydoc-linux-x64-gnu@0.1.7/native', nativeArtifact)
   await hashFile(hash, '@firecrawl/anydoc@0.1.7/package.json', packageJson)
+  for (const [identity, path] of incumbentPackages) await hashFile(hash, `${identity}/package.json`, path)
+  await hashFile(hash, '@firecrawl/pdf-inspector-linux-x64-gnu@1.12.0/native', pdfNativeArtifact)
   const lockfile = await readFile(process.env.CRUX_ANYDOC_LOCKFILE ?? resolve(directory, '../../../../pnpm-lock.yaml'), 'utf8')
-  const integrity = lockfile.match(/'@firecrawl\/anydoc@0\.1\.7':\n\s+resolution: \{integrity: ([^}]+)\}/)?.[1]
-  if (!integrity) throw new Error('Could not determine the installed @firecrawl/anydoc tarball integrity.')
-  hash.update(`@firecrawl/anydoc@0.1.7 tarball-integrity:${integrity}\n`)
+  for (const identity of ['@firecrawl/anydoc@0.1.7', 'mammoth@1.12.0', 'csv-parse@6.2.1', 'exceljs@4.4.0', '@firecrawl/pdf-inspector@1.12.0', 'pdfjs-dist@5.7.284', '@firecrawl/pdf-inspector-linux-x64-gnu@1.12.0']) {
+    const integrity = lockfileIntegrity(lockfile, identity)
+    if (!integrity) throw new Error(`Could not determine the installed ${identity} tarball integrity.`)
+    hash.update(`${identity} tarball-integrity:${integrity}\n`)
+  }
   return hash.digest('hex')
+}
+
+function lockfileIntegrity(lockfile, identity) {
+  const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return lockfile.match(new RegExp(`(?:'${escaped}'|${escaped}):\\n\\s+resolution: \\{integrity: ([^}]+)\\}`))?.[1]
 }
 
 async function fixtureFiles() {
