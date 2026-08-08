@@ -24,6 +24,13 @@ describe('anydoc runner trust boundary', () => {
     expect(source).toContain('withTimeout(new BufferedReader(socket).read(4), socket)')
   })
 
+  it('waits for the supervisor to open the authorization socket after attestation', () => {
+    expect(source).toContain("error.code !== 'EACCES' && error.code !== 'ENOENT'")
+    expect(source).toContain('const deadline = Date.now() + timeoutMilliseconds')
+    expect(source).toContain('await delay(10)')
+    expect(source).toContain("socket.once('error', onError)")
+  })
+
   it('uses the shared canonical job digest vector and verifies it before loading Anydoc', () => {
     const request = { version: 2, nonce: 'a'.repeat(32), format: 'docx', sourceSha256: 'b'.repeat(64), sourceBytes: 3, limits: { sourceBytes: 1024, resultBytes: 2048, expandedBytes: 4096, assetCount: 8, assetBytes: 3072, diagnosticBytes: 512, memoryBytes: 64 << 20, cpuMilliseconds: 900, wallMilliseconds: 1500, pids: 4 } }
     const digest = canonicalDigest(request)

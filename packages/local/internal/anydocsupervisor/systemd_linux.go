@@ -49,6 +49,9 @@ func containmentReason(err error) string {
 			return "dbus-other"
 		}
 	}
+	if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+		return "deadline"
+	}
 	return "io-or-systemd"
 }
 
@@ -670,10 +673,15 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = u.listener.SetDeadline(deadline)
 	}
+	lastStage := "authorize-accept"
+	lastReason := "deadline"
 	for {
 		conn, err := u.listener.AcceptUnix()
 		if err != nil {
-			return errors.New("authorization unavailable")
+			if errors.Is(err, os.ErrDeadlineExceeded) && lastStage != "authorize-accept" {
+				return &ContainmentError{Stage: lastStage, ReasonCode: lastReason}
+			}
+			return containment("authorize-accept", err)
 		}
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
@@ -684,14 +692,21 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 			err = EncodeRequest(conn, request)
 			_ = conn.Close()
 			if err != nil {
-				return errors.New("authorization unavailable")
+				return containment("authorize-encode", err)
 			}
 			return nil
 		}
 		_ = conn.Close()
+		if peerErr != nil {
+			lastStage, lastReason = "authorize-peer-credentials", containmentReason(peerErr)
+		} else if reportErr != nil {
+			lastStage, lastReason = "authorize-report", containmentReason(reportErr)
+		} else {
+			lastStage, lastReason = "authorize-peer-identity", "peer-mismatch"
+		}
 		select {
 		case <-ctx.Done():
-			return errors.New("authorization unavailable")
+			return &ContainmentError{Stage: lastStage, ReasonCode: lastReason}
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}

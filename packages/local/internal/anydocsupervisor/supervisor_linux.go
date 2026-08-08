@@ -663,7 +663,10 @@ func (r *Run) Authorize() error {
 	}
 	closeErr := r.write.Close()
 	if e != nil || closeErr != nil {
-		return closed(ErrContainmentUnavailable)
+		if e != nil {
+			return closedWith(ErrContainmentUnavailable, e)
+		}
+		return closedWith(ErrContainmentUnavailable, containment("authorize-encode", closeErr))
 	}
 	return nil
 }

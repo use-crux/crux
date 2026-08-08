@@ -74,7 +74,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 
 	if err := run.Authorize(); err != nil {
 		_ = run.Finish(context.Background(), err)
-		t.Fatalf("authorize one-shot job: %v", err)
+		t.Fatalf("authorize one-shot job: %s", safeContainmentDiagnostic(err))
 	}
 	result, err := run.Execute(ctx)
 	if err != nil {
@@ -106,7 +106,7 @@ func safeContainmentDiagnostic(err error) string {
 
 func safeContainmentStage(stage string) bool {
 	switch stage {
-	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active":
+	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active", "authorize-accept", "authorize-peer-credentials", "authorize-report", "authorize-peer-identity", "authorize-encode":
 		return true
 	default:
 		return false
@@ -115,7 +115,7 @@ func safeContainmentStage(stage string) bool {
 
 func safeContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "io-or-systemd":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "io-or-systemd", "deadline", "peer-mismatch":
 		return true
 	default:
 		return false

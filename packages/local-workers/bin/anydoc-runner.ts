@@ -84,8 +84,24 @@ async function main(): Promise<void> {
 }
 
 async function receiveRequest(path: string): Promise<Request> {
-  const socket = await connect(path)
+  const socket = await connectWhenAuthorized(path)
   try { return await withTimeout(readFrame<Request>(socket), socket) } finally { socket.destroy() }
+}
+
+async function connectWhenAuthorized(path: string): Promise<Socket> {
+  const deadline = Date.now() + timeoutMilliseconds
+  for (;;) {
+    try {
+      return await connect(path)
+    } catch (error) {
+      if (!(error instanceof Error) || !('code' in error) || (error.code !== 'EACCES' && error.code !== 'ENOENT') || Date.now() >= deadline) throw error
+      await delay(10)
+    }
+  }
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 async function readSource(path: string, limit: number): Promise<Buffer> {
@@ -208,8 +224,9 @@ function connect(path: string): Promise<Socket> {
   return new Promise((resolve, reject) => {
     const socket = new Socket()
     const timer = setTimeout(() => { socket.destroy(); reject(new Error('timeout')) }, timeoutMilliseconds)
-    socket.once('error', reject)
-    socket.connect(path, () => { clearTimeout(timer); socket.off('error', reject); resolve(socket) })
+    const onError = (error: Error) => { clearTimeout(timer); socket.destroy(); reject(error) }
+    socket.once('error', onError)
+    socket.connect(path, () => { clearTimeout(timer); socket.off('error', onError); resolve(socket) })
   })
 }
 
