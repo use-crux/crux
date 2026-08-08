@@ -213,15 +213,17 @@ func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
 }
 
 type SandboxReport struct {
-	MainPID                                                                       int
-	ControlGroupMembers                                                           []int
-	MemoryMax, MemorySwapMax                                                      int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                 int
-	RuntimeMax                                                                    time.Duration
-	KillMode, ProtectSystem                                                       string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome       bool
-	CapabilityBoundingSet, ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
-	Populated                                                                     bool
+	MainPID                                                                 int
+	ControlGroupMembers                                                     []int
+	MemoryMax, MemorySwapMax                                                int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
+	RuntimeMax                                                              time.Duration
+	KillMode, ProtectSystem                                                 string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
+	ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies                  []string
+	CapabilityBoundingSet, AmbientCapabilities                              uint64
+	RestrictAddressFamiliesAllow                                            bool
+	Populated                                                               bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -232,6 +234,12 @@ type Unit interface {
 }
 type Backend interface {
 	Start(context.Context, ServiceSpec, *os.File) (Unit, error)
+}
+type capabilityAuthorizer interface {
+	AuthorizeCapability(context.Context, Request) error
+}
+type verifiedServiceSpec interface {
+	VerifiedServiceSpec(ServiceSpec) ServiceSpec
 }
 type PipeFactory func() (*os.File, *os.File, error)
 type Supervisor struct {
@@ -273,6 +281,9 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 		write.Close()
 		return nil, closed(ErrContainmentUnavailable)
 	}
+	if adjusted, ok := unit.(verifiedServiceSpec); ok {
+		spec = adjusted.VerifiedServiceSpec(spec)
+	}
 	if !verify(ctx, unit, spec) {
 		write.Close()
 		cleanup(unit)
@@ -300,7 +311,14 @@ func (r *Run) Authorize() error {
 	}
 	r.done = true
 	v := Request{Version: ProtocolVersion, Nonce: r.nonce, Digest: r.digest}
-	e := EncodeRequest(r.write, v)
+	var e error
+	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e = authorizer.AuthorizeCapability(ctx, v)
+		cancel()
+	} else {
+		e = EncodeRequest(r.write, v)
+	}
 	closeErr := r.write.Close()
 	if e != nil || closeErr != nil {
 		return closed(ErrContainmentUnavailable)
@@ -398,7 +416,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if e != nil {
 		return false
 	}
-	return r.MainPID > 0 && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && len(r.CapabilityBoundingSet) == 0 && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	return r.MainPID > 0 && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

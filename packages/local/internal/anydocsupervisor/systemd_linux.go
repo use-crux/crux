@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/godbus/dbus/v5"
+	"golang.org/x/sys/unix"
 )
 
 const systemdService = "org.freedesktop.systemd1"
@@ -54,15 +56,47 @@ func (systemClock) Now() time.Time                         { return time.Now() }
 func (systemClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type SystemdBackendOptions struct {
-	Bus        SystemBus
-	FileSystem FileSystem
-	Clock      Clock
+	Bus           SystemBus
+	FileSystem    FileSystem
+	Clock         Clock
+	SocketFactory SocketFactory
+	PeerVerifier  PeerVerifier
+}
+
+type SocketFactory interface {
+	Listen(string) (*net.UnixListener, error)
+}
+type PeerVerifier interface {
+	PID(*net.UnixConn) (int, error)
+}
+type unixSocketFactory struct{}
+
+func (unixSocketFactory) Listen(path string) (*net.UnixListener, error) {
+	return net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+}
+
+type unixPeerVerifier struct{}
+
+func (unixPeerVerifier) PID(conn *net.UnixConn) (int, error) {
+	var credential *unix.Ucred
+	var err error
+	raw, controlErr := conn.SyscallConn()
+	if controlErr != nil {
+		return 0, controlErr
+	}
+	controlErr = raw.Control(func(fd uintptr) { credential, err = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED) })
+	if controlErr != nil || err != nil || credential == nil || credential.Pid <= 0 {
+		return 0, errors.New("peer credentials unavailable")
+	}
+	return int(credential.Pid), nil
 }
 
 type systemdBackend struct {
-	bus SystemBus
-	fs  FileSystem
-	now Clock
+	bus     SystemBus
+	fs      FileSystem
+	now     Clock
+	sockets SocketFactory
+	peers   PeerVerifier
 }
 
 // NewSystemdBackend creates the Linux backend. It is intentionally not wired
@@ -84,30 +118,69 @@ func NewSystemdBackendWith(options SystemdBackendOptions) Backend {
 	if clock == nil {
 		clock = systemClock{}
 	}
-	return &systemdBackend{bus: options.Bus, fs: fs, now: clock}
+	sockets := options.SocketFactory
+	if sockets == nil {
+		sockets = unixSocketFactory{}
+	}
+	peers := options.PeerVerifier
+	if peers == nil {
+		peers = unixPeerVerifier{}
+	}
+	return &systemdBackend{bus: options.Bus, fs: fs, now: clock, sockets: sockets, peers: peers}
 }
 
 func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.File) (Unit, error) {
-	if b == nil || b.bus == nil || b.fs == nil || b.now == nil || stdin == nil || !validBackendSpec(spec) || !b.bus.SupportsUnixFDs() || ctx.Err() != nil {
+	if b == nil || b.bus == nil || b.fs == nil || b.now == nil || b.sockets == nil || b.peers == nil || stdin == nil || !validBackendSpec(spec) || ctx.Err() != nil {
 		return nil, errors.New("systemd unavailable")
 	}
 	name, err := transientUnitName()
 	if err != nil {
 		return nil, err
 	}
-	properties := systemdProperties(spec, stdin)
+	socketPath, listener, err := b.listen(spec)
+	if err != nil {
+		return nil, errors.New("authorization channel unavailable")
+	}
+	defer func() {
+		if listener != nil {
+			_ = listener.Close()
+			_ = os.Remove(socketPath)
+		}
+	}()
+	spec.ReadOnlyPaths = append(spec.ReadOnlyPaths, socketPath)
+	properties := systemdProperties(spec)
 	err = b.bus.StartTransientUnit(ctx, name, properties)
-	closeErr := stdin.Close() // systemd has received its duplicate by this point.
+	closeErr := stdin.Close()
 	if err != nil || closeErr != nil {
 		return nil, errors.New("transient unit unavailable")
 	}
-	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec)}
+	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, peers: b.peers, spec: spec}
 	if err := u.waitActive(ctx); err != nil {
 		_ = u.Stop(context.Background())
 		_ = u.Cleanup(context.Background())
 		return nil, err
 	}
+	listener = nil
 	return u, nil
+}
+
+func (b *systemdBackend) listen(spec ServiceSpec) (string, *net.UnixListener, error) {
+	runtime := spec.ReadOnlyPaths[1]
+	token, err := transientUnitName()
+	if err != nil {
+		return "", nil, err
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(token, "crux-anydoc-"), ".service")
+	path := filepath.Join(runtime, ".a-"+id+".sock")
+	if !validAbsolutePath(path) {
+		return "", nil, errors.New("invalid socket path")
+	}
+	_ = os.Remove(path)
+	listener, err := b.sockets.Listen(path)
+	if err != nil {
+		return "", nil, err
+	}
+	return path, listener, nil
 }
 
 func validBackendSpec(spec ServiceSpec) bool {
@@ -142,28 +215,30 @@ type execStart struct {
 	Fail bool
 }
 
-func systemdProperties(spec ServiceSpec, stdin *os.File) []DBusProperty {
+type restrictAddressFamilies struct {
+	Allow    bool
+	Families []string
+}
+
+func systemdProperties(spec ServiceSpec) []DBusProperty {
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
 		{"ExecStart", []execStart{{Path: spec.Command[0], Args: spec.Command, Fail: false}}},
-		// An empty entry resets inherited Environment= assignments before the
-		// fixed minimal environment is applied.
-		{"Environment", append([]string{""}, spec.Environment...)},
-		{"StandardInput", "file"},
-		{"StandardInputFileDescriptor", dbus.UnixFD(stdin.Fd())},
+		{"Environment", spec.Environment},
 		{"CPUAccounting", spec.CPUAccounting},
 		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
+		{"CPUQuotaPeriodUSec", uint64(spec.CPUQuotaPeriodUSec)},
 		{"MemoryMax", uint64(spec.MemoryMax)},
 		{"MemorySwapMax", uint64(spec.MemorySwapMax)},
 		{"TasksMax", uint64(spec.TasksMax)},
 		{"RuntimeMaxUSec", uint64(spec.RuntimeMax / time.Microsecond)},
 		{"KillMode", spec.KillMode},
 		{"NoNewPrivileges", spec.NoNewPrivileges},
-		{"CapabilityBoundingSet", []string{}},
-		{"AmbientCapabilities", []string{}},
+		{"CapabilityBoundingSet", uint64(0)},
+		{"AmbientCapabilities", uint64(0)},
 		{"PrivateNetwork", spec.PrivateNetwork},
-		{"RestrictAddressFamilies", spec.RestrictAddressFamilies},
+		{"RestrictAddressFamilies", restrictAddressFamilies{Allow: true, Families: spec.RestrictAddressFamilies}},
 		{"PrivateTmp", spec.PrivateTmp},
 		{"ProtectSystem", spec.ProtectSystem},
 		{"ProtectHome", spec.ProtectHome},
@@ -184,12 +259,18 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name string
-	bus  SystemBus
-	fs   FileSystem
-	now  Clock
-	tmp  string
+	name     string
+	bus      SystemBus
+	fs       FileSystem
+	now      Clock
+	tmp      string
+	listener *net.UnixListener
+	socket   string
+	peers    PeerVerifier
+	spec     ServiceSpec
 }
+
+func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
 
 func (u *systemdUnit) waitActive(ctx context.Context) error {
 	for {
@@ -244,7 +325,42 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if err != nil {
 		return SandboxReport{}, err
 	}
-	return SandboxReport{MainPID: intValue(p, "MainPID"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: stringsValue(p, "CapabilityBoundingSet"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamilies: stringsValue(p, "RestrictAddressFamilies"), Populated: populated}, nil
+	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
+	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
+		return SandboxReport{}, errors.New("invalid sandbox properties")
+	}
+	return SandboxReport{MainPID: intValue(p, "MainPID"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+}
+
+func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) error {
+	if u.listener == nil || u.peers == nil {
+		return errors.New("authorization unavailable")
+	}
+	defer func() {
+		_ = u.listener.Close()
+		u.listener = nil
+		_ = os.Remove(u.socket)
+	}()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = u.listener.SetDeadline(deadline)
+	}
+	conn, err := u.listener.AcceptUnix()
+	if err != nil {
+		return errors.New("authorization unavailable")
+	}
+	defer conn.Close()
+	pid, err := u.peers.PID(conn)
+	if err != nil {
+		return errors.New("authorization unavailable")
+	}
+	report, err := u.Report(ctx)
+	if err != nil || pid != report.MainPID || !contains(report.ControlGroupMembers, pid) {
+		return errors.New("authorization unavailable")
+	}
+	if err := EncodeRequest(conn, request); err != nil {
+		return errors.New("authorization unavailable")
+	}
+	return nil
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
@@ -306,6 +422,13 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 }
 
 func (u *systemdUnit) Cleanup(ctx context.Context) error {
+	if u.listener != nil {
+		_ = u.listener.Close()
+		u.listener = nil
+	}
+	if u.socket != "" {
+		_ = os.Remove(u.socket)
+	}
 	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
 		return errors.New("unit cleanup unavailable")
 	}
@@ -387,7 +510,22 @@ func cgroupPopulated(fs FileSystem, cgroup string) (bool, error) {
 func stringValue(p map[string]any, key string) string    { v, _ := p[key].(string); return v }
 func boolValue(p map[string]any, key string) bool        { v, _ := p[key].(bool); return v }
 func stringsValue(p map[string]any, key string) []string { v, _ := p[key].([]string); return v }
-func intValue(p map[string]any, key string) int          { return int(uintValue(p, key)) }
+func uint64ValueOK(p map[string]any, key string) bool    { _, ok := p[key].(uint64); return ok }
+func restrictAddressFamiliesValue(value any) (bool, []string, bool) {
+	switch v := value.(type) {
+	case restrictAddressFamilies:
+		return v.Allow, v.Families, true
+	case []any:
+		if len(v) != 2 {
+			return false, nil, false
+		}
+		allow, aok := v[0].(bool)
+		families, fok := v[1].([]string)
+		return allow, families, aok && fok
+	}
+	return false, nil, false
+}
+func intValue(p map[string]any, key string) int { return int(uintValue(p, key)) }
 func uintValue(p map[string]any, key string) uint64 {
 	switch v := p[key].(type) {
 	case uint32:
@@ -408,7 +546,7 @@ func (b *godbusSystemBus) SupportsUnixFDs() bool {
 	return b != nil && b.conn != nil && b.conn.SupportsUnixFDs()
 }
 func (b *godbusSystemBus) StartTransientUnit(ctx context.Context, name string, props []DBusProperty) error {
-	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.StartTransientUnit", name, "replace", dbusProperties(props), []auxiliaryUnit{})
+	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.StartTransientUnit", name, "fail", dbusProperties(props), []auxiliaryUnit{})
 }
 func (b *godbusSystemBus) UnitProperties(ctx context.Context, name string) (map[string]any, error) {
 	var path dbus.ObjectPath

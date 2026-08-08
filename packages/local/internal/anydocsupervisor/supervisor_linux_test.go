@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -52,7 +53,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	b := &fakeBackend{bad: true}
 	_, e = New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
-	if !b.u.stopped || !b.u.cleaned {
+	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
 	}
 }
@@ -63,7 +64,7 @@ func TestCPULimitStops(t *testing.T) {
 		t.Fatal(e)
 	}
 	time.Sleep(30 * time.Millisecond)
-	if !b.u.stopped {
+	if !b.u.Stopped() {
 		t.Fatal("cpu was not stopped")
 	}
 	r.Finish(context.Background(), nil)
@@ -98,7 +99,7 @@ type fakeBackend struct {
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
 	b.read = r
-	rep := SandboxReport{MainPID: 42, ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: []string{}, ReadOnlyPaths: s.ReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
+	rep := SandboxReport{MainPID: 42, ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
 	if b.bad {
 		rep.MemoryMax = 1
 	}
@@ -111,6 +112,7 @@ type fakeUnit struct {
 	cpu              time.Duration
 	cpuErr           bool
 	stopped, cleaned bool
+	mu               sync.Mutex
 }
 
 func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, nil }
@@ -120,6 +122,19 @@ func (u *fakeUnit) CPUUsage(context.Context) (time.Duration, error) {
 	}
 	return u.cpu, nil
 }
-func (u *fakeUnit) Stop(context.Context) error         { u.stopped = true; u.rep.Populated = false; return nil }
+func (u *fakeUnit) Stop(context.Context) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.stopped = true
+	u.rep.Populated = false
+	return nil
+}
 func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
-func (u *fakeUnit) Cleanup(context.Context) error      { u.cleaned = true; return nil }
+func (u *fakeUnit) Cleanup(context.Context) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.cleaned = true
+	return nil
+}
+func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
+func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }
