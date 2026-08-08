@@ -11,7 +11,6 @@ import type { KnowledgeModel } from '../../src/knowledge/model'
 import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
 
 const namespace = 'derive-diag'
-const chunkRef = { kind: 'chunk' as const, sourceId: 'doc-1', chunkId: 'c1' }
 const assertionTypes = {
   fact: z.object({ value: z.string() }),
 }
@@ -46,8 +45,8 @@ describe('connected knowledge derive diagnostics', () => {
   it('fails assertion extraction when repair still returns invalid claims', async () => {
     const storage = inMemoryStorage()
     const source = model([
-      { type_0: [{ data: { value: 1 }, evidence: [chunkRef], provenance: 'derived' }] },
-      { type_0: [{ data: { value: 1 }, evidence: [chunkRef], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 1 }, evidence: ['e0'], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 1 }, evidence: ['e0'], provenance: 'derived' }] },
     ])
     const docs = knowledgeBase({
       id: 'kb-assertions',
@@ -74,7 +73,7 @@ describe('connected knowledge derive diagnostics', () => {
   it('records the same knowledge summary on the mutation effect receipt evidence', async () => {
     const storage = inMemoryStorage()
     const source = model([
-      { type_0: [{ data: { value: 'ok' }, evidence: [chunkRef], provenance: 'derived' }] },
+      { type_0: [{ data: { value: 'ok' }, evidence: ['e0'], provenance: 'derived' }] },
     ])
     const docs = knowledgeBase({
       id: 'kb-effects',

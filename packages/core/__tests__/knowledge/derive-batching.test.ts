@@ -99,7 +99,8 @@ describe('connected knowledge derive batching', () => {
 
     expect(model.generateObject).toHaveBeenCalledTimes(3)
     expect(result).toEqual([{ stageId: 'facts', status: 'ran', claims: 5, warnings: [] }])
-    expect(prompts.flatMap(chunkIdsFromPrompt)).toEqual(['c1', 'c2', 'c3', 'c4', 'c5'])
+    expect(prompts.flatMap(assertionTargetsFromPrompt).map(({ chunkId }) => chunkId))
+      .toEqual(['c1', 'c2', 'c3', 'c4', 'c5'])
   })
 
   it('leaves the prior manifest intact when a batch still fails after repair', async () => {
@@ -156,8 +157,8 @@ describe('connected knowledge derive batching', () => {
       second: z.object({ value: z.string() }),
     }
     const invalid = {
-      type_0: [{ data: { value: 1 }, evidence: [chunkRef('c1')], provenance: 'derived' }],
-      type_1: [{ data: { value: 2 }, evidence: [chunkRef('c1')], provenance: 'derived' }],
+      type_0: [{ data: { value: 1 }, evidence: ['e0'], provenance: 'derived' }],
+      type_1: [{ data: { value: 2 }, evidence: ['e0'], provenance: 'derived' }],
     }
     const model = fixedAssertionModel([invalid, invalid])
     const stage = assertions({ id: 'facts', version: 1, types, model })
@@ -324,8 +325,8 @@ function fixedAssertionModel(objects?: readonly unknown[], prompts: string[] = [
       prompts.push(prompt)
       return {
         object: objects?.[index++] ?? {
-          type_0: chunkIdsFromPrompt(prompt).map((chunkId) =>
-            ({ data: { value: chunkId }, evidence: [chunkRef(chunkId)], provenance: 'derived' })),
+          type_0: assertionTargetsFromPrompt(prompt).map(({ chunkId, label }) =>
+            ({ data: { value: chunkId }, evidence: [label], provenance: 'derived' })),
         },
       }
     }),
@@ -343,6 +344,11 @@ function claimsForPrompt(prompt: string) {
 
 function chunkIdsFromPrompt(prompt: string): string[] {
   return [...prompt.matchAll(/\[(?:doc-1\/)?([a-z0-9-]+)\]/g)].map((match) => match[1]!)
+}
+
+function assertionTargetsFromPrompt(prompt: string): readonly { readonly chunkId: string; readonly label: string }[] {
+  return [...prompt.matchAll(/\[TARGET:\] \[(e\d+) \| doc-1\/([a-z0-9-]+)\]/g)]
+    .map((match) => ({ label: match[1]!, chunkId: match[2]! }))
 }
 
 function manifestKey(stageId: string): string {
