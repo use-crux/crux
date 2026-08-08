@@ -329,7 +329,16 @@ type SandboxReport struct {
 	PrivateUsers                                                              bool
 	ProtectProc, ProcSubset                                                   string
 	Populated                                                                 bool
+	MemoryCurrent                                                             int64
+	MemoryEvents                                                              map[string]int64
 	RuntimeTreeDigest                                                         string
+}
+type TerminalReport struct {
+	Sandbox SandboxReport
+	CPU     time.Duration
+	Wall    time.Duration
+	Outcome ErrorCode
+	Cleaned bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -380,6 +389,8 @@ type Run struct {
 	finishOnce    sync.Once
 	finished      chan struct{}
 	result        error
+	terminal      TerminalReport
+	started       time.Time
 	done          bool
 	stop          chan struct{}
 }
@@ -416,14 +427,14 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDepen
 	if !verify(ctx, unit, spec) {
 		write.Close()
 		_ = staged.Cleanup()
-		cleanup(unit)
+		_, _, _ = cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	if preparer, ok := unit.(authorizationPreparer); ok {
 		if preparer.PrepareAuthorization(ctx) != nil {
 			write.Close()
 			_ = staged.Cleanup()
-			cleanup(unit)
+			_, _, _ = cleanup(unit)
 			return nil, closed(ErrContainmentUnavailable)
 		}
 	}
@@ -431,13 +442,13 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDepen
 	if _, e = rand.Read(n[:]); e != nil {
 		write.Close()
 		_ = staged.Cleanup()
-		cleanup(unit)
+		_, _, _ = cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	d := sha256.Sum256(input)
 	nonce := hex.EncodeToString(n[:])
 	sourceSHA := hex.EncodeToString(d[:])
-	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, "docx", sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{})}
+	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, "docx", sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: s.now()}
 	go r.monitor()
 	return r, nil
 }
@@ -509,12 +520,14 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.stopOnce.Do(func() { close(r.stop) })
 		r.mu.Unlock()
 		result := outcomeCode(out)
-		if !cleanup(r.unit) {
+		report, cpu, cleaned := cleanup(r.unit)
+		if !cleaned {
 			result = closed(ErrContainmentUnavailable)
 		}
 		if r.staged == nil || r.staged.Cleanup() != nil {
 			result = closed(ErrContainmentUnavailable)
 		}
+		r.terminal = TerminalReport{Sandbox: report, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
 		r.mu.Lock()
 		r.result = result
 		r.mu.Unlock()
@@ -524,6 +537,21 @@ func (r *Run) Finish(_ context.Context, out error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.result
+}
+func (r *Run) TerminalReport() TerminalReport {
+	if r == nil {
+		return TerminalReport{}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.terminal
+}
+func errorCode(err error) ErrorCode {
+	var e *SupervisorError
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return ""
 }
 func outcomeCode(out error) error {
 	if errors.Is(out, errCPUAccounting) {
@@ -562,11 +590,11 @@ func (r *Run) monitor() {
 		}
 	}
 }
-func cleanup(unit Unit) bool {
+func cleanup(unit Unit) (SandboxReport, time.Duration, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
-		return false
+		return SandboxReport{}, 0, false
 	}
 	ok := true
 	if unit.Stop(ctx) != nil {
@@ -579,10 +607,14 @@ func cleanup(unit Unit) bool {
 	if err != nil || report.Populated {
 		ok = false
 	}
+	cpu, cpuErr := unit.CPUUsage(ctx)
+	if cpuErr != nil {
+		ok = false
+	}
 	if unit.Cleanup(ctx) != nil {
 		ok = false
 	}
-	return ok
+	return report, cpu, ok
 }
 func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if u == nil {

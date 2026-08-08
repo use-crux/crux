@@ -410,6 +410,14 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if err != nil {
 		return SandboxReport{}, err
 	}
+	memoryCurrent, err := cgroupLimit(u.fs, cgroup, "memory.current")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
+	if err != nil {
+		return SandboxReport{}, err
+	}
 	swap, err := cgroupLimit(u.fs, cgroup, "memory.swap.max")
 	if err != nil {
 		return SandboxReport{}, err
@@ -446,7 +454,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -707,6 +715,25 @@ func validCgroup(path string) bool {
 	return strings.HasPrefix(path, "/") && filepath.Clean(path) == path && !strings.Contains(path, "..")
 }
 func cgroupFile(cgroup, file string) string { return filepath.Join("/sys/fs/cgroup", cgroup, file) }
+func cgroupEvents(fs FileSystem, cgroup, file string) (map[string]int64, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, file))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int64{}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			continue
+		}
+		v, e := strconv.ParseInt(f[1], 10, 64)
+		if e != nil || v < 0 {
+			return nil, errors.New("invalid cgroup events")
+		}
+		out[f[0]] = v
+	}
+	return out, nil
+}
 func cgroupLimit(fs FileSystem, cgroup, file string) (int64, error) {
 	b, err := fs.ReadFile(cgroupFile(cgroup, file))
 	if err != nil {

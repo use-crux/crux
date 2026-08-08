@@ -54,8 +54,8 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	run, err := supervisor.Start(ctx, input, launch, privateTemp, Limits{
-		MemoryMax:       384 << 20,
-		TasksMax:        16,
+		MemoryMax:       128 << 20,
+		TasksMax:        8,
 		CPUQuotaPercent: 50,
 		RuntimeMax:      20 * time.Second,
 	})
@@ -75,7 +75,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 		t.Fatalf("unbound or invalid runner result: %#v", result)
 	}
 	assertIntegrationCleanup(t, root, stagingRoot, privateTemp, run)
-	writeContainmentEvidence(t, result, root)
+	writeContainmentEvidence(t, result, run.TerminalReport())
 }
 
 func assertIntegrationCleanup(t *testing.T, root, stagingRoot, privateTemp string, run *Run) {
@@ -83,11 +83,8 @@ func assertIntegrationCleanup(t *testing.T, root, stagingRoot, privateTemp strin
 	if run == nil || run.unit == nil {
 		t.Fatal("missing completed unit")
 	}
-	report, err := run.unit.Report(context.Background())
-	if err != nil {
-		t.Fatalf("read completed unit cgroup: %v", err)
-	}
-	if report.Populated {
+	report := run.TerminalReport()
+	if !report.Cleaned || report.Sandbox.Populated {
 		t.Fatal("transient unit cgroup remained populated")
 	}
 	entries, err := os.ReadDir(stagingRoot)
@@ -105,7 +102,7 @@ func assertIntegrationCleanup(t *testing.T, root, stagingRoot, privateTemp strin
 	}
 }
 
-func writeContainmentEvidence(t *testing.T, result Result, root string) {
+func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalReport) {
 	t.Helper()
 	path := os.Getenv("CRUX_SYSTEMD_EVIDENCE_PATH")
 	if path == "" {
@@ -117,12 +114,22 @@ func writeContainmentEvidence(t *testing.T, result Result, root string) {
 	// Deliberately omit source paths and payload: the artifact is containment
 	// evidence, not a document-exfiltration channel.
 	evidence := struct {
-		Format       string `json:"format"`
-		SourceSHA256 string `json:"sourceSha256"`
-		SourceBytes  int64  `json:"sourceBytes"`
-		ResultBytes  int    `json:"resultBytes"`
-		Cleaned      bool   `json:"cleaned"`
-	}{result.Format, result.SourceSHA256, result.SourceBytes, len(result.Payload), true}
+		Format        string           `json:"format"`
+		SourceSHA256  string           `json:"sourceSha256"`
+		SourceBytes   int64            `json:"sourceBytes"`
+		ResultBytes   int              `json:"resultBytes"`
+		Outcome       ErrorCode        `json:"outcome"`
+		Cleaned       bool             `json:"cleaned"`
+		MemoryMax     int64            `json:"memoryMax"`
+		MemoryCurrent int64            `json:"memoryCurrent"`
+		MemoryEvents  map[string]int64 `json:"memoryEvents"`
+		TasksMax      int              `json:"tasksMax"`
+		CPUUsec       int64            `json:"cpuUsec"`
+		WallMillis    int64            `json:"wallMillis"`
+	}{result.Format, result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.Sandbox.MemoryMax, terminal.Sandbox.MemoryCurrent, terminal.Sandbox.MemoryEvents, terminal.Sandbox.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds()}
+	if evidence.MemoryMax > MemoryCeiling/2 {
+		t.Fatal("integration memory ceiling exceeds half the production ceiling")
+	}
 	bytes, err := json.Marshal(evidence)
 	if err != nil {
 		t.Fatal(err)
