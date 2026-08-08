@@ -204,9 +204,71 @@ jobs:
       - name: Validate npm package staging
         run: pnpm release:stage:ts && pnpm release:validate
 
+  systemd-anydoc-containment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CRUX_SYSTEMD_INTEGRATION: 1
+      CRUX_SYSTEMD_EVIDENCE_PATH: ${{ github.workspace }}/artifacts/anydoc-containment.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and embed local workers
+        run: make -C packages/local build-local-workers embed-workers
+
+      - name: Verify systemd host prerequisites
+        run: |
+          test -S /run/dbus/system_bus_socket
+          systemctl --system is-system-running --wait || test $? -eq 1
+          test -r /sys/fs/cgroup/cgroup.controllers
+
+      - name: Build containment test binary as runner user
+        working-directory: packages/local
+        run: go test -c -o /tmp/anydoc-systemd.test ./internal/anydocsupervisor
+
+      - name: Run real systemd containment gate
+        working-directory: packages/local
+        run: sudo --preserve-env=CRUX_SYSTEMD_INTEGRATION,CRUX_SYSTEMD_EVIDENCE_PATH timeout 10m /tmp/anydoc-systemd.test -test.run '^TestSystemdContainmentIntegration$' -test.count=1 -test.parallel=1
+
+      - name: Verify bounded containment evidence
+        if: always()
+        run: |
+          test -f artifacts/anydoc-containment.json
+          test "$(wc -c < artifacts/anydoc-containment.json)" -le 1024
+
+      - name: Upload containment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anydoc-systemd-containment
+          path: artifacts/anydoc-containment.json
+          if-no-files-found: warn
+
   verify:
     if: ${{ always() }}
-    needs: [typecheck, test, postgres-storage, indexer, build_package]
+    needs: [typecheck, test, postgres-storage, indexer, build_package, systemd-anydoc-containment]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Require successful verification jobs
@@ -216,12 +278,14 @@ jobs:
           POSTGRES_STORAGE_RESULT: ${{ needs.postgres-storage.result }}
           INDEXER_RESULT: ${{ needs.indexer.result }}
           BUILD_PACKAGE_RESULT: ${{ needs.build_package.result }}
+          SYSTEMD_ANYDOC_CONTAINMENT_RESULT: ${{ needs.systemd-anydoc-containment.result }}
         run: |
           test "$TYPECHECK_RESULT" = success
           test "$TEST_RESULT" = success
           test "$POSTGRES_STORAGE_RESULT" = success
           test "$INDEXER_RESULT" = success
           test "$BUILD_PACKAGE_RESULT" = success
+          test "$SYSTEMD_ANYDOC_CONTAINMENT_RESULT" = success
 
   typescript-compat:
     runs-on: blacksmith-4vcpu-ubuntu-2404
