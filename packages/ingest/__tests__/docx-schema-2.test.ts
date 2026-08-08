@@ -87,6 +87,19 @@ it('coalesces inline text around nested lists without changing DOM order', () =>
   ])
 })
 
+it('does not invent whitespace between adjacent inline nodes', () => {
+  const document = adaptMammothDocxResult({
+    bytes: new TextEncoder().encode('adjacent inline list'),
+    html: '<ul><li><strong>foo</strong><em>bar</em> <code>baz</code></li></ul>',
+  })
+  const list = document.blocks[0]
+  if (!list || list.kind !== 'list') {
+    throw new Error('Expected a top-level list.')
+  }
+
+  expect(list.items[0]?.blocks.map(listFact)).toEqual([['text', 'foobar baz']])
+})
+
 it('retains Mammoth table spans and only declares headers established by HTML', () => {
   const document = adaptMammothDocxResult({
     bytes: new TextEncoder().encode('merged table'),

@@ -173,7 +173,7 @@ function listBlock(
             blocks.push(listBlock($, child, childId, coordinate, headingPath))
             return
           }
-          bufferedText = appendText(bufferedText, $(child).text())
+          bufferedText += $(child).text()
         })
       flushText()
       items.push({ id: itemId, coordinate, producer: MAMMOTH_PRODUCER, blocks })
@@ -323,13 +323,6 @@ function docxId(documentSha256: string, structuralPath: string): string {
 
 function normalizedText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
-}
-
-function appendText(buffer: string, value: string): string {
-  if (!buffer || !value || /\s$/.test(buffer) || /^\s/.test(value)) {
-    return buffer + value
-  }
-  return `${buffer} ${value}`
 }
 
 function sha256(bytes: Uint8Array): string {
