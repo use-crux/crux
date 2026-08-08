@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { collectDeterminismEvidence, runParserCandidate } from './sequential-runner.js'
 
 const workerPath = fileURLToPath(new URL('./test-worker.mjs', import.meta.url))
+const anydocWorkerPath = fileURLToPath(new URL('./anydoc-worker.mjs', import.meta.url))
 
 describe('runParserCandidate', () => {
   it('runs one fresh worker at a time and returns canonical native and Core hashes', async () => {
@@ -100,6 +101,29 @@ describe('runParserCandidate', () => {
     expect(evidence.warm).toHaveLength(5)
     expect(evidence.deterministic).toBe(true)
     expect(new Set([...evidence.cold, ...evidence.warm].map((run) => run.metadata.workerPid)).size).toBe(8)
+  })
+
+  it('runs one available DOCX fixture through the private Anydoc worker', async () => {
+    const result = await runParserCandidate({
+      workerPath: anydocWorkerPath,
+      source: new URL('./fixtures/prose.docx', import.meta.url),
+      workerArguments: ['docx'],
+      limits: { wallMilliseconds: 5_000, expandedBytes: 8 * 1024 * 1024 },
+    })
+
+    expect(result.outcome).toEqual({ kind: 'success' })
+    expect(result.hashes.native).toMatch(/^[a-f0-9]{64}$/)
+    expect(result.hashes.core).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('keeps PDF as a rejected control without loading a production parser route', async () => {
+    const result = await runParserCandidate({
+      workerPath: anydocWorkerPath,
+      source: new URL('./fixtures/csv-control-v1.csv', import.meta.url),
+      workerArguments: ['pdf'],
+    })
+
+    expect(result.outcome).toEqual({ kind: 'failure', error: 'pdf-control' })
   })
 
   it.each([

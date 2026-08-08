@@ -7,9 +7,9 @@ import type { Readable } from 'node:stream'
 import { ANydocFixtureResourceCeilings } from './fixture-manifest.js'
 
 export type ParserRunFailure =
-  | 'containment-unavailable' | 'cpu-limit' | 'expanded-too-large' | 'invalid-limit'
+  | 'backend-unavailable' | 'containment-unavailable' | 'cpu-limit' | 'expanded-too-large' | 'invalid-limit'
   | 'invalid-result' | 'memory-limit' | 'cleanup-failed' | 'result-too-large' | 'source-too-large'
-  | 'stderr-too-large' | 'stdout-too-large' | 'timeout' | 'worker-crash'
+  | 'pdf-control' | 'stderr-too-large' | 'stdout-too-large' | 'timeout' | 'worker-crash'
 
 export type ParserResourceLimits = { readonly [Key in keyof typeof ANydocFixtureResourceCeilings]: number }
 
@@ -163,7 +163,7 @@ async function runOne(options: ParserRunOptions): Promise<ParserRunResult> {
   const error = protocolFailure
   if (error !== undefined) return { outcome: { kind: 'failure', error }, hashes: {}, diagnostics: settled.diagnostics, metadata }
   const result = validateWorkerResult(settled.value, limits)
-  if ('failure' in result) return { outcome: { kind: 'failure', error: result.failure }, hashes: {}, diagnostics: [], metadata }
+  if ('failure' in result) return { outcome: { kind: 'failure', error: result.failure }, hashes: {}, diagnostics: result.diagnostics, metadata }
   try {
     return { outcome: { kind: 'success' }, hashes: { native: hash(result.value.native), core: hash(result.value.core) }, diagnostics: result.value.native.diagnostics, metadata }
   } catch {
@@ -278,18 +278,27 @@ class BoundedFrameReader {
   }
 }
 
-function validateWorkerResult(value: unknown, limits: ParserResourceLimits): { readonly value: ParserWorkerSuccess } | { readonly failure: ParserRunFailure } {
-  if (!isRecord(value) || value.kind !== 'success' || !isSuccessPayload(value.native) || !isSuccessPayload(value.core) || !isBoundedInteger(value.expandedBytes) || !isCount(value.diagnostics) || !isCount(value.assets)) return { failure: 'invalid-result' }
+function validateWorkerResult(value: unknown, limits: ParserResourceLimits): { readonly value: ParserWorkerSuccess } | { readonly failure: ParserRunFailure; readonly diagnostics: readonly string[] } {
+  if (!isRecord(value) || value.kind !== 'success' || !isSuccessPayload(value.native) || !isSuccessPayload(value.core) || !isBoundedInteger(value.expandedBytes) || !isCount(value.diagnostics) || !isCount(value.assets)) return invalidWorkerResult()
   const native = value.native
   const core = value.core
   const diagnosticsBytes = byteLength(native.diagnostics)
   const assetsBytes = assetBytes(native.assets)
-  if (value.expandedBytes > limits.expandedBytes) return { failure: 'expanded-too-large' }
-  if (!sameJson(native.diagnostics, core.diagnostics) || !sameJson(native.assets, core.assets)) return { failure: 'invalid-result' }
-  if (value.diagnostics.count !== native.diagnostics.length || value.diagnostics.byteLength !== diagnosticsBytes || value.assets.count !== native.assets.length || value.assets.byteLength !== assetsBytes) return { failure: 'invalid-result' }
-  if (native.assets.length > limits.assetCount || assetsBytes > limits.assetBytes) return { failure: 'invalid-result' }
-  try { canonicalJson(native); canonicalJson(core) } catch { return { failure: 'invalid-result' } }
+  if (value.expandedBytes > limits.expandedBytes) return { failure: 'expanded-too-large', diagnostics: native.diagnostics }
+  if (!sameJson(native.diagnostics, core.diagnostics) || !sameJson(native.assets, core.assets)) return invalidWorkerResult()
+  if (value.diagnostics.count !== native.diagnostics.length || value.diagnostics.byteLength !== diagnosticsBytes || value.assets.count !== native.assets.length || value.assets.byteLength !== assetsBytes) return invalidWorkerResult()
+  if (native.assets.length > limits.assetCount || assetsBytes > limits.assetBytes) return invalidWorkerResult()
+  const adapterFailure = adapterFailureOf(native.value)
+  if (adapterFailure !== undefined) return { failure: adapterFailure, diagnostics: native.diagnostics }
+  try { canonicalJson(native); canonicalJson(core) } catch { return invalidWorkerResult() }
   return { value: value as unknown as ParserWorkerSuccess }
+}
+
+function invalidWorkerResult(): { readonly failure: 'invalid-result'; readonly diagnostics: readonly string[] } { return { failure: 'invalid-result', diagnostics: [] } }
+
+function adapterFailureOf(value: unknown): Extract<ParserRunFailure, 'backend-unavailable' | 'pdf-control'> | undefined {
+  if (!isRecord(value) || !isRecord(value.outcome) || value.outcome.kind !== 'failure') return undefined
+  return value.outcome.error === 'backend-unavailable' || value.outcome.error === 'pdf-control' ? value.outcome.error : undefined
 }
 
 function isSuccessPayload(value: unknown): value is { readonly diagnostics: readonly string[]; readonly assets: readonly { readonly byteLength: number }[]; readonly value: unknown } {
