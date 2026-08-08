@@ -16,6 +16,7 @@ import { knowledgeAssertionsItemKey } from '../../src/knowledge/keys'
 import { createKnowledgeEdgeRecord, createKnowledgeEntityRecord, type KnowledgeEdgeRecord } from '../../src/knowledge/records'
 import { encodeKnowledgeRef, type KnowledgeRef } from '../../src/knowledge/refs'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 const indexerId = 'docs'
 const namespace = 'kb'
 
@@ -552,7 +553,7 @@ function chunkInput(sourceId: string, chunkId: string, ordinal: number, content:
 }
 
 function cruxChunk(sourceId: string, chunkId: string, ordinal: number, content: string, ns = namespace): CruxChunk {
-  return { namespace: ns, sourceId, chunkId, ordinal, content, metadata: {} }
+  return schema2TextChunk({ namespace: ns, sourceId, chunkId, ordinal, content, metadata: {} })
 }
 
 function chunkRef(sourceId: string, chunkId: string) {

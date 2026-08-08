@@ -7,6 +7,7 @@ import {
   setObservabilityTransport,
 } from "../../src/observability";
 import { inMemoryRecordStore, inMemorySearchStore } from "../../src/storage";
+import { schema2TextChunk, schema2TextDocument } from "../fixtures/schema2-stored-evidence";
 
 describe("indexing result correlation", () => {
   afterEach(() => {
@@ -24,7 +25,7 @@ describe("indexing result correlation", () => {
     });
 
     const result = await docs.indexDocuments([
-      { namespace: "kb", sourceId: "intro", content: "Hello indexing." },
+      schema2TextDocument({ namespace: "kb", sourceId: "intro", content: "Hello indexing." }),
     ]);
     await observe.flush();
     const span = transport.records.find(
@@ -51,7 +52,7 @@ describe("indexing result correlation", () => {
     });
 
     const result = await docs.indexDocuments(
-      [{ namespace: "kb", sourceId: "intro", content: "Hello dry run." }],
+      [schema2TextDocument({ namespace: "kb", sourceId: "intro", content: "Hello dry run." })],
       { dryRun: true },
     );
     await observe.flush();
@@ -80,14 +81,14 @@ describe("indexing result correlation", () => {
         records: inMemoryRecordStore(),
         search: inMemorySearchStore(),
       });
-      const chunk = {
+      const chunk = schema2TextChunk({
         namespace: "kb",
         sourceId: "intro",
         chunkId: "intro-1",
         ordinal: 0,
         content: "An existing chunk.",
         metadata: {},
-      };
+      });
 
       const result = dryRun
         ? await docs.indexChunks([chunk], { dryRun: true })
@@ -127,11 +128,11 @@ describe("indexing result correlation", () => {
     });
     const parserResult = {
       ok: true as const,
-      document: {
+      document: schema2TextDocument({
         namespace: "kb",
         sourceId: "intro",
         content: "Hello corpus.",
-      },
+      }),
     };
 
     const result = await docs.sync([parserResult], {
@@ -163,7 +164,7 @@ describe("indexing result correlation", () => {
     });
 
     const chunks = await docs.chunk([
-      { namespace: "kb", sourceId: "intro", content: "Hello indexing." },
+      schema2TextDocument({ namespace: "kb", sourceId: "intro", content: "Hello indexing." }),
     ]);
     const deleted = await docs.deleteSource("intro");
     const cleared = await docs.clear();

@@ -11,6 +11,7 @@ import { createKnowledgeEdgeRecord, type KnowledgeEdgeRecord } from '../../src/k
 import { inMemoryStorage, type JsonObject, type RecordStore } from '../../src/storage'
 import type { CruxChunk, CruxParentChunk } from '../../src/indexing/types'
 import type { KnowledgeRef } from '../../src/knowledge/refs'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'docs'
 const namespace = 'kb'
@@ -246,7 +247,7 @@ function chunk(input: {
   readonly content?: string
   readonly metadata?: Record<string, unknown>
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace,
     sourceId: 'guide',
     chunkId: input.chunkId,
@@ -254,7 +255,7 @@ function chunk(input: {
     content: input.content ?? input.chunkId,
     metadata: input.metadata ?? {},
     ...(input.parentId ? { parent: { parentId: input.parentId } } : {}),
-  }
+  })
 }
 
 function parent(input: {
