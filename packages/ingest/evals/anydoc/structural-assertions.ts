@@ -15,6 +15,7 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'link'; readonly text: string; readonly target: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'notes'; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'asset-count'; readonly count: number }
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'coordinate-kinds'; readonly kinds: readonly SourceCoordinate['kind'][] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-order'; readonly slides: readonly number[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-boundary'; readonly slide: number; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'sheet-order'; readonly sheets: readonly string[] }
@@ -49,15 +50,22 @@ export interface StructuralAssertionResult {
   readonly assertions: readonly AssertionResult[]
 }
 
-/** Schema-2 boundary for parser adapters. Native parser objects must not enter this evaluator. */
-export interface ParserNativeSchema2Facts {
-  readonly document?: IngestedDocument
-  readonly outcome?: EvaluationOutcome
+/** Parser-adapter facts are typed but intentionally independent from Core's document model. */
+export type ParserNativeFact = WithoutIdentity<StructuralAssertion>
+
+export interface ParserNativeFacts {
+  readonly outcome: EvaluationOutcome
+  readonly facts: readonly ParserNativeFact[]
 }
 
-/** Assert a parser adapter's schema-2 projection before Core consumes it. */
-export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: ParserNativeSchema2Facts): StructuralAssertionResult {
-  return assertStructuralFacts(expected, actual.document, actual.outcome ?? { kind: 'success' })
+/** Assert a parser's native typed fact surface before its Core projection exists. */
+export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: ParserNativeFacts): StructuralAssertionResult {
+  const results = [outcomeResult(expected.expectedOutcome, actual.outcome)]
+  for (const assertion of expected.assertions) {
+    const native = actual.facts.find((fact) => fact.kind === assertion.kind)
+    results.push(result(assertion.id, assertion.role, native !== undefined && equal(native, withoutIdentity(assertion)), withoutIdentity(assertion), native))
+  }
+  return completedResult(expected.fixtureId, actual.outcome, results, actual.facts.length > 0)
 }
 
 /** Assert the same facts after Core's schema-2 projection. */
@@ -77,8 +85,23 @@ function assertStructuralFacts(expected: ExpectedFactManifest, document: Ingeste
     }
   }
 
+  return completedResult(expected.fixtureId, outcome, results, document !== undefined)
+}
+
+/** Reports required facts that passed natively but were lost by the Core projection. */
+export function compareProjectionFacts(native: StructuralAssertionResult, core: StructuralAssertionResult): readonly { readonly id: string; readonly role: AssertionRole }[] {
+  const coreById = new Map(core.assertions.map((assertion) => [assertion.id, assertion]))
+  return native.assertions
+    .filter((assertion) => assertion.id !== 'outcome' && assertion.passed && !coreById.get(assertion.id)?.passed)
+    .map((assertion) => ({ id: assertion.id, role: assertion.role }))
+}
+
+function completedResult(fixtureId: string, outcome: EvaluationOutcome, results: readonly AssertionResult[], hasFacts: boolean): StructuralAssertionResult {
+  const required = results.filter((result) => result.id !== 'outcome' && result.role === 'required')
+  const hasRequiredFacts = required.length > 0
   const passed = results.every((result) => result.passed || result.role === 'informational')
-  return { fixtureId: expected.fixtureId, passed, admitted: outcome.kind === 'success' && passed, assertions: results }
+    && (outcome.kind !== 'success' || (hasFacts && hasRequiredFacts))
+  return { fixtureId, passed, admitted: outcome.kind === 'success' && passed, assertions: results }
 }
 
 function outcomeResult(expected: EvaluationOutcome, actual: EvaluationOutcome): AssertionResult {
@@ -94,6 +117,7 @@ function assertFact(assertion: StructuralAssertion, document: IngestedDocument):
     case 'link': return compare(assertion, links(document).some((link) => link.text === assertion.text && link.target === assertion.target), true)
     case 'notes': return compare(assertion, noteText(document), assertion.text)
     case 'asset-count': return compare(assertion, document.assets.length, assertion.count)
+    case 'coordinate-kinds': return compare(assertion, coordinateKinds(document), assertion.kinds)
     case 'slide-order': return compare(assertion, document.blocks.filter(isSlide).map((slide) => slide.slide), assertion.slides)
     case 'slide-boundary': return compare(assertion, slideText(document, assertion.slide), assertion.text)
     case 'sheet-order': return compare(assertion, document.blocks.filter(isSheet).sort((a, b) => a.index - b.index).map((sheet) => sheet.sheet), assertion.sheets)
@@ -131,7 +155,10 @@ function headings(document: IngestedDocument): readonly { readonly level: number
 }
 
 function noteText(document: IngestedDocument): readonly string[] {
-  return document.blocks.filter(isSlide).flatMap((slide) => slide.notes.map((note) => note.text))
+  return [
+    ...textBlocks(document.blocks).filter((block) => block.role === 'note').map((block) => block.text),
+    ...document.blocks.filter(isSlide).flatMap((slide) => slide.notes.map((note) => note.text)),
+  ]
 }
 
 function lists(document: IngestedDocument): readonly { readonly ordered: boolean; readonly depth: number; readonly text: readonly string[] }[] {
@@ -159,6 +186,26 @@ function pageBlockText(document: IngestedDocument, page: number, block: number):
 function slideText(document: IngestedDocument, slide: number): readonly string[] | undefined {
   const candidate = document.blocks.filter(isSlide).find((item) => item.slide === slide)
   return candidate ? textBlocks(candidate.blocks).map((block) => block.text) : undefined
+}
+
+function coordinateKinds(document: IngestedDocument): readonly SourceCoordinate['kind'][] {
+  const coordinates = [
+    ...document.blocks.flatMap(blockCoordinates),
+    ...document.assets.map((asset) => asset.coordinate),
+  ]
+  return [...new Set(coordinates.map((coordinate) => coordinate.kind))].sort()
+}
+
+function blockCoordinates(block: DocumentBlock): SourceCoordinate[] {
+  const nested = block.kind === 'text' ? []
+    : block.kind === 'list' ? block.items.flatMap((item) => item.blocks.flatMap((child) => childCoordinates(child)))
+      : block.kind === 'table' ? block.rows.flatMap((row) => row.flatMap((cell) => [cell.coordinate, ...cell.blocks.flatMap(childCoordinates)]))
+        : block.blocks.flatMap(childCoordinates)
+  return [block.coordinate, ...nested]
+}
+
+function childCoordinates(block: TextBlock | ListBlock | TableBlock): SourceCoordinate[] {
+  return blockCoordinates(block as DocumentBlock)
 }
 
 function textBlocks(blocks: readonly (DocumentBlock | TextBlock | ListBlock | TableBlock)[]): TextBlock[] {
@@ -195,10 +242,43 @@ function compare(assertion: StructuralAssertion, actual: unknown, expected: unkn
 function failed(id: string, role: AssertionRole, expected: unknown, actual: unknown): AssertionResult { return result(id, role, false, expected, actual) }
 function result(id: string, role: AssertionRole, passed: boolean, expected: unknown, actual: unknown): AssertionResult { return { id, role, passed, expected: bounded(expected), actual: bounded(actual) } }
 function equal(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right) }
+function withoutIdentity(assertion: StructuralAssertion): ParserNativeFact { const { id: _id, role: _role, ...fact } = assertion; return fact as ParserNativeFact }
+type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role'> : never
 
+const MAX_EVIDENCE_DEPTH = 3
+const MAX_EVIDENCE_ITEMS = 20
+const MAX_EVIDENCE_STRING_BYTES = 240
+
+/** Canonical, deeply bounded evidence safe to retain in deterministic eval output. */
 function bounded(value: unknown, depth = 0): unknown {
-  if (typeof value === 'string') return value.length > 240 ? `${value.slice(0, 240)}…` : value
-  if (value === null || typeof value !== 'object' || depth === 3) return value
-  if (Array.isArray(value)) return value.slice(0, 20).map((item) => bounded(item, depth + 1))
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 20).map(([key, item]) => [key, bounded(item, depth + 1)]))
+  if (typeof value === 'string') return boundedString(value)
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value
+  if (typeof value === 'bigint') return `${value}n`
+  if (typeof value === 'undefined') return { truncated: true, reason: 'undefined' }
+  if (typeof value === 'function' || typeof value === 'symbol') return { truncated: true, reason: typeof value }
+  if (depth >= MAX_EVIDENCE_DEPTH) return { truncated: true, reason: 'depth' }
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_EVIDENCE_ITEMS).map((item) => bounded(item, depth + 1))
+    return value.length > MAX_EVIDENCE_ITEMS
+      ? [...items, { truncated: true, omitted: value.length - MAX_EVIDENCE_ITEMS }]
+      : items
+  }
+  if (!isPlainRecord(value)) return { truncated: true, reason: 'non-plain-object' }
+
+  const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
+  const boundedEntries = entries.slice(0, MAX_EVIDENCE_ITEMS).map(([key, item]) => [key, bounded(item, depth + 1)] as const)
+  if (entries.length > MAX_EVIDENCE_ITEMS) boundedEntries.push(['$truncated', { truncated: true, omitted: entries.length - MAX_EVIDENCE_ITEMS }])
+  return Object.fromEntries(boundedEntries)
+}
+
+function boundedString(value: string): string | { readonly truncated: true; readonly omittedBytes: number; readonly value: string } {
+  const bytes = new TextEncoder().encode(value)
+  if (bytes.byteLength <= MAX_EVIDENCE_STRING_BYTES) return value
+  const prefix = new TextDecoder().decode(bytes.slice(0, MAX_EVIDENCE_STRING_BYTES))
+  return { truncated: true, omittedBytes: bytes.byteLength - new TextEncoder().encode(prefix).byteLength, value: prefix }
+}
+
+function isPlainRecord(value: object): value is Record<string, unknown> {
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }

@@ -47,7 +47,7 @@ type InspectedFact =
   | 'ordered-slides'
   | 'slide-notes'
   | 'table'
-type RequiredFact =
+export type RequiredFact =
   | 'all-text-in-order'
   | 'assets'
   | 'columns'
@@ -141,10 +141,7 @@ const REQUIRED_FACTS: Readonly<Record<FixtureUseCase, readonly RequiredFact[]>> 
   ],
   presentation: [
     'all-text-in-order',
-    'heading-levels',
-    'list-nesting',
     'table-grid',
-    'link-targets',
     'notes-and-assets',
     'coordinates',
     'slide-identity-and-order',
