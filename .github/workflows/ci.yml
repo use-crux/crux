@@ -256,7 +256,10 @@ jobs:
         if: always()
         run: |
           test -f artifacts/anydoc-containment.json
-          test "$(wc -c < artifacts/anydoc-containment.json)" -le 1024
+          test "$(wc -c < artifacts/anydoc-containment.json)" -le 8192
+          test "$(jq '.hostile | length' artifacts/anydoc-containment.json)" -eq 10
+          jq -e 'all(.hostile[]; .cleaned == true and .populated == false)' artifacts/anydoc-containment.json
+          jq -e '[.hostile[].name] | sort == ["abort","cpu","crash","descendants","filesystem","memory","network","pids","privileges","wall"]' artifacts/anydoc-containment.json
 
       - name: Upload containment evidence
         if: always()

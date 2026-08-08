@@ -45,7 +45,7 @@ func TestHostileContainmentSpecContract(t *testing.T) {
 		name string
 		ok   bool
 	}{
-		{"filesystem fixed input and private temporary directory", len(spec.BindReadOnlyPaths) == 2 && len(spec.ReadWritePaths) == 1 && spec.ProtectSystem == "strict" && spec.ProtectHome && spec.PrivateTmp},
+		{"filesystem fixed input and private temporary directory", len(spec.BindReadOnlyPaths) == 2 && len(spec.ReadWritePaths) == 1 && same(spec.InaccessiblePaths, []string{"/opt", "/srv", "/var/lib"}) && spec.ProtectSystem == "strict" && spec.ProtectHome && spec.PrivateTmp},
 		{"network IPv4 IPv6 and DNS denial", spec.PrivateNetwork && same(spec.RestrictAddressFamilies, []string{"AF_UNIX"})},
 		{"no new privileges capabilities uid namespace", spec.NoNewPrivileges && properties["DynamicUser"] == true && properties["PrivateUsers"] == true && properties["CapabilityBoundingSet"] == uint64(0) && properties["AmbientCapabilities"] == uint64(0)},
 		{"memory and pids bounded", spec.MemoryMax == 64<<20 && spec.MemorySwapMax == 0 && spec.TasksMax == 8},
@@ -56,5 +56,20 @@ func TestHostileContainmentSpecContract(t *testing.T) {
 				t.Fatal("containment property missing")
 			}
 		})
+	}
+}
+
+func TestHostileProbeCannotBeSelectedByOrdinaryServiceSpec(t *testing.T) {
+	spec, err := newTestServiceSpec("/run/crux-anydoc-test/input/source", "/run/crux-anydoc-test/runtime", "/run/crux-anydoc-test/private", Limits{64 << 20, 8, 25, time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.probe != nil {
+		t.Fatal("ordinary service spec unexpectedly selected the integration probe")
+	}
+	properties := propertiesByName(systemdProperties(spec))
+	exec, ok := properties["ExecStart"].([]execStart)
+	if !ok || len(exec) != 1 || exec[0].Path != spec.Command[0] {
+		t.Fatal("ordinary service spec did not retain the attested production runner")
 	}
 }

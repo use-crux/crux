@@ -240,15 +240,25 @@ func (l Limits) Clamp() Limits {
 }
 
 type ServiceSpec struct {
-	Command, Environment, ReadOnlyPaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
-	MemoryMax, MemorySwapMax                                                                        int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                                   int
-	RuntimeMax                                                                                      time.Duration
-	KillMode, ProtectSystem                                                                         string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                         bool
-	NodeSHA256                                                                                      string
-	Node                                                                                            assets.AttestedNode
-	runtimeTreeDigest                                                                               string
+	Command, Environment, ReadOnlyPaths, InaccessiblePaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	MemoryMax, MemorySwapMax                                                                                           int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                                                      int
+	RuntimeMax                                                                                                         time.Duration
+	KillMode, ProtectSystem                                                                                            string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                                            bool
+	NodeSHA256                                                                                                         string
+	Node                                                                                                               assets.AttestedNode
+	runtimeTreeDigest                                                                                                  string
+	probe                                                                                                              *containmentProbe
+}
+
+// containmentProbe is an unexported, process-local seal for the host integration
+// executable. It cannot be constructed through the public ingestion or backend
+// APIs and is never present in production service specifications.
+type containmentProbe struct {
+	executable string
+	action     string
+	resultPath string
 }
 
 type LaunchDependency struct {
@@ -294,7 +304,7 @@ func newServiceSpec(hostSource, runtime, tmp, nodePath, nodeSHA256 string, node 
 	}
 	l = l.Clamp()
 	runner := filepath.Join(runtimeTarget, "runner.mjs")
-	return ServiceSpec{Command: []string{nodePath, runner}, NodeSHA256: nodeSHA256, Node: node, runtimeTreeDigest: digest, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, BindReadOnlyPaths: []string{runtime + ":" + runtimeTarget, hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	return ServiceSpec{Command: []string{nodePath, runner}, NodeSHA256: nodeSHA256, Node: node, runtimeTreeDigest: digest, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, InaccessiblePaths: []string{"/opt", "/srv", "/var/lib"}, BindReadOnlyPaths: []string{runtime + ":" + runtimeTarget, hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 // NewInstalledServiceSpec binds containment to a runtime minted by assets,
@@ -323,12 +333,15 @@ type SandboxReport struct {
 	KillMode, ProtectSystem                                                   string
 	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome   bool
 	ReadOnlyPaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	InaccessiblePaths                                                         []string
 	CapabilityBoundingSet, AmbientCapabilities                                uint64
 	RestrictAddressFamiliesAllow                                              bool
 	DynamicUser                                                               bool
 	UID                                                                       uint64
 	PrivateUsers                                                              bool
 	ProtectProc, ProcSubset                                                   string
+	ServiceResult                                                             string
+	ExecMainStatus                                                            int
 	Populated                                                                 bool
 	MemoryCurrent                                                             int64
 	MemoryEvents                                                              map[string]int64
@@ -640,7 +653,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 			return false
 		}
 	}
-	return r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	return r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

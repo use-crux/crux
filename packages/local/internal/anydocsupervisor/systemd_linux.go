@@ -227,7 +227,13 @@ func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.U
 }
 
 func validBackendSpec(spec ServiceSpec) bool {
-	if len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1]) || spec.NodeSHA256 == "" || len(spec.runtimeTreeDigest) != sha256.Size*2 || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 0 || len(spec.BindReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+	if spec.probe == nil && (len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1])) {
+		return false
+	}
+	if spec.probe != nil && (spec.probe.executable == "" || spec.probe.action == "" || spec.probe.resultPath == "") {
+		return false
+	}
+	if spec.NodeSHA256 == "" || len(spec.runtimeTreeDigest) != sha256.Size*2 || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 0 || len(spec.BindReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.InaccessiblePaths, []string{"/opt", "/srv", "/var/lib"}) || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
 		return false
 	}
 	if spec.Command[1] != filepath.Join(runtimeTarget, "runner.mjs") {
@@ -276,10 +282,14 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	if len(spec.ReadOnlyPaths) >= 2 {
 		sockets = spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-2:]
 	}
+	command := []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}
+	if spec.probe != nil {
+		command = []execStart{{Path: spec.probe.executable, Args: append([]string{spec.probe.executable, "-test.run=^TestContainmentProbeProcess$", "--", spec.probe.action, spec.probe.resultPath}, sockets...), Fail: false}}
+	}
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
-		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}},
+		{"ExecStart", command},
 		{"Environment", spec.Environment},
 		{"UnsetEnvironment", blockedNodeEnvironment},
 		{"CPUAccounting", spec.CPUAccounting},
@@ -303,6 +313,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"ProtectSystem", spec.ProtectSystem},
 		{"ProtectHome", spec.ProtectHome},
 		{"ReadOnlyPaths", spec.ReadOnlyPaths},
+		{"InaccessiblePaths", spec.InaccessiblePaths},
 		{"BindReadOnlyPaths", spec.BindReadOnlyPaths},
 		{"ReadWritePaths", spec.ReadWritePaths},
 	}
@@ -454,7 +465,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -555,6 +566,9 @@ func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
 		return errors.New("authorization unavailable")
 	}
 	if u.resultSocket == "" || u.resultListener == nil {
+		return errors.New("authorization unavailable")
+	}
+	if u.tmp == "" || u.fs.Chown(u.tmp, int(report.UID), 0) != nil || u.fs.Chmod(u.tmp, 0o700) != nil {
 		return errors.New("authorization unavailable")
 	}
 	if err := u.fs.Chown(u.socket, int(report.UID), 0); err != nil {
@@ -814,6 +828,10 @@ func uintValue(p map[string]any, key string) uint64 {
 		return uint64(v)
 	case uint64:
 		return v
+	case int32:
+		if v > 0 {
+			return uint64(v)
+		}
 	case int:
 		if v > 0 {
 			return uint64(v)

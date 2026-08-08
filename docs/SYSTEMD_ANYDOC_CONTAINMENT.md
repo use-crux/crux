@@ -19,8 +19,13 @@ sudo CRUX_SYSTEMD_INTEGRATION=1 \
 
 The CI job uses this exact shape. It must not replace systemd with a sandbox
 emulator or silently skip an unavailable system bus. The evidence artifact is
-bounded JSON containing only the input hash, byte counts, observed outcome,
+bounded JSON containing only the input hash, byte counts, observed outcomes,
 effective cgroup limits, memory events/current use, CPU/wall use, and cleanup
-status; it intentionally excludes document bytes and host paths. The
-integration service is capped at 128 MiB (one quarter of the production
-ceiling) and eight tasks.
+status; it intentionally excludes document bytes and host paths. In addition
+to the canonical parse it sequentially exercises network and DNS denial,
+filesystem visibility and write denial, privilege escalation, task exhaustion,
+memory and swap enforcement, cumulative CPU and wall ceilings, worker failure,
+caller cancellation, and descendant cleanup. Each hostile case runs in a fresh
+production transient-unit sandbox through an internal probe seal that cannot be
+selected by ingestion callers. Services are capped at 128 MiB or less and eight
+tasks, and the entire CI job remains bounded to ten minutes.
