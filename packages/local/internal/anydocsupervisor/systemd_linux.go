@@ -791,18 +791,36 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 				_ = conn.SetDeadline(deadline)
 			}
 			result, decodeErr := DecodeResult(conn)
+			if decodeErr != nil {
+				var sup *SupervisorError
+				if errors.As(decodeErr, &sup) && sup.Code == ErrInvalidFrame {
+					decodeErr = resultValidation("decode/frame-json", "unknown")
+				} else {
+					decodeErr = resultValidation("payload/accounting-validation", "unknown")
+				}
+			}
 			if decodeErr == nil && result.Request != expected {
-				decodeErr = errors.New("result capability mismatch")
+				decodeErr = resultValidation("request-binding", "mismatch")
 			}
 			if decodeErr == nil {
-				_, decodeErr = u.RefreshAccounting(ctx)
+				_, err := u.RefreshAccounting(ctx)
+				if err != nil {
+					decodeErr = resultValidation("accounting-refresh", "unknown")
+				}
 			}
 			if decodeErr == nil {
-				_, decodeErr = conn.Write([]byte("ACK\n"))
+				_, err := conn.Write([]byte("ACK\n"))
+				if err != nil {
+					decodeErr = resultValidation("ack-write", "unknown")
+				}
 			}
 			_ = conn.Close()
 			if decodeErr != nil {
-				return Result{}, errors.New("invalid result")
+				var validation *ResultValidationError
+				if errors.As(decodeErr, &validation) {
+					return Result{}, closedWith(ErrInvalidResult, decodeErr)
+				}
+				return Result{}, closedWith(ErrInvalidResult, resultValidation("decode/frame-json", "unknown"))
 			}
 			return result, nil
 		}

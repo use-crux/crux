@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -92,6 +93,41 @@ func (e *SupervisorError) Error() string           { return string(e.Code) }
 func closed(code ErrorCode) error                  { return &SupervisorError{Code: code} }
 func closedWith(code ErrorCode, cause error) error { return &SupervisorError{Code: code, cause: cause} }
 func (e *SupervisorError) Unwrap() error           { return e.cause }
+
+type ResultValidationError struct {
+	Stage      string
+	ReasonCode string
+}
+
+func (e *ResultValidationError) Error() string {
+	return "result-validation " + e.Stage + ":" + e.ReasonCode
+}
+
+func resultValidation(stage, reason string) error {
+	if !validResultValidationStage(stage) {
+		stage = "unknown"
+	}
+	if !validResultValidationReason(reason) {
+		reason = "unknown"
+	}
+	return &ResultValidationError{Stage: stage, ReasonCode: reason}
+}
+
+func validResultValidationStage(stage string) bool {
+	switch stage {
+	case "decode/frame-json", "request-binding", "payload/accounting-validation", "accounting-refresh", "ack-write":
+		return true
+	}
+	return false
+}
+
+func validResultValidationReason(reason string) bool {
+	switch reason {
+	case "mismatch":
+		return true
+	}
+	return false
+}
 
 var errCPUAccounting = errors.New("cpu accounting unavailable")
 
@@ -785,6 +821,80 @@ func errorCode(err error) ErrorCode {
 	}
 	return OutcomeSuccess
 }
+func safeExecutionFailure(err error, terminal TerminalReport) string {
+	var validation *ResultValidationError
+	hasValidation := errors.As(err, &validation)
+
+	var errorStr string
+	code := errorCode(err)
+	switch code {
+	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
+		errorStr = string(code)
+	default:
+		errorStr = "unknown"
+	}
+
+	outcome := string(terminal.Outcome)
+	switch terminal.Outcome {
+	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
+	default:
+		outcome = "unknown"
+	}
+
+	serviceResult := terminal.PreStop.ServiceResult
+	switch serviceResult {
+	case "success", "timeout", "oom-kill", "signal", "exit-code", "core-dump", "resources":
+	default:
+		serviceResult = "unknown"
+	}
+
+	oomKilled := terminal.PreStop.MemoryEvents["oom_kill"] > 0
+	pidsLimited := terminal.PreStop.PIDsEvents["max"] > 0
+
+	var stage, reason string
+	if hasValidation {
+		stage = validation.Stage
+		if !validResultValidationStage(stage) {
+			stage = "unknown"
+		}
+		reason = validation.ReasonCode
+		if !validResultValidationReason(reason) {
+			reason = "unknown"
+		}
+	} else {
+		stage = safeRunnerStage(terminal.PreStop.ExecMainStatus)
+		reason = ""
+	}
+
+	out := "error=" + errorStr + " outcome=" + outcome + " service=" + serviceResult + " stage=" + stage
+	if hasValidation {
+		out += " reason=" + reason
+	}
+	out += " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+	return out
+}
+func safeRunnerStage(status int) string {
+	switch status {
+	case 0:
+		return "success"
+	case 70:
+		return "authorization"
+	case 71:
+		return "request-validation"
+	case 72:
+		return "source-validation"
+	case 73:
+		return "native-load"
+	case 74:
+		return "conversion-projection"
+	case 75:
+		return "result-write"
+	case 76:
+		return "acknowledgement"
+	default:
+		return "unknown"
+	}
+}
 func outcomeCode(out error) error {
 	if errors.Is(out, errCPUAccounting) {
 		return closed(ErrContainmentUnavailable)
@@ -794,6 +904,10 @@ func outcomeCode(out error) error {
 	}
 	if errors.Is(out, context.Canceled) {
 		return closed(ErrAborted)
+	}
+	var validation *ResultValidationError
+	if errors.As(out, &validation) {
+		return closedWith(ErrInvalidResult, validation)
 	}
 	if out != nil {
 		return closed(ErrWorkerCrash)

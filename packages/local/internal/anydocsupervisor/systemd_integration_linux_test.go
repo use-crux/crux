@@ -106,29 +106,6 @@ func safeRunnerDiagnostic(err error, terminal TerminalReport) string {
 	return "error=" + safeExecutionError(err) + " outcome=" + outcome + " service=" + serviceResult + " stage=" + safeRunnerStage(terminal.PreStop.ExecMainStatus) + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
 }
 
-func safeRunnerStage(status int) string {
-	switch status {
-	case 0:
-		return "success"
-	case 70:
-		return "authorization"
-	case 71:
-		return "request-validation"
-	case 72:
-		return "source-validation"
-	case 73:
-		return "native-load"
-	case 74:
-		return "conversion-projection"
-	case 75:
-		return "result-write"
-	case 76:
-		return "acknowledgement"
-	default:
-		return "unknown"
-	}
-}
-
 func safeExecutionError(err error) string {
 	var supervisorError *SupervisorError
 	if errors.As(err, &supervisorError) {
@@ -174,6 +151,49 @@ func safeContainmentReason(reason string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func TestSafeExecutionFailurePreservesHostResultValidationOverAckStage(t *testing.T) {
+	// Host rejected the worker result before ACK; the worker can still exit at
+	// acknowledgement (76). Diagnostics must keep the fixed host stage/reason.
+	err := closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
+	preserved := outcomeCode(err)
+
+	var validation *ResultValidationError
+	if !errors.As(preserved, &validation) {
+		t.Fatalf("outcomeCode/Finish dropped ResultValidationError: %T %v", preserved, preserved)
+	}
+	if validation.Stage != "request-binding" || validation.ReasonCode != "mismatch" {
+		t.Fatalf("validation codes = %q/%q", validation.Stage, validation.ReasonCode)
+	}
+
+	terminal := TerminalReport{
+		Outcome: errorCode(preserved),
+		PreStop: SandboxReport{
+			ExecMainStatus: 76,
+			ServiceResult:  "exit-code",
+		},
+	}
+	got := safeExecutionFailure(preserved, terminal)
+	const want = "error=invalid-result outcome=invalid-result service=exit-code stage=request-binding reason=mismatch oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+	if strings.Contains(got, "acknowledgement") {
+		t.Fatalf("worker ack stage masked host validation: %q", got)
+	}
+
+	unsafe := "/private/path nonce=secret input=customer.docx"
+	for _, bad := range []error{
+		closedWith(ErrInvalidResult, &ResultValidationError{Stage: unsafe, ReasonCode: "mismatch"}),
+		closedWith(ErrInvalidResult, &ResultValidationError{Stage: "request-binding", ReasonCode: unsafe}),
+		closedWith(ErrInvalidResult, errors.New(unsafe)),
+	} {
+		got := safeExecutionFailure(outcomeCode(bad), terminal)
+		if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
+			t.Fatalf("diagnostic leaked unsafe details: %q", got)
+		}
 	}
 }
 
