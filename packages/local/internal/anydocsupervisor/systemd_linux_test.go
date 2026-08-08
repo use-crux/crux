@@ -111,13 +111,20 @@ func TestSystemdBackendFailsClosedForUnavailablePermissionAndCanceledContexts(t 
 }
 
 func TestContainmentDiagnosticRedactsDBusDetails(t *testing.T) {
-	err := containment("start-transient-unit", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{"/private/path secret"}})
-	var diagnostic *ContainmentError
-	if !errors.As(err, &diagnostic) || diagnostic.Stage != "start-transient-unit" || diagnostic.ReasonCode != "dbus-invalid-args" {
-		t.Fatalf("unsafe diagnostic %#v", diagnostic)
-	}
-	if strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "secret") {
-		t.Fatal("diagnostic leaked D-Bus body")
+	for _, test := range []struct{ name, want string }{{"invalid", "dbus-invalid-args"}, {"unknown", "dbus-other"}} {
+		t.Run(test.name, func(t *testing.T) {
+			err := containment("start-transient-unit", dbus.Error{Name: "org.freedesktop.DBus.Error." + test.name, Body: []any{"/private/path secret"}})
+			if test.name == "invalid" {
+				err = containment("start-transient-unit", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{"/private/path secret"}})
+			}
+			var diagnostic *ContainmentError
+			if !errors.As(err, &diagnostic) || diagnostic.Stage != "start-transient-unit" || diagnostic.ReasonCode != test.want {
+				t.Fatalf("unsafe diagnostic %#v", diagnostic)
+			}
+			if strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "secret") {
+				t.Fatal("diagnostic leaked D-Bus body")
+			}
+		})
 	}
 }
 

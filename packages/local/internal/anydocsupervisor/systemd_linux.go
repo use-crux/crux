@@ -45,7 +45,7 @@ func containmentReason(err error) string {
 		case "org.freedesktop.DBus.Error.AccessDenied":
 			return "dbus-access-denied"
 		default:
-			return "dbus-" + strings.ReplaceAll(strings.TrimPrefix(dbusErr.Name, "org.freedesktop.DBus.Error."), ".", "-")
+			return "dbus-other"
 		}
 	}
 	return "io-or-systemd"
@@ -185,7 +185,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	}
 	name, err := transientUnitName()
 	if err != nil {
-		return nil, err
+		return nil, containment("transient-unit-name", err)
 	}
 	socketPath, listener, err := b.listen(spec, ".a-")
 	if err != nil {
@@ -194,17 +194,20 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	if err := b.fs.Chmod(socketPath, 0); err != nil {
 		_ = listener.Close()
 		_ = os.Remove(socketPath)
-		return nil, errors.New("authorization channel unavailable")
+		return nil, containment("authorization-socket-chmod", err)
 	}
 	resultPath, resultListener, err := b.listen(spec, ".r-")
-	if err != nil || b.fs.Chmod(resultPath, 0) != nil {
+	if err != nil {
 		_ = listener.Close()
 		_ = os.Remove(socketPath)
-		if resultListener != nil {
-			_ = resultListener.Close()
-		}
-		_ = os.Remove(resultPath)
 		return nil, containment("result-socket", err)
+	}
+	if err := b.fs.Chmod(resultPath, 0); err != nil {
+		_ = listener.Close()
+		_ = os.Remove(socketPath)
+		_ = resultListener.Close()
+		_ = os.Remove(resultPath)
+		return nil, containment("result-socket-chmod", err)
 	}
 	defer func() {
 		if listener != nil {
@@ -230,7 +233,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	if err := u.waitActive(ctx); err != nil {
 		_ = u.Stop(context.Background())
 		_ = u.Cleanup(context.Background())
-		return nil, err
+		return nil, containment("wait-active", err)
 	}
 	listener = nil
 	resultListener = nil
