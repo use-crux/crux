@@ -242,6 +242,9 @@ type Backend interface {
 type capabilityAuthorizer interface {
 	AuthorizeCapability(context.Context, Request) error
 }
+type resultReceiver interface {
+	ReceiveResult(context.Context) (Result, error)
+}
 type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
 type verifiedServiceSpec interface {
 	VerifiedServiceSpec(ServiceSpec) ServiceSpec
@@ -336,6 +339,33 @@ func (r *Run) Authorize() error {
 		return closed(ErrContainmentUnavailable)
 	}
 	return nil
+}
+
+// ReceiveResult accepts exactly one authenticated worker result, acknowledges
+// it, and leaves lifecycle cleanup to Finish.
+func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
+	if r == nil {
+		return Result{}, closed(ErrReplay)
+	}
+	receiver, ok := r.unit.(resultReceiver)
+	if !ok {
+		return Result{}, closed(ErrContainmentUnavailable)
+	}
+	result, err := receiver.ReceiveResult(ctx)
+	if err != nil {
+		return Result{}, closed(ErrWorkerCrash)
+	}
+	return result, nil
+}
+
+// Execute receives the one permitted result and always tears down its unit.
+func (r *Run) Execute(ctx context.Context) (Result, error) {
+	result, err := r.ReceiveResult(ctx)
+	finishErr := r.Finish(ctx, err)
+	if finishErr != nil {
+		return Result{}, finishErr
+	}
+	return result, err
 }
 func (r *Run) Finish(_ context.Context, out error) error {
 	if r == nil {

@@ -42,7 +42,7 @@ try {
   // Recreate generated output so workers removed by a clean migration cannot
   // survive a rebuild as stale, accidentally packaged artifacts.
   await rm(distDir, { recursive: true, force: true })
-  const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult, runtimeWorkerResult] = await Promise.all([
+  const [evalResult, resolverResult, indexerResult, semanticIndexerResult, runtimeIndexerResult, runtimeWorkerResult, anydocRunnerResult] = await Promise.all([
     build({
       ...shared,
       entryPoints: [resolve(rootDir, 'bin/eval-coordinator.ts')],
@@ -77,6 +77,14 @@ try {
       entryPoints: [resolve(rootDir, 'bin/runtime-worker.ts')],
       outfile: resolve(rootDir, 'dist/runtime-worker.mjs'),
     }),
+    build({
+      ...shared,
+      entryPoints: [resolve(rootDir, 'bin/anydoc-runner.ts')],
+      outfile: resolve(rootDir, 'dist/anydoc-runner.mjs'),
+      // Anydoc is a pinned N-API package. Keep it external so its platform
+      // addon is extracted beside the runner rather than bundled as JS.
+      external: [...shared.external, '@firecrawl/anydoc'],
+    }),
   ])
   console.log(
     `Built dist/eval-coordinator.mjs (${evalResult.errors.length} errors), ` +
@@ -84,7 +92,8 @@ try {
       `dist/project-indexer.mjs (${indexerResult.errors.length} errors), ` +
       `dist/project-semantic-indexer.mjs (${semanticIndexerResult.errors.length} errors), ` +
       `dist/project-runtime-indexer.mjs (${runtimeIndexerResult.errors.length} errors), ` +
-      `dist/runtime-worker.mjs (${runtimeWorkerResult.errors.length} errors)`,
+      `dist/runtime-worker.mjs (${runtimeWorkerResult.errors.length} errors), ` +
+      `dist/anydoc-runner.mjs (${anydocRunnerResult.errors.length} errors)`,
   )
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)

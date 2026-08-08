@@ -5,6 +5,7 @@ package anydocsupervisor
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"reflect"
@@ -77,11 +78,11 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal("invalid D-Bus FD property")
 	}
 	start, ok := got["ExecStart"].([]execStart)
-	if !ok || len(start) != 1 || start[0].Path != "/usr/lib/crux/anydoc-runner" || len(start[0].Args) != 2 || start[0].Args[0] != start[0].Path || start[0].Args[1] != got["ReadOnlyPaths"].([]string)[2] {
+	if !ok || len(start) != 1 || start[0].Path != "/usr/lib/crux/anydoc-runner" || len(start[0].Args) != 3 || start[0].Args[0] != start[0].Path || start[0].Args[1] != got["ReadOnlyPaths"].([]string)[2] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[3] {
 		t.Fatalf("unsafe ExecStart %#v", got["ExecStart"])
 	}
 	paths := got["ReadOnlyPaths"].([]string)
-	if len(paths) != 3 || paths[0] != input || paths[1] != runtime || !strings.HasPrefix(paths[2], runtime+"/") {
+	if len(paths) != 4 || paths[0] != input || paths[1] != runtime || !strings.HasPrefix(paths[2], runtime+"/.a-") || !strings.HasPrefix(paths[3], runtime+"/.r-") {
 		t.Fatalf("socket bind paths %#v", paths)
 	}
 }
@@ -168,6 +169,45 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	}
 }
 
+func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
+	path := t.TempDir() + "/result.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+	done := make(chan struct {
+		result Result
+		err    error
+	}, 1)
+	go func() {
+		result, receiveErr := u.ReceiveResult(context.Background())
+		done <- struct {
+			result Result
+			err    error
+		}{result, receiveErr}
+	}()
+	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := EncodeResult(conn, Result{Version: ProtocolVersion, OK: true, Payload: []byte("ok")}); err != nil {
+		t.Fatal(err)
+	}
+	ack := make([]byte, 4)
+	if _, err := io.ReadFull(conn, ack); err != nil || string(ack) != "ACK\n" {
+		t.Fatalf("ack = %q, %v", ack, err)
+	}
+	_ = conn.Close()
+	got := <-done
+	if got.err != nil || string(got.result.Payload) != "ok" {
+		t.Fatalf("result = %#v, %v", got.result, got.err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("socket retained: %v", err)
+	}
+}
+
 type fakePeer struct{ pid int }
 
 func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) { return p.pid, 1000, nil }
@@ -219,7 +259,7 @@ type fakeSystemBus struct {
 }
 
 func newFakeSystemBus() *fakeSystemBus {
-	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": true, "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/input", "/run/anydoc/runtime"}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
+	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": true, "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/input", "/run/anydoc/runtime"}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
 func (b *fakeSystemBus) SupportsUnixFDs() bool { return b.fdOK }
 func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props []DBusProperty) error {

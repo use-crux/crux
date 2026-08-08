@@ -139,7 +139,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	if err != nil {
 		return nil, err
 	}
-	socketPath, listener, err := b.listen(spec)
+	socketPath, listener, err := b.listen(spec, ".a-")
 	if err != nil {
 		return nil, errors.New("authorization channel unavailable")
 	}
@@ -148,37 +148,52 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 		_ = os.Remove(socketPath)
 		return nil, errors.New("authorization channel unavailable")
 	}
+	resultPath, resultListener, err := b.listen(spec, ".r-")
+	if err != nil || b.fs.Chmod(resultPath, 0) != nil {
+		_ = listener.Close()
+		_ = os.Remove(socketPath)
+		if resultListener != nil {
+			_ = resultListener.Close()
+		}
+		_ = os.Remove(resultPath)
+		return nil, errors.New("result channel unavailable")
+	}
 	defer func() {
 		if listener != nil {
 			_ = listener.Close()
 			_ = os.Remove(socketPath)
 		}
+		if resultListener != nil {
+			_ = resultListener.Close()
+			_ = os.Remove(resultPath)
+		}
 	}()
-	spec.ReadOnlyPaths = append(spec.ReadOnlyPaths, socketPath)
+	spec.ReadOnlyPaths = append(spec.ReadOnlyPaths, socketPath, resultPath)
 	properties := systemdProperties(spec)
 	err = b.bus.StartTransientUnit(ctx, name, properties)
 	closeErr := stdin.Close()
 	if err != nil || closeErr != nil {
 		return nil, errors.New("transient unit unavailable")
 	}
-	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, peers: b.peers, spec: spec}
+	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, resultListener: resultListener, resultSocket: resultPath, peers: b.peers, spec: spec}
 	if err := u.waitActive(ctx); err != nil {
 		_ = u.Stop(context.Background())
 		_ = u.Cleanup(context.Background())
 		return nil, err
 	}
 	listener = nil
+	resultListener = nil
 	return u, nil
 }
 
-func (b *systemdBackend) listen(spec ServiceSpec) (string, *net.UnixListener, error) {
+func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.UnixListener, error) {
 	runtime := spec.ReadOnlyPaths[1]
 	token, err := transientUnitName()
 	if err != nil {
 		return "", nil, err
 	}
 	id := strings.TrimSuffix(strings.TrimPrefix(token, "crux-anydoc-"), ".service")
-	path := filepath.Join(runtime, ".a-"+id+".sock")
+	path := filepath.Join(runtime, prefix+id+".sock")
 	if !validAbsolutePath(path) {
 		return "", nil, errors.New("invalid socket path")
 	}
@@ -231,7 +246,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
-		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-1]), Fail: false}}},
+		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-2:]...), Fail: false}}},
 		{"Environment", spec.Environment},
 		{"CPUAccounting", spec.CPUAccounting},
 		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
@@ -270,15 +285,17 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name     string
-	bus      SystemBus
-	fs       FileSystem
-	now      Clock
-	tmp      string
-	listener *net.UnixListener
-	socket   string
-	peers    PeerVerifier
-	spec     ServiceSpec
+	name           string
+	bus            SystemBus
+	fs             FileSystem
+	now            Clock
+	tmp            string
+	listener       *net.UnixListener
+	socket         string
+	resultListener *net.UnixListener
+	resultSocket   string
+	peers          PeerVerifier
+	spec           ServiceSpec
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -384,13 +401,55 @@ func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
 	if err != nil || !report.DynamicUser || report.UID == 0 || !report.PrivateUsers || report.ProtectProc != "invisible" || report.ProcSubset != "pid" {
 		return errors.New("authorization unavailable")
 	}
+	if u.resultSocket == "" || u.resultListener == nil {
+		return errors.New("authorization unavailable")
+	}
 	if err := u.fs.Chown(u.socket, int(report.UID), 0); err != nil {
 		return errors.New("authorization unavailable")
 	}
-	if err := u.fs.Chmod(u.socket, 0600); err != nil {
+	if err := u.fs.Chmod(u.socket, 0600); err != nil || u.fs.Chown(u.resultSocket, int(report.UID), 0) != nil || u.fs.Chmod(u.resultSocket, 0600) != nil {
 		return errors.New("authorization unavailable")
 	}
 	return nil
+}
+
+func (u *systemdUnit) ReceiveResult(ctx context.Context) (Result, error) {
+	if u.resultListener == nil || u.peers == nil {
+		return Result{}, errors.New("result unavailable")
+	}
+	defer func() {
+		_ = u.resultListener.Close()
+		u.resultListener = nil
+		_ = os.Remove(u.resultSocket)
+	}()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = u.resultListener.SetDeadline(deadline)
+	}
+	for {
+		conn, err := u.resultListener.AcceptUnix()
+		if err != nil {
+			return Result{}, errors.New("result unavailable")
+		}
+		pid, uid, peerErr := u.peers.Credentials(conn)
+		report, reportErr := u.Report(ctx)
+		if peerErr == nil && reportErr == nil && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
+			result, decodeErr := DecodeResult(conn)
+			if decodeErr == nil {
+				_, decodeErr = conn.Write([]byte("ACK\n"))
+			}
+			_ = conn.Close()
+			if decodeErr != nil {
+				return Result{}, errors.New("invalid result")
+			}
+			return result, nil
+		}
+		_ = conn.Close()
+		select {
+		case <-ctx.Done():
+			return Result{}, errors.New("result unavailable")
+		case <-u.now.After(10 * time.Millisecond):
+		}
+	}
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
@@ -458,6 +517,13 @@ func (u *systemdUnit) Cleanup(ctx context.Context) error {
 	}
 	if u.socket != "" {
 		_ = os.Remove(u.socket)
+	}
+	if u.resultListener != nil {
+		_ = u.resultListener.Close()
+		u.resultListener = nil
+	}
+	if u.resultSocket != "" {
+		_ = os.Remove(u.resultSocket)
 	}
 	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
 		return errors.New("unit cleanup unavailable")

@@ -113,6 +113,13 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/anydoc-runner.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/anydoc-runner.mjs" "$(EMBED_DIR)/anydoc-runner.mjs"; \
+		echo "Embedded anydoc-runner.mjs from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/anydoc-runner.mjs not found"; \
+		exit 1; \
+	fi
 
 .PHONY: embed-ui
 embed-ui: $(UI_EMBED_DIR)

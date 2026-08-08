@@ -12,6 +12,7 @@
     "parity:indexer-semantic": "tsx ./lib/indexer-semantic-parity.ts"
   },
   "dependencies": {
+    "@firecrawl/anydoc": "0.1.7",
     "@use-crux/core": "workspace:*",
     "@use-crux/indexer": "workspace:*",
     "tinyglobby": "^0.2.16",

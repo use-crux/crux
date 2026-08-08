@@ -3,8 +3,10 @@
 package anydocsupervisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -68,6 +70,26 @@ func TestCPULimitStops(t *testing.T) {
 		t.Fatal("cpu was not stopped")
 	}
 	r.Finish(context.Background(), nil)
+}
+func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
+	oversized := make([]byte, 4)
+	binary.BigEndian.PutUint32(oversized, MaxFrameBytes+1)
+	_, err := DecodeResult(bytes.NewReader(oversized))
+	assert(t, err, ErrInvalidFrame)
+	err = EncodeResult(bytes.NewBuffer(nil), Result{Version: ProtocolVersion, OK: true, Error: ErrTimeout})
+	assert(t, err, ErrInvalidRequest)
+}
+func TestExecuteFinishesAfterResultFailure(t *testing.T) {
+	b := &fakeBackend{}
+	r, err := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.Execute(context.Background())
+	assert(t, err, ErrWorkerCrash)
+	if !b.u.Cleaned() {
+		t.Fatal("result failure did not clean up")
+	}
 }
 func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 	if time.Duration(CPUQuotaPercent)*RuntimeCeiling/100 >= CPUCeiling {

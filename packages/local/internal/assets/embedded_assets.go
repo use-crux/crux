@@ -27,6 +27,9 @@ var embeddedProjectRuntimeIndexer []byte
 //go:embed embed/runtime-worker.mjs
 var embeddedRuntimeWorker []byte
 
+//go:embed embed/anydoc-runner.mjs
+var embeddedAnydocRunner []byte
+
 //go:embed ui-embed/*
 var embeddedUI embed.FS
 
@@ -43,6 +46,11 @@ func ExtractEmbeddedSourceResolver() (string, error) {
 // ExtractEmbeddedRuntimeWorker extracts the self-hosted Runtime worker script.
 func ExtractEmbeddedRuntimeWorker() (string, error) {
 	return ExtractEmbedded("runtime-worker", embeddedRuntimeWorker)
+}
+
+// ExtractEmbeddedAnydocRunner extracts the capability-gated Anydoc runner.
+func ExtractEmbeddedAnydocRunner() (string, error) {
+	return ExtractEmbedded("anydoc-runner", embeddedAnydocRunner)
 }
 
 // EmbeddedSourceResolverScript returns the embedded source resolver worker.
