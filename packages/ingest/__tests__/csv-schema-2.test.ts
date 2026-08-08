@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { parseCsvDocument } from '../src/csv'
 
+type Assert<T extends true> = T
+type ParseCsvDocumentInputHasNoText = Assert<'text' extends keyof Parameters<typeof parseCsvDocument>[0] ? false : true>
+
 it('maps csv-parse facts into an exact schema-2 logical table', () => {
   const bytes = new TextEncoder().encode('Plan,Price,Notes\nPro,20,"best, value"\nFree,,')
 
@@ -16,6 +19,27 @@ it('maps csv-parse facts into an exact schema-2 logical table', () => {
     Array.from({ length: 3 }, () => ({ kind: 'logical-table', rowStart: 1, rowEnd: 1 })),
     Array.from({ length: 3 }, () => ({ kind: 'logical-table', rowStart: 2, rowEnd: 2 })),
     Array.from({ length: 3 }, () => ({ kind: 'logical-table', rowStart: 3, rowEnd: 3 })),
+  ])
+
+  expect(document.producer).toEqual({
+    kind: 'parser',
+    name: 'csv-parse',
+    version: '6.2.1',
+    adapterVersion: '2',
+  })
+  expect(document.blocks[0]?.id).toBe(
+    'csv:788539879c0cc6dd3e551e7efe90d9149098072965ae4e4c695ced3287a1e459:parser:csv-parse:6.2.1:2:table:1',
+  )
+  expect(document.blocks[0]?.kind === 'table' && document.blocks[0].rows[1]?.[2]?.id).toBe(
+    'csv:788539879c0cc6dd3e551e7efe90d9149098072965ae4e4c695ced3287a1e459:parser:csv-parse:6.2.1:2:table:1:row:2:column:3',
+  )
+})
+
+it('derives CSV facts from the hashed source bytes', () => {
+  const bytes = new TextEncoder().encode('Plan,Price\nPro,20')
+
+  expect(parseCsvDocument({ bytes }).blocks).toMatchObject([
+    { kind: 'table', columns: ['Plan', 'Price'] },
   ])
 })
 

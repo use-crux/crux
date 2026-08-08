@@ -9,6 +9,7 @@ const CSV_PARSE_PRODUCER: ParserIdentity = {
   version: '6.2.1',
   adapterVersion: '2',
 }
+const CSV_PARSE_IDENTITY = `${CSV_PARSE_PRODUCER.kind}:${CSV_PARSE_PRODUCER.name}:${CSV_PARSE_PRODUCER.version}:${CSV_PARSE_PRODUCER.adapterVersion}`
 
 /** Parse CSV into the incumbent exact logical cell matrix. */
 export function parseCsvRows(text: string): string[][] {
@@ -22,13 +23,12 @@ export function parseCsvRows(text: string): string[][] {
  */
 export function parseCsvDocument(input: {
   readonly bytes: Uint8Array
-  readonly text?: string
   readonly mediaType?: string
 }): IngestedDocument {
   const documentSha256 = sha256(input.bytes)
-  const rows = parseCsvRows(input.text ?? new TextDecoder('utf-8').decode(input.bytes))
+  const rows = parseCsvRows(new TextDecoder('utf-8').decode(input.bytes))
   const coordinate: SourceCoordinate = { kind: 'logical-table', rowStart: 1, rowEnd: rows.length }
-  const tableId = `csv:${documentSha256}:table:1`
+  const tableId = csvId(documentSha256, 'table:1')
 
   return validateIngestedDocument({
     schemaVersion: 2,
@@ -84,6 +84,10 @@ function csvCell(input: { readonly tableId: string; readonly value: string; read
     columnSpan: 1,
     blocks: [text],
   }
+}
+
+function csvId(documentSha256: string, structuralPath: string): string {
+  return `csv:${documentSha256}:${CSV_PARSE_IDENTITY}:${structuralPath}`
 }
 
 function sha256(bytes: Uint8Array): string {
