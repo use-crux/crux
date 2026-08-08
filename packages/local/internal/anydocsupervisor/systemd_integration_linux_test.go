@@ -78,7 +78,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	}
 	result, err := run.Execute(ctx)
 	if err != nil {
-		t.Fatalf("execute packaged runner: %s", safeRunnerDiagnostic(err, run.TerminalReport()))
+		t.Fatalf("execute packaged runner: %s", safeExecutionFailure(err, run.TerminalReport()))
 	}
 	if !result.OK || result.Accounting == nil || result.Accounting.SourceBytes != int64(len(input)) || result.SourceSHA256 != sha256Hex(input) || result.Format != "docx" {
 		t.Fatalf("unbound or invalid runner result: %#v", result)
@@ -151,6 +151,113 @@ func safeContainmentReason(reason string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+type fakeValidationUnit struct {
+	validationErr  error
+	execMainStatus int
+	serviceResult  string
+}
+
+func (f *fakeValidationUnit) Report(ctx context.Context) (SandboxReport, error) {
+	return SandboxReport{ExecMainStatus: f.execMainStatus, ServiceResult: f.serviceResult}, nil
+}
+func (f *fakeValidationUnit) CPUUsage(ctx context.Context) (time.Duration, error)          { return 0, nil }
+func (f *fakeValidationUnit) Stop(ctx context.Context) error                               { return nil }
+func (f *fakeValidationUnit) WaitInactive(ctx context.Context) error                      { return nil }
+func (f *fakeValidationUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
+	return TerminalStatus{State: "inactive", ServiceResult: f.serviceResult, ExecMainStatus: f.execMainStatus}, nil
+}
+func (f *fakeValidationUnit) TerminationEvidence(_ context.Context, _ string) (TerminationEvidence, error) {
+	return TerminationEvidence{Empty: true}, nil
+}
+func (f *fakeValidationUnit) Cleanup(ctx context.Context) error { return nil }
+func (f *fakeValidationUnit) ReceiveResult(ctx context.Context, _ Request) (Result, error) {
+	return Result{}, closedWith(ErrInvalidResult, f.validationErr)
+}
+func (f *fakeValidationUnit) CaptureTerminalAccounting(ctx context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error) {
+	return SandboxReport{ExecMainStatus: f.execMainStatus, ServiceResult: f.serviceResult}, 0, accountingCaptureOK, nil
+}
+
+func TestExecutePreservesHostResultValidationWithTerminalAckStatus(t *testing.T) {
+	fake := &fakeValidationUnit{
+		validationErr:  resultValidation("request-binding", "mismatch"),
+		execMainStatus: 76,
+		serviceResult:  "exit-code",
+	}
+
+	tmpDir := t.TempDir()
+	stagingRoot := filepath.Join(tmpDir, "input")
+	if err := os.Mkdir(stagingRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stager := NewStager(stagingRoot)
+	staged, err := stager.Stage([]byte("test"), 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	limits := testJobLimits()
+	sourceSHA := sha256Hex([]byte("test"))
+	r := &Run{
+		unit:        fake,
+		write:       write,
+		nonce:       "00000000000000000000000000000000",
+		digest:      requestDigest(ProtocolVersion, "00000000000000000000000000000000", "docx", sourceSHA, 4, limits),
+		sourceSHA:   sourceSHA,
+		sourceBytes: 4,
+		format:      "docx",
+		limits:      limits,
+		staged:      staged,
+		stop:        make(chan struct{}),
+		finished:    make(chan struct{}),
+		started:     time.Now(),
+	}
+
+	ctx := context.Background()
+	result, execErr := r.Execute(ctx)
+
+	var validation *ResultValidationError
+	if !errors.As(execErr, &validation) {
+		t.Fatalf("Execute did not preserve ResultValidationError: %T %v", execErr, validation)
+	}
+	if validation.Stage != "request-binding" || validation.ReasonCode != "mismatch" {
+		t.Fatalf("Execute stripepd validation: stage=%q reason=%q", validation.Stage, validation.ReasonCode)
+	}
+	if result.Request != (Request{}) {
+		t.Fatalf("Execute returned a result on validation failure: %#v", result)
+	}
+
+	terminal := r.TerminalReport()
+	if terminal.Outcome != ErrInvalidResult {
+		t.Fatalf("terminal outcome = %q, want %q", terminal.Outcome, ErrInvalidResult)
+	}
+
+	got := safeExecutionFailure(execErr, terminal)
+	const want = "error=invalid-result outcome=invalid-result service=exit-code stage=request-binding reason=mismatch oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+	if strings.Contains(got, "acknowledgement") {
+		t.Fatalf("worker ack status %d masked host validation: %q", fake.execMainStatus, got)
+	}
+
+	unsafe := "/private/path nonce=secret input=customer.docx"
+	for _, bad := range []error{
+		closedWith(ErrInvalidResult, &ResultValidationError{Stage: unsafe, ReasonCode: "mismatch"}),
+		closedWith(ErrInvalidResult, &ResultValidationError{Stage: "request-binding", ReasonCode: unsafe}),
+		closedWith(ErrInvalidResult, errors.New(unsafe)),
+	} {
+		got := safeExecutionFailure(outcomeCode(bad), terminal)
+		if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
+			t.Fatalf("diagnostic leaked unsafe details: %q", got)
+		}
 	}
 }
 

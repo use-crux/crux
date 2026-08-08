@@ -794,9 +794,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr != nil {
 				var sup *SupervisorError
 				if errors.As(decodeErr, &sup) && sup.Code == ErrInvalidFrame {
-					decodeErr = resultValidation("decode/frame-json", "unknown")
+					decodeErr = resultValidation("decode/frame-json", "invalid-json")
 				} else {
-					decodeErr = resultValidation("payload/accounting-validation", "unknown")
+					decodeErr = resultValidation("payload/accounting-validation", "invalid-accounting")
 				}
 			}
 			if decodeErr == nil && result.Request != expected {
@@ -805,13 +805,13 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr == nil {
 				_, err := u.RefreshAccounting(ctx)
 				if err != nil {
-					decodeErr = resultValidation("accounting-refresh", "unknown")
+					decodeErr = resultValidation("accounting-refresh", "io")
 				}
 			}
 			if decodeErr == nil {
 				_, err := conn.Write([]byte("ACK\n"))
 				if err != nil {
-					decodeErr = resultValidation("ack-write", "unknown")
+					decodeErr = resultValidation("ack-write", "io")
 				}
 			}
 			_ = conn.Close()

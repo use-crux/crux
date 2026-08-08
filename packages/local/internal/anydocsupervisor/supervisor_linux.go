@@ -123,7 +123,7 @@ func validResultValidationStage(stage string) bool {
 
 func validResultValidationReason(reason string) bool {
 	switch reason {
-	case "mismatch":
+	case "mismatch", "invalid-json", "invalid-accounting", "io":
 		return true
 	}
 	return false
@@ -731,6 +731,10 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	if err != nil {
 		if ctx.Err() != nil {
 			return Result{}, ctx.Err()
+		}
+		var sup *SupervisorError
+		if errors.As(err, &sup) {
+			return Result{}, err
 		}
 		return Result{}, closed(ErrWorkerCrash)
 	}
