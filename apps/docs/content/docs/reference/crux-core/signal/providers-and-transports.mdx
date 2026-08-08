@@ -36,12 +36,16 @@ import {
   acceptTransportEnvelope,
   createTransportNormalizationRunner,
   ManagedStreamTerminalError,
+  projectTransportBindingHealth,
   projectTransportEnvelope,
   replayTransportEnvelope,
+  transportBindingHealth,
   transportStatistics,
   type RuntimeAcceptedTransportEnvelope,
   type RuntimeManagedTransportBinding,
   type RuntimeTransportBindingCheckpoint,
+  type RuntimeTransportBindingHealth,
+  type RuntimeTransportBindingHealthSnapshot,
   type RuntimeTransportEnvelopeProjection,
   type RuntimeTransportEnvelopeRecord,
   type RuntimeTransportEnvelopeState,
@@ -353,6 +357,40 @@ config ref ids, target Signal id, and `lineage` entries of
 Projections omit payload bytes, payload refs, credentials, and raw routing
 secrets. Occurrence identities join existing Signal / Work / Session / Flow
 observability without a parallel execution registry.
+
+When observability sinks are active, accept and normalize also emit a
+`custom.operation` run whose attributes carry
+`{ kind: "transport.envelope", outcome, envelope }` so Devtools Run detail can
+render accepted-envelope lineage without a second event store.
+
+### `transportBindingHealth({ store, namespace, program, now? })`
+
+Bounded, restart-safe per-binding health snapshot for operators and Devtools.
+Derives only from the immutable Runtime program, durable binding checkpoints,
+and the existing transport statistics ledger — no second registry or metrics
+store.
+
+Each binding row includes:
+
+| Facet | Source | Coverage notes |
+| --- | --- | --- |
+| Binding / adapter / config / Signal target | Program declaration | Always present for declared bindings |
+| Transport kind | Executable program provider | `unknown` + `unavailable` when no provider |
+| Status | Checkpoint `status` | `defaulted` to `active` when omitted |
+| Lease owner | Checkpoint `lastOwnerId` | Diagnostic last owner only; live lease tokens are never exposed |
+| Cursor presence + age | Checkpoint cursor / `updatedAt` | Raw cursor text never appears; provider lag is `unavailable` |
+| Outcome counts | Statistics `byIdentity` | First-64 attribution; overflow uses `other` coverage without inventing counts |
+| Fault / reconnect | Checkpoint `lastErrorCode` / `status` | Live reconnect backoff is process-local (`unavailable`); stream exhaustion may be `durable_exhausted` |
+| Shutdown outcome | Not durable | Always `unavailable` |
+
+At most 64 bindings are projected (`coverage.bindings: "truncated"` beyond the
+bound). Missing checkpoint methods, empty statistics ledgers, and unsupported
+facets are reported with explicit coverage — never fabricated counters.
+
+### `projectTransportBindingHealth(options)`
+
+Pure projection of one binding health row from already-loaded durable facts.
+Useful in tests and hosts that already hold checkpoints and statistics.
 
 ## Retention
 

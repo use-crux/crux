@@ -379,3 +379,15 @@ targets, subscriptions, fork lineage, and bounded ingress statistics via the
 existing Runtime Bridge read model; progressive user guides, recipes, exact API
 reference, and Core architecture internals that distinguish shipped Session
 behavior from future managed transport and Channel work.
+
+Close managed-transport observability on the same durable Runtime facts:
+`transportBindingHealth()` projects a bounded (max 64), secret-free per-binding
+health snapshot from program identity, binding checkpoints, and the existing
+transport statistics ledger without a second worker, registry, or metrics store.
+Coverage markers report last-owner lease diagnostics, cursor presence/age,
+fault/reconnect exhaustion when durable, and explicitly unavailable live
+reconnect backoff, provider lag, and shutdown outcome. Accept/normalize emit
+payload-free envelope lineage through the existing observability transport for
+Devtools Run detail; Runtime status exposes a Transports tab when a generated
+program is present. Progressive guides, recipes, API reference, and architecture
+docs cover statistics and health semantics for operators.

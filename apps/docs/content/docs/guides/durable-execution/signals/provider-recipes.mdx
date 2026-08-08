@@ -180,6 +180,7 @@ logical delivery for the same envelope.
 import {
   createTransportNormalizationRunner,
   replayTransportEnvelope,
+  transportBindingHealth,
   transportStatistics,
   projectTransportEnvelope,
 } from "@use-crux/core/runtime";
@@ -195,6 +196,15 @@ await runner.runOnce();
 
 const stats = await transportStatistics({ store, namespace: "prod" });
 console.log(stats.total.retried, stats.total.deadLettered);
+
+// Restart-safe binding health: identity, status, last owner, cursor age, counts.
+// `program` is the immutable RuntimeProgram that declares managed bindings.
+const health = await transportBindingHealth({
+  store,
+  namespace: "prod",
+  program, // createRuntimeProgram({ providers, transports })
+});
+console.log(health.bindings[0]?.status, health.bindings[0]?.cursor.ageMs);
 
 // Operators requeue dead letters explicitly — workers never invent replay.
 const revived = await replayTransportEnvelope({
