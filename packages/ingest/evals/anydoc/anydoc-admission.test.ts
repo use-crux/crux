@@ -23,6 +23,23 @@ describe('private Anydoc admission projection', () => {
     expect(() => admitAnydocDocument(document, bytes, 'docx')).toThrowError(expect.objectContaining({ code: 'invalid-result' }))
   })
 
+  it('accepts every closed Anydoc 0.1.7 union variant', () => {
+    const markers = ['bullet', 'decimal', 'lowerAlpha', 'upperAlpha', 'lowerRoman', 'upperRoman']
+    const blocks = [
+      { kind: 'heading', level: 2, anchor: 'heading', content: [{ kind: 'anchor', anchor: 'inline' }] },
+      { kind: 'codeBlock', lang: 'ts', text: 'code' },
+      ...markers.map((marker) => ({ kind: 'list', list: { marker, start: 1, items: [{ checked: true, markerLabel: '1-a)', blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: marker }] }] }] } })),
+      { kind: 'table', table: { kind: 'layout', headerRows: 0, grid: [[{ kind: 'origin', cell: { blocks: [], colSpan: 2, rowSpan: 1 } }, { kind: 'covered', originRow: 0, originCol: 0 }]] } },
+      { kind: 'paragraph', content: [
+        { kind: 'link', content: [{ kind: 'text', text: 'relative' }], target: { kind: 'relative', value: '../x' } },
+        { kind: 'link', content: [{ kind: 'text', text: 'anchor' }], target: { kind: 'anchor', value: 'heading' } },
+        { kind: 'image', alt: 'remote', source: { kind: 'external', url: 'https://example.test/x.png' } },
+        { kind: 'image', alt: 'missing', source: { kind: 'unavailable' } },
+      ] },
+    ]
+    expect(() => admitAnydocDocument({ blocks, notes: [], assets: [] }, bytes, 'docx')).not.toThrow()
+  })
+
   it('extracts parser-native facts independently from the Core projection', async () => {
     const raw = JSON.parse(await readFile(new URL('./fixtures/anydoc-0.1.7-raw-document.json', import.meta.url), 'utf8'))
     delete raw.$comment

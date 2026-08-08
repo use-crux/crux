@@ -118,7 +118,7 @@ function validateReferences(document) {
     noteIds.add(note.id)
   }
   const visitInlines = (inlines) => inlines.forEach((inline) => {
-    if (inline.kind === 'image' && !assetIds.has(inline.source.assetId)) invalid()
+    if (inline.kind === 'image' && inline.source.kind === 'asset' && !assetIds.has(inline.source.assetId)) invalid()
     if (inline.kind === 'noteRef' && !noteIds.has(inline.noteId)) invalid()
     if (inline.kind === 'link') visitInlines(inline.content)
   })
@@ -136,32 +136,33 @@ function validateBlock(block, state, depth) {
   enter(state, depth)
   if (!block || typeof block.kind !== 'string' || !BLOCK_KINDS.has(block.kind)) invalid()
   if (block.kind === 'heading') {
-    requireRecord(block, ['kind', 'level', 'content'], state)
+    requireRecord(block, ['kind', 'level', 'content'], state, ['anchor'])
     if (!Number.isSafeInteger(block.level) || block.level < 1 || block.level > 6) invalid()
+    if (block.anchor !== undefined) requireString(block.anchor)
     validateInlines(block.content, state, depth + 1)
   } else if (block.kind === 'paragraph') {
     requireRecord(block, ['kind', 'content'], state); validateInlines(block.content, state, depth + 1)
   } else if (block.kind === 'codeBlock') {
-    requireRecord(block, ['kind', 'text'], state); requireString(block.text)
+    requireRecord(block, ['kind', 'text'], state, ['lang']); requireString(block.text); if (block.lang !== undefined) requireString(block.lang)
   } else if (block.kind === 'rule') {
     requireRecord(block, ['kind'], state)
   } else if (block.kind === 'blockQuote') {
     requireRecord(block, ['kind', 'blocks'], state); requireArray(block.blocks, state); block.blocks.forEach((child) => validateBlock(child, state, depth + 1))
   } else if (block.kind === 'list') {
     requireRecord(block, ['kind', 'list'], state); requireRecord(block.list, ['marker', 'start', 'items'], state)
-    if (!['bullet', 'ordered'].includes(block.list.marker) || !Number.isSafeInteger(block.list.start)) invalid()
+    if (!['bullet', 'decimal', 'lowerAlpha', 'upperAlpha', 'lowerRoman', 'upperRoman'].includes(block.list.marker) || !Number.isSafeInteger(block.list.start)) invalid()
     requireArray(block.list.items, state)
-    block.list.items.forEach((item) => { requireRecord(item, ['blocks'], state); requireArray(item.blocks, state); item.blocks.forEach((child) => validateBlock(child, state, depth + 1)) })
+    block.list.items.forEach((item) => { requireRecord(item, ['blocks'], state, ['checked', 'markerLabel']); if (item.checked !== undefined && typeof item.checked !== 'boolean' || item.markerLabel !== undefined && typeof item.markerLabel !== 'string') invalid(); requireArray(item.blocks, state); item.blocks.forEach((child) => validateBlock(child, state, depth + 1)) })
   } else {
     requireRecord(block, ['kind', 'table'], state); requireRecord(block.table, ['kind', 'headerRows', 'grid'], state)
-    if (block.table.kind !== 'data' || !Number.isSafeInteger(block.table.headerRows) || block.table.headerRows < 0) invalid()
+    if (!['data', 'layout'].includes(block.table.kind) || !Number.isSafeInteger(block.table.headerRows) || block.table.headerRows < 0) invalid()
     requireArray(block.table.grid, state)
     block.table.grid.forEach((row) => { requireArray(row, state); row.forEach((slot) => validateSlot(slot, state, depth + 1)) })
   }
 }
 
 function validateSlot(slot, state, depth) {
-  if (!slot || slot.kind === 'covered') { requireRecord(slot, ['kind'], state); return }
+  if (!slot || slot.kind === 'covered') { requireRecord(slot, ['kind', 'originRow', 'originCol'], state); if (!Number.isSafeInteger(slot.originRow) || slot.originRow < 0 || !Number.isSafeInteger(slot.originCol) || slot.originCol < 0) invalid(); return }
   requireRecord(slot, ['kind', 'cell'], state)
   if (slot.kind !== 'origin') invalid()
   requireRecord(slot.cell, ['blocks'], state, ['colSpan', 'rowSpan'])
@@ -189,8 +190,8 @@ function validateInlines(values, state, depth) {
   })
 }
 
-function validateSource(source, state) { requireRecord(source, ['kind', 'assetId'], state); if (source.kind !== 'asset' || !Number.isSafeInteger(source.assetId) || source.assetId < 0) invalid() }
-function validateTarget(target, state) { requireRecord(target, ['kind', 'value'], state); if (!['external', 'internal'].includes(target.kind)) invalid(); requireString(target.value) }
+function validateSource(source, state) { if (!source || !['asset', 'external', 'unavailable'].includes(source.kind)) invalid(); if (source.kind === 'asset') { requireRecord(source, ['kind', 'assetId'], state); if (!Number.isSafeInteger(source.assetId) || source.assetId < 0) invalid() } else if (source.kind === 'external') { requireRecord(source, ['kind', 'url'], state); requireString(source.url) } else requireRecord(source, ['kind'], state) }
+function validateTarget(target, state) { requireRecord(target, ['kind', 'value'], state); if (!['external', 'relative', 'anchor'].includes(target.kind)) invalid(); requireString(target.value) }
 function requireRecord(value, keys, state, optional = []) { state.nodes++; check(state); const actual = value && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : []; if (!value || typeof value !== 'object' || Array.isArray(value) || !keys.every((key) => Object.hasOwn(value, key)) || actual.some((key) => !keys.includes(key) && !optional.includes(key))) invalid(); state.keys += actual.length; check(state) }
 function requireArray(value, state) { if (!Array.isArray(value)) invalid(); state.nodes += value.length; check(state) }
 function requireString(value) { if (typeof value !== 'string') invalid() }

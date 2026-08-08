@@ -14,7 +14,6 @@
   "dependencies": {
     "@firecrawl/anydoc": "0.1.7",
     "@use-crux/core": "workspace:*",
-    "@use-crux/ingest": "workspace:*",
     "@use-crux/indexer": "workspace:*",
     "tinyglobby": "^0.2.16",
     "zod": "^4.4.3"

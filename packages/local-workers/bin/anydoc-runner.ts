@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { Socket } from 'node:net'
 import type { Format as NativeFormat } from '@firecrawl/anydoc'
-import { admitAnydocDocument, AnydocAdmissionError } from '@use-crux/ingest/private/anydoc-admission'
+import { admitAnydocDocument, AnydocAdmissionError } from '../../ingest/private/anydoc-admission.mjs'
 import { encodeAdmissionResult, preflightRawDocument } from '../lib/anydoc-raw-result'
 
 const protocolVersion = 2

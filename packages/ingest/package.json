@@ -35,10 +35,6 @@
     "./urls": {
       "types": "./src/urls.ts",
       "import": "./src/urls.ts"
-    },
-    "./private/anydoc-admission": {
-      "types": "./private/anydoc-admission.d.mts",
-      "import": "./private/anydoc-admission.mjs"
     }
   },
   "dependencies": {

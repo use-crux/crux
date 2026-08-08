@@ -592,9 +592,6 @@ importers:
       '@use-crux/indexer':
         specifier: workspace:*
         version: link:../indexer
-      '@use-crux/ingest':
-        specifier: workspace:*
-        version: link:../ingest
       localtunnel:
         specifier: '>=2.0.0'
         version: 2.0.2
