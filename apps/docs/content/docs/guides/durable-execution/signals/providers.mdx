@@ -425,6 +425,9 @@ messages.
   the same statistics ledger. Cursor age and last owner are available when
   checkpointed; live reconnect backoff and shutdown outcome stay explicitly
   unavailable when they are not durable. At most 64 bindings are returned.
+  Memory and PostgreSQL implement the transports port; Convex does not claim
+  managed-transport accept/checkpoints and rejects managed-binding workers with
+  `CAPABILITY_MISSING`.
 - `projectTransportEnvelope(record)` exposes envelope state and Signal
   occurrence lineage without payload bytes. Accept/normalize also emit that
   projection on the existing observability transport for Devtools Run detail.

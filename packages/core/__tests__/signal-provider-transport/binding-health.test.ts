@@ -314,4 +314,42 @@ describe("transport binding health", () => {
     expect(snapshot.bindings[0]!.cursor.present).toBe(false);
     expect(snapshot.bindings[0]!.cursor.coverage).toBe("absent");
   });
+
+  it("reports unsupported checkpoints without inventing cursor or lease state", async () => {
+    const fixture = createPollingFixture();
+    const base = inMemoryRuntimeStore();
+    // Truthful adapter gap: transports exist for envelopes/stats, but binding
+    // checkpoints are not implemented (e.g. a partial store port).
+    const store = {
+      ...base,
+      transports: {
+        ...base.transports!,
+        getBindingCheckpoint: undefined,
+        putBindingCheckpoint: undefined,
+      },
+    };
+
+    const snapshot = await transportBindingHealth({
+      store,
+      namespace: "partial",
+      program: fixture.program,
+      now: new Date("2026-08-08T12:00:00.000Z"),
+    });
+
+    expect(snapshot.coverage.checkpoints).toBe("unsupported");
+    expect(snapshot.bindings).toHaveLength(1);
+    expect(snapshot.bindings[0]!).toMatchObject({
+      status: "active",
+      statusCoverage: "unsupported",
+      lease: { coverage: "unsupported" },
+      cursor: {
+        present: false,
+        coverage: "unsupported",
+        lagCoverage: "unavailable",
+      },
+      // No durable error is available when checkpoints are unsupported.
+      fault: { coverage: "absent" },
+    });
+    expect(JSON.stringify(snapshot)).not.toMatch(/cursor:|lease_|secret/);
+  });
 });

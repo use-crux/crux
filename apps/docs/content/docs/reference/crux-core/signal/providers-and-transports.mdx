@@ -422,10 +422,16 @@ lease port with resource `transport-binding:{namespace}:{bindingId}`.
 - Memory or PostgreSQL Runtime storage with the transports port, including
   `getBindingCheckpoint` / `putBindingCheckpoint` (PostgreSQL table
   `transport_binding_checkpoints` via store setup).
+- Convex Runtime storage does **not** implement managed-transport accept,
+  checkpoints, or statistics. Worker start with managed bindings fails with
+  `CAPABILITY_MISSING` rather than fabricating transport state.
 - `createRuntimeProgram({ providers, transports })` with live providers in
   process and inert bindings in the program.
 - `createRuntimeWorker({ runtime, program })` as the only supervised owner of
   polling and stream acquisition, envelope drain, and Work maintenance.
+- Shutdown: worker stop aborts in-flight poll/open via `AbortSignal`, releases
+  binding leases, and preserves the last durable checkpoint for restart recovery.
+  Process-local reconnect attempt history is not durable; see health coverage.
 
 ## Guarantees and non-goals
 

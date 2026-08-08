@@ -128,6 +128,28 @@ describe("runtime managed transport validation", () => {
     );
   });
 
+  it("rejects non-signal target kinds (Channel semantics are not available here)", () => {
+    // Managed transport targets are Signal-only until #302 ships Channel claim policy.
+    expectContractError(() =>
+      validateRuntimeManagedTransportBinding({
+        ...binding(),
+        target: { kind: "channel", signalId: "orders.received" },
+      }),
+    );
+    expectContractError(() =>
+      validateRuntimeManagedTransportBinding({
+        ...binding(),
+        target: { kind: "channel", channelId: "orders.conversation" },
+      }),
+    );
+    expectContractError(() =>
+      validateRuntimeAcceptedTransportEnvelope({
+        ...envelope(),
+        target: { kind: "channel", signalId: "orders.received" },
+      }),
+    );
+  });
+
   it("rejects live, non-plain, accessor, and cyclic values", () => {
     const withAccessor = adapter();
     Object.defineProperty(withAccessor, "id", {
