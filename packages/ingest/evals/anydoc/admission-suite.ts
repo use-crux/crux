@@ -55,23 +55,26 @@ export interface AdmissionFormatDecision {
   readonly blockers: readonly string[]
 }
 
-/** Drops parser content while preserving replayable hashes, outcomes, fact gates, and resource evidence. */
+/** Produces the host-independent decision record. Host measurements belong in the run attestation. */
 export async function admissionBaseline(evidence: AdmissionSuiteEvidence): Promise<unknown> {
   const nativeArtifact = await readFile(resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc-linux-x64-gnu@0.1.7/node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node'))
   return {
     schemaVersion: evidence.schemaVersion,
+    artifactKind: 'admission-decision',
+    authorizesRouting: false,
     packageIdentity: {
       anydoc: '0.1.7',
       native: { package: '@firecrawl/anydoc-linux-x64-gnu@0.1.7', sha256: createHash('sha256').update(nativeArtifact).digest('hex') },
       adapters: { mammoth: '1.12.0', 'csv-parse': '6.2.1', exceljs: '4.4.0', 'pdf-inspector': '1.12.0' },
     },
-    evidenceIdentity: {
-      cacheIdentity: evidence.cacheIdentity ?? 'in-process-unkeyed',
-      runtime: `${process.platform}-${process.arch}-node-${process.versions.node}`,
-      hardMemoryContainment: evidence.runner.hardMemoryContainment ?? false,
+    decisionIdentity: {
       fixtureSha256: evidence.results.map((result) => ({ fixtureId: result.fixtureId, sha256: result.sourceHash })),
     },
-    runner: evidence.runner,
+    gates: {
+      maxConcurrentChildren: evidence.runner.maxConcurrentChildren,
+      productionEquivalent: evidence.runner.productionEquivalent,
+      hardMemoryContainment: evidence.runner.hardMemoryContainment ?? false,
+    },
     formats: evidence.formats,
     docxDecision: evidence.docxDecision,
     results: evidence.results.map((fixture) => ({
@@ -92,10 +95,37 @@ export async function admissionBaseline(evidence: AdmissionSuiteEvidence): Promi
         determinism: candidate.determinism && {
           deterministic: candidate.determinism.deterministic,
           hashes: candidate.determinism.hashes,
+        },
+      })),
+    })),
+  }
+}
+
+/** Captures variable execution provenance without participating in admission authorization. */
+export function admissionRunAttestation(evidence: AdmissionSuiteEvidence): unknown {
+  return {
+    schemaVersion: 1,
+    artifactKind: 'run-attestation',
+    authorizesRouting: false,
+    cacheIdentity: evidence.cacheIdentity ?? 'in-process-unkeyed',
+    runtime: `${process.platform}-${process.arch}-node-${process.versions.node}`,
+    workflow: {
+      name: process.env.GITHUB_WORKFLOW ?? null,
+      runId: process.env.GITHUB_RUN_ID ?? null,
+      runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
+      commitSha: process.env.GITHUB_SHA ?? null,
+    },
+    runner: evidence.runner,
+    results: evidence.results.map((fixture) => ({
+      fixtureId: fixture.fixtureId,
+      candidates: fixture.candidates.map((candidate) => ({
+        parser: candidate.parser,
+        rolloutBudgetGate: candidate.rolloutBudgetGate,
+        p95: candidate.p95,
+        determinism: candidate.determinism && {
           cold: candidate.determinism.cold.map(compactRun),
           warm: candidate.determinism.warm.map(compactRun),
         },
-        p95: candidate.p95,
       })),
     })),
   }
@@ -111,9 +141,9 @@ export async function renderAdmissionArtifacts(evidence: AdmissionSuiteEvidence)
   const docx = evidence.formats.filter((decision) => decision.format === 'docx')
   const primary = evidence.docxDecision.primary
   const metrics = evidence.results.find((fixture) => fixture.fixtureId === 'docx-structure-v1')?.candidates ?? []
-  const rows = metrics.map((candidate) => `| ${candidate.parser} | ${candidate.native.passed} | ${candidate.core.passed} | ${candidate.determinism?.deterministic ?? false} | ${candidate.rolloutBudgetGate} | ${candidate.p95.wallMilliseconds} | ${candidate.p95.peakRssBytes ?? 'unavailable'} |`).join('\n')
+  const rows = metrics.map((candidate) => `| ${candidate.parser} | ${candidate.native.passed} | ${candidate.core.passed} | ${candidate.determinism?.deterministic ?? false} | ${candidate.rolloutBudgetGate} |`).join('\n')
   const blockers = docx.flatMap((decision) => decision.blockers.map((fixture) => `- \`${decision.parser}\`: \`${fixture}\``)).join('\n') || '- None.'
-  const adr = `# ADR 0005: Anydoc Phase 2 Admission\n\nStatus: Accepted\n\nDate: 2026-08-08\n\nBaseline SHA-256: \`${baselineSha256}\`\n\n## Decision\n\nDOCX primary: ${primary ? `\`${primary}\`` : '**none**'}. Exactly one primary is selected only when one candidate passes every applicable fixture gate. No fallback trigger is admitted. This evaluation does not change production routing.\n\n## DOCX evidence\n\n| Parser | Native facts | Core facts | Deterministic | Resource <= 50% | p95 wall ms | p95 RSS bytes |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n${rows}\n\n## Format-wide blockers\n\n${blockers}\n\nMissing fixtures and source-hash mismatches are hard non-admission results; they are never inherited from another format or parser. The machine-readable baseline embeds every fixture outcome, deterministic hash, and resource sample used by this decision.\n`
+  const adr = `# ADR 0005: Anydoc Phase 2 Admission\n\nStatus: Accepted\n\nDate: 2026-08-08\n\nBaseline SHA-256: \`${baselineSha256}\`\n\n## Decision\n\nDOCX primary: ${primary ? `\`${primary}\`` : '**none**'}. Exactly one primary is selected only when one candidate passes every applicable fixture gate. No fallback trigger is admitted. This evaluation does not change production routing.\n\n## DOCX evidence\n\n| Parser | Native facts | Core facts | Deterministic | Resource <= 50% |\n| --- | ---: | ---: | ---: | ---: |\n${rows}\n\n## Format-wide blockers\n\n${blockers}\n\nMissing fixtures and source-hash mismatches are hard non-admission results; they are never inherited from another format or parser. The machine-readable baseline contains only logical fixture, package, fact, assertion, decision, and gate evidence. Runtime versions, host provenance, and exact resource samples are emitted separately as run attestation and cannot authorize routing.\n`
   return { baseline, adr }
 }
 

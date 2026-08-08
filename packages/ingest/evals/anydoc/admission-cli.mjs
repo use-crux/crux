@@ -114,11 +114,11 @@ async function evidenceCacheIdentity() {
     ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc@0.1.7/node_modules/@firecrawl/anydoc/package.json')
   const hash = createHash('sha256')
   hash.update('admission-evidence-schema:3\nrunner:family-v3\nassertions:native-raw-v3\n')
-  hash.update(`${process.platform}:${process.arch}:node-${process.versions.node}\ncontainment:${hardMemoryContainment}\n`)
-  for (const file of [...files, ...coreProjectors]) await hashFile(hash, resolve(directory, file))
-  for (const file of await fixtureFiles()) await hashFile(hash, file)
-  await hashFile(hash, nativeArtifact)
-  await hashFile(hash, packageJson)
+  hash.update(`${process.platform}:${process.arch}:node-${process.versions.node.split('.')[0]}\ncontainment:${hardMemoryContainment}\n`)
+  for (const file of [...files, ...coreProjectors]) await hashFile(hash, file, resolve(directory, file))
+  for (const [label, file] of await fixtureFiles()) await hashFile(hash, label, file)
+  await hashFile(hash, '@firecrawl/anydoc-linux-x64-gnu@0.1.7/native', nativeArtifact)
+  await hashFile(hash, '@firecrawl/anydoc@0.1.7/package.json', packageJson)
   const lockfile = await readFile(process.env.CRUX_ANYDOC_LOCKFILE ?? resolve(directory, '../../../../pnpm-lock.yaml'), 'utf8')
   const integrity = lockfile.match(/'@firecrawl\/anydoc@0\.1\.7':\n\s+resolution: \{integrity: ([^}]+)\}/)?.[1]
   if (!integrity) throw new Error('Could not determine the installed @firecrawl/anydoc tarball integrity.')
@@ -129,7 +129,7 @@ async function evidenceCacheIdentity() {
 async function fixtureFiles() {
   const files = await filesUnder(resolve(directory, 'fixtures'))
   files.push(resolve(directory, '../../__tests__/fixtures/layout-aware-mixed.pdf'))
-  return files.sort()
+  return files.sort().map((file) => [`fixture:${file.startsWith(directory) ? file.slice(directory.length + 1) : file.split('/').at(-1)}`, file])
 }
 
 async function filesUnder(path) {
@@ -143,10 +143,10 @@ async function filesUnder(path) {
   return files
 }
 
-async function hashFile(hash, path) {
+async function hashFile(hash, label, path) {
   const bytes = await readFile(path)
   const info = await stat(path)
-  hash.update(`${path}:${info.size}:${createHash('sha256').update(bytes).digest('hex')}\n`)
+  hash.update(`${label}:${info.size}:${createHash('sha256').update(bytes).digest('hex')}\n`)
 }
 
 function containmentUnavailableCandidate(parser, fixtureId) {

@@ -4,7 +4,7 @@ Status: Accepted
 
 Date: 2026-08-08
 
-Baseline SHA-256: `d7f02d2c0475634f4ccd9b7c2593af131ee57de5705439f0abbc764dac16151f`
+Baseline SHA-256: `ff3442e70c956de4e1633cb0841f300b6066c3160848a19b10a3f49021a225a7`
 
 ## Decision
 
@@ -12,10 +12,10 @@ DOCX primary: **none**. Exactly one primary is selected only when one candidate 
 
 ## DOCX evidence
 
-| Parser | Native facts | Core facts | Deterministic | Resource <= 50% | p95 wall ms | p95 RSS bytes |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| anydoc | false | false | false | false | 0 | unavailable |
-| mammoth | false | false | true | true | 1000 | 268435456 |
+| Parser | Native facts | Core facts | Deterministic | Resource <= 50% |
+| --- | ---: | ---: | ---: | ---: |
+| anydoc | false | false | false | false |
+| mammoth | false | false | true | true |
 
 ## Format-wide blockers
 
@@ -32,4 +32,4 @@ DOCX primary: **none**. Exactly one primary is selected only when one candidate 
 - `anydoc`: `hard-memory-containment`
 - `mammoth`: `docx-structure-v1`
 
-Missing fixtures and source-hash mismatches are hard non-admission results; they are never inherited from another format or parser. The machine-readable baseline embeds every fixture outcome, deterministic hash, and resource sample used by this decision.
+Missing fixtures and source-hash mismatches are hard non-admission results; they are never inherited from another format or parser. The machine-readable baseline contains only logical fixture, package, fact, assertion, decision, and gate evidence. Runtime versions, host provenance, and exact resource samples are emitted separately as run attestation and cannot authorize routing.

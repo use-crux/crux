@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "artifactKind": "admission-decision",
+  "authorizesRouting": false,
   "packageIdentity": {
     "anydoc": "0.1.7",
     "native": {
@@ -13,10 +15,7 @@
       "pdf-inspector": "1.12.0"
     }
   },
-  "evidenceIdentity": {
-    "cacheIdentity": "1174ee43d451a2b1e3cd9c8b43abaabbde906931c7ba8c8ed8d5c63778a10396",
-    "runtime": "linux-x64-node-24.16.0",
-    "hardMemoryContainment": false,
+  "decisionIdentity": {
     "fixtureSha256": [
       {
         "fixtureId": "csv-control-v1",
@@ -108,7 +107,7 @@
       }
     ]
   },
-  "runner": {
+  "gates": {
     "maxConcurrentChildren": 1,
     "productionEquivalent": false,
     "hardMemoryContainment": false
@@ -288,152 +287,7 @@
             "hashes": {
               "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
               "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
-                  "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 45,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
-          "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 268435456,
-            "cpuMilliseconds": 1000
+            }
           }
         }
       ]
@@ -468,10 +322,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -505,10 +356,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -542,10 +390,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         },
         {
           "parser": "mammoth",
@@ -592,152 +437,7 @@
             "hashes": {
               "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
               "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
-                  "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6499,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
-          "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 268435456,
-            "cpuMilliseconds": 1000
+            }
           }
         }
       ]
@@ -772,10 +472,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -809,10 +506,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -846,10 +540,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -883,10 +574,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -920,10 +608,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -957,10 +642,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -994,10 +676,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1031,10 +710,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1068,10 +744,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1105,10 +778,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1142,10 +812,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1179,10 +846,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1220,152 +884,7 @@
             "hashes": {
               "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
               "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
-                  "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 36444,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
-          "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 268435456,
-            "cpuMilliseconds": 1000
+            }
           }
         }
       ]
@@ -1400,10 +919,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1437,10 +953,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1474,10 +987,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1511,10 +1021,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         }
       ]
     },
@@ -1548,10 +1055,7 @@
             ]
           },
           "projectionLosses": [],
-          "rolloutBudgetGate": false,
-          "p95": {
-            "wallMilliseconds": 0
-          }
+          "rolloutBudgetGate": false
         },
         {
           "parser": "exceljs",
@@ -1580,152 +1084,7 @@
             "hashes": {
               "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
               "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-            },
-            "cold": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ],
-            "warm": [
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              },
-              {
-                "outcome": {
-                  "kind": "success"
-                },
-                "hashes": {
-                  "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
-                  "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
-                },
-                "diagnostics": [],
-                "metadata": {
-                  "sourceBytes": 6434,
-                  "rssMeasurement": "linux-procfs-process-group",
-                  "productionEquivalent": false,
-                  "maxConcurrentChildren": 1,
-                  "cleanedUp": true
-                }
-              }
-            ]
-          },
-          "p95": {
-            "wallMilliseconds": 1000,
-            "peakRssBytes": 268435456,
-            "cpuMilliseconds": 1000
+            }
           }
         }
       ]

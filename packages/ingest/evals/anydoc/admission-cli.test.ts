@@ -27,6 +27,8 @@ describe('admission replay cache', () => {
       await copyFile(nativeArtifactPath(), nativeArtifact)
 
       const first = await run(copiedDirectory, cacheDirectory, nativeArtifact)
+      const original = await run(directory, resolve(temporary, 'original-cache'), nativeArtifact)
+      expect(first.cacheIdentity).toBe(original.cacheIdentity)
       const cachedPath = resolve(cacheDirectory, 'families/csv.json')
       const staleFixture = JSON.parse(await readFile(cachedPath, 'utf8'))
       staleFixture.results[0].sourceHashMatches = true
