@@ -77,7 +77,7 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal("invalid D-Bus FD property")
 	}
 	start, ok := got["ExecStart"].([]execStart)
-	if !ok || len(start) != 1 || start[0].Path != "/usr/lib/crux/anydoc-runner" || len(start[0].Args) != 1 || start[0].Args[0] != start[0].Path {
+	if !ok || len(start) != 1 || start[0].Path != "/usr/lib/crux/anydoc-runner" || len(start[0].Args) != 2 || start[0].Args[0] != start[0].Path || start[0].Args[1] != got["ReadOnlyPaths"].([]string)[2] {
 		t.Fatalf("unsafe ExecStart %#v", got["ExecStart"])
 	}
 	paths := got["ReadOnlyPaths"].([]string)
@@ -150,8 +150,10 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	bus := newFakeSystemBus()
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, listener: listener, socket: path, peers: fakePeer{pid: 43}}
 	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
 	go func() {
-		done <- u.AuthorizeCapability(context.Background(), Request{Version: 1, Nonce: strings.Repeat("a", 32), Digest: strings.Repeat("b", 64)})
+		done <- u.AuthorizeCapability(ctx, Request{Version: 1, Nonce: strings.Repeat("a", 32), Digest: strings.Repeat("b", 64)})
 	}()
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -168,7 +170,7 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 
 type fakePeer struct{ pid int }
 
-func (p fakePeer) PID(*net.UnixConn) (int, error) { return p.pid, nil }
+func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) { return p.pid, 1000, nil }
 
 func TestSystemdRejectsUnsafePaths(t *testing.T) {
 	for _, path := range []string{"", "/", "relative", "/run/../etc"} {

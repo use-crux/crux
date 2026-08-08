@@ -67,7 +67,7 @@ type SocketFactory interface {
 	Listen(string) (*net.UnixListener, error)
 }
 type PeerVerifier interface {
-	PID(*net.UnixConn) (int, error)
+	Credentials(*net.UnixConn) (int, uint32, error)
 }
 type unixSocketFactory struct{}
 
@@ -77,18 +77,18 @@ func (unixSocketFactory) Listen(path string) (*net.UnixListener, error) {
 
 type unixPeerVerifier struct{}
 
-func (unixPeerVerifier) PID(conn *net.UnixConn) (int, error) {
+func (unixPeerVerifier) Credentials(conn *net.UnixConn) (int, uint32, error) {
 	var credential *unix.Ucred
 	var err error
 	raw, controlErr := conn.SyscallConn()
 	if controlErr != nil {
-		return 0, controlErr
+		return 0, 0, controlErr
 	}
 	controlErr = raw.Control(func(fd uintptr) { credential, err = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED) })
 	if controlErr != nil || err != nil || credential == nil || credential.Pid <= 0 {
-		return 0, errors.New("peer credentials unavailable")
+		return 0, 0, errors.New("peer credentials unavailable")
 	}
-	return int(credential.Pid), nil
+	return int(credential.Pid), credential.Uid, nil
 }
 
 type systemdBackend struct {
@@ -224,7 +224,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
-		{"ExecStart", []execStart{{Path: spec.Command[0], Args: spec.Command, Fail: false}}},
+		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-1]), Fail: false}}},
 		{"Environment", spec.Environment},
 		{"CPUAccounting", spec.CPUAccounting},
 		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
@@ -333,7 +333,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, errors.New("invalid sandbox properties")
 	}
-	return SandboxReport{MainPID: intValue(p, "MainPID"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) error {
@@ -348,23 +348,24 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = u.listener.SetDeadline(deadline)
 	}
-	conn, err := u.listener.AcceptUnix()
-	if err != nil {
-		return errors.New("authorization unavailable")
+	for attempt := 0; attempt < 8; attempt++ {
+		conn, err := u.listener.AcceptUnix()
+		if err != nil {
+			return errors.New("authorization unavailable")
+		}
+		pid, uid, peerErr := u.peers.Credentials(conn)
+		report, reportErr := u.Report(ctx)
+		if peerErr == nil && reportErr == nil && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
+			err = EncodeRequest(conn, request)
+			_ = conn.Close()
+			if err != nil {
+				return errors.New("authorization unavailable")
+			}
+			return nil
+		}
+		_ = conn.Close()
 	}
-	defer conn.Close()
-	pid, err := u.peers.PID(conn)
-	if err != nil {
-		return errors.New("authorization unavailable")
-	}
-	report, err := u.Report(ctx)
-	if err != nil || pid != report.MainPID || !contains(report.ControlGroupMembers, pid) {
-		return errors.New("authorization unavailable")
-	}
-	if err := EncodeRequest(conn, request); err != nil {
-		return errors.New("authorization unavailable")
-	}
-	return nil
+	return errors.New("authorization unavailable")
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
