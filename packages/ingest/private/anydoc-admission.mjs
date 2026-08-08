@@ -103,6 +103,33 @@ function validateDocument(value, state) {
     if (!Buffer.isBuffer(asset.data)) invalid()
   })
   if (value.blocks.length === 0 && value.notes.length === 0) invalid()
+  validateReferences(value)
+}
+
+function validateReferences(document) {
+  const assetIds = new Set()
+  for (const asset of document.assets) {
+    if (assetIds.has(asset.id)) invalid()
+    assetIds.add(asset.id)
+  }
+  const noteIds = new Set()
+  for (const note of document.notes) {
+    if (noteIds.has(note.id)) invalid()
+    noteIds.add(note.id)
+  }
+  const visitInlines = (inlines) => inlines.forEach((inline) => {
+    if (inline.kind === 'image' && !assetIds.has(inline.source.assetId)) invalid()
+    if (inline.kind === 'noteRef' && !noteIds.has(inline.noteId)) invalid()
+    if (inline.kind === 'link') visitInlines(inline.content)
+  })
+  const visitBlocks = (blocks) => blocks.forEach((block) => {
+    if (block.content) visitInlines(block.content)
+    if (block.blocks) visitBlocks(block.blocks)
+    if (block.list) block.list.items.forEach((item) => visitBlocks(item.blocks))
+    if (block.table) block.table.grid.forEach((row) => row.forEach((slot) => { if (slot.kind === 'origin') visitBlocks(slot.cell.blocks) }))
+  })
+  visitBlocks(document.blocks)
+  document.notes.forEach((note) => visitBlocks(note.blocks))
 }
 
 function validateBlock(block, state, depth) {

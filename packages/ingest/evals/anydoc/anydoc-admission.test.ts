@@ -18,6 +18,11 @@ describe('private Anydoc admission projection', () => {
     expect(() => admitAnydocDocument({ blocks: [block], notes: [], assets: [] }, bytes, 'docx')).toThrowError(expect.objectContaining({ code: 'expanded-too-large' }))
   })
 
+  it('rejects dangling parser-owned note and asset relationships', () => {
+    const document = { blocks: [{ kind: 'paragraph', content: [{ kind: 'image', alt: 'missing', source: { kind: 'asset', assetId: 7 } }] }], notes: [], assets: [] }
+    expect(() => admitAnydocDocument(document, bytes, 'docx')).toThrowError(expect.objectContaining({ code: 'invalid-result' }))
+  })
+
   it('extracts parser-native facts independently from the Core projection', async () => {
     const raw = JSON.parse(await readFile(new URL('./fixtures/anydoc-0.1.7-raw-document.json', import.meta.url), 'utf8'))
     delete raw.$comment
