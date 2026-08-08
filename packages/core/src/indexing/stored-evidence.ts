@@ -18,6 +18,19 @@ export interface StoredEvidence {
   readonly chunkerVersion: string
 }
 
+/** Schema-2 facts shared by every normalized chunk from one document. */
+export interface StoredEvidenceDocument {
+  readonly documentSha256: string
+  readonly producer: DocumentProducer
+  readonly normalizationVersion: string
+}
+
+/** Schema-2 facts owned by a normalized source block. */
+export interface StoredEvidenceOrigin {
+  readonly coordinate: SourceCoordinate
+  readonly blockIds: readonly string[]
+}
+
 export class StoredEvidenceContractError extends Error {
   readonly code = 'STORED_EVIDENCE_CONTRACT_INVALID' as const
 
@@ -76,6 +89,30 @@ export function validateStoredEvidence(value: unknown): StoredEvidence {
     normalizedContentSha256,
     normalizationVersion: nonEmpty(record.normalizationVersion, '$.normalizationVersion'),
     chunkerVersion: nonEmpty(record.chunkerVersion, '$.chunkerVersion'),
+  })
+}
+
+/** Build immutable evidence from schema-2 document, block, and chunk facts. */
+export function createStoredEvidence(input: {
+  readonly document: StoredEvidenceDocument
+  readonly origin: StoredEvidenceOrigin
+  readonly chunkId: string
+  readonly normalizedContent: string
+  readonly chunkerVersion: string
+}): StoredEvidence {
+  const contentHash = sha256Hex(new TextEncoder().encode(input.normalizedContent))
+  return validateStoredEvidence({
+    schemaVersion: 2,
+    documentSha256: input.document.documentSha256,
+    producer: input.document.producer,
+    coordinate: input.origin.coordinate,
+    blockIds: input.origin.blockIds,
+    chunkId: input.chunkId,
+    chunkSha256: contentHash,
+    normalizedContent: input.normalizedContent,
+    normalizedContentSha256: contentHash,
+    normalizationVersion: input.document.normalizationVersion,
+    chunkerVersion: input.chunkerVersion,
   })
 }
 

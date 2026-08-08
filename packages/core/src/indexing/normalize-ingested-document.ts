@@ -26,6 +26,11 @@ export function normalizeXlsxDocument(
     source: { mediaType: document.source.mediaType },
     metadata: { ...document.metadata },
     parts,
+    evidence: {
+      documentSha256: document.source.documentSha256,
+      producer: document.producer,
+      normalizationVersion: 'crux:ingested-document:2',
+    },
   }
 }
 
@@ -52,6 +57,10 @@ function tablePart(table: TableBlock, sheet: SheetBlock): CruxIngestPart {
     rows,
     sheetName: spreadsheet.sheet,
     spreadsheet,
+    evidence: {
+      coordinate: table.coordinate,
+      blockIds: [sheet.id, table.id, ...table.rows.flatMap((row) => row.map((cell) => cell.id))],
+    },
   }
 }
 

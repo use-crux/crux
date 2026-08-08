@@ -10,6 +10,7 @@
 
 import { DEFAULT_MAX_CHARS, normalizeChunkingOptions } from './chunking-options'
 import { createStableId } from './hash'
+import { createStoredEvidence } from './stored-evidence'
 import { createMediaPartChunk, mediaParts } from './media-chunks'
 import {
   coarseProvenance,
@@ -376,7 +377,7 @@ function chunkTablePart(
         ...coarseProvenance([part]),
         ...(part.spreadsheet && spreadsheetRows ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, spreadsheetRows, sourceRowIndexes)] } : {}),
         confidence: 'derived',
-      }),
+      }, tableEvidenceOrigin(part, spreadsheetRows, sourceRowIndexes)),
     )
   }
   return chunks
@@ -408,23 +409,42 @@ function createPartChunk(
   content: string,
   ordinal: number,
   provenance?: ChunkProvenance,
+  evidenceOrigin?: CruxIngestPart['evidence'],
 ): CruxChunk {
   const source = sourceFactsWithLocations(document.source, provenance?.sourceLocations ?? [])
+  const chunkId = createStableId('chunk', {
+    sourceId: document.sourceId,
+    ordinal,
+    content,
+    provenance,
+  })
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
-    chunkId: createStableId('chunk', {
-      sourceId: document.sourceId,
-      ordinal,
-      content,
-      provenance,
-    }),
+    chunkId,
     ordinal,
     content,
     metadata: document.metadata ?? {},
     ...(source ? { source } : {}),
     ...(document.title ? { parent: { title: document.title } } : {}),
     ...(provenance ? { provenance } : {}),
+    ...(document.evidence && evidenceOrigin
+      ? { evidence: createStoredEvidence({ document: document.evidence, origin: evidenceOrigin, chunkId, normalizedContent: content, chunkerVersion: 'structured:2' }) }
+      : {}),
+  }
+}
+
+function tableEvidenceOrigin(
+  part: Extract<CruxIngestPart, { kind: 'table' }>,
+  rows: readonly (readonly SpreadsheetCellProvenance[])[] | undefined,
+  indexes: readonly number[],
+): CruxIngestPart['evidence'] {
+  if (!part.evidence || !rows) {
+    return part.evidence
+  }
+  return {
+    coordinate: part.evidence.coordinate,
+    blockIds: [...part.evidence.blockIds.slice(0, 2), ...indexes.flatMap((index) => rows[index]?.map((cell) => cell.id) ?? [])],
   }
 }
 

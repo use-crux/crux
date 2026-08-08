@@ -16,7 +16,7 @@ import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
-import type { ChunkProvenance, CruxSourceFacts } from '../indexing'
+import type { CruxSourceFacts } from '../indexing'
 import type { StoredEvidence } from '../indexing'
 import type { AssetRef } from '../asset'
 import type { KnowledgeRef } from '../knowledge/refs'
@@ -117,7 +117,7 @@ export interface RetrieverSource extends Omit<CruxSourceFacts, 'assetRef'> {
 }
 
 /** Structured scoring and transformation history for a retrieval hit. */
-export interface HitProvenance extends ChunkProvenance {
+export interface HitProvenance {
   rawScore?: number
   matches?: readonly SearchLegMatch[]
   perSource?: Array<{ retrieverId: string; score: number; rank: number; weight?: number }>

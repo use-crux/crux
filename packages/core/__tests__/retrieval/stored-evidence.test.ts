@@ -46,4 +46,15 @@ describe('stored retrieval evidence', () => {
 
     expect(indexedChunkToHit({ value: stale, score: 0.9 })).toBeNull()
   })
+
+  it('rejects missing evidence instead of hydrating a legacy chunk', () => {
+    const legacy = { ...chunk(), evidence: undefined }
+
+    expect(() => createIndexedChunkRecord({ indexerId: 'docs', generationId: 'g1', chunk: legacy, now: 1 })).toThrow(
+      'Stored evidence is required',
+    )
+
+    const persisted = createIndexedChunkRecord({ indexerId: 'docs', generationId: 'g1', chunk: chunk(), now: 1 })
+    expect(indexedChunkToHit({ value: { ...persisted, evidence: undefined }, score: 0.9 })).toBeNull()
+  })
 })

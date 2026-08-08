@@ -18,7 +18,13 @@ export { transform, chunker, indexingPipeline } from './pipeline'
 export { indexer } from './define-indexer'
 export { corpus } from './define-corpus'
 export { IngestedDocumentContractError, validateIngestedDocument } from './ingested-document'
-export { StoredEvidenceContractError, deserializeStoredEvidence, serializeStoredEvidence, validateStoredEvidence } from './stored-evidence'
+export {
+  StoredEvidenceContractError,
+  createStoredEvidence,
+  deserializeStoredEvidence,
+  serializeStoredEvidence,
+  validateStoredEvidence,
+} from './stored-evidence'
 export { normalizeXlsxDocument } from './normalize-ingested-document'
 export type {
   ApplicationOperationProducer,
@@ -42,7 +48,7 @@ export type {
   TableCell,
   TextBlock,
 } from './ingested-document'
-export type { StoredEvidence } from './stored-evidence'
+export type { StoredEvidence, StoredEvidenceDocument, StoredEvidenceOrigin } from './stored-evidence'
 
 export type {
   // Documents, chunks, and provenance

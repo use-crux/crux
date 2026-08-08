@@ -14,7 +14,7 @@ import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, SearchStore, Storage } from '../storage'
 import type { DeriveStage } from '../knowledge/derive/stage'
-import type { StoredEvidence } from './stored-evidence'
+import type { StoredEvidence, StoredEvidenceDocument, StoredEvidenceOrigin } from './stored-evidence'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
@@ -30,6 +30,8 @@ export interface CruxDocument {
   metadata?: Record<string, unknown>
   parts?: CruxIngestPart[]
   warnings?: CruxIngestWarning[]
+  /** Schema-2 document facts used to derive immutable stored evidence. */
+  evidence?: StoredEvidenceDocument
 }
 
 /** An indexed content chunk. */
@@ -215,7 +217,11 @@ export type CruxIngestPart = (
       caption?: string
       metadata?: Record<string, unknown>
     }
-) & { readonly sourceLocation?: CruxSourceLocation }
+) & {
+  readonly sourceLocation?: CruxSourceLocation
+  /** Schema-2 source block facts used to derive immutable stored evidence. */
+  readonly evidence?: StoredEvidenceOrigin
+}
 
 /** Where a chunk's content came from in its source document. */
 export interface ChunkProvenance {

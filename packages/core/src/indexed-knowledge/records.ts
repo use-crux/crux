@@ -70,8 +70,11 @@ export function createIndexedChunkRecord(input: {
   readonly sparse?: SparseVector
   readonly now: number
 }): IndexedChunkRecord {
-  const evidence = input.chunk.evidence ? validateStoredEvidence(input.chunk.evidence) : undefined
-  if (evidence && (evidence.chunkId !== input.chunk.chunkId || evidence.normalizedContent !== input.chunk.content)) {
+  if (!input.chunk.evidence) {
+    throw new Error('Stored evidence is required before an indexed chunk can be persisted.')
+  }
+  const evidence = validateStoredEvidence(input.chunk.evidence)
+  if (evidence.chunkId !== input.chunk.chunkId || evidence.normalizedContent !== input.chunk.content) {
     throw new Error('Stored evidence must retain the indexed chunk ID and content exactly.')
   }
   const source = projectSourceFacts(input.chunk.source)
@@ -196,21 +199,19 @@ export function indexedChunkToHit(input: {
 
   const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
   let evidence: CruxChunk['evidence'] | undefined
-  if (value.evidence !== undefined) {
-    try {
-      evidence = validateStoredEvidence(value.evidence)
-    } catch {
-      return null
-    }
-    if (evidence.chunkId !== value.chunkId || evidence.normalizedContent !== value.content) {
-      return null
-    }
+  if (value.evidence === undefined) {
+    return null
+  }
+  try {
+    evidence = validateStoredEvidence(value.evidence)
+  } catch {
+    return null
+  }
+  if (evidence.chunkId !== value.chunkId || evidence.normalizedContent !== value.content) {
+    return null
   }
   const matches = input.matches?.map((match) => ({ ...match }))
-  const provenance = {
-    ...(isRecord(value.provenance) ? value.provenance : {}),
-    ...(matches ? { matches } : {}),
-  }
+  const provenance = matches ? { matches } : undefined
 
   return {
     namespace: value.namespace,
@@ -221,7 +222,7 @@ export function indexedChunkToHit(input: {
     score: input.score,
     ...(evidence ? { evidence } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
-    ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
+    ...(provenance ? { provenance } : {}),
   }
 }
 
