@@ -120,4 +120,43 @@ describe('private Anydoc admission projection', () => {
     ]))
     expect(JSON.stringify(admitted.native)).not.toContain('AQID')
   })
+
+  // Supervisor DecodeResult rejects any non-provenance fact whose factPath
+  // lacks a provenance row (unbound native fact) and never sends ACK; the
+  // worker then fails at stage=acknowledgement. Link facts use distinct
+  // /inlines/N paths that must carry their own bound provenance.
+  it('binds provenance to every native link fact path required before ACK', () => {
+    const raw = {
+      blocks: [{ kind: 'paragraph', content: [
+        { kind: 'text', text: 'before ' },
+        { kind: 'link', content: [{ kind: 'text', text: 'reference' }], target: { kind: 'external', value: 'https://cruxjs.dev/' } },
+        { kind: 'text', text: '.' },
+      ] }],
+      notes: [],
+      assets: [],
+    }
+    const admitted = admitAnydocDocument(raw, bytes, 'docx')
+    const facts = admitted.native.facts as ReadonlyArray<{ readonly kind: string; readonly factPath: string; readonly path?: string; readonly text?: string; readonly target?: string }>
+    const links = facts.filter((fact) => fact.kind === 'link')
+    expect(links).toEqual([
+      expect.objectContaining({ kind: 'link', text: 'reference', target: 'https://cruxjs.dev/', factPath: 'blocks/1/inlines/2' }),
+    ])
+
+    // Same binding rule DecodeResult enforces before writing ACK (and the
+    // worker replying ACKED): every non-provenance factPath must be bound.
+    const provenancePaths = new Set(
+      facts.filter((fact) => fact.kind === 'provenance').map((fact) => fact.factPath),
+    )
+    for (const fact of facts) {
+      if (fact.kind === 'provenance') {
+        continue
+      }
+      expect(provenancePaths.has(fact.factPath)).toBe(true)
+    }
+    for (const link of links) {
+      expect(facts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'provenance', factPath: link.factPath, path: link.factPath }),
+      ]))
+    }
+  })
 })

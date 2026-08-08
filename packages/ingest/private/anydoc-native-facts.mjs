@@ -33,6 +33,10 @@ export function extractAnydocNativeFacts(document, bytes, producer) {
     if (inline.kind !== 'link') return
     const factPath = `${path}/inlines/${index + 1}`
     add(factPath, { kind: 'link', text: nativeInlineText(inline.content), target: inline.target.value })
+    // Link facts use a distinct path from the parent block. Supervisor
+    // DecodeResult rejects unbound non-provenance fact paths before ACK;
+    // bind the inline path so the result can be acknowledged.
+    provenance(factPath)
     visitLinks(inline.content, factPath)
   })
   const visit = (block, factPath, depth) => {
