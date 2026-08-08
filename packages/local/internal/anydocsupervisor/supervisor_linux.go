@@ -23,10 +23,12 @@ const (
 	MaxFrameBytes   = 8 << 20
 	MemoryCeiling   = 512 << 20
 	TasksCeiling    = 64
-	CPUQuotaPercent = 100
+	// This caps aggregate cgroup CPU at 18 seconds during RuntimeCeiling.
+	CPUQuotaPercent = 60
 	CPUPeriodUSec   = 1_000_000
 	RuntimeCeiling  = 30 * time.Second
 	CPUCeiling      = 20 * time.Second
+	usageTimeout    = 100 * time.Millisecond
 )
 
 type ErrorCode string
@@ -45,6 +47,8 @@ type SupervisorError struct{ Code ErrorCode }
 
 func (e *SupervisorError) Error() string { return string(e.Code) }
 func closed(code ErrorCode) error        { return &SupervisorError{Code: code} }
+
+var errCPUAccounting = errors.New("cpu accounting unavailable")
 
 type Request struct {
 	Version int    `json:"version"`
@@ -328,6 +332,9 @@ func (r *Run) Finish(_ context.Context, out error) error {
 	return r.result
 }
 func outcomeCode(out error) error {
+	if errors.Is(out, errCPUAccounting) {
+		return closed(ErrContainmentUnavailable)
+	}
 	if errors.Is(out, context.DeadlineExceeded) {
 		return closed(ErrTimeout)
 	}
@@ -347,9 +354,11 @@ func (r *Run) monitor() {
 		case <-r.stop:
 			return
 		case <-tick.C:
-			u, e := r.unit.CPUUsage(context.Background())
+			ctx, cancel := context.WithTimeout(context.Background(), usageTimeout)
+			u, e := r.unit.CPUUsage(ctx)
+			cancel()
 			if e != nil {
-				r.Finish(context.Background(), errors.New("cpu accounting"))
+				r.Finish(context.Background(), errCPUAccounting)
 				return
 			}
 			if u >= CPUCeiling {

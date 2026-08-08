@@ -68,6 +68,18 @@ func TestCPULimitStops(t *testing.T) {
 	}
 	r.Finish(context.Background(), nil)
 }
+func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
+	if time.Duration(CPUQuotaPercent)*RuntimeCeiling/100 >= CPUCeiling {
+		t.Fatal("service quota can exceed CPU budget")
+	}
+	b := &fakeBackend{cpuErr: true}
+	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	time.Sleep(30 * time.Millisecond)
+	assert(t, r.Finish(context.Background(), nil), ErrContainmentUnavailable)
+}
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
 	var x *SupervisorError
@@ -77,10 +89,11 @@ func assert(t *testing.T, e error, c ErrorCode) {
 }
 
 type fakeBackend struct {
-	u    *fakeUnit
-	read *os.File
-	bad  bool
-	cpu  time.Duration
+	u      *fakeUnit
+	read   *os.File
+	bad    bool
+	cpu    time.Duration
+	cpuErr bool
 }
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
@@ -89,18 +102,24 @@ func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit,
 	if b.bad {
 		rep.MemoryMax = 1
 	}
-	b.u = &fakeUnit{rep: rep, cpu: b.cpu}
+	b.u = &fakeUnit{rep: rep, cpu: b.cpu, cpuErr: b.cpuErr}
 	return b.u, nil
 }
 
 type fakeUnit struct {
 	rep              SandboxReport
 	cpu              time.Duration
+	cpuErr           bool
 	stopped, cleaned bool
 }
 
-func (u *fakeUnit) Report(context.Context) (SandboxReport, error)   { return u.rep, nil }
-func (u *fakeUnit) CPUUsage(context.Context) (time.Duration, error) { return u.cpu, nil }
-func (u *fakeUnit) Stop(context.Context) error                      { u.stopped = true; u.rep.Populated = false; return nil }
-func (u *fakeUnit) WaitInactive(context.Context) error              { return nil }
-func (u *fakeUnit) Cleanup(context.Context) error                   { u.cleaned = true; return nil }
+func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, nil }
+func (u *fakeUnit) CPUUsage(context.Context) (time.Duration, error) {
+	if u.cpuErr {
+		return 0, errors.New("unavailable")
+	}
+	return u.cpu, nil
+}
+func (u *fakeUnit) Stop(context.Context) error         { u.stopped = true; u.rep.Populated = false; return nil }
+func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
+func (u *fakeUnit) Cleanup(context.Context) error      { u.cleaned = true; return nil }
