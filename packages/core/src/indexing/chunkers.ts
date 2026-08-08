@@ -357,14 +357,15 @@ function chunkTablePart(
     : part.content.split('\n').map((row) => row.split('|').map((cell) => cell.trim()))
   if (!rows.length) return []
   const header = part.columns ?? rows[0]
-  const includesHeaderRow = rows.length > 1 && arraysEqual(rows[0], header)
+  const includesHeaderRow = rows.length > 0 && arraysEqual(rows[0], header)
   const bodyRows = includesHeaderRow ? rows.slice(1) : rows
+  const windows = bodyRows.length ? bodyRows : [[]]
   const chunks: CruxChunk[] = []
-  for (let index = 0; index < bodyRows.length; index += rowsPerChunk) {
-    const windowRows = bodyRows.slice(index, index + rowsPerChunk)
+  for (let index = 0; index < windows.length; index += rowsPerChunk) {
+    const windowRows = windows.slice(index, index + rowsPerChunk)
     const renderedRows = [header, ...windowRows].map((row) => row.join(' | ')).join('\n')
     const sourceRowIndexes = [
-      ...(includesHeaderRow ? [0] : []),
+      ...(includesHeaderRow && index === 0 ? [0] : []),
       ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
     ]
     chunks.push(

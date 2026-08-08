@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
 import { expect, it } from 'vitest'
-import { indexer, normalizeIngestedDocument } from '@use-crux/core'
+import { indexer, normalizeXlsxDocument } from '@use-crux/core'
 import { embedding } from '@use-crux/core/embedding'
 import { chunker, indexingPipeline } from '@use-crux/core/indexing'
 import { retriever } from '@use-crux/core/retrieval'
@@ -25,7 +25,7 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
   revenue.getCell('B6').value = 'Annual plan'
 
   const ingested = await parseXlsxDocument({ bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) })
-  const document = normalizeIngestedDocument(ingested, { namespace: 'finance', sourceId: 'revenue.xlsx' })
+  const document = normalizeXlsxDocument(ingested, { namespace: 'finance', sourceId: 'revenue.xlsx' })
   const records = inMemoryRecordStore()
   const search = inMemorySearchStore()
   const dense = embedding({
@@ -48,17 +48,39 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
   const chunks = await docs.chunk([document])
   const formulaChunk = chunks.find((chunk) => chunk.content.includes('Pro') && chunk.content.includes('20'))
   const spreadsheet = formulaChunk?.provenance?.spreadsheets?.[0]
-  expect(spreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
-  expect(spreadsheet?.cells).toEqual(expect.arrayContaining([
-    expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
-  ]))
-  expect(spreadsheet?.cells.map((cell) => cell.address)).not.toContain('B6')
+  expect(spreadsheet).toMatchObject({
+    sheet: 'Revenue',
+    index: 0,
+    range: 'B2:D6',
+    sheetBlockId: ingested.blocks[0]?.id,
+    tableBlockId: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.id : undefined,
+  })
+  expect(spreadsheet?.cells.map((cell) => cell.address)).toEqual(['B2', 'C2', 'D2', 'B4', 'C4', 'D4'])
+  expect(spreadsheet?.cells.find((cell) => cell.address === 'D4')).toMatchObject({
+    id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[1]?.[2]?.id : undefined,
+    address: 'D4',
+    displayedValue: '20',
+    formula: '10*2',
+  })
 
   const mergeSpreadsheet = chunks.find((chunk) => chunk.content.includes('Annual plan'))?.provenance?.spreadsheets?.[0]
-  expect(mergeSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
+  expect(mergeSpreadsheet).toMatchObject({
+    sheet: 'Revenue',
+    index: 0,
+    range: 'B2:D6',
+    sheetBlockId: ingested.blocks[0]?.id,
+    tableBlockId: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.id : undefined,
+  })
+  expect(mergeSpreadsheet?.cells.map((cell) => cell.address)).toEqual(['B6', 'C6', 'D6'])
   expect(mergeSpreadsheet?.cells).toEqual(expect.arrayContaining([
-    expect.objectContaining({ address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
-    expect.objectContaining({ address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+    expect.objectContaining({
+      id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[0]?.id : undefined,
+      address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6',
+    }),
+    expect.objectContaining({
+      id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[1]?.id : undefined,
+      address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6',
+    }),
   ]))
 
   await docs.indexDocuments([document])
@@ -73,8 +95,12 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
             sheet: 'Revenue',
             index: 0,
             range: 'B2:D6',
+            sheetBlockId: ingested.blocks[0]?.id,
             cells: expect.arrayContaining([
-              expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
+              expect.objectContaining({
+                id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[1]?.[2]?.id : undefined,
+                address: 'D4', displayedValue: '20', formula: '10*2',
+              }),
             ]),
           }),
         ]),
@@ -86,18 +112,52 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
   expect(hits[0]).toMatchObject({ source: { id: 'revenue.xlsx' } })
   const retrieved = hits.find((hit) => hit.kind !== 'finding' && hit.content.includes('Pro'))
   const retrievedSpreadsheet = retrieved?.kind === 'finding' ? undefined : retrieved?.provenance?.spreadsheets?.[0]
-  expect(retrievedSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6' })
+  expect(retrievedSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6', sheetBlockId: ingested.blocks[0]?.id })
   expect(retrievedSpreadsheet?.cells).toEqual(expect.arrayContaining([
-    expect.objectContaining({ address: 'D4', displayedValue: '20', formula: '10*2' }),
+    expect.objectContaining({
+      id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[1]?.[2]?.id : undefined,
+      address: 'D4', displayedValue: '20', formula: '10*2',
+    }),
   ]))
 
   const mergeHit = (await retriever({ id: 'finance', namespace: 'finance', records, search, dense }).retrieve('Annual'))
     .find((hit) => hit.kind !== 'finding' && hit.content.includes('Annual plan'))
   const retrievedMerge = mergeHit?.kind === 'finding' ? undefined : mergeHit?.provenance?.spreadsheets?.[0]
   expect(retrievedMerge?.cells).toEqual(expect.arrayContaining([
-    expect.objectContaining({ address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
-    expect.objectContaining({ address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6' }),
+    expect.objectContaining({
+      id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[0]?.id : undefined,
+      address: 'B6', displayedValue: 'Annual plan', mergeMaster: 'B6', mergeRange: 'B6:C6',
+    }),
+    expect.objectContaining({
+      id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[1]?.id : undefined,
+      address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6',
+    }),
   ]))
+})
+
+it('normalizes only spreadsheet blocks and does not duplicate a one-row table header', async () => {
+  const workbook = new ExcelJS.Workbook()
+  workbook.addWorksheet('Summary').getCell('A1').value = 'Only value'
+  const ingested = await parseXlsxDocument({ bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) })
+  const document = normalizeXlsxDocument(ingested, { namespace: 'finance', sourceId: 'summary.xlsx' })
+  const result = await chunker.structured().chunkDocument(document, { chunking: { maxChars: 100, overlapChars: 0 } })
+
+  expect(result.chunks).toHaveLength(1)
+  expect(result.chunks[0]?.content.match(/Only value/g)).toHaveLength(1)
+  expect(result.chunks[0]?.provenance?.spreadsheets?.[0]?.cells.map((cell) => cell.address)).toEqual(['A1'])
+  expect(() => normalizeXlsxDocument({
+    ...ingested,
+    blocks: [{
+      id: 'not-a-sheet',
+      kind: 'text',
+      coordinate: { kind: 'document', documentSha256: ingested.source.documentSha256 },
+      headingPath: [],
+      producer: ingested.producer,
+      role: 'paragraph',
+      text: 'unsupported',
+      inlines: [],
+    }],
+  })).toThrow('normalizeXlsxDocument only accepts sheet blocks; received text.')
 })
 
 it('maps ExcelJS worksheet, sparse-cell, formula, and merge facts to schema 2', async () => {

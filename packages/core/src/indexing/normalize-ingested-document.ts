@@ -1,28 +1,23 @@
 /** Normalize schema-2 documents into the established Core indexing input. */
 
-import type {
-  DocumentBlock,
-  IngestedDocument,
-  SheetBlock,
-  SourceCoordinate,
-  TableBlock,
-  TableCell,
-  TextBlock,
-} from './ingested-document'
+import type { IngestedDocument, SheetBlock, SourceCoordinate, TableBlock, TableCell } from './ingested-document'
 import type { CruxDocument, CruxIngestPart, SpreadsheetCellProvenance, SpreadsheetProvenance } from './types'
 
 /**
- * Normalize schema-2 blocks without deriving location facts from rendered text.
+ * Normalize schema-2 XLSX blocks without deriving location facts from rendered text.
  *
  * Spreadsheet tables retain their original worksheet range and every physical
  * cell descriptor as chunk provenance. Core owns this bridge and intentionally
  * has no dependency on any parser or Ingest package.
  */
-export function normalizeIngestedDocument(
+export function normalizeXlsxDocument(
   document: IngestedDocument,
   identity: { readonly namespace: string; readonly sourceId: string },
 ): CruxDocument {
-  const parts = document.blocks.flatMap((block) => normalizeBlock(block))
+  if (document.source.format !== 'xlsx' && document.source.format !== 'xlsm') {
+    throw new Error('normalizeXlsxDocument only accepts XLSX or XLSM schema-2 documents.')
+  }
+  const parts = document.blocks.flatMap(normalizeSheet)
 
   return {
     namespace: identity.namespace,
@@ -38,47 +33,32 @@ function partContent(part: CruxIngestPart): string {
   return part.kind === 'media' ? (part.caption ?? '') : part.content
 }
 
-function normalizeBlock(block: DocumentBlock, sheet?: SheetBlock): CruxIngestPart[] {
-  switch (block.kind) {
-    case 'text':
-      return [textPart(block)]
-    case 'table':
-      return [tablePart(block, sheet)]
-    case 'sheet':
-      return block.blocks.flatMap((child) => normalizeBlock(child, block))
-    case 'page':
-    case 'slide':
-      return block.blocks.flatMap((child) => normalizeBlock(child))
-    case 'list':
-      return block.items.flatMap((item) => item.blocks.flatMap((child) => normalizeBlock(child)))
+function normalizeSheet(block: IngestedDocument['blocks'][number]): CruxIngestPart[] {
+  if (block.kind !== 'sheet') {
+    throw new Error(`normalizeXlsxDocument only accepts sheet blocks; received ${block.kind}.`)
   }
+  const sheet = block
+  return sheet.blocks.map((table) => tablePart(table, sheet))
 }
 
-function textPart(block: TextBlock): CruxIngestPart {
-  return {
-    id: block.id,
-    kind: 'text',
-    content: block.text,
-    role: block.role,
-    headingPath: [...block.headingPath],
-  }
-}
-
-function tablePart(table: TableBlock, sheet: SheetBlock | undefined): CruxIngestPart {
+function tablePart(table: TableBlock, sheet: SheetBlock): CruxIngestPart {
   const rows = table.rows.map((row) => row.map(cellValue))
-  const spreadsheet = sheet ? spreadsheetProvenance(sheet, table) : undefined
+  const spreadsheet = spreadsheetProvenance(sheet, table)
   return {
     id: table.id,
     kind: 'table',
     content: rows.map((row) => row.join(' | ')).join('\n'),
     columns: [...table.columns],
     rows,
-    ...(spreadsheet ? { sheetName: spreadsheet.sheet, spreadsheet } : {}),
+    sheetName: spreadsheet.sheet,
+    spreadsheet,
   }
 }
 
 function spreadsheetProvenance(sheet: SheetBlock, table: TableBlock): SpreadsheetProvenance {
   return {
+    sheetBlockId: sheet.id,
+    tableBlockId: table.id,
     sheet: sheet.sheet,
     index: sheet.index,
     range: sheet.range,
@@ -90,6 +70,7 @@ function cellProvenance(cell: TableCell): SpreadsheetCellProvenance {
   const address = cellAddress(cell.coordinate)
   const mergeMaster = cell.mergeRange ? cell.mergeRange.split(':')[0] : undefined
   return {
+    id: cell.id,
     address,
     row: cell.row,
     column: cell.column,

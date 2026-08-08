@@ -125,6 +125,8 @@ export interface CruxIngestPageTableBlock {
 
 /** Exact spreadsheet cell facts owned by a structured table chunk. */
 export interface SpreadsheetCellProvenance {
+  /** Stable schema-2 TableCell ID. */
+  readonly id: string
   readonly address: string
   readonly row: number
   readonly column: number
@@ -136,6 +138,10 @@ export interface SpreadsheetCellProvenance {
 
 /** Exact worksheet ownership retained through chunking and retrieval. */
 export interface SpreadsheetProvenance {
+  /** Stable schema-2 SheetBlock ID. */
+  readonly sheetBlockId: string
+  /** Stable schema-2 TableBlock ID. */
+  readonly tableBlockId: string
   readonly sheet: string
   readonly index: number
   readonly range: string

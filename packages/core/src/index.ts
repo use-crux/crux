@@ -1002,7 +1002,7 @@ export type {
 } from "./citations";
 
 // Indexing
-export { corpus, indexer, IngestedDocumentContractError, normalizeIngestedDocument, validateIngestedDocument } from "./indexing";
+export { corpus, indexer, IngestedDocumentContractError, normalizeXlsxDocument, validateIngestedDocument } from "./indexing";
 export type {
   Corpus,
   CorpusConfig,
