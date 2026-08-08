@@ -799,6 +799,35 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 	return usage, nil
 }
 
+func (u *systemdUnit) CaptureTerminalAccounting(ctx context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error) {
+	report, reportErr := u.Report(ctx)
+	if reportErr != nil {
+		return SandboxReport{}, 0, u.captureFailure(), reportErr
+	}
+	cpu, cpuErr := u.CPUUsage(ctx)
+	if cpuErr != nil {
+		return SandboxReport{}, 0, u.captureFailure(), cpuErr
+	}
+	return report, cpu, accountingCaptureOK, nil
+}
+
+func (u *systemdUnit) captureFailure() accountingCaptureFailure {
+	if u == nil || u.fs == nil {
+		return accountingCaptureInvalid
+	}
+	u.reportMu.Lock()
+	cgroup := u.controlGroup
+	u.reportMu.Unlock()
+	if !validCgroup(cgroup) {
+		return accountingCaptureInvalid
+	}
+	_, err := u.fs.ReadFile(cgroupFile(cgroup, "cgroup.events"))
+	if os.IsNotExist(err) {
+		return accountingCaptureExactCgroupAbsent
+	}
+	return accountingCaptureInvalid
+}
+
 func (u *systemdUnit) Stop(ctx context.Context) error {
 	if err := u.bus.StopUnit(ctx, u.name); err == nil {
 		return nil

@@ -95,6 +95,7 @@ type hostileEvidence struct {
 	CPUThrottled      int64            `json:"cpuThrottledUsec"`
 	CPUPeriods        int64            `json:"cpuThrottledPeriods"`
 	PIDsMax           int64            `json:"pidsMaxEvents"`
+	ServiceResult     string           `json:"serviceResult,omitempty"`
 	WallMillis        int64            `json:"wallMillis"`
 	Cleaned           bool             `json:"cleaned"`
 	TerminationEmpty  bool             `json:"terminationEmpty"`
@@ -260,8 +261,8 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if terminal.Outcome == ErrContainmentUnavailable {
 		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
 	}
-	if name == "memory" && terminal.PreStop.MemoryEvents["oom_kill"] < 1 {
-		t.Fatalf("memory probe lacked observed OOM kill: %#v", terminal.PreStop.MemoryEvents)
+	if name == "memory" && terminal.PreStop.MemoryEvents["oom_kill"] < 1 && terminal.PreStop.ServiceResult != "oom-kill" {
+		t.Fatalf("memory probe lacked observed OOM evidence: events=%#v result=%q", terminal.PreStop.MemoryEvents, terminal.PreStop.ServiceResult)
 	}
 	if name == "cpu" && (terminal.CPU < 300*time.Millisecond || terminal.CPU > 900*time.Millisecond) {
 		t.Fatalf("CPU probe exceeded bounded cumulative ceiling: %s", terminal.CPU)
@@ -289,7 +290,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 			t.Fatalf("descendant %d escaped cgroup cleanup", observation.PID)
 		}
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
 
 func expectedProbeOutcome(name string) ErrorCode {
@@ -393,7 +394,7 @@ func observedProbeOutcome(name string, observation probeObservation, report Sand
 		}
 		return OutcomeSuccess
 	case "memory":
-		if report.MemoryEvents["oom_kill"] > 0 {
+		if report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom-kill" {
 			return ErrWorkerCrash
 		}
 	case "cpu":

@@ -47,3 +47,8 @@ worker may exit and have its cgroup removed without losing its last valid
 accounting evidence. A missing cgroup fails closed unless such a verified
 snapshot exists; it is accepted only later as termination evidence for that
 exact original cgroup identity.
+
+That fallback is classified at the failed accounting capture itself. Only an
+`ENOENT` for the exact verified cgroup permits reuse of the retained snapshot;
+malformed, unreadable, permission-denied, and other I/O failures remain closed
+even if stopping the unit subsequently removes the cgroup.

@@ -390,6 +390,17 @@ type verifiedAccountingSnapshot interface {
 type activeAccountingCollector interface {
 	RefreshAccounting(context.Context) (time.Duration, error)
 }
+type accountingCaptureFailure uint8
+
+const (
+	accountingCaptureOK accountingCaptureFailure = iota
+	accountingCaptureExactCgroupAbsent
+	accountingCaptureInvalid
+)
+
+type terminalAccountingCapture interface {
+	CaptureTerminalAccounting(context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error)
+}
 type Backend interface {
 	Start(context.Context, ServiceSpec, *os.File) (Unit, error)
 }
@@ -692,17 +703,35 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 	}
 	ok := true
 	usedCachedAccounting := false
-	report, reportErr := unit.Report(ctx)
-	cpu, cpuErr := unit.CPUUsage(ctx)
-	if reportErr != nil || cpuErr != nil {
+	captureFailure := accountingCaptureInvalid
+	var report SandboxReport
+	var cpu time.Duration
+	var captureErr error
+	if capture, supported := unit.(terminalAccountingCapture); supported {
+		report, cpu, captureFailure, captureErr = capture.CaptureTerminalAccounting(ctx)
+	} else {
+		var reportErr, cpuErr error
+		report, reportErr = unit.Report(ctx)
+		cpu, cpuErr = unit.CPUUsage(ctx)
+		if reportErr != nil {
+			captureErr = reportErr
+		} else {
+			captureErr = cpuErr
+		}
+		if captureErr == nil {
+			captureFailure = accountingCaptureOK
+		}
+	}
+	if captureErr != nil {
 		snapshots, hasSnapshots := unit.(verifiedAccountingSnapshot)
 		cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
 		if hasSnapshots {
 			cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
 		}
-		if !cached {
+		if !cached || captureFailure != accountingCaptureExactCgroupAbsent {
 			ok = false
-		} else {
+		}
+		if cached {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
 		}

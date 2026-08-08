@@ -200,6 +200,13 @@ func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
 	delete(fs.files, cgroupFile("/crux.slice/test", "memory.max"))
 	fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
 	fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = nil
+	bus.onStop = func() {
+		for path := range fs.files {
+			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, path)
+			}
+		}
+	}
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
 	if _, _, _, cleaned := cleanup(unit); cleaned {
@@ -472,6 +479,7 @@ type fakeSystemBus struct {
 	values                     map[string]any
 	startErr, stopErr, killErr error
 	reset                      bool
+	onStop                     func()
 }
 
 func newFakeSystemBus() *fakeSystemBus {
@@ -491,7 +499,12 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]any, error) {
 	return b.values, nil
 }
-func (b *fakeSystemBus) StopUnit(_ context.Context, _ string) error { return b.stopErr }
+func (b *fakeSystemBus) StopUnit(_ context.Context, _ string) error {
+	if b.onStop != nil {
+		b.onStop()
+	}
+	return b.stopErr
+}
 func (b *fakeSystemBus) KillUnit(_ context.Context, _ string) error { return b.killErr }
 func (b *fakeSystemBus) ResetFailedUnit(_ context.Context, _ string) error {
 	b.reset = true
