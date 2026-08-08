@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
 import { expect, it } from 'vitest'
-import { parseXlsxDocument } from '../src/xlsx'
+import { parseXlsxDocument, projectXlsxSchema2DisplayValue } from '../src/xlsx'
 
 it('maps ExcelJS worksheet, sparse-cell, formula, and merge facts to schema 2', async () => {
   const workbook = new ExcelJS.Workbook()
@@ -81,4 +81,58 @@ it('preserves ExcelJS displayed values independently from formula expressions', 
     { displayedValue: 'false', formula: '1=2' },
   ])
   expect(document.diagnostics).toEqual([])
+})
+
+it('preserves shared-formula translation, vertical merge topology, and saved currency/date displays', async () => {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Details')
+  sheet.getCell('A1').value = 'Amount'
+  sheet.getCell('B1').value = 'Due'
+  sheet.getCell('C1').value = 'Shared'
+  sheet.getCell('A2').value = 1234.5
+  sheet.getCell('A2').numFmt = '$#,##0.00'
+  sheet.getCell('B2').value = new Date(Date.UTC(2024, 0, 2))
+  sheet.getCell('B2').numFmt = 'yyyy-mm-dd'
+  sheet.getCell('C2').value = 1
+  sheet.getCell('C3').value = 2
+  sheet.fillFormula('D2:D3', 'C2+1', [2, 3])
+  sheet.mergeCells('E2:E4')
+  sheet.getCell('E2').value = 'Annual'
+
+  const document = await parseXlsxDocument({ bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) })
+  const sheetBlock = document.blocks[0]
+  if (!sheetBlock || sheetBlock.kind !== 'sheet') {
+    throw new Error('Expected a sheet block.')
+  }
+  const rows = sheetBlock.blocks[0]!.rows
+
+  expect(rows[1]).toMatchObject([
+    { displayedValue: '$1,234.50' },
+    { displayedValue: '2024-01-02' },
+    { displayedValue: '1' },
+    { displayedValue: '2', formula: 'C2+1' },
+    { displayedValue: 'Annual', mergeRange: 'E2:E4', rowSpan: 3 },
+  ])
+  expect(rows[2]?.[3]).toMatchObject({ displayedValue: '3', formula: 'C3+1' })
+  expect(rows[2]?.[4]).toMatchObject({ displayedValue: '', mergeRange: 'E2:E4', rowSpan: 1 })
+  expect(rows[3]?.[4]).toMatchObject({ displayedValue: '', mergeRange: 'E2:E4', rowSpan: 1 })
+})
+
+it('warns with an exact cell coordinate for malformed structured ExcelJS values', () => {
+  const diagnostics: Parameters<typeof projectXlsxSchema2DisplayValue>[1]['diagnostics'] = []
+
+  expect(projectXlsxSchema2DisplayValue({ richText: [{ text: 42 }] }, {
+    sheet: 'Values',
+    address: 'A1',
+    diagnostics,
+  })).toBe('')
+  expect(diagnostics).toEqual([
+    {
+      code: 'partial-extraction',
+      severity: 'warning',
+      message: 'Could not project XLSX structured value for cell A1; emitted empty value.',
+      coordinate: { kind: 'sheet-range', sheet: 'Values', range: 'A1' },
+      producer: { kind: 'parser', name: 'exceljs', version: '4.4.0', adapterVersion: '2' },
+    },
+  ])
 })

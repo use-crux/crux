@@ -125,7 +125,7 @@ function cellValue(cell: TableCell): string {
 
 function formatCell(cell: ExcelJS.Cell, date1904: boolean, sheet: string, diagnostics: IngestDiagnostic[]): string {
   const value = cell.formula ? cell.result : cell.value
-  const fallback = displayValue(value, { sheet, address: cell.address, diagnostics })
+  const fallback = projectXlsxSchema2DisplayValue(value, { sheet, address: cell.address, diagnostics })
   if (!cell.numFmt || (typeof value !== 'number' && !(value instanceof Date))) {
     return fallback
   }
@@ -143,7 +143,11 @@ function formatCell(cell: ExcelJS.Cell, date1904: boolean, sheet: string, diagno
   }
 }
 
-function displayValue(value: unknown, context: { readonly sheet: string; readonly address: string; readonly diagnostics: IngestDiagnostic[] }): string {
+/** Project persisted ExcelJS values without allowing object stringification. */
+export function projectXlsxSchema2DisplayValue(
+  value: unknown,
+  context: { readonly sheet: string; readonly address: string; readonly diagnostics: IngestDiagnostic[] },
+): string {
   if (value === null || value === undefined) {
     return ''
   }
@@ -158,19 +162,32 @@ function displayValue(value: unknown, context: { readonly sheet: string; readonl
   }
 
   const record = value as Record<string, unknown>
-  if ('richText' in record && Array.isArray(record.richText) && record.richText.every(isRichTextRun)) {
-    return record.richText.map((run) => run.text).join('')
+  if ('richText' in record) {
+    if (Array.isArray(record.richText) && record.richText.every(isRichTextRun)) {
+      return record.richText.map((run) => run.text).join('')
+    }
+    return rejectStructuredValue(context)
   }
-  if (typeof record.hyperlink === 'string' && typeof record.text === 'string') {
-    return record.text
+  if ('hyperlink' in record || 'text' in record) {
+    if (typeof record.hyperlink === 'string' && typeof record.text === 'string') {
+      return record.text
+    }
+    return rejectStructuredValue(context)
   }
-  if (typeof record.error === 'string') {
-    return record.error
+  if ('error' in record) {
+    if (typeof record.error === 'string') {
+      return record.error
+    }
+    return rejectStructuredValue(context)
   }
   if (typeof record.formula === 'string' || typeof record.sharedFormula === 'string') {
-    return 'result' in record ? displayValue(record.result, context) : ''
+    return 'result' in record ? projectXlsxSchema2DisplayValue(record.result, context) : ''
   }
 
+  return rejectStructuredValue(context)
+}
+
+function rejectStructuredValue(context: { readonly sheet: string; readonly address: string; readonly diagnostics: IngestDiagnostic[] }): string {
   context.diagnostics.push({
     code: 'partial-extraction',
     severity: 'warning',
