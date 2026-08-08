@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { prompt as makePrompt } from '@use-crux/core'
+import { createStoredEvidence, prompt as makePrompt, type RetrieverHit } from '@use-crux/core'
 import { z } from 'zod'
 import { createGoogle, googleProviderRuntime } from '../src'
 
@@ -8,6 +9,36 @@ interface GoogleRuntimeRequest {
   readonly model: unknown
   readonly contents?: unknown
   readonly config?: Record<string, unknown>
+}
+
+function retrievalHit(sourceId: string, chunkId: string, content: string, score: number): RetrieverHit {
+  const documentSha256 = createHash('sha256').update(content).digest('hex')
+  const producer = {
+    kind: 'parser' as const,
+    name: 'text' as const,
+    version: 'test:text-parser:2',
+    adapterVersion: 'test:text-adapter:2',
+  }
+
+  return {
+    namespace: 'n',
+    source: { id: sourceId },
+    chunkId,
+    content,
+    metadata: {},
+    score,
+    evidence: createStoredEvidence({
+      document: { documentSha256, producer, normalizationVersion: 'test:text-normalization:2' },
+      origin: {
+        coordinate: { kind: 'document', documentSha256 },
+        producer,
+        blockIds: [`block:${sourceId}`],
+      },
+      chunkId,
+      normalizedContent: content,
+      chunkerVersion: 'test:text-chunker:2',
+    }),
+  }
 }
 
 function googleResponse(text: string): GenerateContentResponse {
@@ -77,8 +108,8 @@ describe('Google provider runtime', () => {
       adapter.reranker({ model: 'gemini-2.5-flash' }).rerank({
         query: 'needle',
         hits: [
-          { namespace: 'n', source: { id: 'a' }, chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
-          { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
+          retrievalHit('a', 'a1', 'first', 0.1),
+          retrievalHit('b', 'b1', 'second', 0.2),
         ],
       }),
     ).resolves.toEqual([
