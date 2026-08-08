@@ -6,6 +6,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { gfm } from 'micromark-extension-gfm'
+import type { Content, List, ListItem } from 'mdast'
 import type {
   ApplicationOperationProducer,
   DocumentProducer,
@@ -385,6 +386,7 @@ function pdfPageBlock(input: {
     ? `page:${input.page.pageNumber}:derived`
     : `page:${input.page.pageNumber}`
   const id = pdfId(input.documentSha256, producer, path)
+  const markdownNodes = input.page.blocks ? layoutMarkdownNodes(input.page.content) : []
   const blocks = visual
     ? input.mediaProducer && input.page.content
       ? [pageText({ id: `${id}:text:1`, coordinate, producer, text: input.page.content })]
@@ -394,6 +396,7 @@ function pdfPageBlock(input: {
         page: input.page.pageNumber,
         block,
         ordinal: index + 1,
+        markdownNode: markdownNodes[index],
         producer,
       })) ?? fallbackText(input.page, id, coordinate, producer)
 
@@ -425,6 +428,7 @@ function pdfLayoutBlock(input: {
   readonly page: number
   readonly block: IngestPageBlock
   readonly ordinal: number
+  readonly markdownNode?: Content
   readonly producer: DocumentProducer
 }): TextBlock | ListBlock | TableBlock {
   const coordinate = pdfBlockCoordinate(input.page, input.ordinal, input.block)
@@ -441,15 +445,19 @@ function pdfLayoutBlock(input: {
       producer: input.producer,
       columns: input.block.columns ?? [],
       headerRows,
-      rows: input.block.rows.map((row, rowIndex) => row.map((value, columnIndex) => tableCell({
-        id: `${id}:row:${rowIndex + headerRows + 1}:column:${columnIndex + 1}`,
+      rows: (input.block.columns ? [input.block.columns, ...input.block.rows] : input.block.rows).map((row, rowIndex) => row.map((value, columnIndex) => tableCell({
+        id: `${id}:row:${rowIndex + 1}:column:${columnIndex + 1}`,
         coordinate,
         producer: input.producer,
-        row: rowIndex + headerRows + 1,
+        row: rowIndex + 1,
         column: columnIndex + 1,
         value,
       }))),
     }
+  }
+
+  if (input.block.role === 'list' && input.markdownNode?.type === 'list') {
+    return markdownListBlock(input.markdownNode, id, coordinate, headingPath, input.producer)
   }
 
   if (input.block.role === 'list') {
@@ -478,6 +486,74 @@ function pdfLayoutBlock(input: {
     role: input.block.role === 'other' ? 'note' : input.block.role,
     level: input.block.role === 'heading' ? headingLevel(input.block.content) : undefined,
   })
+}
+
+function layoutMarkdownNodes(markdown: string): readonly Content[] {
+  const tree = fromMarkdown(markdown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] })
+  return tree.children.filter((node) => {
+    const range = readSourceRange(node)
+    const raw = range ? markdown.slice(range.start, range.end) : ''
+    if (!raw.trim()) {
+      return false
+    }
+    if (node.type === 'heading' || node.type === 'table') {
+      return true
+    }
+    return Boolean(mdastToString(node).trim())
+  })
+}
+
+function markdownListBlock(
+  node: List,
+  id: string,
+  coordinate: SourceCoordinate,
+  headingPath: readonly string[],
+  producer: DocumentProducer,
+): ListBlock {
+  return {
+    id,
+    kind: 'list',
+    coordinate,
+    headingPath,
+    producer,
+    ordered: node.ordered === true,
+    items: node.children.map((item, index) => markdownListItem(item, `${id}:item:${index + 1}`, coordinate, headingPath, producer)),
+  }
+}
+
+function markdownListItem(
+  item: ListItem,
+  id: string,
+  coordinate: SourceCoordinate,
+  headingPath: readonly string[],
+  producer: DocumentProducer,
+): ListBlock['items'][number] {
+  const blocks: (TextBlock | ListBlock)[] = []
+  for (const [index, child] of item.children.entries()) {
+    const childId = `${id}:block:${index + 1}`
+    if (child.type === 'list') {
+      blocks.push(markdownListBlock(child, childId, coordinate, headingPath, producer))
+      continue
+    }
+    const text = mdastToString(child)
+    if (!text) {
+      continue
+    }
+    blocks.push(pageText({
+      id: childId,
+      coordinate,
+      producer,
+      headingPath,
+      text,
+      role: child.type === 'code' ? 'code' : child.type === 'blockquote' ? 'note' : 'paragraph',
+    }))
+  }
+  return {
+    id,
+    coordinate,
+    producer,
+    blocks,
+  }
 }
 
 function pageText(input: {

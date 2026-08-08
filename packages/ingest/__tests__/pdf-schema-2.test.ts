@@ -44,9 +44,37 @@ it('adapts layout-aware PDF Markdown into page, narrative, and table facts', () 
   const page = document.blocks[0]
   if (!page || page.kind !== 'page') throw new Error('Expected page')
   expect(page.blocks[2]?.id).toMatch(/^pdf:[0-9a-f]{64}:parser:pdf-inspector:1\.12\.0:2:page:1:block:3$/)
+  expect(page.blocks[2]?.kind === 'table' && page.blocks[2].rows.map((row) => row.map((cell) => cell.displayedValue))).toEqual([
+    ['Name', 'Status'],
+    ['Crux', 'Ready'],
+  ])
   expect(page.blocks[2]?.kind === 'table' && page.blocks[2].rows[0]?.[0]?.id).toMatch(
-    /^pdf:[0-9a-f]{64}:parser:pdf-inspector:1\.12\.0:2:page:1:block:3:row:2:column:1$/,
+    /^pdf:[0-9a-f]{64}:parser:pdf-inspector:1\.12\.0:2:page:1:block:3:row:1:column:1$/,
   )
+})
+
+it('retains ordered PDF list item boundaries and nesting from emitted Markdown', () => {
+  const content = '1. First\n   - Nested one\n   - Nested two\n2. Second'
+  const document = adaptPdfParseResult({
+    bytes,
+    parsed: {
+      parts: [{
+        id: 'pdf:page:1', kind: 'page', pageNumber: 1,
+        sourceLocation: { type: 'page', pageNumber: 1 }, content,
+        blocks: [{ id: 'pdf:page:1/block:0', kind: 'text', role: 'list', content: 'First\nNested one\nNested two\nSecond' }],
+      }],
+    },
+  })
+
+  const page = document.blocks[0]
+  if (!page || page.kind !== 'page') throw new Error('Expected page.')
+  const list = page.blocks[0]
+  if (!list || list.kind !== 'list') throw new Error('Expected list.')
+  expect(list.ordered).toBe(true)
+  expect(list.items.map((item) => item.blocks.map(listText))).toEqual([
+    [['First'], [[['Nested one']], [['Nested two']]]],
+    [['Second']],
+  ])
 })
 
 it('retains fallback and empty physical pages with only a page coordinate and typed downgrade', () => {
@@ -109,3 +137,9 @@ it('uses the installed inspector for real PDF page and layout facts', async () =
     expect.objectContaining({ kind: 'table' }),
   ]))
 })
+
+function listText(block: { readonly kind: string; readonly text?: string; readonly ordered?: boolean; readonly items?: readonly { readonly blocks: readonly unknown[] }[] }): unknown {
+  if (block.kind === 'text') return [block.text]
+  if (block.kind === 'list') return block.items?.map((item) => item.blocks.map((nested) => listText(nested as Parameters<typeof listText>[0])))
+  return block.kind
+}
