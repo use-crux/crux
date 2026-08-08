@@ -14,6 +14,7 @@ import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, SearchStore, Storage } from '../storage'
 import type { DeriveStage } from '../knowledge/derive/stage'
+import type { StoredEvidence } from './stored-evidence'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
@@ -50,6 +51,8 @@ export interface CruxChunk {
     readonly sha256?: string
   }
   metadata: Record<string, unknown>
+  /** Immutable schema-2 evidence for citation-capable retrieval. */
+  evidence?: StoredEvidence
   parent?: {
     parentId?: string
     key?: string

@@ -9,6 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk } from '../indexing/types'
+import { validateStoredEvidence } from '../indexing/stored-evidence'
 import type { ExactFilter, JsonObject, SearchLegMatch, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
@@ -32,6 +33,7 @@ type IndexedBaseRecord<TType extends IndexedRecordType> = {
   readonly metadata: Record<string, unknown>
   readonly source?: CruxChunk['source']
   readonly provenance?: CruxChunk['provenance']
+  readonly evidence?: CruxChunk['evidence']
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -68,6 +70,10 @@ export function createIndexedChunkRecord(input: {
   readonly sparse?: SparseVector
   readonly now: number
 }): IndexedChunkRecord {
+  const evidence = input.chunk.evidence ? validateStoredEvidence(input.chunk.evidence) : undefined
+  if (evidence && (evidence.chunkId !== input.chunk.chunkId || evidence.normalizedContent !== input.chunk.content)) {
+    throw new Error('Stored evidence must retain the indexed chunk ID and content exactly.')
+  }
   const source = projectSourceFacts(input.chunk.source)
   const parent =
     input.chunk.parent?.parentId !== undefined
@@ -92,6 +98,7 @@ export function createIndexedChunkRecord(input: {
     ...(source ? { source } : {}),
     ...(parent ? { parent } : {}),
     ...(input.chunk.provenance ? { provenance: input.chunk.provenance } : {}),
+    ...(evidence ? { evidence } : {}),
     ...(input.dense ? { embedding: input.dense } : {}),
     ...(input.sparse ? { sparseEmbedding: input.sparse } : {}),
     createdAt: input.now,
@@ -188,6 +195,17 @@ export function indexedChunkToHit(input: {
     : undefined
 
   const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
+  let evidence: CruxChunk['evidence'] | undefined
+  if (value.evidence !== undefined) {
+    try {
+      evidence = validateStoredEvidence(value.evidence)
+    } catch {
+      return null
+    }
+    if (evidence.chunkId !== value.chunkId || evidence.normalizedContent !== value.content) {
+      return null
+    }
+  }
   const matches = input.matches?.map((match) => ({ ...match }))
   const provenance = {
     ...(isRecord(value.provenance) ? value.provenance : {}),
@@ -201,6 +219,7 @@ export function indexedChunkToHit(input: {
     content: value.content,
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
+    ...(evidence ? { evidence } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
     ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
   }

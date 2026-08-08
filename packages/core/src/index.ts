@@ -1002,7 +1002,17 @@ export type {
 } from "./citations";
 
 // Indexing
-export { corpus, indexer, IngestedDocumentContractError, normalizeXlsxDocument, validateIngestedDocument } from "./indexing";
+export {
+  corpus,
+  indexer,
+  IngestedDocumentContractError,
+  normalizeXlsxDocument,
+  StoredEvidenceContractError,
+  deserializeStoredEvidence,
+  serializeStoredEvidence,
+  validateIngestedDocument,
+  validateStoredEvidence,
+} from "./indexing";
 export type {
   Corpus,
   CorpusConfig,
@@ -1016,6 +1026,7 @@ export type {
   IngestedDocument,
   DocumentBlock,
   SourceCoordinate,
+  StoredEvidence,
   ParserIdentity,
   SpreadsheetCellProvenance,
   SpreadsheetProvenance,

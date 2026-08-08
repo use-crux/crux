@@ -17,6 +17,7 @@ import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
 import type { ChunkProvenance, CruxSourceFacts } from '../indexing'
+import type { StoredEvidence } from '../indexing'
 import type { AssetRef } from '../asset'
 import type { KnowledgeRef } from '../knowledge/refs'
 
@@ -80,6 +81,8 @@ export interface EvidenceHit {
   content: string
   metadata: Record<string, unknown>
   score: number
+  /** Immutable schema-2 evidence hydrated from the indexed record, when retained. */
+  evidence?: StoredEvidence
   parent?: {
     parentId?: string
     key?: string
