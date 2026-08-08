@@ -186,12 +186,12 @@ func (l Limits) Clamp() Limits {
 }
 
 type ServiceSpec struct {
-	Command, Environment, ReadOnlyPaths, ReadWritePaths                     []string
-	MemoryMax, MemorySwapMax                                                int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
-	RuntimeMax                                                              time.Duration
-	KillMode, ProtectSystem                                                 string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
+	Command, Environment, ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	MemoryMax, MemorySwapMax                                                     int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                int
+	RuntimeMax                                                                   time.Duration
+	KillMode, ProtectSystem                                                      string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome      bool
 }
 
 func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
@@ -209,19 +209,19 @@ func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
 		}
 	}
 	l = l.Clamp()
-	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{input, runtime}, ReadWritePaths: []string{tmp}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{input, runtime}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 type SandboxReport struct {
-	MainPID                                                                 int
-	ControlGroupMembers                                                     []int
-	MemoryMax, MemorySwapMax                                                int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
-	RuntimeMax                                                              time.Duration
-	KillMode, ProtectSystem                                                 string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
-	CapabilityBoundingSet, ReadOnlyPaths, ReadWritePaths                    []string
-	Populated                                                               bool
+	MainPID                                                                       int
+	ControlGroupMembers                                                           []int
+	MemoryMax, MemorySwapMax                                                      int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                 int
+	RuntimeMax                                                                    time.Duration
+	KillMode, ProtectSystem                                                       string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome       bool
+	CapabilityBoundingSet, ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	Populated                                                                     bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -398,7 +398,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if e != nil {
 		return false
 	}
-	return r.MainPID > 0 && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && len(r.CapabilityBoundingSet) == 0 && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths)
+	return r.MainPID > 0 && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && len(r.CapabilityBoundingSet) == 0 && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

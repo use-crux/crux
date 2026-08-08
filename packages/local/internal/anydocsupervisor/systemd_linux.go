@@ -1,0 +1,476 @@
+//go:build linux
+
+package anydocsupervisor
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/godbus/dbus/v5"
+)
+
+const systemdService = "org.freedesktop.systemd1"
+
+// DBusProperty is the deliberately small subset of a systemd transient-unit
+// request that this package is permitted to make.
+type DBusProperty struct {
+	Name  string
+	Value any
+}
+
+// SystemBus is injectable so the containment contract can be tested without a
+// host system bus. Implementations must not expose arbitrary D-Bus calls.
+type SystemBus interface {
+	SupportsUnixFDs() bool
+	StartTransientUnit(context.Context, string, []DBusProperty) error
+	UnitProperties(context.Context, string) (map[string]any, error)
+	StopUnit(context.Context, string) error
+	KillUnit(context.Context, string) error
+	ResetFailedUnit(context.Context, string) error
+}
+
+type FileSystem interface {
+	ReadFile(string) ([]byte, error)
+	WriteFile(string, []byte) error
+	RemoveAll(string) error
+}
+
+type Clock interface {
+	Now() time.Time
+	After(time.Duration) <-chan time.Time
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time                         { return time.Now() }
+func (systemClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+
+type SystemdBackendOptions struct {
+	Bus        SystemBus
+	FileSystem FileSystem
+	Clock      Clock
+}
+
+type systemdBackend struct {
+	bus SystemBus
+	fs  FileSystem
+	now Clock
+}
+
+// NewSystemdBackend creates the Linux backend. It is intentionally not wired
+// into Anydoc production routing; callers must opt in explicitly.
+func NewSystemdBackend() Backend {
+	conn, err := dbus.ConnectSystemBus()
+	if err != nil {
+		return &systemdBackend{}
+	}
+	return NewSystemdBackendWith(SystemdBackendOptions{Bus: &godbusSystemBus{conn: conn}, FileSystem: osFS{}, Clock: systemClock{}})
+}
+
+func NewSystemdBackendWith(options SystemdBackendOptions) Backend {
+	fs := options.FileSystem
+	if fs == nil {
+		fs = osFS{}
+	}
+	clock := options.Clock
+	if clock == nil {
+		clock = systemClock{}
+	}
+	return &systemdBackend{bus: options.Bus, fs: fs, now: clock}
+}
+
+func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.File) (Unit, error) {
+	if b == nil || b.bus == nil || b.fs == nil || b.now == nil || stdin == nil || !validBackendSpec(spec) || !b.bus.SupportsUnixFDs() || ctx.Err() != nil {
+		return nil, errors.New("systemd unavailable")
+	}
+	name, err := transientUnitName()
+	if err != nil {
+		return nil, err
+	}
+	properties := systemdProperties(spec, stdin)
+	err = b.bus.StartTransientUnit(ctx, name, properties)
+	closeErr := stdin.Close() // systemd has received its duplicate by this point.
+	if err != nil || closeErr != nil {
+		return nil, errors.New("transient unit unavailable")
+	}
+	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec)}
+	if err := u.waitActive(ctx); err != nil {
+		_ = u.Stop(context.Background())
+		_ = u.Cleanup(context.Background())
+		return nil, err
+	}
+	return u, nil
+}
+
+func validBackendSpec(spec ServiceSpec) bool {
+	if len(spec.Command) != 1 || spec.Command[0] != "/usr/lib/crux/anydoc-runner" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+		return false
+	}
+	paths := append(append([]string{}, spec.ReadOnlyPaths...), spec.ReadWritePaths...)
+	for i, path := range paths {
+		if !validAbsolutePath(path) {
+			return false
+		}
+		for j, other := range paths {
+			if i != j && (path == other || strings.HasPrefix(other, path+"/")) {
+				return false
+			}
+		}
+	}
+	return spec.MemoryMax > 0 && spec.MemorySwapMax == 0 && spec.TasksMax > 0 && spec.CPUQuotaPercent > 0 && spec.CPUQuotaPeriodUSec == CPUPeriodUSec && spec.RuntimeMax > 0 && spec.KillMode == "control-group" && spec.ProtectSystem == "strict" && spec.CPUAccounting && spec.NoNewPrivileges && spec.PrivateNetwork && spec.PrivateTmp && spec.ProtectHome
+}
+
+func transientUnitName() (string, error) {
+	var token [12]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		return "", err
+	}
+	return "crux-anydoc-" + hex.EncodeToString(token[:]) + ".service", nil
+}
+
+type execStart struct {
+	Path string
+	Args []string
+	Fail bool
+}
+
+func systemdProperties(spec ServiceSpec, stdin *os.File) []DBusProperty {
+	return []DBusProperty{
+		{"Description", "Crux Anydoc isolated runner"},
+		{"Type", "exec"},
+		{"ExecStart", []execStart{{Path: spec.Command[0], Args: spec.Command, Fail: false}}},
+		// An empty entry resets inherited Environment= assignments before the
+		// fixed minimal environment is applied.
+		{"Environment", append([]string{""}, spec.Environment...)},
+		{"StandardInput", "file"},
+		{"StandardInputFileDescriptor", dbus.UnixFD(stdin.Fd())},
+		{"CPUAccounting", spec.CPUAccounting},
+		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
+		{"MemoryMax", uint64(spec.MemoryMax)},
+		{"MemorySwapMax", uint64(spec.MemorySwapMax)},
+		{"TasksMax", uint64(spec.TasksMax)},
+		{"RuntimeMaxUSec", uint64(spec.RuntimeMax / time.Microsecond)},
+		{"KillMode", spec.KillMode},
+		{"NoNewPrivileges", spec.NoNewPrivileges},
+		{"CapabilityBoundingSet", []string{}},
+		{"AmbientCapabilities", []string{}},
+		{"PrivateNetwork", spec.PrivateNetwork},
+		{"RestrictAddressFamilies", spec.RestrictAddressFamilies},
+		{"PrivateTmp", spec.PrivateTmp},
+		{"ProtectSystem", spec.ProtectSystem},
+		{"ProtectHome", spec.ProtectHome},
+		{"ReadOnlyPaths", spec.ReadOnlyPaths},
+		{"ReadWritePaths", spec.ReadWritePaths},
+	}
+}
+
+func onlyPrivateTemp(spec ServiceSpec) string {
+	if len(spec.ReadWritePaths) != 1 || !validAbsolutePath(spec.ReadWritePaths[0]) {
+		return ""
+	}
+	return spec.ReadWritePaths[0]
+}
+
+func validAbsolutePath(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path && path != "/"
+}
+
+type systemdUnit struct {
+	name string
+	bus  SystemBus
+	fs   FileSystem
+	now  Clock
+	tmp  string
+}
+
+func (u *systemdUnit) waitActive(ctx context.Context) error {
+	for {
+		p, err := u.bus.UnitProperties(ctx, u.name)
+		if err != nil {
+			return err
+		}
+		if stringValue(p, "ActiveState") == "active" && intValue(p, "MainPID") > 0 {
+			return nil
+		}
+		if stringValue(p, "ActiveState") == "failed" || stringValue(p, "ActiveState") == "inactive" {
+			return errors.New("unit did not activate")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-u.now.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil {
+		return SandboxReport{}, errors.New("unit properties unavailable")
+	}
+	cgroup := stringValue(p, "ControlGroup")
+	if !validCgroup(cgroup) {
+		return SandboxReport{}, errors.New("invalid cgroup")
+	}
+	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	swap, err := cgroupLimit(u.fs, cgroup, "memory.swap.max")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	tasks, err := cgroupLimit(u.fs, cgroup, "pids.max")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	quota, period, err := cpuLimit(u.fs, cgroup)
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	members, err := cgroupPIDs(u.fs, cgroup)
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	populated, err := cgroupPopulated(u.fs, cgroup)
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	return SandboxReport{MainPID: intValue(p, "MainPID"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: stringsValue(p, "CapabilityBoundingSet"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamilies: stringsValue(p, "RestrictAddressFamilies"), Populated: populated}, nil
+}
+
+func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil || !validCgroup(stringValue(p, "ControlGroup")) {
+		return 0, errors.New("cpu accounting unavailable")
+	}
+	data, err := u.fs.ReadFile(cgroupFile(stringValue(p, "ControlGroup"), "cpu.stat"))
+	if err != nil {
+		return 0, errors.New("cpu accounting unavailable")
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "usage_usec" {
+			v, err := strconv.ParseInt(fields[1], 10, 64)
+			if err == nil && v >= 0 {
+				return time.Duration(v) * time.Microsecond, nil
+			}
+		}
+	}
+	return 0, errors.New("cpu accounting unavailable")
+}
+
+func (u *systemdUnit) Stop(ctx context.Context) error {
+	if err := u.bus.StopUnit(ctx, u.name); err == nil {
+		return nil
+	}
+	if err := u.bus.KillUnit(ctx, u.name); err == nil {
+		return nil
+	}
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil || !validCgroup(stringValue(p, "ControlGroup")) {
+		return errors.New("unit stop unavailable")
+	}
+	if err := u.fs.WriteFile(cgroupFile(stringValue(p, "ControlGroup"), "cgroup.kill"), []byte("1")); err != nil {
+		return errors.New("unit stop unavailable")
+	}
+	return nil
+}
+
+func (u *systemdUnit) WaitInactive(ctx context.Context) error {
+	for {
+		p, err := u.bus.UnitProperties(ctx, u.name)
+		if err != nil {
+			return errors.New("unit status unavailable")
+		}
+		if stringValue(p, "ActiveState") == "inactive" {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-u.now.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func (u *systemdUnit) Cleanup(ctx context.Context) error {
+	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
+		return errors.New("unit cleanup unavailable")
+	}
+	if u.tmp != "" {
+		if err := u.fs.RemoveAll(u.tmp); err != nil {
+			return errors.New("private temp cleanup unavailable")
+		}
+	}
+	return nil
+}
+
+type osFS struct{}
+
+func (osFS) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
+func (osFS) WriteFile(path string, contents []byte) error {
+	return os.WriteFile(path, contents, 0)
+}
+func (osFS) RemoveAll(path string) error { return os.RemoveAll(path) }
+
+func validCgroup(path string) bool {
+	return strings.HasPrefix(path, "/") && filepath.Clean(path) == path && !strings.Contains(path, "..")
+}
+func cgroupFile(cgroup, file string) string { return filepath.Join("/sys/fs/cgroup", cgroup, file) }
+func cgroupLimit(fs FileSystem, cgroup, file string) (int64, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, file))
+	if err != nil {
+		return 0, errors.New("cgroup unavailable")
+	}
+	v, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+	if err != nil || v < 0 {
+		return 0, errors.New("invalid cgroup limit")
+	}
+	return v, nil
+}
+func cpuLimit(fs FileSystem, cgroup string) (int64, int64, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, "cpu.max"))
+	if err != nil {
+		return 0, 0, errors.New("cgroup unavailable")
+	}
+	f := strings.Fields(string(b))
+	if len(f) != 2 || f[0] == "max" {
+		return 0, 0, errors.New("invalid cpu limit")
+	}
+	q, e1 := strconv.ParseInt(f[0], 10, 64)
+	p, e2 := strconv.ParseInt(f[1], 10, 64)
+	if e1 != nil || e2 != nil || q <= 0 || p <= 0 {
+		return 0, 0, errors.New("invalid cpu limit")
+	}
+	return q, p, nil
+}
+func cgroupPIDs(fs FileSystem, cgroup string) ([]int, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, "cgroup.procs"))
+	if err != nil {
+		return nil, errors.New("cgroup unavailable")
+	}
+	var result []int
+	for _, field := range strings.Fields(string(b)) {
+		v, err := strconv.Atoi(field)
+		if err != nil || v <= 0 {
+			return nil, errors.New("invalid cgroup members")
+		}
+		result = append(result, v)
+	}
+	return result, nil
+}
+func cgroupPopulated(fs FileSystem, cgroup string) (bool, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, "cgroup.events"))
+	if err != nil {
+		return false, errors.New("cgroup unavailable")
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && f[0] == "populated" {
+			return f[1] == "1", nil
+		}
+	}
+	return false, errors.New("invalid cgroup events")
+}
+func stringValue(p map[string]any, key string) string    { v, _ := p[key].(string); return v }
+func boolValue(p map[string]any, key string) bool        { v, _ := p[key].(bool); return v }
+func stringsValue(p map[string]any, key string) []string { v, _ := p[key].([]string); return v }
+func intValue(p map[string]any, key string) int          { return int(uintValue(p, key)) }
+func uintValue(p map[string]any, key string) uint64 {
+	switch v := p[key].(type) {
+	case uint32:
+		return uint64(v)
+	case uint64:
+		return v
+	case int:
+		if v > 0 {
+			return uint64(v)
+		}
+	}
+	return 0
+}
+
+type godbusSystemBus struct{ conn *dbus.Conn }
+
+func (b *godbusSystemBus) SupportsUnixFDs() bool {
+	return b != nil && b.conn != nil && b.conn.SupportsUnixFDs()
+}
+func (b *godbusSystemBus) StartTransientUnit(ctx context.Context, name string, props []DBusProperty) error {
+	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.StartTransientUnit", name, "replace", dbusProperties(props), []auxiliaryUnit{})
+}
+func (b *godbusSystemBus) UnitProperties(ctx context.Context, name string) (map[string]any, error) {
+	var path dbus.ObjectPath
+	if err := b.conn.Object(systemdService, "/org/freedesktop/systemd1").CallWithContext(ctx, "org.freedesktop.systemd1.Manager.GetUnit", 0, name).Store(&path); err != nil {
+		return nil, err
+	}
+	unit := b.conn.Object(systemdService, path)
+	values, err := dbusInterfaceProperties(ctx, unit, "org.freedesktop.systemd1.Unit")
+	if err != nil {
+		return nil, err
+	}
+	service, err := dbusInterfaceProperties(ctx, unit, "org.freedesktop.systemd1.Service")
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range service {
+		values[key] = value
+	}
+	return values, nil
+}
+func (b *godbusSystemBus) StopUnit(ctx context.Context, name string) error {
+	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.StopUnit", name, "replace")
+}
+func (b *godbusSystemBus) KillUnit(ctx context.Context, name string) error {
+	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.KillUnit", name, "all", int32(9))
+}
+func (b *godbusSystemBus) ResetFailedUnit(ctx context.Context, name string) error {
+	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.ResetFailedUnit", name)
+}
+func (b *godbusSystemBus) call(ctx context.Context, path dbus.ObjectPath, method string, args ...any) error {
+	if b == nil || b.conn == nil {
+		return fmt.Errorf("system bus unavailable")
+	}
+	return b.conn.Object(systemdService, path).CallWithContext(ctx, method, 0, args...).Err
+}
+
+type dbusProperty struct {
+	Name  string
+	Value dbus.Variant
+}
+
+type auxiliaryUnit struct {
+	Name       string
+	Properties []dbusProperty
+}
+
+func dbusInterfaceProperties(ctx context.Context, unit dbus.BusObject, iface string) (map[string]any, error) {
+	var values map[string]dbus.Variant
+	if err := unit.CallWithContext(ctx, "org.freedesktop.DBus.Properties.GetAll", 0, iface).Store(&values); err != nil {
+		return nil, err
+	}
+	out := make(map[string]any, len(values))
+	for key, value := range values {
+		out[key] = value.Value()
+	}
+	return out, nil
+}
+
+func dbusProperties(props []DBusProperty) []dbusProperty {
+	out := make([]dbusProperty, len(props))
+	for i, p := range props {
+		out[i] = dbusProperty{p.Name, dbus.MakeVariant(p.Value)}
+	}
+	return out
+}
