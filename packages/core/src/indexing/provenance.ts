@@ -138,12 +138,26 @@ function uniqueSpreadsheets(items: readonly import('./types').SpreadsheetProvena
       bySheetRange.set(key, item)
       continue
     }
-    const cells = [...previous.cells, ...item.cells].filter((cell, index, all) =>
-      all.findIndex((candidate) => candidate.address === cell.address) === index,
-    )
+    const cells = uniqueSpreadsheetCells(previous, item)
     bySheetRange.set(key, { ...item, cells })
   }
   return [...bySheetRange.values()]
+}
+
+function uniqueSpreadsheetCells(
+  first: import('./types').SpreadsheetProvenance,
+  second: import('./types').SpreadsheetProvenance,
+): import('./types').SpreadsheetCellProvenance[] {
+  const cells = new Map<string, import('./types').SpreadsheetCellProvenance>()
+  for (const spreadsheet of [first, second]) {
+    for (const cell of spreadsheet.cells) {
+      const key = `${spreadsheet.sheetBlockId}:${spreadsheet.tableBlockId}:${cell.id}`
+      if (!cells.has(key)) {
+        cells.set(key, cell)
+      }
+    }
+  }
+  return [...cells.values()]
 }
 
 function uniqueSourceLocations(locations: readonly CruxSourceLocation[]): CruxSourceLocation[] {

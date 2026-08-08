@@ -160,6 +160,25 @@ it('normalizes only spreadsheet blocks and does not duplicate a one-row table he
   })).toThrow('normalizeXlsxDocument only accepts sheet blocks; received text.')
 })
 
+it('chunks high-row XLSX tables with one owned row per window', async () => {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Rows')
+  sheet.getCell('A1').value = 'Value'
+  for (let row = 2; row <= 1_001; row += 1) {
+    sheet.getCell(`A${row}`).value = `row-${row}`
+  }
+
+  const ingested = await parseXlsxDocument({ bytes: new Uint8Array(await workbook.xlsx.writeBuffer()) })
+  const result = await chunker.structured({ tableRowsPerChunk: 1 }).chunkDocument(
+    normalizeXlsxDocument(ingested, { namespace: 'finance', sourceId: 'rows.xlsx' }),
+    { chunking: { maxChars: 100, overlapChars: 0 } },
+  )
+
+  expect(result.chunks).toHaveLength(1_000)
+  expect(result.chunks[499]?.provenance?.spreadsheets?.[0]?.cells.map((cell) => cell.address)).toEqual(['A501'])
+  expect(result.chunks[999]?.provenance?.spreadsheets?.[0]?.cells.map((cell) => cell.address)).toEqual(['A1001'])
+})
+
 it('maps ExcelJS worksheet, sparse-cell, formula, and merge facts to schema 2', async () => {
   const workbook = new ExcelJS.Workbook()
   const revenue = workbook.addWorksheet('Revenue')

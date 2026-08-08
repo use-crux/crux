@@ -34,6 +34,8 @@ import type {
   SemanticChunkerOptions,
   StructuredChunkerOptions,
   ChunkingOptions,
+  SpreadsheetCellProvenance,
+  SpreadsheetProvenance,
 } from './types'
 
 /** Structured chunker: splits each typed part, windowing table rows. */
@@ -360,6 +362,7 @@ function chunkTablePart(
   const includesHeaderRow = rows.length > 0 && arraysEqual(rows[0], header)
   const bodyRows = includesHeaderRow ? rows.slice(1) : rows
   const windows = bodyRows.length ? bodyRows : [[]]
+  const spreadsheetRows = part.spreadsheet ? indexSpreadsheetRows(part.spreadsheet) : undefined
   const chunks: CruxChunk[] = []
   for (let index = 0; index < windows.length; index += rowsPerChunk) {
     const windowRows = windows.slice(index, index + rowsPerChunk)
@@ -371,7 +374,7 @@ function chunkTablePart(
     chunks.push(
       createPartChunk(document, renderedRows, chunks.length, {
         ...coarseProvenance([part]),
-        ...(part.spreadsheet ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, sourceRowIndexes)] } : {}),
+        ...(part.spreadsheet && spreadsheetRows ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, spreadsheetRows, sourceRowIndexes)] } : {}),
         confidence: 'derived',
       }),
     )
@@ -380,12 +383,24 @@ function chunkTablePart(
 }
 
 function spreadsheetWindow(
-  spreadsheet: NonNullable<Extract<CruxIngestPart, { kind: 'table' }>['spreadsheet']>,
+  spreadsheet: SpreadsheetProvenance,
+  rows: readonly (readonly SpreadsheetCellProvenance[])[],
   sourceRowIndexes: readonly number[],
-): NonNullable<Extract<CruxIngestPart, { kind: 'table' }>['spreadsheet']> {
-  const rowNumbers = [...new Set(spreadsheet.cells.map((cell) => cell.row))]
-  const selectedRows = new Set(sourceRowIndexes.map((index) => rowNumbers[index]).filter((row): row is number => row !== undefined))
-  return { ...spreadsheet, cells: spreadsheet.cells.filter((cell) => selectedRows.has(cell.row)) }
+): SpreadsheetProvenance {
+  return { ...spreadsheet, cells: sourceRowIndexes.flatMap((index) => rows[index] ?? []) }
+}
+
+function indexSpreadsheetRows(spreadsheet: SpreadsheetProvenance): readonly (readonly SpreadsheetCellProvenance[])[] {
+  const rows = new Map<number, SpreadsheetCellProvenance[]>()
+  for (const cell of spreadsheet.cells) {
+    const row = rows.get(cell.row)
+    if (row) {
+      row.push(cell)
+    } else {
+      rows.set(cell.row, [cell])
+    }
+  }
+  return [...rows.values()]
 }
 
 function createPartChunk(
