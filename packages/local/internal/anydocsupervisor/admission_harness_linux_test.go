@@ -1,0 +1,160 @@
+//go:build linux
+
+package anydocsupervisor
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+func TestAdmissionHarnessRunsFreshSequentialColdAndWarmEvidence(t *testing.T) {
+	t.Setenv(admissionHarnessEnv, "1")
+	backend := &harnessBackend{}
+	supervisor := newTestSupervisor(t, backend)
+	launch, packageHash, codeHash := harnessLaunch(t)
+	input := []byte("fixture")
+	source := sha256Hex(input)
+	caseInput := AdmissionFixtureCase{
+		ID:            "docx-structure-v1",
+		Bytes:         input,
+		Format:        FormatDOCX,
+		SourceSHA256:  source,
+		PackageSHA256: packageHash,
+		RuntimeSHA256: strings.Repeat("d", 64),
+		CodeSHA256:    codeHash,
+	}
+
+	report, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backend.starts != 8 || backend.maxActive != 1 {
+		t.Fatalf("starts=%d maxActive=%d, want 8 sequential fresh units", backend.starts, backend.maxActive)
+	}
+	if len(report.Fixtures) != 1 || len(report.Fixtures[0].Cold) != 3 || len(report.Fixtures[0].Warm) != 5 {
+		t.Fatalf("unexpected repetition report: %#v", report)
+	}
+	first := report.Fixtures[0].First
+	if first == nil || first.NativeSHA256 == "" || first.CoreSHA256 == "" || len(first.Facts) == 0 || first.Facts[0].FactPathSHA256 == "" {
+		t.Fatalf("first-run compact facts missing: %#v", first)
+	}
+	if report.Fixtures[0].Cold[0].RequestSHA256 == "" || report.Fixtures[0].Cold[0].MemoryPeakBytes != 1024 || !report.Fixtures[0].Cold[0].Cleaned || !report.Fixtures[0].Cold[0].TerminationEmpty {
+		t.Fatalf("terminal accounting missing: %#v", report.Fixtures[0].Cold[0])
+	}
+	encoded, err := report.MarshalJSON()
+	if err != nil || len(encoded) == 0 || len(encoded) > admissionEnvelopeMaxBytes {
+		t.Fatalf("bounded envelope = %d bytes, %v", len(encoded), err)
+	}
+	if string(encoded) == "" || containsText(string(encoded), `"text":"Title"`) {
+		t.Fatalf("envelope leaked document text: %s", encoded)
+	}
+}
+
+func TestAdmissionHarnessRejectsUnboundOrOverBudgetInputs(t *testing.T) {
+	t.Setenv(admissionHarnessEnv, "1")
+	supervisor := newTestSupervisor(t, &harnessBackend{})
+	launch, packageHash, codeHash := harnessLaunch(t)
+	caseInput := AdmissionFixtureCase{ID: "bad", Bytes: []byte("x"), Format: FormatDOCX, SourceSHA256: testDigest('a'), PackageSHA256: packageHash, RuntimeSHA256: strings.Repeat("d", 64), CodeSHA256: codeHash}
+	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+		t.Fatal("unbound source accepted")
+	}
+	caseInput.SourceSHA256 = sha256Hex(caseInput.Bytes)
+	if _, err := RunAdmissionHarness(context.Background(), supervisor, launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: MemoryCeiling, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+		t.Fatal("over-half rollout memory limit accepted")
+	}
+}
+
+func TestAdmissionHarnessRequiresSystemdIntegrationGate(t *testing.T) {
+	t.Setenv(admissionHarnessEnv, "")
+	launch, packageHash, codeHash := harnessLaunch(t)
+	caseInput := AdmissionFixtureCase{ID: "gated", Bytes: []byte("x"), Format: FormatDOCX, SourceSHA256: sha256Hex([]byte("x")), PackageSHA256: packageHash, RuntimeSHA256: strings.Repeat("d", 64), CodeSHA256: codeHash}
+	if _, err := RunAdmissionHarness(context.Background(), newTestSupervisor(t, &harnessBackend{}), launch, t.TempDir(), []AdmissionFixtureCase{caseInput}, AdmissionHarnessLimits{MemoryMax: 128 << 20, TasksMax: 8, CPUQuotaPercent: 30, RuntimeMax: 10 * time.Second}); err == nil {
+		t.Fatal("ungated harness execution accepted")
+	}
+}
+
+func testDigest(value byte) string {
+	return hex.EncodeToString(bytesOf(value, sha256.Size))
+}
+
+func bytesOf(value byte, count int) []byte {
+	result := make([]byte, count)
+	for i := range result {
+		result[i] = value
+	}
+	return result
+}
+
+func harnessLaunch(t *testing.T) (LaunchDependency, string, string) {
+	t.Helper()
+	root := t.TempDir()
+	runner := []byte("export default 'runner'\n")
+	packageJSON := []byte(`{"name":"@firecrawl/anydoc","version":"0.1.7"}`)
+	packagePath := filepath.Join(root, "node_modules", "@firecrawl", "anydoc")
+	if err := os.MkdirAll(packagePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "runner.mjs"), runner, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packagePath, "package.json"), packageJSON, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	launch := testLaunch()
+	launch.runtimeRoot = root
+	launch.runtimeRunner = filepath.Join(root, "runner.mjs")
+	return launch, sha256Hex(packageJSON), sha256Hex(runner)
+}
+
+func containsText(value, needle string) bool { return strings.Contains(value, needle) }
+
+type harnessBackend struct {
+	mu                        sync.Mutex
+	starts, active, maxActive int
+}
+
+func (b *harnessBackend) Start(_ context.Context, spec ServiceSpec, read *os.File) (Unit, error) {
+	b.mu.Lock()
+	b.starts++
+	b.active++
+	if b.active > b.maxActive {
+		b.maxActive = b.active
+	}
+	b.mu.Unlock()
+	return &harnessUnit{fakeUnit: fakeUnit{rep: harnessReport(spec), cpu: 5 * time.Millisecond}, backend: b, read: read}, nil
+}
+
+type harnessUnit struct {
+	fakeUnit
+	backend *harnessBackend
+	read    *os.File
+}
+
+func (u *harnessUnit) ReceiveResult(_ context.Context, request Request) (Result, error) {
+	payload := validAdmissionPayloadWithBlock(request)
+	accounting, err := recomputePayloadAccounting(request, payload)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}, nil
+}
+func (u *harnessUnit) Cleanup(ctx context.Context) error {
+	if err := u.fakeUnit.Cleanup(ctx); err != nil {
+		return err
+	}
+	u.backend.mu.Lock()
+	u.backend.active--
+	u.backend.mu.Unlock()
+	return nil
+}
+
+func harnessReport(spec ServiceSpec) SandboxReport {
+	return SandboxReport{MainPID: 42, ControlGroup: "/fake", RuntimeTreeDigest: spec.runtimeTreeDigest, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: spec.MemoryMax, MemoryCurrent: 512, MemoryPeak: 1024, MemorySwapMax: 0, TasksMax: spec.TasksMax, CPUQuotaPercent: spec.CPUQuotaPercent, CPUQuotaPeriodUSec: spec.CPUQuotaPeriodUSec, RuntimeMax: spec.RuntimeMax, KillMode: spec.KillMode, ProtectSystem: spec.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: spec.RestrictAddressFamilies, ReadOnlyPaths: spec.ReadOnlyPaths, InaccessiblePaths: spec.InaccessiblePaths, BindReadOnlyPaths: spec.BindReadOnlyPaths, ReadWritePaths: spec.ReadWritePaths, Populated: true}
+}

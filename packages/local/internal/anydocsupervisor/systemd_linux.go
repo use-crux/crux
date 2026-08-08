@@ -554,6 +554,10 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if err != nil {
 		return SandboxReport{}, err
 	}
+	memoryPeak, err := cgroupLimit(u.fs, cgroup, "memory.peak")
+	if err != nil {
+		return SandboxReport{}, err
+	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
 	if err != nil {
 		return SandboxReport{}, err
@@ -604,7 +608,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
+	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
 	if report.MainPID > 0 && report.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
 		u.snapshotMu.Lock()
 		u.snapshot = cloneSandboxReport(report)
@@ -831,6 +835,10 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 	if err != nil {
 		return 0, err
 	}
+	memoryPeak, err := cgroupLimit(u.fs, cgroup, "memory.peak")
+	if err != nil {
+		return 0, err
+	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
 	if err != nil {
 		return 0, err
@@ -862,6 +870,7 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 		return 0, errors.New("accounting snapshot is not verified")
 	}
 	u.snapshot.MemoryCurrent = memoryCurrent
+	u.snapshot.MemoryPeak = memoryPeak
 	u.snapshot.MemoryEvents = memoryEvents
 	u.snapshot.CPUStats = cpuStats
 	u.snapshot.PIDsEvents = pidsEvents

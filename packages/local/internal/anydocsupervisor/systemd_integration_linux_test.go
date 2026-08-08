@@ -684,6 +684,7 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 		Cleaned              bool              `json:"cleaned"`
 		PreStopMemoryMax     int64             `json:"preStopMemoryMax"`
 		PreStopMemoryCurrent int64             `json:"preStopMemoryCurrent"`
+		PreStopMemoryPeak    int64             `json:"preStopMemoryPeak"`
 		PreStopMemoryEvents  map[string]int64  `json:"preStopMemoryEvents"`
 		TasksMax             int               `json:"tasksMax"`
 		CPUUsec              int64             `json:"cpuUsec"`
@@ -691,7 +692,7 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 		Hostile              []hostileEvidence `json:"hostile"`
 		TerminationEmpty     bool              `json:"terminationEmpty"`
 		TerminationAbsent    bool              `json:"terminationAbsent"`
-	}{string(result.Format), result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
+	}{string(result.Format), result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryPeak, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
 	if evidence.PreStopMemoryMax > MemoryCeiling/2 {
 		t.Fatal("integration memory ceiling exceeds half the production ceiling")
 	}

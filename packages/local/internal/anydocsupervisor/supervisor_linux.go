@@ -448,6 +448,7 @@ type SandboxReport struct {
 	ExecMainStatus                                                            int
 	Populated                                                                 bool
 	MemoryCurrent                                                             int64
+	MemoryPeak                                                                int64
 	MemoryEvents                                                              map[string]int64
 	CPUStats, PIDsEvents                                                      map[string]int64
 	RuntimeTreeDigest                                                         string
