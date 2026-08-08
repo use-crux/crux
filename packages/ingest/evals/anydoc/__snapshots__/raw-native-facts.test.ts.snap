@@ -1,0 +1,150 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshots parser-specific facts from raw parser payloads 1`] = `
+{
+  "anydoc": [
+    {
+      "factPath": "blocks/1",
+      "kind": "heading",
+      "level": 1,
+      "text": "Release Notes",
+    },
+    {
+      "columns": [
+        "Plan",
+      ],
+      "factPath": "blocks/3",
+      "kind": "table",
+      "rows": [
+        [
+          "Plan",
+        ],
+        [
+          "Pro",
+        ],
+      ],
+    },
+  ],
+  "csv": [
+    {
+      "columns": [
+        "Plan",
+        "Price",
+      ],
+      "factPath": "blocks/1",
+      "kind": "table",
+      "rows": [
+        [
+          "Plan",
+          "Price",
+        ],
+        [
+          "Pro",
+          "20",
+        ],
+      ],
+    },
+    {
+      "factPath": "blocks/1",
+      "kind": "csv-matrix",
+      "matrix": [
+        [
+          "Plan",
+          "Price",
+        ],
+        [
+          "Pro",
+          "20",
+        ],
+      ],
+    },
+    {
+      "end": 2,
+      "factPath": "blocks/1",
+      "kind": "logical-row-bounds",
+      "start": 1,
+    },
+  ],
+  "excel": [
+    {
+      "factPath": "blocks/1",
+      "kind": "sheet-range",
+      "range": "A1:B2",
+      "sheet": "Pricing",
+    },
+    {
+      "address": "A1",
+      "displayedValue": "Plan",
+      "factPath": "blocks/1/blocks/1/rows/1/cells/1",
+      "kind": "cell",
+      "sheet": "Pricing",
+    },
+    {
+      "address": "B1",
+      "displayedValue": "Price",
+      "factPath": "blocks/1/blocks/1/rows/1/cells/2",
+      "kind": "cell",
+      "sheet": "Pricing",
+    },
+    {
+      "address": "A2",
+      "displayedValue": "Pro",
+      "factPath": "blocks/1/blocks/1/rows/2/cells/1",
+      "kind": "cell",
+      "sheet": "Pricing",
+    },
+    {
+      "address": "B2",
+      "displayedValue": "20",
+      "factPath": "blocks/1/blocks/1/rows/2/cells/2",
+      "kind": "cell",
+      "sheet": "Pricing",
+    },
+  ],
+  "mammoth": [
+    {
+      "factPath": "blocks/1",
+      "kind": "heading",
+      "level": 1,
+      "text": "Release Notes",
+    },
+    {
+      "columns": [
+        "Plan",
+      ],
+      "factPath": "blocks/2",
+      "kind": "table",
+      "rows": [
+        [
+          "Plan",
+        ],
+        [
+          "Pro",
+        ],
+      ],
+    },
+  ],
+  "pdf": [
+    {
+      "block": 1,
+      "factPath": "blocks/1/blocks/1",
+      "kind": "page-block",
+      "page": 1,
+      "text": "# Release Notes",
+    },
+    {
+      "factPath": "blocks/1/blocks/1",
+      "kind": "heading",
+      "level": 1,
+      "text": "Release Notes",
+    },
+    {
+      "block": 2,
+      "factPath": "blocks/1/blocks/2",
+      "kind": "page-block",
+      "page": 1,
+      "text": "Parser-owned body.",
+    },
+  ],
+}
+`;

@@ -1,0 +1,10 @@
+{
+  "$comment": "Static bounded capture of the @firecrawl/anydoc 0.1.7 Document shape. It is not produced by executing native code in tests.",
+  "blocks": [
+    { "kind": "heading", "level": 1, "content": [{ "kind": "text", "text": "Release Notes" }] },
+    { "kind": "paragraph", "content": [{ "kind": "text", "text": "Parser-owned body." }] },
+    { "kind": "table", "table": { "kind": "data", "headerRows": 1, "grid": [[{ "kind": "origin", "cell": { "blocks": [{ "kind": "paragraph", "content": [{ "kind": "text", "text": "Plan" }] }] } }], [{ "kind": "origin", "cell": { "blocks": [{ "kind": "paragraph", "content": [{ "kind": "text", "text": "Pro" }] }] } }]] } }
+  ],
+  "notes": [],
+  "assets": []
+}

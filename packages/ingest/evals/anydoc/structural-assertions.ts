@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { DocumentBlock, DocumentProducer, IngestedDocument, ListBlock, ListItem, SourceCoordinate, TableBlock, TextBlock } from '@use-crux/core/indexing'
+import type { NativeFact } from './native-fact-schema'
 
 export type AssertionRole = 'required' | 'informational'
 
@@ -62,7 +63,7 @@ type ParserNativeFactValue = StructuralAssertion extends infer Fact
   ? Fact extends unknown ? Omit<Fact, 'id' | 'role' | 'factPath' | 'for'> : never
   : never
 
-export type ParserNativeFact = ParserNativeFactValue & {
+export type ParserNativeFact = NativeFact & ParserNativeFactValue & {
   /** Parser-owned structural location, retained for duplicate-kind disambiguation. */
   readonly factPath: string
 }
@@ -76,6 +77,11 @@ export interface ParserNativeFacts {
 export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: ParserNativeFacts): StructuralAssertionResult {
   const results = [outcomeResult(expected.expectedOutcome, actual.outcome)]
   for (const assertion of expected.assertions) {
+    // These are Core representation checks, not facts exposed by every raw
+    // parser payload. Raw extractors retain their own page hashes in snapshots.
+    if (assertion.kind === 'metadata' || assertion.kind === 'page-content-hash') {
+      continue
+    }
     const expectedPath = assertion.kind === 'provenance' ? assertion.path : assertion.factPath
     const expectedValue = assertion.kind === 'provenance'
       ? (({ for: _for, ...value }) => value)(withoutIdentity(assertion) as WithoutIdentity<Extract<StructuralAssertion, { kind: 'provenance' }>>)
