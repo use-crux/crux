@@ -105,6 +105,75 @@ export interface RuntimeOutboxRow {
   };
 }
 
+export interface RuntimeTransportBindingHealthRow {
+  readonly schema: 1;
+  readonly namespace: string;
+  readonly bindingId: string;
+  readonly adapterId: string;
+  readonly provider: string;
+  readonly transportKind: string;
+  readonly status: string;
+  readonly statusCoverage: string;
+  readonly lease: {
+    readonly coverage: string;
+    readonly ownerId?: string;
+  };
+  readonly cursor: {
+    readonly present: boolean;
+    readonly coverage: string;
+    readonly ageMs?: number;
+    readonly lagCoverage: string;
+  };
+  readonly outcomes: {
+    readonly coverage: string;
+    readonly accepted?: number;
+    readonly deduplicated?: number;
+    readonly delivered?: number;
+    readonly retried?: number;
+    readonly deadLettered?: number;
+  };
+  readonly fault: {
+    readonly coverage: string;
+    readonly lastErrorCode?: string;
+  };
+  readonly reconnect: {
+    readonly coverage: string;
+  };
+  readonly shutdown: {
+    readonly coverage: string;
+  };
+  readonly configRef?: {
+    readonly id: string;
+    readonly revision: string;
+  };
+  readonly target?: {
+    readonly kind: string;
+    readonly signalId: string;
+  };
+}
+
+export interface RuntimeTransportBindingHealthSnapshot {
+  readonly schema: 1;
+  readonly namespace: string;
+  readonly observedAt: string;
+  readonly bindings: readonly RuntimeTransportBindingHealthRow[];
+  readonly totals: {
+    readonly accepted: number;
+    readonly deduplicated: number;
+    readonly delivered: number;
+    readonly retried: number;
+    readonly deadLettered: number;
+    readonly normalized?: number;
+  };
+  readonly coverage: {
+    readonly bindingLimit: number;
+    readonly bindings: string;
+    readonly identityAttribution: string;
+    readonly checkpoints: string;
+    readonly statistics: string;
+  };
+}
+
 export interface RuntimeStatusResponse {
   readonly operation: "status";
   readonly ok: true;
@@ -113,6 +182,7 @@ export interface RuntimeStatusResponse {
   readonly work: readonly RuntimeWorkRow[];
   readonly timers: readonly RuntimeTimerRow[];
   readonly outbox: readonly RuntimeOutboxRow[];
+  readonly transports?: RuntimeTransportBindingHealthSnapshot;
 }
 
 export interface RuntimeInspectResponse {
