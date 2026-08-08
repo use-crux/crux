@@ -1,42 +1,41 @@
 import { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { open } from 'node:fs/promises'
 import { Socket } from 'node:net'
 
 const protocolVersion = 1
 const maxSourceBytes = 64 << 20
 const maxResultBytes = 8 << 20
+const inputPath = '/run/crux-anydoc/input/source'
+const timeoutMilliseconds = 25_000
+const candidateFormats = new Set(['doc', 'docm', 'rtf', 'odt', 'epub', 'ppt', 'pps', 'pot', 'pptx', 'pptm', 'ppsx', 'ppsm', 'odp', 'docx', 'xls', 'xlsb', 'ods'])
 
-type Request = { version: number; nonce: string; digest: string }
-type Result = { version: number; ok: boolean; error?: string; payload?: string }
+type Request = { version: number; nonce: string; requestDigest: string; format: string; sourceSha256: string; sourceBytes: number; limits: { sourceBytes: number; resultBytes: number } }
+type Result = Request & { ok: boolean; error?: string; payload?: string; accounting?: { sourceBytes: number } }
 
-const [capabilityPath, resultPath, inputPath, format] = process.argv.slice(2)
+const [capabilityPath, resultPath] = process.argv.slice(2)
 
 void main()
 
 async function main(): Promise<void> {
-  if (!capabilityPath || !resultPath || !inputPath || !format) return fail('invalid-request')
+  if (!capabilityPath || !resultPath) return fail('invalid-request')
   const request = await receiveRequest(capabilityPath).catch(() => undefined)
   if (!validRequest(request)) return fail('replay')
 
-  const bytes = await readSource(inputPath).catch(() => undefined)
+  const bytes = await readSource(inputPath, request.limits.sourceBytes).catch(() => undefined)
   if (!bytes) return fail('invalid-request')
-  if (sha256(bytes) !== request.digest) return fail('replay')
+  if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return fail('replay')
 
   let payload: unknown
-  if (format === '__crux_anydoc_test__') {
-    payload = { schemaVersion: 1, format, sourceBytes: bytes.byteLength }
-  } else {
-    try {
-      // This literal is intentionally post-capability: the bundled runner's
-      // top level has only Node builtins, so untrusted launches cannot load the
-      // native addon before proving possession of this run's nonce and digest.
-      const anydoc = await import('@firecrawl/anydoc')
-      payload = await anydoc.toDocument(bytes, format as never)
-    } catch {
-      return fail('invalid-result')
-    }
+  try {
+    // This literal is intentionally post-capability: the bundled runner's
+    // top level has only Node builtins, so untrusted launches cannot load the
+    // native addon before proving possession of this run's nonce and digest.
+    const anydoc = await import('@firecrawl/anydoc')
+    payload = await anydoc.toDocument(bytes, request.format as never)
+  } catch {
+    return fail('invalid-result', request)
   }
-  await send({ version: protocolVersion, ok: true, payload: Buffer.from(JSON.stringify(payload)).toString('base64') })
+  await send({ ...request, ok: true, payload: Buffer.from(JSON.stringify(payload)).toString('base64'), accounting: { sourceBytes: bytes.byteLength } })
 }
 
 async function receiveRequest(path: string): Promise<Request> {
@@ -44,21 +43,38 @@ async function receiveRequest(path: string): Promise<Request> {
   try { return await readFrame<Request>(socket) } finally { socket.destroy() }
 }
 
-async function readSource(path: string): Promise<Buffer> {
-  const stat = await fs.stat(path)
-  if (!stat.isFile() || stat.size < 0 || stat.size > maxSourceBytes) throw new Error('source')
-  return fs.readFile(path)
+async function readSource(path: string, limit: number): Promise<Buffer> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > maxSourceBytes) throw new Error('source')
+  const file = await open(path, 'r')
+  try {
+    const stat = await file.stat()
+    if (!stat.isFile() || stat.size < 0 || stat.size > limit) throw new Error('source')
+    const chunks: Buffer[] = []
+    let total = 0
+    for (;;) {
+      const chunk = Buffer.allocUnsafe(Math.min(64 << 10, limit + 1 - total))
+      const { bytesRead } = await file.read(chunk, 0, chunk.byteLength, null)
+      if (bytesRead === 0) return Buffer.concat(chunks, total)
+      total += bytesRead
+      if (total > limit) throw new Error('source')
+      chunks.push(chunk.subarray(0, bytesRead))
+    }
+  } finally { await file.close() }
 }
 
 function validRequest(value: unknown): value is Request {
   return !!value && typeof value === 'object'
     && (value as Request).version === protocolVersion
     && /^[a-f0-9]{32}$/.test((value as Request).nonce)
-    && /^[a-f0-9]{64}$/.test((value as Request).digest)
+    && /^[a-f0-9]{64}$/.test((value as Request).requestDigest)
+    && /^[a-f0-9]{64}$/.test((value as Request).sourceSha256)
+    && candidateFormats.has((value as Request).format)
+    && Number.isSafeInteger((value as Request).sourceBytes) && (value as Request).sourceBytes >= 0
+    && Number.isSafeInteger((value as Request).limits?.sourceBytes) && Number.isSafeInteger((value as Request).limits?.resultBytes)
 }
 
-async function fail(error: string): Promise<void> {
-  await send({ version: protocolVersion, ok: false, error }).catch(() => undefined)
+async function fail(error: string, request?: Request): Promise<void> {
+  if (request) await send({ ...request, ok: false, error }).catch(() => undefined)
   process.exitCode = 1
 }
 
@@ -68,7 +84,7 @@ async function send(result: Result): Promise<void> {
   const socket = await connect(resultPath)
   try {
     await write(socket, Buffer.concat([u32(payload.byteLength), payload]))
-    const ack = await readExact(socket, 4)
+    const ack = await new BufferedReader(socket).read(4)
     if (!ack.equals(Buffer.from('ACK\n'))) throw new Error('ack')
   } finally { socket.destroy() }
 }
@@ -76,29 +92,37 @@ async function send(result: Result): Promise<void> {
 function connect(path: string): Promise<Socket> {
   return new Promise((resolve, reject) => {
     const socket = new Socket()
+    const timer = setTimeout(() => { socket.destroy(); reject(new Error('timeout')) }, timeoutMilliseconds)
     socket.once('error', reject)
-    socket.connect(path, () => { socket.off('error', reject); resolve(socket) })
+    socket.connect(path, () => { clearTimeout(timer); socket.off('error', reject); resolve(socket) })
   })
 }
 
 function readFrame<Value>(socket: Socket): Promise<Value> {
-  return readExact(socket, 4).then(async (header) => {
+  const reader = new BufferedReader(socket)
+  return reader.read(4).then(async (header) => {
     const length = header.readUInt32BE(0)
     if (length === 0 || length > maxResultBytes) throw new Error('frame')
-    return JSON.parse((await readExact(socket, length)).toString('utf8')) as Value
+    return JSON.parse((await reader.read(length)).toString('utf8')) as Value
   })
 }
 
-function readExact(socket: Socket, length: number): Promise<Buffer> {
+class BufferedReader {
+  private pending = Buffer.alloc(0)
+  constructor(private readonly socket: Socket) {}
+  read(length: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let total = 0
-    const done = (error?: Error): void => { socket.off('data', data); socket.off('end', end); socket.off('error', failRead); error ? reject(error) : resolve(Buffer.concat(chunks, total)) }
-    const data = (chunk: Buffer): void => { const needed = length - total; chunks.push(chunk.subarray(0, needed)); total += Math.min(chunk.byteLength, needed); if (total === length) done() }
+    const chunks: Buffer[] = [this.pending.subarray(0, length)]
+    let total = chunks[0].byteLength
+    this.pending = this.pending.subarray(total)
+    const done = (error?: Error): void => { this.socket.off('data', data); this.socket.off('end', end); this.socket.off('error', failRead); error ? reject(error) : resolve(Buffer.concat(chunks, total)) }
+    const data = (chunk: Buffer): void => { const needed = length - total; chunks.push(chunk.subarray(0, needed)); total += Math.min(chunk.byteLength, needed); if (chunk.byteLength > needed) this.pending = Buffer.concat([this.pending, chunk.subarray(needed)]); if (total === length) done() }
     const end = (): void => done(new Error('eof'))
     const failRead = (error: Error): void => done(error)
-    socket.on('data', data); socket.once('end', end); socket.once('error', failRead)
+    if (total === length) return done()
+    this.socket.on('data', data); this.socket.once('end', end); this.socket.once('error', failRead)
   })
+  }
 }
 
 function write(socket: Socket, value: Buffer): Promise<void> {

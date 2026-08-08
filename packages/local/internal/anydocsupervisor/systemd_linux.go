@@ -380,6 +380,9 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
 		if peerErr == nil && reportErr == nil && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
+			if deadline, ok := ctx.Deadline(); ok {
+				_ = conn.SetDeadline(deadline)
+			}
 			err = EncodeRequest(conn, request)
 			_ = conn.Close()
 			if err != nil {
@@ -433,6 +436,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context) (Result, error) {
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
 		if peerErr == nil && reportErr == nil && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
+			if deadline, ok := ctx.Deadline(); ok {
+				_ = conn.SetDeadline(deadline)
+			}
 			result, decodeErr := DecodeResult(conn)
 			if decodeErr == nil {
 				_, decodeErr = conn.Write([]byte("ACK\n"))

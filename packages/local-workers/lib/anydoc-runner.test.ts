@@ -8,15 +8,15 @@ describe('anydoc runner trust boundary', () => {
   it('keeps the native addon behind nonce, digest, and fixed-source validation', () => {
     const nativeImport = source.indexOf("import('@firecrawl/anydoc')")
     expect(nativeImport).toBeGreaterThan(source.indexOf('validRequest(request)'))
-    expect(nativeImport).toBeGreaterThan(source.indexOf('sha256(bytes) !== request.digest'))
-    expect(source).toContain('const [capabilityPath, resultPath, inputPath, format]')
-    expect(source).toContain('fs.readFile(path)')
+    expect(nativeImport).toBeGreaterThan(source.indexOf('sha256(bytes) !== request.sourceSha256'))
+    expect(source).toContain("const inputPath = '/run/crux-anydoc/input/source'")
+    expect(source).toContain('await file.read(')
     expect(source).not.toContain('child_process')
   })
 
   it('requires a bounded result frame and exact ACK before exit', () => {
     expect(source).toContain('payload.byteLength > maxResultBytes')
     expect(source).toContain("Buffer.from('ACK\\n')")
-    expect(source).toContain('readExact(socket, 4)')
+    expect(source).toContain('class BufferedReader')
   })
 })

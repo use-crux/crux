@@ -51,19 +51,34 @@ func closed(code ErrorCode) error        { return &SupervisorError{Code: code} }
 var errCPUAccounting = errors.New("cpu accounting unavailable")
 
 type Request struct {
-	Version int    `json:"version"`
-	Nonce   string `json:"nonce"`
-	Digest  string `json:"digest"`
+	Version       int    `json:"version"`
+	Nonce         string `json:"nonce"`
+	RequestDigest string `json:"requestDigest"`
+	Format        string `json:"format"`
+	SourceSHA256  string `json:"sourceSha256"`
+	SourceBytes   int64  `json:"sourceBytes"`
+	Limits        Limits `json:"limits"`
 }
 type Result struct {
-	Version int       `json:"version"`
-	OK      bool      `json:"ok"`
-	Error   ErrorCode `json:"error,omitempty"`
-	Payload []byte    `json:"payload,omitempty"`
+	Request
+	OK         bool              `json:"ok"`
+	Error      ErrorCode         `json:"error,omitempty"`
+	Payload    []byte            `json:"payload,omitempty"`
+	Accounting *ResultAccounting `json:"accounting,omitempty"`
+}
+type ResultAccounting struct {
+	SourceBytes int64 `json:"sourceBytes"`
 }
 
 func validRequest(v Request) bool {
-	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.Digest) == 64 && hexOK(v.Nonce) && hexOK(v.Digest)
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0
+}
+func validFormat(format string) bool {
+	switch format {
+	case "doc", "docm", "rtf", "odt", "epub", "ppt", "pps", "pot", "pptx", "pptm", "ppsx", "ppsm", "odp", "docx", "xls", "xlsb", "ods":
+		return true
+	}
+	return false
 }
 func hexOK(s string) bool { _, e := hex.DecodeString(s); return e == nil }
 func writeFull(w io.Writer, p []byte) error {
@@ -136,7 +151,7 @@ func DecodeRequest(r io.Reader) (Request, error) {
 	return v, nil
 }
 func EncodeResult(w io.Writer, v Result) error {
-	if v.Version != ProtocolVersion || (v.OK && v.Error != "") || (!v.OK && !known(v.Error)) {
+	if !validResult(v) {
 		return closed(ErrInvalidRequest)
 	}
 	if e := writeFrame(w, v); e != nil {
@@ -150,10 +165,19 @@ func DecodeResult(r io.Reader) (Result, error) {
 	if e != nil {
 		return v, e
 	}
-	if v.Version != ProtocolVersion || (v.OK && v.Error != "") || (!v.OK && !known(v.Error)) {
+	if !validResult(v) {
 		return v, closed(ErrInvalidRequest)
 	}
 	return v, nil
+}
+func validResult(v Result) bool {
+	if !validRequest(v.Request) {
+		return false
+	}
+	if v.OK {
+		return v.Error == "" && len(v.Payload) > 0 && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes
+	}
+	return v.Error != "" && known(v.Error) && len(v.Payload) == 0 && v.Accounting == nil
 }
 func known(c ErrorCode) bool {
 	switch c {
@@ -262,6 +286,7 @@ type Run struct {
 	unit          Unit
 	write         *os.File
 	nonce, digest string
+	sourceBytes   int64
 	mu            sync.Mutex
 	stopOnce      sync.Once
 	finishOnce    sync.Once
@@ -311,7 +336,7 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	d := sha256.Sum256(input)
-	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), stop: make(chan struct{}), finished: make(chan struct{})}
+	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), sourceBytes: int64(len(input)), stop: make(chan struct{}), finished: make(chan struct{})}
 	go r.monitor()
 	return r, nil
 }
@@ -325,7 +350,7 @@ func (r *Run) Authorize() error {
 		return closed(ErrReplay)
 	}
 	r.done = true
-	v := Request{Version: ProtocolVersion, Nonce: r.nonce, Digest: r.digest}
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.digest, Format: "docx", SourceBytes: r.sourceBytes, Limits: Limits{}.Clamp()}
 	var e error
 	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -354,6 +379,9 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	result, err := receiver.ReceiveResult(ctx)
 	if err != nil {
 		return Result{}, closed(ErrWorkerCrash)
+	}
+	if result.Nonce != r.nonce || result.RequestDigest != r.digest || result.SourceSHA256 != r.digest || result.SourceBytes != r.sourceBytes || result.Format != "docx" {
+		return Result{}, closed(ErrReplay)
 	}
 	return result, nil
 }
