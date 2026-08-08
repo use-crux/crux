@@ -514,7 +514,7 @@ importers:
   packages/ingest:
     dependencies:
       '@firecrawl/pdf-inspector':
-        specifier: ^1.12.0
+        specifier: 1.12.0
         version: 1.12.0
       '@use-crux/core':
         specifier: workspace:*
@@ -544,7 +544,7 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       pdfjs-dist:
-        specifier: ^5.0.0
+        specifier: 5.7.284
         version: 5.7.284
       ssf:
         specifier: ^0.11.2
