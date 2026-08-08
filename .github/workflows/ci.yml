@@ -206,7 +206,7 @@ jobs:
 
   systemd-anydoc-containment:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       CRUX_SYSTEMD_INTEGRATION: 1
@@ -238,11 +238,24 @@ jobs:
       - name: Build and embed local workers
         run: make -C packages/local build-local-workers embed-workers
 
+      - name: Prepare root-attestable Node 24 for the containment test
+        run: |
+          runner_node="$(node -p 'process.execPath')"
+          runner_node="$(readlink -f "$runner_node")"
+          test -x "$runner_node"
+          sudo install -o root -g root -m 0755 "$runner_node" /usr/local/lib/crux-systemd-node24
+          printf 'CRUX_SYSTEMD_TEST_NODE=/usr/local/lib/crux-systemd-node24\n' >> "$GITHUB_ENV"
+
       - name: Verify systemd host prerequisites
         run: |
           test -S /run/dbus/system_bus_socket
           systemctl --system is-system-running --wait || test $? -eq 1
           test -r /sys/fs/cgroup/cgroup.controllers
+          sudo --preserve-env=CRUX_SYSTEMD_TEST_NODE sh -ceu '
+            test -x "$CRUX_SYSTEMD_TEST_NODE"
+            test "$(stat -c %u "$CRUX_SYSTEMD_TEST_NODE")" = 0
+            test "$("$CRUX_SYSTEMD_TEST_NODE" --version | sed -n "s/^v\([0-9][0-9]*\).*/\1/p")" -ge 24
+          '
 
       - name: Build containment test binary as runner user
         working-directory: packages/local
@@ -250,7 +263,7 @@ jobs:
 
       - name: Run real systemd containment gate
         working-directory: packages/local
-        run: sudo --preserve-env=CRUX_SYSTEMD_INTEGRATION,CRUX_SYSTEMD_EVIDENCE_PATH timeout 10m /tmp/anydoc-systemd.test -test.run '^TestSystemdContainmentIntegration$' -test.count=1 -test.parallel=1
+        run: sudo --preserve-env=CRUX_SYSTEMD_INTEGRATION,CRUX_SYSTEMD_EVIDENCE_PATH,CRUX_SYSTEMD_TEST_NODE env CRUX_NODE_PATH="$CRUX_SYSTEMD_TEST_NODE" timeout 10m /tmp/anydoc-systemd.test -test.run '^TestSystemdContainmentIntegration$' -test.count=1 -test.parallel=1
 
       - name: Verify bounded containment evidence
         if: always()
