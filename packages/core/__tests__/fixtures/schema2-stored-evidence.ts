@@ -1,4 +1,5 @@
 import { sha256Hex } from '../../src/content/sha256'
+import type { Asset } from '../../src/asset'
 import { createIndexedChunkRecord } from '../../src/indexed-knowledge/records'
 import { createStoredEvidence } from '../../src/indexing/stored-evidence'
 import type { CruxChunk, CruxDocument, StoredEvidenceDocument, StoredEvidenceOrigin } from '../../src/indexing'
@@ -15,6 +16,14 @@ export const textFixtureProducer = Object.freeze({
   adapterVersion: 'test:text-adapter:2',
 })
 
+/** Exact closed producer identity for schema-2 media fixture sources. */
+export const mediaFixtureProducer = Object.freeze({
+  kind: 'parser' as const,
+  name: 'text' as const,
+  version: 'test:media-parser:2',
+  adapterVersion: 'test:media-adapter:2',
+})
+
 /** Build a truthful schema-2 text document with one stable source block. */
 export function schema2TextDocument(
   input: Omit<CruxDocument, 'evidence' | 'parts'> & { readonly content: string; readonly blockId?: string },
@@ -28,6 +37,56 @@ export function schema2TextDocument(
     ...document,
     evidence,
     parts: [{ id: blockId, kind: 'text', content: document.content, evidence: origin }],
+  }
+}
+
+/** Build a truthful schema-2 media document with one stable media source block. */
+export function schema2MediaDocument(
+  input: Omit<CruxDocument, 'asset' | 'evidence' | 'parts'> & {
+    readonly asset: Asset
+    readonly mediaPartId?: string
+    readonly additionalMediaParts?: readonly { readonly id: string; readonly asset: Asset }[]
+  },
+): CruxDocument {
+  const { asset, mediaPartId: explicitPartId, additionalMediaParts = [], ...document } = input
+  const documentSha256 = mediaDocumentSha256([asset, ...additionalMediaParts.map((part) => part.asset)])
+  const partId = explicitPartId ?? `media:${document.sourceId}`
+  const evidence: StoredEvidenceDocument = {
+    documentSha256,
+    producer: mediaFixtureProducer,
+    normalizationVersion: 'test:media-normalization:2',
+  }
+  const origin: StoredEvidenceOrigin = {
+    coordinate: { kind: 'document', documentSha256 },
+    producer: mediaFixtureProducer,
+    blockIds: [partId],
+  }
+
+  return {
+    ...document,
+    evidence,
+    parts: [
+      ...(document.content === undefined
+        ? []
+        : [
+            {
+              id: textBlockId(document.sourceId),
+              kind: 'text' as const,
+              content: document.content,
+              evidence: {
+                ...origin,
+                blockIds: [textBlockId(document.sourceId)],
+              },
+            },
+          ]),
+      { id: partId, kind: 'media', asset, evidence: origin },
+      ...additionalMediaParts.map((part) => ({
+        id: part.id,
+        kind: 'media' as const,
+        asset: part.asset,
+        evidence: { ...origin, blockIds: [part.id] },
+      })),
+    ],
   }
 }
 
@@ -105,4 +164,21 @@ function schema2TextOrigin(document: StoredEvidenceDocument, blockId: string): S
 
 function textBlockId(sourceId: string): string {
   return `text:${sourceId}`
+}
+
+function mediaDocumentSha256(assets: readonly Asset[]): string {
+  return sha256Hex(encoder.encode(assets.map(mediaAssetIdentity).join('\n')))
+}
+
+function mediaAssetIdentity(asset: Asset): string {
+  if (asset.type === 'data') {
+    if (!(asset.data instanceof Uint8Array)) {
+      throw new TypeError('schema2MediaDocument fixtures require Uint8Array data assets.')
+    }
+    return sha256Hex(asset.data)
+  }
+  if (asset.type === 'url') {
+    return sha256Hex(encoder.encode(asset.url.href))
+  }
+  return sha256Hex(encoder.encode(`${asset.provider}:${asset.fileId}`))
 }
