@@ -585,23 +585,11 @@ function inline(value: unknown, path: string): Inline {
 }
 
 function cell(value: unknown, path: string): TableCell {
-  const record = exact(
+  const record = exactWithOptional(
     value,
     path,
     ['id', 'coordinate', 'producer', 'row', 'column', 'rowSpan', 'columnSpan', 'blocks'],
-    [
-      'id',
-      'coordinate',
-      'producer',
-      'row',
-      'column',
-      'rowSpan',
-      'columnSpan',
-      'blocks',
-      'displayedValue',
-      'formula',
-      'mergeRange',
-    ],
+    ['displayedValue', 'formula', 'mergeRange'],
   )
   return freeze({
     id: nonEmpty(record.id, `${path}.id`),
@@ -689,6 +677,16 @@ function exact(value: unknown, path: string, required: string[], alternate?: str
   const keys = Object.keys(record).sort()
   if (!same(keys, required) && (!alternate || !same(keys, alternate))) {
     fail(path, 'must contain exactly the declared keys')
+  }
+  return record
+}
+
+function exactWithOptional(value: unknown, path: string, required: string[], optional: string[]): RecordValue {
+  const record = plain(value, path)
+  const allowed = new Set([...required, ...optional])
+  const keys = Object.keys(record)
+  if (!required.every((key) => Object.hasOwn(record, key)) || keys.some((key) => !allowed.has(key))) {
+    fail(path, 'must contain only declared keys and every required key')
   }
   return record
 }

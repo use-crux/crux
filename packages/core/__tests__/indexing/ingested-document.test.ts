@@ -179,6 +179,33 @@ describe('ingested document schema 2', () => {
     })
   })
 
+  it('accepts every independent table-cell fact combination', () => {
+    const combinations = [
+      { displayedValue: '10' },
+      { formula: '=5+5' },
+      { displayedValue: '10', formula: '=5+5' },
+      { mergeRange: 'A1:A2' },
+    ]
+
+    for (const facts of combinations) {
+      const input = document()
+      const cell = input.blocks[2].rows[0][0]
+      input.blocks[2].rows[0][0] = {
+        id: cell.id,
+        coordinate: cell.coordinate,
+        producer: cell.producer,
+        row: cell.row,
+        column: cell.column,
+        rowSpan: cell.rowSpan,
+        columnSpan: cell.columnSpan,
+        blocks: cell.blocks,
+        ...facts,
+      } as typeof cell
+
+      expect(validateIngestedDocument(input).blocks[2]).toMatchObject({ kind: 'table' })
+    }
+  })
+
   it('rejects incomplete, invented, and open shapes', () => {
     const badDocumentHash = document()
     badDocumentHash.source.documentSha256 = 'not-a-sha'
@@ -226,5 +253,41 @@ describe('ingested document schema 2', () => {
       trigger: 'timeout',
     } as (typeof invalidDiagnostic.diagnostics)[number]
     expectContractError(() => validateIngestedDocument(invalidDiagnostic))
+
+    const openCell = document()
+    openCell.blocks[2].rows[0][0] = {
+      ...openCell.blocks[2].rows[0][0],
+      unexpected: true,
+    } as never
+    expectContractError(() => validateIngestedDocument(openCell))
+
+    const openInline = document()
+    openInline.blocks[0].inlines[0] = {
+      ...openInline.blocks[0].inlines[0],
+      unexpected: true,
+    } as never
+    expectContractError(() => validateIngestedDocument(openInline))
+
+    const detachedInline = document()
+    detachedInline.blocks[0].inlines[0] = {
+      ...detachedInline.blocks[0].inlines[0],
+      coordinate: { kind: 'document', documentSha256: 'e'.repeat(64) },
+    } as never
+    expectContractError(() => validateIngestedDocument(detachedInline))
+
+    const incompleteListItem = document()
+    incompleteListItem.blocks[1].items[0] = {
+      id: 'item-1',
+      coordinate: { kind: 'page-block', page: 2, block: 1 },
+      producer: parser,
+    } as never
+    expectContractError(() => validateIngestedDocument(incompleteListItem))
+
+    const invalidAssetProducer = document()
+    invalidAssetProducer.assets[0] = {
+      ...invalidAssetProducer.assets[0],
+      producer: { kind: 'parser', name: 'made-up', version: '1', adapterVersion: '1' },
+    } as never
+    expectContractError(() => validateIngestedDocument(invalidAssetProducer))
   })
 })

@@ -1,8 +1,11 @@
 import type {
   DocumentBlock,
   DocumentProducer,
+  IngestFormat,
   IngestDiagnostic,
   IngestedDocument,
+  Inline,
+  ParserIdentity,
   SourceCoordinate,
 } from '../src/indexing'
 
@@ -78,11 +81,86 @@ function producerLabel(producer: DocumentProducer): string {
   }
 }
 
+function inlineLabel(inline: Inline): string {
+  switch (inline.kind) {
+    case 'text':
+      return inline.text
+    case 'link':
+      return inline.target
+    default: {
+      const exhaustive: never = inline
+      return exhaustive
+    }
+  }
+}
+
+function parserNameLabel(name: ParserIdentity['name']): string {
+  switch (name) {
+    case 'anydoc':
+    case 'mammoth':
+    case 'pdf-inspector':
+    case 'pdfjs-dist':
+    case 'exceljs':
+    case 'csv-parse':
+      return name
+    default: {
+      const exhaustive: never = name
+      return exhaustive
+    }
+  }
+}
+
+function formatLabel(format: IngestFormat): string {
+  switch (format) {
+    case 'txt':
+    case 'md':
+    case 'html':
+    case 'pdf':
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'csv':
+    case 'json':
+    case 'doc':
+    case 'docm':
+    case 'docx':
+    case 'rtf':
+    case 'odt':
+    case 'epub':
+    case 'ppt':
+    case 'pps':
+    case 'pot':
+    case 'pptx':
+    case 'pptm':
+    case 'ppsx':
+    case 'ppsm':
+    case 'odp':
+    case 'xls':
+    case 'xlsb':
+    case 'xlsm':
+    case 'xlsx':
+    case 'ods':
+    case 'unknown':
+      return format
+    default: {
+      const exhaustive: never = format
+      return exhaustive
+    }
+  }
+}
+
 declare const document: IngestedDocument
 void coordinateLabel(document.blocks[0]!.coordinate)
 void blockLabel(document.blocks[0]!)
 void diagnosticLabel(document.diagnostics[0]!)
 void producerLabel(document.producer)
+void inlineLabel(
+  document.blocks[0]!.kind === 'text'
+    ? document.blocks[0].inlines[0]!
+    : { kind: 'text', text: '', coordinate: { kind: 'page', page: 1 }, producer: document.producer },
+)
+void parserNameLabel(document.producer.name)
+void formatLabel(document.source.format)
 
 // @ts-expect-error Host-owned application operations require a version.
 const invalidProducer: DocumentProducer = {
