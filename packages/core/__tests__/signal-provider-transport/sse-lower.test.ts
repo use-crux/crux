@@ -339,7 +339,10 @@ describe("lowerSseOpen", () => {
   });
 
   it("calls return only for cleanup when throw is absent, then rethrows", async () => {
-    const returnSpy = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const cleanupError = new Error("cleanup-failed");
+    const returnSpy = vi.fn(async () => {
+      throw cleanupError;
+    });
     const open: SseOpen = () => ({
       [Symbol.asyncIterator]() {
         return {

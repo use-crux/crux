@@ -436,13 +436,26 @@ import {
 export const marketplaceWs = signalProvider({
   id: "marketplace.ws",
   transport: websocket({
-    async open({ cursor, signal, configRef }) {
+    async *open({ cursor, signal, configRef }) {
       const socket = await connectMarketplaceWs({
         resume: cursor,
         revision: configRef.revision,
         signal,
       });
       const buffer = createBoundedPushBuffer({ capacity: 64, signal });
+
+      let finalized = false;
+      const finalize = () => {
+        if (finalized) {
+          return;
+        }
+        finalized = true;
+        signal.removeEventListener("abort", onAbort);
+        socket.close();
+      };
+      const onAbort = () => {
+        finalize();
+      };
 
       socket.onmessage = (event) => {
         try {
@@ -462,14 +475,17 @@ export const marketplaceWs = signalProvider({
             // Optional: Runtime calls this only after durable accept + checkpoint.
             acknowledge: () => socket.sendAck(message.wireId),
           });
-        } catch {
-          socket.close();
+        } catch (error) {
+          // Fail first so a later clean onclose cannot mask parse/overflow faults.
+          buffer.fail(error);
+          finalize();
         }
       };
 
       socket.onclose = (closeEvent) => {
         const kind = classifyWebSocketCloseCode(closeEvent.code);
         if (kind === "normal") {
+          // close() is a no-op after fail(), so prior failure stays authoritative.
           buffer.close();
           return;
         }
@@ -485,8 +501,13 @@ export const marketplaceWs = signalProvider({
         buffer.fail(new Error(`WebSocket closed with code ${closeEvent.code}`));
       };
 
-      signal.addEventListener("abort", () => socket.close(), { once: true });
-      return buffer.items;
+      signal.addEventListener("abort", onAbort);
+      try {
+        yield* buffer.items;
+      } finally {
+        // Early return, clean EOF, and throw all close the socket and detach abort.
+        finalize();
+      }
     },
   }),
   signals: { orderSubmitted },

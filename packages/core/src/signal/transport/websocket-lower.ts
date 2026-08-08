@@ -39,7 +39,8 @@ export function lowerWebSocketItem(item: unknown): StreamItem {
  * results. Early consumer stop invokes the source iterator's `return` when
  * present so adapter cleanup (socket close, unsubscribe) runs. Consumer
  * `throw` propagates the source `throw` result when present (done or recovered
- * value); otherwise it runs `return` for cleanup and rethrows.
+ * value); otherwise it best-effort runs `return` for cleanup and always rethrows
+ * the injected error (cleanup rejection is ignored).
  */
 export function lowerWebSocketOpen(open: WebSocketOpen): StreamOpen {
   return (context: StreamOpenContext) => lowerWebSocketOpenIterable(open, context);
@@ -101,7 +102,11 @@ function lowerWebSocketIterable(
 
           // No source throw: best-effort cleanup only, then rethrow.
           if (typeof sourceIterator.return === "function") {
-            await sourceIterator.return();
+            try {
+              await sourceIterator.return();
+            } catch {
+              // Cleanup failure must not mask the consumer-injected error.
+            }
           }
 
           throw error;

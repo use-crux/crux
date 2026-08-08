@@ -219,7 +219,10 @@ describe("lowerWebSocketOpen", () => {
   });
 
   it("calls return only for cleanup when throw is absent, then rethrows", async () => {
-    const returned = vi.fn(async () => ({ done: true as const, value: undefined }));
+    const cleanupError = new Error("cleanup-failed");
+    const returned = vi.fn(async () => {
+      throw cleanupError;
+    });
     const open: WebSocketOpen = () => ({
       [Symbol.asyncIterator]() {
         return {

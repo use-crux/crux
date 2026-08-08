@@ -81,8 +81,9 @@ export function lowerSseItem(item: unknown): StreamItem {
  * @remarks Supports both direct `AsyncIterable` and `Promise<AsyncIterable>`
  * results. Early consumer stop invokes the source iterator's `return` when
  * present so adapter cleanup runs. Consumer `throw` propagates the source
- * `throw` result when present (done or recovered value); otherwise it runs
- * `return` for cleanup and rethrows.
+ * `throw` result when present (done or recovered value); otherwise it best-effort
+ * runs `return` for cleanup and always rethrows the injected error (cleanup
+ * rejection is ignored).
  */
 export function lowerSseOpen(open: SseOpen): StreamOpen {
   return (context: StreamOpenContext) => lowerSseOpenIterable(open, context);
@@ -144,7 +145,11 @@ function lowerSseIterable(
 
           // No source throw: best-effort cleanup only, then rethrow.
           if (typeof sourceIterator.return === "function") {
-            await sourceIterator.return();
+            try {
+              await sourceIterator.return();
+            } catch {
+              // Cleanup failure must not mask the consumer-injected error.
+            }
           }
 
           throw error;
