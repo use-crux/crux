@@ -52,6 +52,12 @@ type FileSystem interface {
 	Chmod(string, os.FileMode) error
 }
 
+type ProcRuntimeFS interface {
+	Lstat(string) (os.FileInfo, error)
+	ReadDir(string) ([]os.DirEntry, error)
+	ReadFile(string) ([]byte, error)
+}
+
 type Clock interface {
 	Now() time.Time
 	After(time.Duration) <-chan time.Time
@@ -68,6 +74,7 @@ type SystemdBackendOptions struct {
 	Clock         Clock
 	SocketFactory SocketFactory
 	PeerVerifier  PeerVerifier
+	ProcRuntimeFS ProcRuntimeFS
 }
 
 type SocketFactory interface {
@@ -104,6 +111,7 @@ type systemdBackend struct {
 	now     Clock
 	sockets SocketFactory
 	peers   PeerVerifier
+	procFS  ProcRuntimeFS
 }
 
 // NewSystemdBackend creates the Linux backend. It is intentionally not wired
@@ -133,7 +141,15 @@ func NewSystemdBackendWith(options SystemdBackendOptions) Backend {
 	if peers == nil {
 		peers = unixPeerVerifier{}
 	}
-	return &systemdBackend{bus: options.Bus, fs: fs, now: clock, sockets: sockets, peers: peers}
+	procFS := options.ProcRuntimeFS
+	if procFS == nil {
+		if candidate, ok := fs.(ProcRuntimeFS); ok {
+			procFS = candidate
+		} else {
+			procFS = osProcRuntimeFS{}
+		}
+	}
+	return &systemdBackend{bus: options.Bus, fs: fs, now: clock, sockets: sockets, peers: peers, procFS: procFS}
 }
 
 func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.File) (Unit, error) {
@@ -180,7 +196,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	if err != nil || closeErr != nil {
 		return nil, errors.New("transient unit unavailable")
 	}
-	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, resultListener: resultListener, resultSocket: resultPath, peers: b.peers, spec: spec}
+	u := &systemdUnit{name: name, bus: b.bus, fs: b.fs, procFS: b.procFS, now: b.now, tmp: onlyPrivateTemp(spec), listener: listener, socket: socketPath, resultListener: resultListener, resultSocket: resultPath, peers: b.peers, spec: spec}
 	if err := u.waitActive(ctx); err != nil {
 		_ = u.Stop(context.Background())
 		_ = u.Cleanup(context.Background())
@@ -192,7 +208,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 }
 
 func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.UnixListener, error) {
-	runtime := spec.ReadOnlyPaths[0]
+	runtime := onlyPrivateTemp(spec)
 	token, err := transientUnitName()
 	if err != nil {
 		return "", nil, err
@@ -211,10 +227,10 @@ func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.U
 }
 
 func validBackendSpec(spec ServiceSpec) bool {
-	if len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1]) || spec.NodeSHA256 == "" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 1 || len(spec.BindReadOnlyPaths) != 1 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+	if len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1]) || spec.NodeSHA256 == "" || len(spec.runtimeTreeDigest) != sha256.Size*2 || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 0 || len(spec.BindReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
 		return false
 	}
-	if spec.Command[1] != filepath.Join(spec.ReadOnlyPaths[0], "runner.mjs") {
+	if spec.Command[1] != filepath.Join(runtimeTarget, "runner.mjs") {
 		return false
 	}
 	paths := append(append([]string{}, spec.ReadOnlyPaths...), spec.ReadWritePaths...)
@@ -228,8 +244,9 @@ func validBackendSpec(spec ServiceSpec) bool {
 			}
 		}
 	}
-	parts := strings.Split(spec.BindReadOnlyPaths[0], ":")
-	if len(parts) != 2 || !validAbsolutePath(parts[0]) || parts[1] != stagedSourceTarget {
+	runtimeBind := strings.Split(spec.BindReadOnlyPaths[0], ":")
+	sourceBind := strings.Split(spec.BindReadOnlyPaths[1], ":")
+	if len(runtimeBind) != 2 || !validAbsolutePath(runtimeBind[0]) || runtimeBind[1] != runtimeTarget || len(sourceBind) != 2 || !validAbsolutePath(sourceBind[0]) || sourceBind[1] != stagedSourceTarget {
 		return false
 	}
 	return spec.MemoryMax > 0 && spec.MemorySwapMax == 0 && spec.TasksMax > 0 && spec.CPUQuotaPercent > 0 && spec.CPUQuotaPeriodUSec == CPUPeriodUSec && spec.RuntimeMax > 0 && spec.KillMode == "control-group" && spec.ProtectSystem == "strict" && spec.CPUAccounting && spec.NoNewPrivileges && spec.PrivateNetwork && spec.PrivateTmp && spec.ProtectHome
@@ -306,6 +323,7 @@ type systemdUnit struct {
 	name           string
 	bus            SystemBus
 	fs             FileSystem
+	procFS         ProcRuntimeFS
 	now            Clock
 	tmp            string
 	listener       *net.UnixListener
@@ -416,7 +434,72 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, errors.New("invalid sandbox properties")
 	}
-	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	pid := intValue(p, "MainPID")
+	runtimeDigest := ""
+	if pid > 0 {
+		procFS := u.procFS
+		if procFS == nil {
+			procFS, _ = u.fs.(ProcRuntimeFS)
+		}
+		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
+		if err != nil {
+			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
+		}
+	}
+	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+}
+
+func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
+	if fs == nil || pid <= 0 {
+		return "", errors.New("runtime filesystem unavailable")
+	}
+	root := filepath.Join("/proc", strconv.Itoa(pid), "root", strings.TrimPrefix(runtimeTarget, "/"))
+	h := sha256.New()
+	var walk func(string, string, bool) error
+	walk = func(path, rel string, rootEntry bool) error {
+		info, err := fs.Lstat(path)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("unsafe mounted runtime entry")
+		}
+		if info.IsDir() {
+			want := os.FileMode(0o755)
+			if rootEntry {
+				want = 0o555
+			}
+			if info.Mode().Perm() != want {
+				return errors.New("mounted runtime directory mode mismatch")
+			}
+			_, _ = fmt.Fprintf(h, "d\x00%s\x00%04o\x00", rel, info.Mode().Perm())
+			entries, err := fs.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				childRel := entry.Name()
+				if rel != "." {
+					childRel = rel + "/" + childRel
+				}
+				if err := walk(filepath.Join(path, entry.Name()), childRel, false); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm() != 0o444 {
+			return errors.New("mounted runtime file mismatch")
+		}
+		contents, err := fs.ReadFile(path)
+		if err != nil || int64(len(contents)) != info.Size() {
+			return errors.New("mounted runtime file unavailable")
+		}
+		sum := sha256.Sum256(contents)
+		_, _ = fmt.Fprintf(h, "f\x00%s\x00%04o\x00%d\x00%s\x00", rel, info.Mode().Perm(), info.Size(), hex.EncodeToString(sum[:]))
+		return nil
+	}
+	if err := walk(root, ".", true); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) error {
@@ -605,6 +688,12 @@ func (u *systemdUnit) Cleanup(ctx context.Context) error {
 }
 
 type osFS struct{}
+
+type osProcRuntimeFS struct{}
+
+func (osProcRuntimeFS) Lstat(path string) (os.FileInfo, error)     { return os.Lstat(path) }
+func (osProcRuntimeFS) ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(path) }
+func (osProcRuntimeFS) ReadFile(path string) ([]byte, error)       { return os.ReadFile(path) }
 
 func (osFS) ReadFile(path string) ([]byte, error) { return os.ReadFile(path) }
 func (osFS) WriteFile(path string, contents []byte) error {

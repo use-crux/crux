@@ -31,6 +31,7 @@ const (
 	RuntimeCeiling  = 30 * time.Second
 	CPUCeiling      = 20 * time.Second
 	usageTimeout    = 100 * time.Millisecond
+	runtimeTarget   = "/run/crux-anydoc/runtime"
 )
 
 type ErrorCode string
@@ -246,9 +247,37 @@ type ServiceSpec struct {
 	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                         bool
 	NodeSHA256                                                                                      string
 	Node                                                                                            assets.AttestedNode
+	runtimeTreeDigest                                                                               string
 }
 
-func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, error) {
+type LaunchDependency struct {
+	runtimeRoot, runtimeRunner, runtimeTreeDigest string
+	node                                          assets.AttestedNode
+	nodePath, nodeSHA256                          string
+}
+
+// PrepareLocalHost materializes and attests the dormant Anydoc launch inputs.
+// It intentionally does not register a route or enable any document format.
+func PrepareLocalHost() (LaunchDependency, error) {
+	runtime, err := assets.ExtractEmbeddedAnydocRuntime()
+	if err != nil {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	node, err := assets.ResolveAnydocNode()
+	if err != nil {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	return newLaunchDependency(runtime, node)
+}
+
+func newLaunchDependency(runtime assets.InstalledAnydocRuntime, node assets.AttestedNode) (LaunchDependency, error) {
+	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") || len(runtime.Digest()) != sha256.Size*2 || node.Path() == "" || len(node.SHA256()) != sha256.Size*2 {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	return LaunchDependency{runtimeRoot: runtime.Root(), runtimeRunner: runtime.Runner(), runtimeTreeDigest: runtime.Digest(), node: node, nodePath: node.Path(), nodeSHA256: node.SHA256()}, nil
+}
+
+func newServiceSpec(hostSource, runtime, tmp, nodePath, nodeSHA256 string, node assets.AttestedNode, digest string, l Limits) (ServiceSpec, error) {
 	paths := []string{hostSource, runtime, tmp}
 	for _, p := range paths {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
@@ -263,21 +292,25 @@ func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, err
 		}
 	}
 	l = l.Clamp()
-	node, err := assets.ResolveAnydocNode()
-	if err != nil {
-		return ServiceSpec{}, closed(ErrContainmentUnavailable)
-	}
-	runner := filepath.Join(runtime, "runner.mjs")
-	return ServiceSpec{Command: []string{node.Path(), runner}, NodeSHA256: node.SHA256(), Node: node, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	runner := filepath.Join(runtimeTarget, "runner.mjs")
+	return ServiceSpec{Command: []string{nodePath, runner}, NodeSHA256: nodeSHA256, Node: node, runtimeTreeDigest: digest, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, BindReadOnlyPaths: []string{runtime + ":" + runtimeTarget, hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 // NewInstalledServiceSpec binds containment to a runtime minted by assets,
 // rather than accepting a caller-controlled runner path.
-func NewInstalledServiceSpec(hostSource string, runtime assets.InstalledAnydocRuntime, tmp string, l Limits) (ServiceSpec, error) {
-	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") || runtime.Digest() == "" {
+func NewInstalledServiceSpec(hostSource string, runtime assets.InstalledAnydocRuntime, node assets.AttestedNode, tmp string, l Limits) (ServiceSpec, error) {
+	launch, err := newLaunchDependency(runtime, node)
+	if err != nil {
+		return ServiceSpec{}, err
+	}
+	return serviceSpec(hostSource, launch, tmp, l)
+}
+
+func serviceSpec(hostSource string, launch LaunchDependency, tmp string, l Limits) (ServiceSpec, error) {
+	if launch.runtimeRoot == "" || launch.runtimeRunner != filepath.Join(launch.runtimeRoot, "runner.mjs") || launch.nodePath == "" || len(launch.nodeSHA256) != sha256.Size*2 || len(launch.runtimeTreeDigest) != sha256.Size*2 {
 		return ServiceSpec{}, closed(ErrContainmentUnavailable)
 	}
-	return NewServiceSpec(hostSource, runtime.Root(), tmp, l)
+	return newServiceSpec(hostSource, launch.runtimeRoot, tmp, launch.nodePath, launch.nodeSHA256, launch.node, launch.runtimeTreeDigest, l)
 }
 
 type SandboxReport struct {
@@ -296,6 +329,7 @@ type SandboxReport struct {
 	PrivateUsers                                                              bool
 	ProtectProc, ProcSubset                                                   string
 	Populated                                                                 bool
+	RuntimeTreeDigest                                                         string
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -350,7 +384,7 @@ type Run struct {
 	stop          chan struct{}
 }
 
-func (s *Supervisor) Start(ctx context.Context, input []byte, runtime, tmp string, l Limits) (*Run, error) {
+func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
 	if s == nil || s.backend == nil || s.stager == nil {
 		return nil, closed(ErrContainmentUnavailable)
 	}
@@ -359,7 +393,7 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, runtime, tmp strin
 	if e != nil {
 		return nil, closed(ErrInvalidRequest)
 	}
-	spec, e := NewServiceSpec(staged.HostPath, runtime, tmp, l)
+	spec, e := serviceSpec(staged.HostPath, launch, tmp, l)
 	if e != nil {
 		_ = staged.Cleanup()
 		return nil, e
@@ -408,14 +442,6 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, runtime, tmp strin
 	return r, nil
 }
 
-// StartInstalled is the production containment entry point. It only accepts an
-// attested runtime and never derives its executable from an arbitrary string.
-func (s *Supervisor) StartInstalled(ctx context.Context, input []byte, runtime assets.InstalledAnydocRuntime, tmp string, l Limits) (*Run, error) {
-	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") {
-		return nil, closed(ErrContainmentUnavailable)
-	}
-	return s.Start(ctx, input, runtime.Root(), tmp, l)
-}
 func (r *Run) Authorize() error {
 	if r == nil {
 		return closed(ErrReplay)
@@ -571,7 +597,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 			return false
 		}
 	}
-	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	return r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

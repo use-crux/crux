@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +20,7 @@ import (
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	b := &fakeBackend{}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -38,9 +39,28 @@ func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	}
 	assert(t, r.Authorize(), ErrReplay)
 }
+
+func TestPrepareLocalHostBuildsOpaqueLaunchDependencyWithoutRouting(t *testing.T) {
+	t.Setenv("CRUX_CACHE_DIR", t.TempDir())
+	launch, err := PrepareLocalHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = filepath.Walk(launch.runtimeRoot, func(path string, info os.FileInfo, err error) error {
+			if err == nil && info.IsDir() {
+				_ = os.Chmod(path, 0o755)
+			}
+			return nil
+		})
+	})
+	if launch.runtimeRoot == "" || launch.runtimeRunner != filepath.Join(launch.runtimeRoot, "runner.mjs") || len(launch.runtimeTreeDigest) != 64 || launch.nodePath == "" || len(launch.nodeSHA256) != 64 {
+		t.Fatalf("invalid prepared launch dependency: %#v", launch)
+	}
+}
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
-	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	ch := make(chan error, 2)
 	go func() { ch <- r.Authorize() }()
 	go func() { ch <- r.Authorize() }()
@@ -51,11 +71,11 @@ func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	r.Finish(context.Background(), nil)
 }
 func TestSpecAndMismatchCleanup(t *testing.T) {
-	_, e := NewServiceSpec("/run/x", "/run/x/a", "/run/t", Limits{})
+	_, e := newTestServiceSpec("/run/x", "/run/x/a", "/run/t", Limits{})
 	assert(t, e, ErrInvalidRequest)
 	b := &fakeBackend{bad: true}
 	supervisor := newTestSupervisor(t, b)
-	_, e = supervisor.Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	_, e = supervisor.Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
 	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
@@ -67,7 +87,7 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -88,7 +108,7 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	b := &fakeBackend{}
 	supervisor := newTestSupervisor(t, b)
-	r, err := supervisor.Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	r, err := supervisor.Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +127,7 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 		t.Fatal("service quota can exceed CPU budget")
 	}
 	b := &fakeBackend{cpuErr: true}
-	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -118,6 +138,23 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 func newTestSupervisor(t *testing.T, backend Backend) *Supervisor {
 	t.Helper()
 	return NewWithStager(backend, NewStager(t.TempDir()))
+}
+
+func testLaunch() LaunchDependency {
+	return LaunchDependency{
+		runtimeRoot:       "/run/run",
+		runtimeRunner:     "/run/run/runner.mjs",
+		runtimeTreeDigest: strings.Repeat("d", 64),
+		nodePath:          "/usr/bin/node",
+		nodeSHA256:        strings.Repeat("e", 64),
+	}
+}
+
+func newTestServiceSpec(hostSource, runtime, tmp string, limits Limits) (ServiceSpec, error) {
+	launch := testLaunch()
+	launch.runtimeRoot = runtime
+	launch.runtimeRunner = filepath.Join(runtime, "runner.mjs")
+	return serviceSpec(hostSource, launch, tmp, limits)
 }
 
 func TestRequestDigestBindsEveryJobField(t *testing.T) {
@@ -208,7 +245,7 @@ type fakeBackend struct {
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
 	b.read = r
-	rep := SandboxReport{MainPID: 42, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, BindReadOnlyPaths: s.BindReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
+	rep := SandboxReport{MainPID: 42, RuntimeTreeDigest: s.runtimeTreeDigest, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, BindReadOnlyPaths: s.BindReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
 	if b.bad {
 		rep.MemoryMax = 1
 	}

@@ -125,8 +125,8 @@ func InstallAnydocRuntime(source embed.FS) (InstalledAnydocRuntime, error) {
 		return InstalledAnydocRuntime{}, err
 	}
 	root := filepath.Join(base, "anydoc-runtime-"+digest[:16])
-	if err := verifyRuntime(root, manifest); err == nil {
-		return InstalledAnydocRuntime{root: root, runner: filepath.Join(root, "runner.mjs"), digest: digest}, nil
+	if treeDigest, verifyErr := verifyRuntime(root, manifest); verifyErr == nil {
+		return InstalledAnydocRuntime{root: root, runner: filepath.Join(root, "runner.mjs"), digest: treeDigest}, nil
 	}
 	partial, err := os.MkdirTemp(base, ".anydoc-runtime-"+digest[:16]+"-")
 	if err != nil {
@@ -164,7 +164,7 @@ func InstallAnydocRuntime(source embed.FS) (InstalledAnydocRuntime, error) {
 			return InstalledAnydocRuntime{}, err
 		}
 	}
-	if err := verifyRuntimeFiles(partial, manifest); err != nil {
+	if _, err := verifyRuntimeFiles(partial, manifest, false); err != nil {
 		return InstalledAnydocRuntime{}, err
 	}
 	marker, err := os.OpenFile(filepath.Join(partial, ".complete"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o444)
@@ -175,11 +175,15 @@ func InstallAnydocRuntime(source embed.FS) (InstalledAnydocRuntime, error) {
 		return InstalledAnydocRuntime{}, err
 	}
 	if err := os.Rename(partial, root); err != nil {
-		if verifyRuntime(root, manifest) != nil {
+		if _, verifyErr := verifyRuntime(root, manifest); verifyErr != nil {
 			return InstalledAnydocRuntime{}, err
 		}
 	}
-	return InstalledAnydocRuntime{root: root, runner: filepath.Join(root, "runner.mjs"), digest: digest}, nil
+	treeDigest, err := verifyRuntime(root, manifest)
+	if err != nil {
+		return InstalledAnydocRuntime{}, err
+	}
+	return InstalledAnydocRuntime{root: root, runner: filepath.Join(root, "runner.mjs"), digest: treeDigest}, nil
 }
 
 var gnuPlatformProbe = trustedGNUPlatform
@@ -223,57 +227,122 @@ func validPackages(packages map[string]struct {
 	return true
 }
 
-func verifyRuntime(root string, manifest anydocManifest) error {
+func verifyRuntime(root string, manifest anydocManifest) (string, error) {
 	marker, err := os.Lstat(filepath.Join(root, ".complete"))
 	if err != nil || !marker.Mode().IsRegular() || marker.Mode().Perm() != 0o444 {
-		return errors.New("Anydoc containment unavailable: incomplete runtime")
+		return "", errors.New("Anydoc containment unavailable: incomplete runtime")
 	}
-	return verifyRuntimeFiles(root, manifest)
+	return verifyRuntimeFiles(root, manifest, true)
 }
 
-func verifyRuntimeFiles(root string, manifest anydocManifest) error {
+func verifyRuntimeFiles(root string, manifest anydocManifest, complete bool) (string, error) {
 	expected := map[string]struct{}{".complete": {}}
+	rootInfo, err := os.Lstat(root)
+	wantRootMode := os.FileMode(0o755)
+	if complete {
+		wantRootMode = 0o555
+	}
+	if err != nil || !rootInfo.IsDir() || rootInfo.Mode().Perm() != wantRootMode || !ownedByCurrentUser(rootInfo) {
+		return "", errors.New("Anydoc containment unavailable: unsafe runtime root")
+	}
+	if err := safeOwnerParentChain(root); err != nil {
+		return "", err
+	}
 	for _, file := range manifest.Files {
 		if !safeRuntimePath(file.Path) {
-			return errors.New("Anydoc containment unavailable: unsafe manifest path")
+			return "", errors.New("Anydoc containment unavailable: unsafe manifest path")
 		}
 		path := filepath.Join(root, filepath.FromSlash(file.Path))
 		if _, exists := expected[file.Path]; exists {
-			return errors.New("Anydoc containment unavailable: duplicate runtime file")
+			return "", errors.New("Anydoc containment unavailable: duplicate runtime file")
 		}
 		expected[file.Path] = struct{}{}
 		info, err := os.Lstat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o444 || info.Size() != file.Size {
-			return errors.New("Anydoc containment unavailable: runtime file mismatch")
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o444 || info.Size() != file.Size || !ownedByCurrentUser(info) {
+			return "", errors.New("Anydoc containment unavailable: runtime file mismatch")
 		}
 		bytes, err := os.ReadFile(path)
 		if err != nil || sha256Hex(bytes) != file.SHA256 {
-			return errors.New("Anydoc containment unavailable: runtime hash mismatch")
+			return "", errors.New("Anydoc containment unavailable: runtime hash mismatch")
 		}
 	}
-	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+	h := sha256.New()
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, err := filepath.Rel(root, path)
-		if err != nil || rel == "." {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			_, _ = fmt.Fprintf(h, "d\x00.\x00%04o\x00", info.Mode().Perm())
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
-		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() && !entry.IsDir() {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() && !info.IsDir() {
 			return errors.New("Anydoc containment unavailable: unsafe runtime entry")
 		}
-		if entry.IsDir() {
-			if entry.Type().Perm()&0o022 != 0 {
+		if !ownedByCurrentUser(info) {
+			return errors.New("Anydoc containment unavailable: untrusted runtime owner")
+		}
+		if info.IsDir() {
+			if info.Mode().Perm() != 0o755 {
 				return errors.New("Anydoc containment unavailable: writable runtime directory")
 			}
+			_, _ = fmt.Fprintf(h, "d\x00%s\x00%04o\x00", rel, info.Mode().Perm())
 			return nil
 		}
 		if _, ok := expected[rel]; !ok {
 			return errors.New("Anydoc containment unavailable: unexpected runtime file")
 		}
+		if info.Mode().Perm() != 0o444 {
+			return errors.New("Anydoc containment unavailable: runtime file mode mismatch")
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(h, "f\x00%s\x00%04o\x00%d\x00%s\x00", rel, info.Mode().Perm(), info.Size(), sha256Hex(contents))
 		return nil
 	})
+	if err != nil {
+		return "", err
+	}
+	if !complete {
+		return "", nil
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func ownedByCurrentUser(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == uint32(os.Geteuid())
+}
+
+func safeOwnerParentChain(path string) error {
+	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			return errors.New("Anydoc containment unavailable: unsafe runtime parent")
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 && stat.Uid != uint32(os.Geteuid()) {
+			return errors.New("Anydoc containment unavailable: untrusted runtime parent owner")
+		}
+		writable := info.Mode().Perm()&0o022 != 0
+		stickyRoot := info.Mode()&os.ModeSticky != 0 && stat.Uid == 0
+		if writable && !stickyRoot {
+			return errors.New("Anydoc containment unavailable: unsafe runtime parent")
+		}
+		if dir == "/" {
+			return nil
+		}
+	}
 }
 
 func safeRuntimePath(path string) bool {

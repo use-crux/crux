@@ -14,3 +14,7 @@ variables from the isolated service.
 
 Verify the launched Node executable and require a trusted glibc host before
 native Anydoc extraction.
+
+Bind launches to opaque host-prepared runtime and Node attestations, then
+re-attest the exact read-only runtime tree through the worker mount namespace
+before releasing its one-shot job capability.

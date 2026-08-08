@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal(err)
 	}
 	defer write.Close()
-	spec, err := NewServiceSpec(input, runtime, tmp, Limits{})
+	spec, err := newTestServiceSpec(input, runtime, tmp, Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,20 +80,20 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal("invalid D-Bus FD property")
 	}
 	start, ok := got["ExecStart"].([]execStart)
-	if !ok || len(start) != 1 || start[0].Path != spec.Command[0] || len(start[0].Args) != 4 || start[0].Args[0] != start[0].Path || start[0].Args[1] != spec.Command[1] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[1] || start[0].Args[3] != got["ReadOnlyPaths"].([]string)[2] {
+	if !ok || len(start) != 1 || start[0].Path != spec.Command[0] || len(start[0].Args) != 4 || start[0].Args[0] != start[0].Path || start[0].Args[1] != spec.Command[1] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[0] || start[0].Args[3] != got["ReadOnlyPaths"].([]string)[1] {
 		t.Fatalf("unsafe ExecStart %#v", got["ExecStart"])
 	}
 	paths := got["ReadOnlyPaths"].([]string)
-	if len(paths) != 3 || paths[0] != runtime || !strings.HasPrefix(paths[1], runtime+"/.a-") || !strings.HasPrefix(paths[2], runtime+"/.r-") {
+	if len(paths) != 2 || !strings.HasPrefix(paths[0], tmp+"/.a-") || !strings.HasPrefix(paths[1], tmp+"/.r-") {
 		t.Fatalf("socket bind paths %#v", paths)
 	}
-	if !same(got["BindReadOnlyPaths"].([]string), []string{input + ":" + stagedSourceTarget}) {
+	if !same(got["BindReadOnlyPaths"].([]string), []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) {
 		t.Fatalf("source bind mapping %#v", got["BindReadOnlyPaths"])
 	}
 }
 
 func TestSystemdBackendFailsClosedForUnavailablePermissionAndCanceledContexts(t *testing.T) {
-	spec, _ := NewServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	spec, _ := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
 	read, write, _ := os.Pipe()
 	defer read.Close()
 	defer write.Close()
@@ -124,6 +125,93 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 		t.Fatal("unbounded CPU was accepted")
 	}
 }
+
+func TestMountedRuntimeAttestationRejectsTreeTamperingAndProcErrors(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".complete"), nil, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
+	fs := rootedProcFS{root: root}
+	digest, err := mountedRuntimeDigest(fs, 42)
+	if err != nil || len(digest) != 64 {
+		t.Fatalf("digest = %q, %v", digest, err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(string) error
+	}{
+		{"extra", func(root string) error {
+			_ = os.Chmod(root, 0o755)
+			err := os.WriteFile(filepath.Join(root, "extra"), []byte("x"), 0o444)
+			_ = os.Chmod(root, 0o555)
+			return err
+		}},
+		{"writable root", func(root string) error { return os.Chmod(root, 0o755) }},
+		{"writable directory", func(root string) error {
+			_ = os.Chmod(root, 0o755)
+			path := filepath.Join(root, "dir")
+			if err := os.Mkdir(path, 0o755); err != nil {
+				return err
+			}
+			if err := os.Chmod(path, 0o777); err != nil {
+				return err
+			}
+			return os.Chmod(root, 0o555)
+		}},
+		{"file mode", func(root string) error { return os.Chmod(filepath.Join(root, ".complete"), 0o644) }},
+		{"file hash", func(root string) error {
+			path := filepath.Join(root, ".complete")
+			_ = os.Chmod(path, 0o644)
+			err := os.WriteFile(path, []byte("changed"), 0o444)
+			_ = os.Chmod(path, 0o444)
+			return err
+		}},
+		{"symlink", func(root string) error {
+			_ = os.Chmod(root, 0o755)
+			err := os.Symlink(".complete", filepath.Join(root, "link"))
+			_ = os.Chmod(root, 0o555)
+			return err
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			copyRoot := t.TempDir()
+			if err := os.WriteFile(filepath.Join(copyRoot, ".complete"), nil, 0o444); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(copyRoot, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(copyRoot, 0o755) })
+			if err := test.mutate(copyRoot); err != nil {
+				t.Fatal(err)
+			}
+			got, err := mountedRuntimeDigest(rootedProcFS{root: copyRoot}, 42)
+			if err == nil && got == digest {
+				t.Fatal("tampered mounted runtime matched attested tree")
+			}
+		})
+	}
+	if _, err := mountedRuntimeDigest(rootedProcFS{root: filepath.Join(root, "missing")}, 42); err == nil {
+		t.Fatal("proc lookup error accepted")
+	}
+}
+
+type rootedProcFS struct{ root string }
+
+func (f rootedProcFS) path(path string) string {
+	prefix := filepath.Join("/proc", "42", "root", strings.TrimPrefix(runtimeTarget, "/"))
+	rel := strings.TrimPrefix(path, prefix)
+	return filepath.Join(f.root, strings.TrimPrefix(rel, "/"))
+}
+func (f rootedProcFS) Lstat(path string) (os.FileInfo, error)     { return os.Lstat(f.path(path)) }
+func (f rootedProcFS) ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(f.path(path)) }
+func (f rootedProcFS) ReadFile(path string) ([]byte, error)       { return os.ReadFile(f.path(path)) }
 
 func TestSystemdStopFallsBackToCgroupKillAndCleanup(t *testing.T) {
 	bus := newFakeSystemBus()
@@ -258,7 +346,7 @@ func TestSystemdRejectsUnsafePaths(t *testing.T) {
 	if validCgroup("/crux/../evil") || validCgroup("relative") {
 		t.Fatal("accepted unsafe cgroup")
 	}
-	spec, _ := NewServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	spec, _ := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
 	spec.ReadWritePaths = []string{"/run/../private"}
 	if validBackendSpec(spec) {
 		t.Fatal("accepted unsafe backend spec")
@@ -266,7 +354,7 @@ func TestSystemdRejectsUnsafePaths(t *testing.T) {
 }
 
 func TestSystemdPropertyWireTypesRoundTrip(t *testing.T) {
-	spec, _ := NewServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	spec, _ := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
 	props := propertiesByName(systemdProperties(spec))
 	for _, name := range []string{"CapabilityBoundingSet", "AmbientCapabilities", "CPUQuotaPeriodUSec"} {
 		if dbus.SignatureOf(props[name]).String() != "t" {
@@ -328,11 +416,29 @@ func newFakeFS() *fakeFS {
 	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("64\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
+	if strings.HasSuffix(path, "/.complete") {
+		return []byte{}, nil
+	}
 	v, ok := f.files[path]
 	if !ok {
 		return nil, os.ErrNotExist
 	}
 	return v, nil
+}
+func (f *fakeFS) Lstat(path string) (os.FileInfo, error) {
+	if strings.HasSuffix(path, runtimeTarget) {
+		return fakeRuntimeInfo{name: "runtime", mode: os.ModeDir | 0o555}, nil
+	}
+	if strings.HasSuffix(path, runtimeTarget+"/.complete") {
+		return fakeRuntimeInfo{name: ".complete", mode: 0o444}, nil
+	}
+	return nil, os.ErrNotExist
+}
+func (f *fakeFS) ReadDir(path string) ([]os.DirEntry, error) {
+	if strings.HasSuffix(path, runtimeTarget) {
+		return []os.DirEntry{fakeRuntimeEntry{fakeRuntimeInfo{name: ".complete", mode: 0o444}}}, nil
+	}
+	return nil, os.ErrNotExist
 }
 func (f *fakeFS) WriteFile(path string, contents []byte) error {
 	f.writes[path] = append([]byte(nil), contents...)
@@ -341,6 +447,23 @@ func (f *fakeFS) WriteFile(path string, contents []byte) error {
 func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return nil }
 func (f *fakeFS) Chown(string, int, int) error    { return nil }
 func (f *fakeFS) Chmod(string, os.FileMode) error { return nil }
+
+type fakeRuntimeInfo struct {
+	name string
+	mode os.FileMode
+}
+
+func (i fakeRuntimeInfo) Name() string       { return i.name }
+func (i fakeRuntimeInfo) Size() int64        { return 0 }
+func (i fakeRuntimeInfo) Mode() os.FileMode  { return i.mode }
+func (i fakeRuntimeInfo) ModTime() time.Time { return time.Time{} }
+func (i fakeRuntimeInfo) IsDir() bool        { return i.mode.IsDir() }
+func (i fakeRuntimeInfo) Sys() any           { return nil }
+
+type fakeRuntimeEntry struct{ fakeRuntimeInfo }
+
+func (e fakeRuntimeEntry) Type() os.FileMode          { return e.mode.Type() }
+func (e fakeRuntimeEntry) Info() (os.FileInfo, error) { return e.fakeRuntimeInfo, nil }
 
 type immediateClock struct{}
 
