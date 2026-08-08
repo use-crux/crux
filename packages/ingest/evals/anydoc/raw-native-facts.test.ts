@@ -17,7 +17,7 @@ it('snapshots parser-specific facts from raw parser payloads', async () => {
   const sheet = workbook.addWorksheet('Pricing')
   sheet.addRow(['Plan', 'Price'])
   sheet.addRow(['Pro', 20])
-  const anydoc = await import('./native-anydoc-facts.mjs')
+  const anydoc = await import('../../private/anydoc-admission.mjs')
   const rawAnydoc = JSON.parse(await readFile(new URL('./fixtures/anydoc-0.1.7-raw-document.json', import.meta.url), 'utf8'))
 
   expect({

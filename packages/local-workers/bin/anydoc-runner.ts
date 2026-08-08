@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { Socket } from 'node:net'
 import type { Format as NativeFormat } from '@firecrawl/anydoc'
-import { encodeRawResult, preflightRawDocument } from '../lib/anydoc-raw-result'
+import { admitAnydocDocument, AnydocAdmissionError } from '@use-crux/ingest/private/anydoc-admission'
+import { encodeAdmissionResult, preflightRawDocument } from '../lib/anydoc-raw-result'
 
 const protocolVersion = 2
 const maxSourceBytes = 32 << 20
@@ -52,20 +53,25 @@ async function main(): Promise<void> {
   }
   const preflight = preflightRawDocument(payload, request.limits)
   if ('error' in preflight) return fail(preflight.error, request)
-  const wireDocument = { ...preflight.document, assets: preflight.assets.map(({ id, mediaType, originPart }) => ({ id, mediaType, originPart })) }
-  const raw = Buffer.from(JSON.stringify(wireDocument))
-  const expandedBytes = bytes.byteLength + raw.byteLength + preflight.assetBytes
+  let admission
+  try {
+    admission = admitAnydocDocument(preflight.document, bytes, request.format, request.limits)
+  } catch (error) {
+    return fail(error instanceof AnydocAdmissionError ? error.code : 'invalid-result', request)
+  }
+  const projection = Buffer.from(JSON.stringify({ native: admission.native, core: admission.core }))
+  const expandedBytes = bytes.byteLength + projection.byteLength + preflight.assetBytes
   if (expandedBytes > request.limits.expandedBytes) return fail('expanded-too-large', request)
   const accounting: Accounting = {
     sourceBytes: bytes.byteLength,
-    rawBytes: raw.byteLength,
+    rawBytes: projection.byteLength,
     expandedBytes,
     assetCount: preflight.assets.length,
     assetBytes: preflight.assetBytes,
     diagnosticCount: 0,
     diagnosticBytes: 0,
   }
-  const encoded = encodeRawResult({ resultBytes: request.limits.resultBytes, sourceBytes: request.sourceBytes }, wireDocument, raw.byteLength, preflight.assets, accounting)
+  const encoded = encodeAdmissionResult({ resultBytes: request.limits.resultBytes, sourceBytes: request.sourceBytes }, admission, projection.byteLength, preflight.assets, accounting)
   if ('error' in encoded) return fail(encoded.error, request)
   const result = { ...request, ok: true as const, payload: encoded.bytes.toString('base64'), accounting }
   if (encodeResult(result).byteLength > request.limits.resultBytes) return fail('invalid-result', request)

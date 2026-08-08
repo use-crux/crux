@@ -55,11 +55,13 @@ describe('anydoc runner trust boundary', () => {
   it('bounds the native graph before serializing or projecting it', () => {
     const conversion = source.indexOf('await anydoc.toDocument')
     const preflight = source.indexOf('preflightRawDocument(payload, request.limits)')
-    const serialization = source.indexOf('JSON.stringify(wireDocument)')
+    const projection = source.indexOf('admitAnydocDocument(preflight.document')
+    const serialization = source.indexOf('JSON.stringify({ native: admission.native, core: admission.core })')
     expect(conversion).toBeGreaterThan(-1)
     expect(preflight).toBeGreaterThan(conversion)
-    expect(serialization).toBeGreaterThan(preflight)
-    expect(source).toContain('encodeRawResult(')
+    expect(projection).toBeGreaterThan(preflight)
+    expect(serialization).toBeGreaterThan(projection)
+    expect(source).toContain('encodeAdmissionResult(')
   })
 
   it('ships a self-contained, integrity-described native runtime tree', async () => {

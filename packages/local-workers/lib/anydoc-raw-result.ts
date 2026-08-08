@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 export type RawResultLimits = { expandedBytes: number; resultBytes: number; assetCount: number; assetBytes: number }
 export type RawAsset = { id: number; mediaType: string; originPart: string; data: Buffer }
 export type RawDocument = Record<string, unknown> & { blocks: unknown[]; notes: unknown[]; assets: RawAsset[] }
-type WireDocument = Record<string, unknown> & { blocks: unknown[]; notes: unknown[]; assets: Array<Omit<RawAsset, 'data'>> }
+type Admission = { native: unknown; core: unknown }
 
 type Preflight = { document: RawDocument; assets: RawAsset[]; assetBytes: number; maxTraversalFrames: number }
 type Failure = { error: 'invalid-result' | 'expanded-too-large' }
@@ -66,9 +66,9 @@ export function preflightRawDocument(payload: unknown, limits: RawResultLimits):
   return { document: payload as RawDocument, assets, assetBytes, maxTraversalFrames }
 }
 
-export function encodeRawResult(
+export function encodeAdmissionResult(
   request: { resultBytes: number; sourceBytes: number },
-  wireDocument: WireDocument,
+  admission: Admission,
   rawBytes: number,
   assets: readonly RawAsset[],
   accounting: Readonly<Record<string, number>>,
@@ -77,21 +77,22 @@ export function encodeRawResult(
     stringify: JSON.stringify,
   },
 ): { bytes: Buffer } | Failure {
-  const innerBytes = rawResultInnerBytes(rawBytes, assets)
+  const innerBytes = admissionResultInnerBytes(rawBytes, assets)
   const outerBytes = saturatedAdd(base64Bytes(innerBytes), resultEnvelopeBytes(request, accounting))
   if (outerBytes > request.resultBytes) return { error: 'invalid-result' }
 
   const payload = {
-    kind: 'anydoc-raw-v1',
-    document: wireDocument,
+    kind: 'anydoc-admission-v2',
+    native: admission.native,
+    core: admission.core,
     assets: assets.map(({ id, mediaType, originPart, data }) => ({ id, mediaType, originPart, data: codecs.base64(data) })),
     diagnostics: [],
   }
   return { bytes: Buffer.from(codecs.stringify(payload)) }
 }
 
-function rawResultInnerBytes(rawBytes: number, assets: readonly RawAsset[]): number {
-  let bytes = saturatedAdd(Buffer.byteLength('{"kind":"anydoc-raw-v1","document":'), rawBytes)
+function admissionResultInnerBytes(rawBytes: number, assets: readonly RawAsset[]): number {
+  let bytes = saturatedAdd(Buffer.byteLength('{"kind":"anydoc-admission-v2","native":,"core":'), rawBytes)
   bytes = saturatedAdd(bytes, Buffer.byteLength(',"assets":['))
   for (let index = 0; index < assets.length; index++) {
     const asset = assets[index]!

@@ -101,7 +101,7 @@ async function evidenceCacheIdentity() {
   const files = [
     'admission-family-worker.ts', 'admission-suite.ts', 'anydoc-worker.mjs', 'expected-facts.ts',
     'fixture-manifest.ts', 'incumbent-worker.ts', 'sequential-runner.ts', 'structural-assertions.ts',
-    'native-anydoc-facts.mjs', 'native-csv-facts.ts', 'native-fact-schema.ts', 'native-mammoth-facts.ts',
+    'native-csv-facts.ts', 'native-fact-schema.ts', 'native-mammoth-facts.ts', '../../private/anydoc-admission.mjs',
     'native-pdf-facts.ts', 'native-xlsx-facts.ts', 'containment.ts',
   ]
   const coreProjectors = [

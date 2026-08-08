@@ -21,6 +21,7 @@ describe('admission replay cache', () => {
     try {
       await cp(directory, copiedDirectory, { recursive: true })
       await cp(resolve(repository, 'packages/ingest/src'), resolve(temporary, 'packages/ingest/src'), { recursive: true })
+      await cp(resolve(repository, 'packages/ingest/private'), resolve(temporary, 'packages/ingest/private'), { recursive: true })
       await cp(resolve(directory, '../../__tests__/fixtures'), dirname(copiedPdf), { recursive: true })
       await symlink(resolve(repository, 'node_modules'), resolve(temporary, 'node_modules'), 'dir')
       await copyFile(nativeArtifactPath(), nativeArtifact)

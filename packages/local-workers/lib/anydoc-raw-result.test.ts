@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeRawResult, preflightRawDocument, type RawAsset } from './anydoc-raw-result'
+import { encodeAdmissionResult, preflightRawDocument, type RawAsset } from './anydoc-raw-result'
 
 describe('bounded Anydoc raw result', () => {
   it('rejects a five MiB asset before base64 or payload serialization', () => {
@@ -8,7 +8,7 @@ describe('bounded Anydoc raw result', () => {
     const document = { blocks: [], notes: [], assets: [] }
     const base64 = vi.fn(() => { throw new Error('must not encode') })
     const stringify = vi.fn(() => { throw new Error('must not stringify') })
-    const result = encodeRawResult({ resultBytes: 8 << 20, sourceBytes: 1 }, document, 36, [asset], {}, { base64, stringify })
+    const result = encodeAdmissionResult({ resultBytes: 8 << 20, sourceBytes: 1 }, { native: document, core: document }, 36, [asset], {}, { base64, stringify })
     expect(result).toEqual({ error: 'invalid-result' })
     expect(base64).not.toHaveBeenCalled()
     expect(stringify).not.toHaveBeenCalled()

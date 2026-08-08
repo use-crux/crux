@@ -137,17 +137,15 @@ describe('runParserCandidate', () => {
 
   it('retains the real DOCX fixture footnote, image asset, and native relationships through projection', async () => {
     const payload = await rawWorkerResult('docx', new URL('./fixtures/prose.docx', import.meta.url))
-    const native = payload.native.value as { readonly observed: { readonly notes: readonly { readonly id: string }[]; readonly assets: readonly unknown[]; readonly blocks: unknown }; readonly facts: readonly unknown[] }
+    const native = payload.native.value as { readonly observed: { readonly noteCount: number; readonly assets: readonly unknown[] }; readonly facts: readonly unknown[] }
     const core = payload.core.value as { readonly assets: readonly unknown[]; readonly metadata: { readonly anydocRelationships: string } }
     const relationships = JSON.parse(core.metadata.anydocRelationships) as { readonly notes: readonly { readonly id: string }[]; readonly inlines: readonly { readonly kind: string; readonly noteId?: string; readonly source?: { readonly kind?: string } }[] }
 
-    expect(native.observed.notes).toHaveLength(1)
+    expect(native.observed.noteCount).toBe(1)
     expect(native.observed.assets).toHaveLength(1)
-    expect(JSON.stringify(native.observed.blocks)).toContain('noteRef')
-    expect(JSON.stringify(native.observed.blocks)).toContain('image')
     expect(native.facts.length).toBeGreaterThan(0)
     expect(core.assets).toHaveLength(1)
-    expect(relationships.notes).toEqual(native.observed.notes.map((note) => ({ id: note.id, kind: 'footnote' })))
+    expect(relationships.notes).toEqual([{ id: 'fn1', kind: 'footnote' }])
     expect(relationships.inlines).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'noteRef' }),
       expect.objectContaining({ kind: 'image', source: expect.objectContaining({ kind: 'asset' }) }),

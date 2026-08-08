@@ -109,7 +109,7 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 
 func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 	request := validTestRequest(FormatDOCX)
-	payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png"}]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[]}`)
+	payload := []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[{"id":"asset:1","mediaType":"image/png","sha256":"039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81","byteLength":3,"coordinate":{},"producer":{}}],"diagnostics":[]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[]}`)
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -125,9 +125,25 @@ func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 		t.Fatal("worker accounting was trusted")
 	}
 	valid.Accounting = &accounting
-	valid.Payload = []byte(`{"kind":"anydoc-raw-v1","document":{},"assets":[],"diagnostics":[]}`)
+	valid.Payload = []byte(`{"kind":"anydoc-admission-v2","native":{},"core":{},"assets":[],"diagnostics":[]}`)
 	if err := EncodeResult(bytes.NewBuffer(nil), valid); err == nil {
 		t.Fatal("malformed wire payload accepted")
+	}
+}
+
+func TestAdmissionResultRejectsUnknownProjectionShapesAndAssetMutation(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	unknownNative := bytes.Replace(validAdmissionPayload(), []byte(`"facts":[]`), []byte(`"facts":[],"unknown":true`), 1)
+	if _, err := recomputePayloadAccounting(request, unknownNative); err == nil {
+		t.Fatal("unknown native fact envelope field accepted")
+	}
+	unknownCore := bytes.Replace(validAdmissionPayload(), []byte(`"diagnostics":[]},"assets"`), []byte(`"diagnostics":[],"unknown":true},"assets"`), 1)
+	if _, err := recomputePayloadAccounting(request, unknownCore); err == nil {
+		t.Fatal("unknown Core projection field accepted")
+	}
+	assetMutation := []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[{"id":"asset:1","mediaType":"image/png","sha256":"039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81","byteLength":3,"coordinate":{},"producer":{}}],"diagnostics":[]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQIE"}],"diagnostics":[]}`)
+	if _, err := recomputePayloadAccounting(request, assetMutation); err == nil {
+		t.Fatal("asset bytes independent of the Core digest accepted")
 	}
 }
 
@@ -159,7 +175,7 @@ func validTestRequest(format Format) Request {
 }
 
 func validWireResult(request Request) Result {
-	payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[]}`)
+	payload := validAdmissionPayload()
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		panic(err)
@@ -189,7 +205,7 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 		if request.Format != FormatODT {
 			t.Fatalf("result expected format = %q", request.Format)
 		}
-		payload := []byte(`{"kind":"anydoc-raw-v1","document":{"blocks":[],"notes":[],"assets":[]},"assets":[],"diagnostics":[]}`)
+		payload := validAdmissionPayload()
 		accounting, err := recomputePayloadAccounting(request, payload)
 		return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}, err
 	}}
@@ -207,6 +223,10 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 	if _, err := run.ReceiveResult(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func validAdmissionPayload() []byte {
+	return []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[],"diagnostics":[]},"assets":[],"diagnostics":[]}`)
 }
 
 func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {

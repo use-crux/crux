@@ -4,22 +4,45 @@ package anydocsupervisor
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 )
 
 type wirePayload struct {
 	Kind        string          `json:"kind"`
-	Document    json.RawMessage `json:"document"`
+	Native      json.RawMessage `json:"native"`
+	Core        json.RawMessage `json:"core"`
 	Assets      []wireAsset     `json:"assets"`
 	Diagnostics []string        `json:"diagnostics"`
 }
 
-type wireDocument struct {
-	Blocks json.RawMessage     `json:"blocks"`
-	Notes  json.RawMessage     `json:"notes"`
-	Assets []wireAssetMetadata `json:"assets"`
+type wireNative struct {
+	Kind     string          `json:"kind"`
+	Source   json.RawMessage `json:"source"`
+	Observed json.RawMessage `json:"observed"`
+	Facts    json.RawMessage `json:"facts"`
+}
+
+type wireCore struct {
+	SchemaVersion int                  `json:"schemaVersion"`
+	Source        json.RawMessage      `json:"source"`
+	Producer      json.RawMessage      `json:"producer"`
+	Metadata      json.RawMessage      `json:"metadata"`
+	Blocks        json.RawMessage      `json:"blocks"`
+	Assets        []wireProjectedAsset `json:"assets"`
+	Diagnostics   json.RawMessage      `json:"diagnostics"`
+}
+
+type wireProjectedAsset struct {
+	ID         string          `json:"id"`
+	MediaType  string          `json:"mediaType"`
+	SHA256     string          `json:"sha256"`
+	ByteLength int64           `json:"byteLength"`
+	Coordinate json.RawMessage `json:"coordinate"`
+	Producer   json.RawMessage `json:"producer"`
 }
 
 type wireAssetMetadata struct {
@@ -35,21 +58,30 @@ type wireAsset struct {
 
 func recomputePayloadAccounting(request Request, payload []byte) (ResultAccounting, error) {
 	var wire wirePayload
-	if err := decodeStrict(payload, &wire); err != nil || wire.Kind != "anydoc-raw-v1" || len(wire.Document) == 0 || wire.Assets == nil || wire.Diagnostics == nil {
+	if err := decodeStrict(payload, &wire); err != nil || wire.Kind != "anydoc-admission-v2" || len(wire.Native) == 0 || len(wire.Core) == 0 || wire.Assets == nil || wire.Diagnostics == nil {
 		return ResultAccounting{}, errors.New("invalid wire payload")
 	}
 
-	var document wireDocument
-	if err := decodeStrict(wire.Document, &document); err != nil || !jsonArray(document.Blocks) || !jsonArray(document.Notes) || document.Assets == nil || len(document.Assets) != len(wire.Assets) {
-		return ResultAccounting{}, errors.New("invalid wire document")
+	var native wireNative
+	var core wireCore
+	if err := decodeStrict(wire.Native, &native); err != nil || native.Kind != "anydoc-native-v2" || !jsonArray(native.Facts) || len(native.Source) == 0 || len(native.Observed) == 0 {
+		return ResultAccounting{}, errors.New("invalid native facts")
 	}
-	if err := validateBoundedJSON(wire.Document, request.Limits); err != nil {
+	if err := decodeStrict(wire.Core, &core); err != nil || core.SchemaVersion != 2 || !jsonArray(core.Blocks) || !jsonArray(core.Diagnostics) || core.Assets == nil || len(core.Assets) != len(wire.Assets) {
+		return ResultAccounting{}, errors.New("invalid core projection")
+	}
+	if err := validateBoundedJSON(wire.Native, request.Limits); err != nil {
+		return ResultAccounting{}, errors.New("unbounded wire payload")
+	}
+	if err := validateBoundedJSON(wire.Core, request.Limits); err != nil {
 		return ResultAccounting{}, errors.New("unbounded wire payload")
 	}
 
 	assetBytes := int64(0)
 	for index, asset := range wire.Assets {
-		if asset.wireAssetMetadata != document.Assets[index] || asset.ID < 0 || asset.MediaType == "" || asset.OriginPart == "" {
+		projected := core.Assets[index]
+		assetSHA := fmt.Sprintf("%x", sha256.Sum256(asset.Data))
+		if asset.ID < 0 || asset.MediaType == "" || asset.OriginPart == "" || projected.MediaType != asset.MediaType || projected.ByteLength != int64(len(asset.Data)) || projected.SHA256 != assetSHA || projected.ID == "" {
 			return ResultAccounting{}, errors.New("asset metadata mismatch")
 		}
 		assetBytes += int64(len(asset.Data))
@@ -68,7 +100,7 @@ func recomputePayloadAccounting(request Request, payload []byte) (ResultAccounti
 
 	accounting := ResultAccounting{
 		SourceBytes:     request.SourceBytes,
-		RawBytes:        int64(len(wire.Document)),
+		RawBytes:        int64(len(wire.Native) + len(wire.Core) + len(`{"native":,"core":}`)),
 		AssetCount:      int64(len(wire.Assets)),
 		AssetBytes:      assetBytes,
 		DiagnosticCount: int64(len(wire.Diagnostics)),
