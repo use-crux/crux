@@ -103,7 +103,30 @@ func safeRunnerDiagnostic(err error, terminal TerminalReport) string {
 	}
 	oomKilled := terminal.PreStop.MemoryEvents["oom_kill"] > 0
 	pidsLimited := terminal.PreStop.PIDsEvents["max"] > 0
-	return "error=" + safeExecutionError(err) + " outcome=" + outcome + " service=" + serviceResult + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+	return "error=" + safeExecutionError(err) + " outcome=" + outcome + " service=" + serviceResult + " stage=" + safeRunnerStage(terminal.PreStop.ExecMainStatus) + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+}
+
+func safeRunnerStage(status int) string {
+	switch status {
+	case 0:
+		return "success"
+	case 70:
+		return "authorization"
+	case 71:
+		return "request-validation"
+	case 72:
+		return "source-validation"
+	case 73:
+		return "native-load"
+	case 74:
+		return "conversion-projection"
+	case 75:
+		return "result-write"
+	case 76:
+		return "acknowledgement"
+	default:
+		return "unknown"
+	}
 }
 
 func safeExecutionError(err error) string {
@@ -200,12 +223,17 @@ func TestSafeRunnerDiagnosticReportsOnlyBoundedTerminalCategories(t *testing.T) 
 			PIDsEvents:    map[string]int64{"max": 1},
 		},
 	})
-	const want = "error=unknown outcome=unknown service=unknown oom-killed=true pids-limited=true"
+	const want = "error=unknown outcome=unknown service=unknown stage=success oom-killed=true pids-limited=true"
 	if got != want {
 		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
 	}
 	if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
 		t.Fatalf("diagnostic leaked unsafe details: %q", got)
+	}
+	for status, want := range map[int]string{70: "authorization", 71: "request-validation", 72: "source-validation", 73: "native-load", 74: "conversion-projection", 75: "result-write", 76: "acknowledgement", 77: "unknown"} {
+		if got := safeRunnerStage(status); got != want {
+			t.Fatalf("stage %d = %q, want %q", status, got, want)
+		}
 	}
 }
 

@@ -18,6 +18,15 @@ const maxWallMilliseconds = 30_000
 const maxPids = 64
 const inputPath = '/run/crux-anydoc/input/source'
 const timeoutMilliseconds = 25_000
+const stageExit = {
+  authorization: 70,
+  request: 71,
+  source: 72,
+  nativeLoad: 73,
+  conversion: 74,
+  resultWrite: 75,
+  acknowledgement: 76,
+} as const
 const parserFormats = new Set<AnydocFormat>(['doc', 'docm', 'docx', 'rtf', 'odt', 'epub', 'ppt', 'pps', 'pot', 'pptx', 'pptm', 'ppsx', 'ppsm', 'odp', 'xls', 'xlsb', 'xlsx', 'xlsm', 'ods', 'csv', 'pdf'])
 
 type AnydocFormat = 'doc' | 'docm' | 'docx' | 'rtf' | 'odt' | 'epub' | 'ppt' | 'pps' | 'pot' | 'pptx' | 'pptm' | 'ppsx' | 'ppsm' | 'odp' | 'xls' | 'xlsb' | 'xlsx' | 'xlsm' | 'ods' | 'csv' | 'pdf'
@@ -29,16 +38,20 @@ type Result = (Request & { ok: true; payload: string; accounting: Accounting }) 
 
 const [capabilityPath, resultPath] = process.argv.slice(2)
 
-void main()
+void main().catch((error: unknown) => {
+  // Force the allowlisted stage code so systemd ExecMainStatus cannot be masked
+  // by leftover handles after an early trust-boundary failure.
+  process.exit(error instanceof StageFailure ? error.exitCode : stageExit.conversion)
+})
 
 async function main(): Promise<void> {
-  if (!capabilityPath || !resultPath) return abort()
-  const request = await receiveRequest(capabilityPath).catch(() => undefined)
-  if (!validRequest(request)) return abort()
+  if (!capabilityPath || !resultPath) return abort(stageExit.request)
+  const request = await receiveRequest(capabilityPath).catch(() => abort(stageExit.authorization))
+  if (!validRequest(request)) return abort(stageExit.request)
 
   const bytes = await readSource(inputPath, request.limits.sourceBytes).catch(() => undefined)
-  if (!bytes) return abort()
-  if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return abort()
+  if (!bytes) return abort(stageExit.source)
+  if (bytes.byteLength !== request.sourceBytes || sha256(bytes) !== request.sourceSha256) return abort(stageExit.source)
   if (request.format === 'pdf') return fail('unsupported-format', request)
 
   let payload: unknown
@@ -46,9 +59,10 @@ async function main(): Promise<void> {
     // This literal is intentionally post-capability: the bundled runner's
     // top level has only Node builtins, so untrusted launches cannot load the
     // native addon before proving possession of this run's nonce and digest.
-    const anydoc = await import('@firecrawl/anydoc')
+    const anydoc = await import('@firecrawl/anydoc').catch(() => { throw new StageFailure(stageExit.nativeLoad) })
     payload = await anydoc.toDocument(bytes, nativeFormat(request.format))
   } catch (error) {
+    if (error instanceof StageFailure) throw error
     return fail(parserError(error), request)
   }
   let projected
@@ -150,17 +164,21 @@ async function fail(error: ParserError, request: Request): Promise<void> {
   process.exitCode = 1
 }
 
-function abort(): void { process.exitCode = 1 }
+function abort(exitCode: number): never { throw new StageFailure(exitCode) }
 
 async function send(result: Result): Promise<void> {
   const payload = encodeResult(result)
-  if (payload.byteLength === 0 || payload.byteLength > maxResultBytes || payload.byteLength > result.limits.resultBytes) throw new Error('result')
-  const socket = await connect(resultPath)
+  if (payload.byteLength === 0 || payload.byteLength > maxResultBytes || payload.byteLength > result.limits.resultBytes) throw new StageFailure(stageExit.resultWrite)
+  const socket = await connect(resultPath).catch(() => { throw new StageFailure(stageExit.resultWrite) })
   try {
-    await withTimeout(write(socket, Buffer.concat([u32(payload.byteLength), payload])), socket)
-    const ack = await withTimeout(new BufferedReader(socket).read(4), socket)
-    if (!ack.equals(Buffer.from('ACK\n'))) throw new Error('ack')
+    await withTimeout(write(socket, Buffer.concat([u32(payload.byteLength), payload])), socket).catch(() => { throw new StageFailure(stageExit.resultWrite) })
+    const ack = await withTimeout(new BufferedReader(socket).read(4), socket).catch(() => { throw new StageFailure(stageExit.acknowledgement) })
+    if (!ack.equals(Buffer.from('ACK\n'))) throw new StageFailure(stageExit.acknowledgement)
   } finally { socket.destroy() }
+}
+
+class StageFailure extends Error {
+  constructor(readonly exitCode: number) { super('runner-stage') }
 }
 
 function encodeResult(result: Result): Buffer { return Buffer.from(JSON.stringify(result)) }

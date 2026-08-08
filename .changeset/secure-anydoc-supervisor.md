@@ -33,3 +33,8 @@ Preflight the native document graph and its nested result encoding before
 serialization, recompute raw-parser accounting in the Go supervisor from a
 strict bounded payload, and keep test-only parser capabilities separate from
 the evidence-gated production admission policy.
+
+Map packaged runner stage failures to fixed allowlisted exit codes
+(authorization, request/source validation, native load, conversion, result
+delivery, acknowledgement) so CI diagnostics can name the failed stage without
+leaking paths, nonces, or document content.

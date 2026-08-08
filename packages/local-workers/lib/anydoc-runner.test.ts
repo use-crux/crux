@@ -24,6 +24,20 @@ describe('anydoc runner trust boundary', () => {
     expect(source).toContain('withTimeout(new BufferedReader(socket).read(4), socket)')
   })
 
+  it('reports only fixed allowlisted stage exit codes', () => {
+    for (const [stage, exitCode] of Object.entries({ authorization: 70, request: 71, source: 72, nativeLoad: 73, conversion: 74, resultWrite: 75, acknowledgement: 76 })) {
+      expect(source).toContain(`${stage}: ${exitCode}`)
+    }
+    expect(source).toContain('process.exit(error instanceof StageFailure ? error.exitCode : stageExit.conversion)')
+    expect(source).toContain("import('@firecrawl/anydoc').catch")
+    expect(source).not.toContain('console.')
+    // Hard invariant: native load stage remains after authorization and source validation.
+    const nativeStage = source.indexOf('stageExit.nativeLoad')
+    expect(nativeStage).toBeGreaterThan(source.indexOf('stageExit.authorization'))
+    expect(nativeStage).toBeGreaterThan(source.indexOf('stageExit.source'))
+    expect(nativeStage).toBeGreaterThan(source.indexOf('validRequest(request)'))
+  })
+
   it('waits for the supervisor to open the authorization socket after attestation', () => {
     expect(source).toContain("error.code !== 'EACCES' && error.code !== 'ENOENT'")
     expect(source).toContain('const deadline = Date.now() + timeoutMilliseconds')
