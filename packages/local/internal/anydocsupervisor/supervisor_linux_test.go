@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
@@ -634,8 +636,8 @@ func TestStagedSourceGrantsExactDynamicUserAccess(t *testing.T) {
 	if identityAfter.dev != identityBefore.dev || identityAfter.ino != identityBefore.ino || identityAfter.size != identityBefore.size {
 		t.Fatalf("grant mutated inode identity: before=%#v after=%#v", identityBefore, identityAfter)
 	}
-	if got := fileOwner(t, fileAfter); got.uid != uid {
-		t.Fatalf("staged source uid = %d, want verified DynamicUser %d", got.uid, uid)
+	if got := fileOwner(t, fileAfter); got.uid != uid || got.gid != uid {
+		t.Fatalf("staged source owner = %#v, want uid=gid=%d (exact requested DynamicUser)", got, uid)
 	}
 
 	parentAfter, err := os.Lstat(filepath.Dir(staged.HostPath))
@@ -674,6 +676,68 @@ func TestStagedSourceGrantsExactDynamicUserAccess(t *testing.T) {
 	if err := grantVerifiedSourceAccess(context.Background(), foreign, staged); err == nil {
 		t.Fatal("foreign-unit bind path accepted for staged source grant")
 	}
+}
+
+// TestInspectStagedSourceFDRejectsStatDriftDuringHash is the TOCTOU regression
+// for inspectStagedSourceFD: a single pre-hash fstat is not enough. Metadata
+// (ctime via same-mode fchmod) must not be allowed to change across the hash.
+func TestInspectStagedSourceFDRejectsStatDriftDuringHash(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Multi-chunk payload widens the hash window so concurrent ctime churn is observable.
+	payload := bytes.Repeat([]byte("staged-source-drift-"), 64<<10)
+	staged, err := NewStager(root).Stage(payload, int64(len(payload)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = staged.Cleanup() })
+
+	mutFD, err := unix.Open(staged.HostPath, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(mutFD)
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				// Mode stays 0400; Linux still advances ctime on a successful chmod.
+				_ = unix.Fchmod(mutFD, 0400)
+			}
+		}
+	}()
+	defer func() {
+		close(stop)
+		wg.Wait()
+	}()
+
+	// Head start so ctime is already moving before the first fstat.
+	time.Sleep(5 * time.Millisecond)
+
+	fd, err := unix.Open(staged.HostPath, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(fd)
+
+	// Without pre/post fstat equality, inspect returns success under ctime churn.
+	// With the fix, any dev/ino/size/mode/uid/gid/mtime/ctime drift fails closed.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := inspectStagedSourceFD(fd, staged.size, staged.hash, staged.size); err != nil {
+			return
+		}
+	}
+	t.Fatal("stat drift during hash accepted")
 }
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()

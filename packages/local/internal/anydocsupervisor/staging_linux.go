@@ -146,13 +146,14 @@ func inspectStagedSource(path string, size int64, want []byte, limit int64) (sta
 }
 
 func inspectStagedSourceFD(fd int, size int64, want []byte, limit int64) (stagedSourceIdentity, error) {
-	var stat unix.Stat_t
-	if err := unix.Fstat(fd, &stat); err != nil {
+	// fstat immediately before hashing so identity cannot be observed from a
+	// stale snapshot taken earlier in the caller.
+	var before unix.Stat_t
+	if err := unix.Fstat(fd, &before); err != nil {
 		return stagedSourceIdentity{}, err
 	}
-	mode := os.FileMode(stat.Mode & 0777)
-	if stat.Mode&unix.S_IFMT != unix.S_IFREG || int64(stat.Size) != size || int64(stat.Size) > limit || mode != 0400 {
-		return stagedSourceIdentity{}, errors.New("invalid staged source")
+	if err := validateStagedSourceStat(&before, size, limit); err != nil {
+		return stagedSourceIdentity{}, err
 	}
 	if _, err := unix.Seek(fd, 0, io.SeekStart); err != nil {
 		return stagedSourceIdentity{}, err
@@ -180,15 +181,46 @@ func inspectStagedSourceFD(fd int, size int64, want []byte, limit int64) (staged
 	if read != size || !sameBytes(sum, want) {
 		return stagedSourceIdentity{}, errors.New("invalid staged source")
 	}
+	// fstat immediately after hashing; any identity drift during the read
+	// (including same-mode chmod ctime bumps) fails closed.
+	var after unix.Stat_t
+	if err := unix.Fstat(fd, &after); err != nil {
+		return stagedSourceIdentity{}, err
+	}
+	if !sameStagedSourceStat(&before, &after) {
+		return stagedSourceIdentity{}, errors.New("invalid staged source")
+	}
 	return stagedSourceIdentity{
 		size: size,
 		hash: append([]byte(nil), sum...),
-		dev:  uint64(stat.Dev),
-		ino:  stat.Ino,
-		uid:  stat.Uid,
-		gid:  stat.Gid,
-		mode: mode,
+		dev:  uint64(after.Dev),
+		ino:  after.Ino,
+		uid:  after.Uid,
+		gid:  after.Gid,
+		mode: os.FileMode(after.Mode & 0777),
 	}, nil
+}
+
+func validateStagedSourceStat(stat *unix.Stat_t, size, limit int64) error {
+	mode := os.FileMode(stat.Mode & 0777)
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG || int64(stat.Size) != size || int64(stat.Size) > limit || mode != 0400 {
+		return errors.New("invalid staged source")
+	}
+	return nil
+}
+
+// sameStagedSourceStat reports whether two fstat results describe the same
+// immutable staged-source identity across a hash: device, inode, size, full
+// type/mode, ownership, and mtime/ctime.
+func sameStagedSourceStat(a, b *unix.Stat_t) bool {
+	return a.Dev == b.Dev &&
+		a.Ino == b.Ino &&
+		a.Size == b.Size &&
+		a.Mode == b.Mode &&
+		a.Uid == b.Uid &&
+		a.Gid == b.Gid &&
+		a.Mtim == b.Mtim &&
+		a.Ctim == b.Ctim
 }
 
 // GrantAccess transfers ownership of the exact staged source inode to the
@@ -218,17 +250,24 @@ func (s *StagedSource) GrantAccess(uid uint32) error {
 	defer unix.Close(fd)
 
 	before, err := inspectStagedSourceFD(fd, s.size, s.hash, s.size)
-	if err != nil || before.dev != s.dev || before.ino != s.ino {
+	if err != nil || before.dev != s.dev || before.ino != s.ino || before.size != s.size || !sameBytes(before.hash, s.hash) {
 		return errors.New("invalid staged source")
 	}
+	// Requested DynamicUser ownership is uid for both owner and group.
 	if err := unix.Fchown(fd, int(uid), int(uid)); err != nil {
 		return err
 	}
 	if err := unix.Fchmod(fd, 0400); err != nil {
 		return err
 	}
+	// Re-inspect through pre/post fstat hashing, then require the exact
+	// requested uid AND gid, regular 0400 mode/type, and expected identity.
 	after, err := inspectStagedSourceFD(fd, s.size, s.hash, s.size)
-	if err != nil || after.dev != s.dev || after.ino != s.ino || after.uid != uid || after.mode != 0400 {
+	if err != nil ||
+		after.dev != s.dev || after.ino != s.ino ||
+		after.size != s.size || !sameBytes(after.hash, s.hash) ||
+		after.uid != uid || after.gid != uid ||
+		after.mode != 0400 {
 		return errors.New("invalid staged source grant")
 	}
 

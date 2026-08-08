@@ -27,7 +27,10 @@ descendant-escape probes.
 After unit, cgroup, and DynamicUser verification, transfer ownership of the
 exact staged source inode to that worker UID at mode 0400 so the read-only
 bind is readable without weakening parent directory privacy, hash or identity
-revalidation, or containment.
+revalidation, or containment. Staged-source inspection fstats immediately
+before and after hashing and rejects any dev, inode, size, type/mode, uid,
+gid, mtime, or ctime drift; post-grant checks require the exact requested
+uid and gid, mode 0400, and expected identity, size, and hash.
 
 Bind the selected closed document format and every source, result, expansion,
 asset, diagnostic, memory, CPU, wall-time, and process ceiling into the
