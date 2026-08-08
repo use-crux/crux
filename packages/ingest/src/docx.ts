@@ -154,16 +154,18 @@ function listBlock(
     .each((itemIndex, item) => {
       const itemId = `${id}:item:${itemIndex + 1}`
       const blocks: (TextBlock | ListBlock)[] = []
-      const textContainer = $(item).clone()
-      textContainer.children('ol,ul').remove()
-      const text = normalizedText(textContainer.text())
-      if (text) {
-        blocks.push(textBlock({ id: `${itemId}:text:1`, coordinate, headingPath, role: 'paragraph', text }))
-      }
       $(item)
-        .children('ol,ul')
-        .each((nestedIndex, nested) => {
-          blocks.push(listBlock($, nested, `${itemId}:list:${nestedIndex + 1}`, coordinate, headingPath))
+        .contents()
+        .each((childIndex, child) => {
+          const childId = `${itemId}:child:${childIndex + 1}`
+          if (child.type === 'tag' && (child.tagName === 'ol' || child.tagName === 'ul')) {
+            blocks.push(listBlock($, child, childId, coordinate, headingPath))
+            return
+          }
+          const text = normalizedText($(child).text())
+          if (text) {
+            blocks.push(textBlock({ id: `${childId}:text`, coordinate, headingPath, role: 'paragraph', text }))
+          }
         })
       items.push({ id: itemId, coordinate, producer: MAMMOTH_PRODUCER, blocks })
     })

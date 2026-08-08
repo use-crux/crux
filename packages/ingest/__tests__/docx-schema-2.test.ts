@@ -51,6 +51,25 @@ it('keeps nested lists and table-cell text within their structural parent', () =
   ])
 })
 
+it('preserves text and nested-list interleavings within a list item', () => {
+  const document = adaptMammothDocxResult({
+    bytes: new TextEncoder().encode('interleaved list'),
+    html: '<ul><li>Before<ul><li>Nested one</li></ul>After<ol><li>Nested two</li></ol>Finally</li></ul>',
+  })
+  const list = document.blocks[0]
+  if (!list || list.kind !== 'list') {
+    throw new Error('Expected a top-level list.')
+  }
+
+  expect(list.items[0]?.blocks.map(listFact)).toEqual([
+    ['text', 'Before'],
+    ['list', false, [[['text', 'Nested one']]]],
+    ['text', 'After'],
+    ['list', true, [[['text', 'Nested two']]]],
+    ['text', 'Finally'],
+  ])
+})
+
 it('retains Mammoth table spans and only declares headers established by HTML', () => {
   const document = adaptMammothDocxResult({
     bytes: new TextEncoder().encode('merged table'),
