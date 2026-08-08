@@ -6,6 +6,7 @@ export { extractAnydocNativeFacts } from './anydoc-native-facts.mjs'
 const PRODUCER = Object.freeze({ kind: 'parser', name: 'anydoc', version: '0.1.7', adapterVersion: '2-admission' })
 const BLOCK_KINDS = new Set(['heading', 'paragraph', 'codeBlock', 'rule', 'blockQuote', 'list', 'table'])
 const INLINE_KINDS = new Set(['text', 'link', 'image', 'anchor', 'noteRef', 'lineBreak'])
+const NOTE_KINDS = new Set(['footnote', 'endnote'])
 
 /** Validate and project the closed Anydoc 0.1.7 model without invoking native code. */
 export function admitAnydocDocument(document, bytes, sourceFormat, limits = {}) {
@@ -63,6 +64,7 @@ function validateDocument(value, state) {
   value.notes.forEach((note) => {
     requireRecord(note, ['id', 'kind', 'blocks'], state)
     requireString(note.id); requireString(note.kind); requireArray(note.blocks, state)
+    if (!NOTE_KINDS.has(note.kind)) invalid()
     note.blocks.forEach((block) => validateBlock(block, state, 2))
   })
   value.assets.forEach((asset) => {

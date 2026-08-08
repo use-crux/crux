@@ -4,10 +4,37 @@ exports[`snapshots parser-specific facts from raw parser payloads 1`] = `
 {
   "anydoc": [
     {
+      "count": 5,
+      "factPath": "document",
+      "kind": "block-count",
+    },
+    {
+      "factPath": "blocks/1",
+      "kind": "block",
+    },
+    {
+      "factPath": "blocks/1",
+      "kind": "block-text",
+      "text": "Release Notes",
+    },
+    {
       "factPath": "blocks/1",
       "kind": "heading",
       "level": 1,
       "text": "Release Notes",
+    },
+    {
+      "factPath": "blocks/2",
+      "kind": "block",
+    },
+    {
+      "factPath": "blocks/2",
+      "kind": "block-text",
+      "text": "Parser-owned body.",
+    },
+    {
+      "factPath": "blocks/3",
+      "kind": "block",
     },
     {
       "columns": [
@@ -23,6 +50,24 @@ exports[`snapshots parser-specific facts from raw parser payloads 1`] = `
           "Pro",
         ],
       ],
+    },
+    {
+      "factPath": "blocks/3/rows/1/columns/1/blocks/1",
+      "kind": "block",
+    },
+    {
+      "factPath": "blocks/3/rows/1/columns/1/blocks/1",
+      "kind": "block-text",
+      "text": "Plan",
+    },
+    {
+      "factPath": "blocks/3/rows/2/columns/1/blocks/1",
+      "kind": "block",
+    },
+    {
+      "factPath": "blocks/3/rows/2/columns/1/blocks/1",
+      "kind": "block-text",
+      "text": "Pro",
     },
   ],
   "csv": [

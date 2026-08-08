@@ -284,6 +284,8 @@ func validateWirePayload(request Request, wire wirePayload) error {
 		return errors.New("invalid core projection")
 	}
 	provenance := make(map[string]wireCoordinate)
+	blockFacts := make(map[string]struct{})
+	blockTextFacts := make(map[string]string)
 	factKinds := make(map[string]int)
 	nativeAssetCount := int64(-1)
 	var coordinateKinds []string
@@ -295,12 +297,33 @@ func validateWirePayload(request Request, wire wirePayload) error {
 		if fact.Kind == "asset-count" {
 			nativeAssetCount = *fact.Count
 		}
+		if fact.Kind == "block" {
+			if _, exists := blockFacts[fact.FactPath]; exists {
+				return errors.New("duplicate native block")
+			}
+			blockFacts[fact.FactPath] = struct{}{}
+		}
+		if fact.Kind == "block-text" {
+			if _, exists := blockTextFacts[fact.FactPath]; exists {
+				return errors.New("duplicate native block text")
+			}
+			blockTextFacts[fact.FactPath] = fact.Text.Values[0]
+		}
 		if fact.Kind == "coordinate-kinds" {
 			coordinateKinds = fact.Kinds
 		}
 	}
-	if factKinds["ordered-text"] != 1 || factKinds["asset-count"] != 1 || factKinds["coordinate-kinds"] != 1 || factKinds["no-parser-downgrade"] != 1 || factKinds["notes"] < 1 {
+	if factKinds["ordered-text"] != 1 || factKinds["asset-count"] != 1 || factKinds["block-count"] != 1 || factKinds["coordinate-kinds"] != 1 || factKinds["no-parser-downgrade"] != 1 || factKinds["notes"] < 1 {
 		return errors.New("incomplete native facts")
+	}
+	mainBlockCount := int64(0)
+	for path := range blockFacts {
+		if strings.HasPrefix(path, "blocks/") {
+			mainBlockCount++
+		}
+	}
+	if wire.Native.Observed.BlockCount != mainBlockCount || nativeCountFact(wire.Native.Facts, "block-count") != mainBlockCount {
+		return errors.New("native block count mismatch")
 	}
 	expectedCoordinateKinds := []string{"document"}
 	if len(wire.Assets) > 0 {
@@ -324,7 +347,7 @@ func validateWirePayload(request Request, wire wirePayload) error {
 	}
 	seenIDs := make(map[string]struct{})
 	for _, block := range wire.Core.Blocks {
-		if err := validateBlock(block, request.SourceSHA256, seenIDs, provenance, 1); err != nil {
+		if err := validateBlock(block, request.SourceSHA256, seenIDs, provenance, blockFacts, blockTextFacts, 1); err != nil {
 			return errors.New("invalid core projection")
 		}
 	}
@@ -341,7 +364,7 @@ func validateFact(fact wireFact, request Request, provenance map[string]wireCoor
 		if !baseOnly || fact.Text == nil || fact.Text.Scalar {
 			return errors.New("fact shape")
 		}
-	case "asset-count":
+	case "asset-count", "block-count":
 		if fact.Path != nil || fact.Coordinate != nil || fact.Producer != nil || fact.Text != nil || fact.Level != nil || fact.Target != nil || fact.Ordered != nil || fact.Depth != nil || fact.Columns != nil || fact.Rows != nil || fact.Count == nil || *fact.Count < 0 || fact.Kinds != nil {
 			return errors.New("fact shape")
 		}
@@ -356,6 +379,14 @@ func validateFact(fact wireFact, request Request, provenance map[string]wireCoor
 		}
 	case "no-parser-downgrade":
 		if !baseOnly || fact.Text != nil {
+			return errors.New("fact shape")
+		}
+	case "block":
+		if !baseOnly || fact.Text != nil {
+			return errors.New("fact shape")
+		}
+	case "block-text":
+		if fact.Text == nil || !fact.Text.Scalar || len(fact.Text.Values) != 1 || fact.Path != nil || fact.Coordinate != nil || fact.Producer != nil || fact.Level != nil || fact.Target != nil || fact.Ordered != nil || fact.Depth != nil || fact.Columns != nil || fact.Rows != nil || fact.Count != nil || fact.Kinds != nil {
 			return errors.New("fact shape")
 		}
 	case "heading":
@@ -388,7 +419,7 @@ func validateFact(fact wireFact, request Request, provenance map[string]wireCoor
 	return nil
 }
 
-func validateBlock(block wireBlock, sourceSHA string, seen map[string]struct{}, provenance map[string]wireCoordinate, depth int) error {
+func validateBlock(block wireBlock, sourceSHA string, seen map[string]struct{}, provenance map[string]wireCoordinate, blockFacts map[string]struct{}, blockTextFacts map[string]string, depth int) error {
 	if depth > 128 || block.ID == "" || !strings.HasPrefix(block.ID, "anydoc:"+sourceSHA+":") || !documentCoordinate(block.Coordinate, sourceSHA) || !validProducer(block.Producer) || block.HeadingPath == nil {
 		return errors.New("block provenance")
 	}
@@ -396,15 +427,23 @@ func validateBlock(block wireBlock, sourceSHA string, seen map[string]struct{}, 
 		return errors.New("duplicate block")
 	}
 	seen[block.ID] = struct{}{}
-	if factPath, bound := blockFactPath(block.ID); bound {
-		if _, exists := provenance[factPath]; !exists {
-			return errors.New("block missing native provenance")
-		}
+	factPath, bound := blockFactPath(block.ID)
+	if !bound {
+		return errors.New("block native path")
+	}
+	if _, exists := provenance[factPath]; !exists {
+		return errors.New("block missing native provenance")
+	}
+	if _, exists := blockFacts[factPath]; !exists {
+		return errors.New("block missing native fact")
 	}
 	switch block.Kind {
 	case "text":
 		if block.Role == nil || !oneOf(*block.Role, "heading", "paragraph", "code", "quote", "note") || block.Text == nil || block.Inlines == nil || block.Ordered != nil || block.Items != nil || block.Columns != nil || block.HeaderRows != nil || block.Rows != nil {
 			return errors.New("text block")
+		}
+		if nativeText, exists := blockTextFacts[factPath]; !exists || nativeText != *block.Text {
+			return errors.New("text missing native fact")
 		}
 		if *block.Role == "heading" {
 			if block.Level == nil || *block.Level < 1 || *block.Level > 6 {
@@ -422,15 +461,15 @@ func validateBlock(block wireBlock, sourceSHA string, seen map[string]struct{}, 
 		if block.Ordered == nil || block.Items == nil || block.Role != nil || block.Text != nil || block.Inlines != nil || block.Level != nil || block.Columns != nil || block.HeaderRows != nil || block.Rows != nil {
 			return errors.New("list block")
 		}
-		for _, item := range block.Items {
-			if item.ID == "" || !documentCoordinate(item.Coordinate, sourceSHA) || !validProducer(item.Producer) || item.Blocks == nil {
+		for itemIndex, item := range block.Items {
+			if item.ID != fmt.Sprintf("%s:item:%d", block.ID, itemIndex+1) || !documentCoordinate(item.Coordinate, sourceSHA) || !validProducer(item.Producer) || item.Blocks == nil {
 				return errors.New("list item")
 			}
 			for _, child := range item.Blocks {
 				if child.Kind != "text" && child.Kind != "list" {
 					return errors.New("list child")
 				}
-				if err := validateBlock(child, sourceSHA, seen, provenance, depth+1); err != nil {
+				if err := validateBlock(child, sourceSHA, seen, provenance, blockFacts, blockTextFacts, depth+1); err != nil {
 					return err
 				}
 			}
@@ -441,14 +480,18 @@ func validateBlock(block wireBlock, sourceSHA string, seen map[string]struct{}, 
 		}
 		for rowIndex, row := range block.Rows {
 			for columnIndex, cell := range row {
-				if cell.ID == "" || !documentCoordinate(cell.Coordinate, sourceSHA) || !validProducer(cell.Producer) || cell.Row != int64(rowIndex+1) || cell.Column != int64(columnIndex+1) || cell.RowSpan < 1 || cell.ColumnSpan < 1 || cell.Blocks == nil {
+				if cell.ID != fmt.Sprintf("%s:row:%d:column:%d", block.ID, rowIndex+1, columnIndex+1) || !documentCoordinate(cell.Coordinate, sourceSHA) || !validProducer(cell.Producer) || cell.Row != int64(rowIndex+1) || cell.Column != int64(columnIndex+1) || cell.RowSpan < 1 || cell.ColumnSpan < 1 || cell.Blocks == nil {
 					return errors.New("table cell")
+				}
+				cellFactPath := fmt.Sprintf("%s/rows/%d/columns/%d", factPath, rowIndex+1, columnIndex+1)
+				if _, exists := provenance[cellFactPath]; !exists {
+					return errors.New("table cell missing native provenance")
 				}
 				for _, child := range cell.Blocks {
 					if child.Kind != "text" && child.Kind != "list" {
 						return errors.New("table child")
 					}
-					if err := validateBlock(child, sourceSHA, seen, provenance, depth+1); err != nil {
+					if err := validateBlock(child, sourceSHA, seen, provenance, blockFacts, blockTextFacts, depth+1); err != nil {
 						return err
 					}
 				}
@@ -466,9 +509,6 @@ func blockFactPath(id string) (string, bool) {
 		return "", false
 	}
 	path := parts[3]
-	if strings.Contains(path, "/row:") {
-		return "", false
-	}
 	if strings.HasPrefix(path, "document/") {
 		path = strings.TrimPrefix(path, "document/")
 	} else if strings.HasPrefix(path, "note:") {
@@ -479,7 +519,18 @@ func blockFactPath(id string) (string, bool) {
 	path = strings.ReplaceAll(path, "/block:", "/blocks/")
 	path = strings.ReplaceAll(path, "block:", "blocks/")
 	path = strings.ReplaceAll(path, "/item:", "/items/")
+	path = strings.ReplaceAll(path, "/row:", "/rows/")
+	path = strings.ReplaceAll(path, "/column:", "/columns/")
 	return path, true
+}
+
+func nativeCountFact(facts []wireFact, kind string) int64 {
+	for _, fact := range facts {
+		if fact.Kind == kind && fact.Count != nil {
+			return *fact.Count
+		}
+	}
+	return -1
 }
 
 func validateRelationships(value wireRelationships, observed wireObserved, assets []wireAsset) error {
@@ -488,7 +539,7 @@ func validateRelationships(value wireRelationships, observed wireObserved, asset
 	}
 	noteIDs := make(map[string]struct{})
 	for _, note := range value.Notes {
-		if note.ID == "" || note.Kind == "" {
+		if note.ID == "" || !oneOf(note.Kind, "footnote", "endnote") {
 			return errors.New("note")
 		}
 		if _, exists := noteIDs[note.ID]; exists {

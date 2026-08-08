@@ -169,16 +169,55 @@ func TestAdmissionResultStrictlyBindsNestedEvidence(t *testing.T) {
 		t.Fatalf("valid bound block rejected: %v", err)
 	}
 	mutations := map[string][]byte{
-		"unknown nested fact": bytes.Replace(valid, []byte(`"kind":"heading"`), []byte(`"kind":"heading","unknown":true`), 1),
-		"source hash":         bytes.Replace(valid, []byte(request.SourceSHA256), []byte(strings.Repeat("d", 64)), 1),
-		"producer":            bytes.Replace(valid, []byte(`"version":"0.1.7"`), []byte(`"version":"0.1.6"`), 1),
-		"coordinate":          bytes.Replace(valid, []byte(`"documentSha256":"`+request.SourceSHA256+`"`), []byte(`"documentSha256":"`+strings.Repeat("d", 64)+`"`), 2),
-		"block fact path":     bytes.Replace(valid, []byte(`:document/block:1"`), []byte(`:document/block:2"`), 1),
+		"unknown nested fact":  bytes.Replace(valid, []byte(`"kind":"heading"`), []byte(`"kind":"heading","unknown":true`), 1),
+		"source hash":          bytes.Replace(valid, []byte(request.SourceSHA256), []byte(strings.Repeat("d", 64)), 1),
+		"producer":             bytes.Replace(valid, []byte(`"version":"0.1.7"`), []byte(`"version":"0.1.6"`), 1),
+		"coordinate":           bytes.Replace(valid, []byte(`"documentSha256":"`+request.SourceSHA256+`"`), []byte(`"documentSha256":"`+strings.Repeat("d", 64)+`"`), 2),
+		"block fact path":      bytes.Replace(valid, []byte(`:document/block:1"`), []byte(`:document/block:2"`), 1),
+		"observed block count": bytes.Replace(valid, []byte(`"blockCount":1`), []byte(`"blockCount":2`), 1),
+		"native block count":   bytes.Replace(valid, []byte(`"block-count","count":1`), []byte(`"block-count","count":2`), 1),
 	}
 	for name, payload := range mutations {
 		t.Run(name, func(t *testing.T) {
 			if _, err := recomputePayloadAccounting(request, payload); err == nil {
 				t.Fatal("mutated nested evidence accepted")
+			}
+		})
+	}
+}
+
+func TestAdmissionResultClosesNoteKinds(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	valid := validAdmissionPayload(request)
+	valid = bytes.Replace(valid, []byte(`"noteCount":0`), []byte(`"noteCount":1`), 1)
+	valid = bytes.Replace(valid, []byte(`{\"notes\":[]`), []byte(`{\"notes\":[{\"id\":\"n1\",\"kind\":\"footnote\"}]`), 1)
+	if _, err := recomputePayloadAccounting(request, valid); err != nil {
+		t.Fatalf("valid footnote rejected: %v", err)
+	}
+	if _, err := recomputePayloadAccounting(request, bytes.Replace(valid, []byte(`\"footnote\"`), []byte(`\"comment\"`), 1)); err == nil {
+		t.Fatal("open note kind accepted")
+	}
+}
+
+func TestAdmissionResultRequiresNativeEvidenceForEveryTableDescendant(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	valid := validAdmissionPayloadWithTableDescendant(request)
+	if _, err := recomputePayloadAccounting(request, valid); err != nil {
+		t.Fatalf("valid table descendant rejected: %v", err)
+	}
+	mutations := map[string][]byte{
+		"cell provenance":     bytes.Replace(valid, []byte(`"path":"blocks/1/rows/1/columns/1"`), []byte(`"path":"blocks/1/rows/1/columns/2"`), 1),
+		"child block marker":  bytes.Replace(valid, []byte(`{"kind":"block","factPath":"blocks/1/rows/1/columns/1/blocks/1"},`), nil, 1),
+		"nested list marker":  bytes.Replace(valid, []byte(`{"kind":"block","factPath":"blocks/1/rows/1/columns/1/blocks/1/items/1/blocks/1"},`), nil, 1),
+		"nested child id":     bytes.Replace(valid, []byte(`column:1/block:1/item:1/block:1"`), []byte(`column:1/block:1/item:1/block:2"`), 1),
+		"nested child text":   bytes.Replace(valid, []byte(`"text":"nested"`), []byte(`"text":"forged"`), 1),
+		"table cell id":       bytes.Replace(valid, []byte(`:row:1:column:1"`), []byte(`:row:1:column:2"`), 1),
+		"nested list item id": bytes.Replace(valid, []byte(`:2:document/block:1/row:1/column:1/block:1:item:1"`), []byte(`:2:document/block:1/row:1/column:1/block:1:item:2"`), 1),
+	}
+	for name, payload := range mutations {
+		t.Run(name, func(t *testing.T) {
+			if _, err := recomputePayloadAccounting(request, payload); err == nil {
+				t.Fatal("unbound table descendant accepted")
 			}
 		})
 	}
@@ -265,7 +304,7 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 func validAdmissionPayload(request Request) []byte {
 	producer := `{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}`
 	coordinate := fmt.Sprintf(`{"kind":"document","documentSha256":%q}`, request.SourceSHA256)
-	facts := fmt.Sprintf(`[{"kind":"ordered-text","text":[],"factPath":"document"},{"kind":"notes","text":[],"factPath":"document"},{"kind":"asset-count","count":0,"factPath":"document"},{"kind":"coordinate-kinds","kinds":["document"],"factPath":"document"},{"kind":"no-parser-downgrade","factPath":"document"},{"kind":"provenance","path":"document","coordinate":%s,"producer":%s,"factPath":"document"}]`, coordinate, producer)
+	facts := fmt.Sprintf(`[{"kind":"ordered-text","text":[],"factPath":"document"},{"kind":"notes","text":[],"factPath":"document"},{"kind":"asset-count","count":0,"factPath":"document"},{"kind":"block-count","count":0,"factPath":"document"},{"kind":"coordinate-kinds","kinds":["document"],"factPath":"document"},{"kind":"no-parser-downgrade","factPath":"document"},{"kind":"provenance","path":"document","coordinate":%s,"producer":%s,"factPath":"document"}]`, coordinate, producer)
 	return []byte(fmt.Sprintf(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{"documentSha256":%q,"format":%q},"observed":{"blockCount":0,"noteCount":0,"assets":[]},"facts":%s},"core":{"schemaVersion":2,"source":{"documentSha256":%q,"mediaType":%q,"format":%q},"producer":%s,"metadata":{"anydocRelationships":"{\"notes\":[],\"inlines\":[]}"},"blocks":[],"assets":[],"diagnostics":[]},"assets":[],"diagnostics":[]}`, request.SourceSHA256, request.Format, facts, request.SourceSHA256, formatMediaType(request.Format), request.Format, producer))
 }
 
@@ -284,11 +323,35 @@ func validAdmissionPayloadWithBlock(request Request) []byte {
 	payload := string(validAdmissionPayload(request))
 	producer := `{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}`
 	coordinate := fmt.Sprintf(`{"kind":"document","documentSha256":%q}`, request.SourceSHA256)
-	facts := fmt.Sprintf(`{"kind":"heading","level":1,"text":"Title","factPath":"blocks/1"},{"kind":"provenance","path":"blocks/1","coordinate":%s,"producer":%s,"factPath":"blocks/1"},`, coordinate, producer)
+	facts := fmt.Sprintf(`{"kind":"block","factPath":"blocks/1"},{"kind":"block-text","text":"Title","factPath":"blocks/1"},{"kind":"heading","level":1,"text":"Title","factPath":"blocks/1"},{"kind":"provenance","path":"blocks/1","coordinate":%s,"producer":%s,"factPath":"blocks/1"},`, coordinate, producer)
 	payload = strings.Replace(payload, `"blockCount":0`, `"blockCount":1`, 1)
+	payload = strings.Replace(payload, `"block-count","count":0`, `"block-count","count":1`, 1)
 	payload = strings.Replace(payload, `"facts":[`, `"facts":[`+facts, 1)
 	block := fmt.Sprintf(`{"id":"anydoc:%s:1:document/block:1","kind":"text","coordinate":%s,"headingPath":[],"producer":%s,"role":"heading","text":"Title","inlines":[{"kind":"text","text":"Title","coordinate":%s,"producer":%s}],"level":1}`, request.SourceSHA256, coordinate, producer, coordinate, producer)
 	payload = strings.Replace(payload, `"blocks":[]`, `"blocks":[`+block+`]`, 1)
+	return []byte(payload)
+}
+
+func validAdmissionPayloadWithTableDescendant(request Request) []byte {
+	payload := string(validAdmissionPayload(request))
+	producer := `{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}`
+	coordinate := fmt.Sprintf(`{"kind":"document","documentSha256":%q}`, request.SourceSHA256)
+	paths := []string{"blocks/1", "blocks/1/rows/1/columns/1/blocks/1", "blocks/1/rows/1/columns/1/blocks/1/items/1/blocks/1"}
+	facts := ""
+	for _, path := range paths {
+		facts += fmt.Sprintf(`{"kind":"block","factPath":%q},{"kind":"provenance","path":%q,"coordinate":%s,"producer":%s,"factPath":%q},`, path, path, coordinate, producer, path)
+	}
+	cellPath := "blocks/1/rows/1/columns/1"
+	facts += fmt.Sprintf(`{"kind":"provenance","path":%q,"coordinate":%s,"producer":%s,"factPath":%q},{"kind":"table","columns":[],"rows":[["nested"]],"factPath":"blocks/1"},{"kind":"list","ordered":false,"depth":1,"text":["nested"],"factPath":"blocks/1/rows/1/columns/1/blocks/1"},`, cellPath, coordinate, producer, cellPath)
+	facts += `{"kind":"block-text","text":"nested","factPath":"blocks/1/rows/1/columns/1/blocks/1/items/1/blocks/1"},`
+	payload = strings.Replace(payload, `"blockCount":0`, `"blockCount":3`, 1)
+	payload = strings.Replace(payload, `"block-count","count":0`, `"block-count","count":3`, 1)
+	payload = strings.Replace(payload, `"facts":[`, `"facts":[`+facts, 1)
+	paragraph := fmt.Sprintf(`{"id":"anydoc:%s:3:document/block:1/row:1/column:1/block:1/item:1/block:1","kind":"text","coordinate":%s,"headingPath":[],"producer":%s,"role":"paragraph","text":"nested","inlines":[{"kind":"text","text":"nested","coordinate":%s,"producer":%s}]}`, request.SourceSHA256, coordinate, producer, coordinate, producer)
+	listID := fmt.Sprintf("anydoc:%s:2:document/block:1/row:1/column:1/block:1", request.SourceSHA256)
+	list := fmt.Sprintf(`{"id":%q,"kind":"list","coordinate":%s,"headingPath":[],"producer":%s,"ordered":false,"items":[{"id":%q,"coordinate":%s,"producer":%s,"blocks":[%s]}]}`, listID, coordinate, producer, listID+":item:1", coordinate, producer, paragraph)
+	table := fmt.Sprintf(`{"id":"anydoc:%s:1:document/block:1","kind":"table","coordinate":%s,"headingPath":[],"producer":%s,"columns":[],"headerRows":0,"rows":[[{"id":"anydoc:%s:1:document/block:1:row:1:column:1","coordinate":%s,"producer":%s,"row":1,"column":1,"rowSpan":1,"columnSpan":1,"blocks":[%s],"displayedValue":""}]]}`, request.SourceSHA256, coordinate, producer, request.SourceSHA256, coordinate, producer, list)
+	payload = strings.Replace(payload, `"blocks":[]`, `"blocks":[`+table+`]`, 1)
 	return []byte(payload)
 }
 

@@ -36,7 +36,11 @@ export function extractAnydocNativeFacts(document, bytes, producer) {
     visitLinks(inline.content, factPath)
   })
   const visit = (block, factPath, depth) => {
+    add(factPath, { kind: 'block' })
     provenance(factPath)
+    if (block.kind === 'heading' || block.kind === 'paragraph') add(factPath, { kind: 'block-text', text: nativeInlineText(block.content) })
+    if (block.kind === 'codeBlock') add(factPath, { kind: 'block-text', text: block.text })
+    if (block.kind === 'rule') add(factPath, { kind: 'block-text', text: '---' })
     if (block.kind === 'heading') add(factPath, { kind: 'heading', level: block.level, text: nativeInlineText(block.content) })
     if (block.kind === 'paragraph' || block.kind === 'heading') visitLinks(block.content, factPath)
     if (block.kind === 'list') {
@@ -46,6 +50,13 @@ export function extractAnydocNativeFacts(document, bytes, producer) {
     if (block.kind === 'table') {
       const rows = block.table.grid.map((row) => row.map((slot) => slot.kind === 'origin' ? slot.cell.blocks.flatMap(nativeBlockText).join('') : ''))
       add(factPath, { kind: 'table', columns: block.table.headerRows > 0 ? rows[0] ?? [] : [], rows })
+      block.table.grid.forEach((row, rowIndex) => row.forEach((slot, columnIndex) => {
+        const cellPath = `${factPath}/rows/${rowIndex + 1}/columns/${columnIndex + 1}`
+        provenance(cellPath)
+        if (slot.kind === 'origin') {
+          slot.cell.blocks.forEach((child, childIndex) => visit(child, `${cellPath}/blocks/${childIndex + 1}`, depth))
+        }
+      }))
     }
     if (block.kind === 'blockQuote') block.blocks.forEach((child, index) => visit(child, `${factPath}/blocks/${index + 1}`, depth))
   }
@@ -53,6 +64,7 @@ export function extractAnydocNativeFacts(document, bytes, producer) {
   add('document', { kind: 'ordered-text', text: nativeBlocksText(document.blocks) })
   add('document', { kind: 'notes', text: document.notes.flatMap((note) => nativeBlocksText(note.blocks)) })
   add('document', { kind: 'asset-count', count: document.assets.length })
+  add('document', { kind: 'block-count', count: countNativeBlocks(document.blocks) })
   add('document', { kind: 'coordinate-kinds', kinds: document.assets.length ? ['document', 'package-part'] : ['document'] })
   add('document', { kind: 'no-parser-downgrade' })
   provenance('document')
@@ -60,8 +72,16 @@ export function extractAnydocNativeFacts(document, bytes, producer) {
   document.notes.forEach((note, noteIndex) => note.blocks.forEach((block, blockIndex) => {
     const factPath = `notes/${noteIndex + 1}/blocks/${blockIndex + 1}`
     add(factPath, { kind: 'notes', text: nativeBlockText(block) })
-    provenance(factPath)
+    visit(block, factPath, 1)
   }))
   document.assets.forEach((asset, index) => provenance(`assets/${index + 1}`, { kind: 'package-part', part: asset.originPart }))
   return facts
+}
+
+function countNativeBlocks(blocks) {
+  return blocks.reduce((count, block) => count
+    + 1
+    + (block.kind === 'blockQuote' ? countNativeBlocks(block.blocks) : 0)
+    + (block.kind === 'list' ? block.list.items.reduce((sum, item) => sum + countNativeBlocks(item.blocks), 0) : 0)
+    + (block.kind === 'table' ? block.table.grid.reduce((sum, row) => sum + row.reduce((cellSum, slot) => cellSum + (slot.kind === 'origin' ? countNativeBlocks(slot.cell.blocks) : 0), 0), 0) : 0), 0)
 }

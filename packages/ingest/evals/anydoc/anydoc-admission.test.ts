@@ -24,6 +24,18 @@ describe('private Anydoc admission projection', () => {
     expect(() => admitAnydocDocument(document, bytes, 'docx')).toThrowError(expect.objectContaining({ code: 'invalid-result' }))
   })
 
+  it('accepts only the closed footnote and endnote note kinds', () => {
+    const note = (kind: string) => ({
+      blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'body' }] }],
+      notes: [{ id: 'n1', kind, blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'note' }] }] }],
+      assets: [],
+    })
+
+    expect(() => admitAnydocDocument(note('footnote'), bytes, 'docx')).not.toThrow()
+    expect(() => admitAnydocDocument(note('endnote'), bytes, 'docx')).not.toThrow()
+    expect(() => admitAnydocDocument(note('comment'), bytes, 'docx')).toThrowError(expect.objectContaining({ code: 'invalid-result' }))
+  })
+
   it('accepts every closed Anydoc 0.1.7 union variant', () => {
     const markers = ['bullet', 'decimal', 'lowerAlpha', 'upperAlpha', 'lowerRoman', 'upperRoman']
     const blocks = [
@@ -66,6 +78,28 @@ describe('private Anydoc admission projection', () => {
     admitted.core.blocks[0].text = 'projector regression'
     expect(extractAnydocNativeFacts(raw, bytes, admitted.core.producer)).toEqual(nativeBefore)
     expect(nativeBefore).not.toEqual(expect.arrayContaining([expect.objectContaining({ text: 'projector regression' })]))
+  })
+
+  it('binds the observed block count and every table-cell descendant to native facts', () => {
+    const raw = {
+      blocks: [{ kind: 'table', table: { kind: 'data', headerRows: 0, grid: [[{
+        kind: 'origin',
+        cell: { blocks: [{ kind: 'list', list: { marker: 'bullet', start: 1, items: [{ blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'nested' }] }] }] } }] },
+      }]] } }],
+      notes: [],
+      assets: [],
+    }
+    const admitted = admitAnydocDocument(raw, bytes, 'docx')
+
+    expect(admitted.native.observed.blockCount).toBe(3)
+    expect(admitted.native.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'block-count', count: 3, factPath: 'document' }),
+      expect.objectContaining({ kind: 'block', factPath: 'blocks/1' }),
+      expect.objectContaining({ kind: 'provenance', factPath: 'blocks/1/rows/1/columns/1' }),
+      expect.objectContaining({ kind: 'block', factPath: 'blocks/1/rows/1/columns/1/blocks/1' }),
+      expect.objectContaining({ kind: 'block', factPath: 'blocks/1/rows/1/columns/1/blocks/1/items/1/blocks/1' }),
+      expect.objectContaining({ kind: 'block-text', text: 'nested', factPath: 'blocks/1/rows/1/columns/1/blocks/1/items/1/blocks/1' }),
+    ]))
   })
 
   it('retains link, note, and image relationships without embedding asset bytes in native facts', async () => {
