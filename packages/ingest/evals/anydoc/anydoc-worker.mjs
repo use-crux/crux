@@ -12,16 +12,28 @@ process.stdin.on('end', () => {
 })
 
 async function convert(bytes) {
+  if (format === 'pdf') {
+    send(failure('pdf-control', 'PDF is an explicit control and is never parsed by the Anydoc evaluation adapter.', bytes))
+    return
+  }
+
+  if (format === '__synthetic_all_variants__') {
+    const document = syntheticDocument()
+    send(projectDocument(document, bytes, 'docx'))
+    return
+  }
+
+  if (format?.startsWith('__convert_error__:')) {
+    const code = format.slice('__convert_error__:'.length)
+    send(failure(mapConvertError({ code }), `Synthetic Anydoc conversion error: ${code}`, bytes))
+    return
+  }
+
   let anydoc
   try {
     anydoc = await import('@firecrawl/anydoc')
   } catch (error) {
     send(backendUnavailable(error, bytes))
-    return
-  }
-
-  if (format === 'pdf') {
-    send(failure('pdf-control', 'PDF is an explicit control and is never parsed by the Anydoc evaluation adapter.', bytes))
     return
   }
 
@@ -53,8 +65,8 @@ function nativeDocumentProblem(document) {
     if (block.kind === 'codeBlock') return typeof block.text === 'string'
     if (block.kind === 'rule') return true
     if (block.kind === 'blockQuote') return Array.isArray(block.blocks) && validBlocks(block.blocks)
-    if (block.kind === 'list') return block.list && Array.isArray(block.list.items) && block.list.items.every((item) => Array.isArray(item.blocks) && validBlocks(item.blocks))
-    if (block.kind === 'table') return block.table?.kind === 'data' && Array.isArray(block.table.grid) && block.table.grid.every((row) => Array.isArray(row) && row.every((slot) => slot?.kind === 'covered' || slot?.kind === 'origin' && Array.isArray(slot.cell?.blocks) && validBlocks(slot.cell.blocks)))
+    if (block.kind === 'list') return block.list && Array.isArray(block.list.items) && block.list.items.every((item) => Array.isArray(item.blocks) && validBlocks(item.blocks) && listChildrenOnly(item.blocks))
+    if (block.kind === 'table') return block.table?.kind === 'data' && Array.isArray(block.table.grid) && block.table.grid.every((row) => Array.isArray(row) && row.every((slot) => slot?.kind === 'covered' || slot?.kind === 'origin' && Array.isArray(slot.cell?.blocks) && validBlocks(slot.cell.blocks) && listChildrenOnly(slot.cell.blocks)))
     return false
   })
   if (!validBlocks(document.blocks) || !document.notes.every((note) => Array.isArray(note?.blocks) && validBlocks(note.blocks))) {
@@ -64,6 +76,11 @@ function nativeDocumentProblem(document) {
     return 'Anydoc returned an incomplete asset payload.'
   }
   return undefined
+}
+
+/** Core list items and table cells can retain only text/list children. */
+function listChildrenOnly(blocks) {
+  return blocks.every((block) => block.kind === 'heading' || block.kind === 'paragraph' || block.kind === 'codeBlock' || block.kind === 'rule' || block.kind === 'list')
 }
 
 function projectDocument(document, bytes, sourceFormat) {
@@ -80,12 +97,19 @@ function projectDocument(document, bytes, sourceFormat) {
   const inlineText = (inlines) => inlines.map((inline) => {
     if (inline.kind === 'text') return inline.text ?? ''
     if (inline.kind === 'link') return inlineText(inline.content ?? [])
-    if (inline.kind === 'image') return inline.alt ?? ''
+    if (inline.kind === 'image') return inline.alt ? `[image:${inline.alt}]` : '[image]'
+    if (inline.kind === 'anchor') return inline.anchor ? `[anchor:${inline.anchor}]` : '[anchor]'
+    if (inline.kind === 'noteRef') return inline.noteId ? `[note:${inline.noteId}]` : '[note]'
+    if (inline.kind === 'lineBreak') return '\n'
     return ''
   }).join('')
   const projectInlines = (inlines) => inlines.flatMap((inline) => {
     if (inline.kind === 'text') return [{ kind: 'text', text: inline.text ?? '', coordinate, producer }]
     if (inline.kind === 'link') return [{ kind: 'link', text: inlineText(inline.content ?? []), target: inline.target?.value ?? '', coordinate, producer }]
+    if (inline.kind === 'image') return [{ kind: 'text', text: inline.alt ? `[image:${inline.alt}]` : '[image]', coordinate, producer }]
+    if (inline.kind === 'anchor') return [{ kind: 'text', text: inline.anchor ? `[anchor:${inline.anchor}]` : '[anchor]', coordinate, producer }]
+    if (inline.kind === 'noteRef') return [{ kind: 'text', text: inline.noteId ? `[note:${inline.noteId}]` : '[note]', coordinate, producer }]
+    if (inline.kind === 'lineBreak') return [{ kind: 'text', text: '\n', coordinate, producer }]
     return []
   })
   const projectBlocks = (blocks, path) => blocks.flatMap((block, index) => {
@@ -98,8 +122,7 @@ function projectDocument(document, bytes, sourceFormat) {
       })]
     }
     if (block.kind === 'blockQuote') {
-      const text = projectBlocks(block.blocks ?? [], blockPath)
-      return text.map((child) => ({ ...child, role: 'quote' }))
+      return projectBlocks(block.blocks ?? [], blockPath).map((child) => child.kind === 'text' ? { ...child, role: 'quote' } : child)
     }
     if (block.kind === 'list' && block.list) {
       const listId = id(blockPath)
@@ -121,6 +144,7 @@ function projectDocument(document, bytes, sourceFormat) {
       const columns = rows[0]?.map((cell) => cell.displayedValue ?? '') ?? []
       return [{ id: tableId, kind: 'table', coordinate, headingPath: [], producer, columns, headerRows: block.table.headerRows, rows }]
     }
+    if (block.kind === 'rule') return [textBlock('---', 'code', blockPath)]
     return []
   })
   const blocks = [
@@ -131,17 +155,32 @@ function projectDocument(document, bytes, sourceFormat) {
     id: `anydoc:${documentSha256}:asset:${index + 1}`, mediaType: asset.mediaType, sha256: sha256(asset.data), byteLength: asset.data.byteLength,
     coordinate: { kind: 'package-part', part: asset.originPart }, producer,
   }))
-  const core = { schemaVersion: 2, source: { documentSha256, mediaType: mediaType(sourceFormat), format: sourceFormat }, producer, metadata: {}, blocks, assets, diagnostics: [] }
+  const relationships = {
+    notes: document.notes.map((note) => ({ id: note.id, kind: note.kind })),
+    inlines: collectInlineFacts(document.blocks, document.notes),
+  }
+  const core = { schemaVersion: 2, source: { documentSha256, mediaType: mediaType(sourceFormat), format: sourceFormat }, producer, metadata: { anydocRelationships: JSON.stringify(relationships) }, blocks, assets, diagnostics: [] }
   const native = {
     kind: 'anydoc-native-v1', source: { documentSha256, format: sourceFormat },
     facts: { blocks: document.blocks, notes: document.notes, assets: document.assets.map((asset) => ({ id: asset.id, mediaType: asset.mediaType, originPart: asset.originPart, byteLength: asset.data.byteLength })) },
   }
-  return success(native, core, bytes.byteLength + JSON.stringify(native).length + assets.reduce((total, asset) => total + asset.byteLength, 0), assets)
+  return success(native, core, saturatedSum(bytes.byteLength, jsonBytes(document), jsonBytes(native), jsonBytes(core), assets.reduce((total, asset) => saturatedAdd(total, asset.byteLength), 0)), assets)
 }
 
 function isListChild(block) { return block.kind === 'text' || block.kind === 'list' }
 function mediaType(format) { return format === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream' }
-function mapConvertError(error) { return error && typeof error === 'object' && 'code' in error ? String(error.code) : 'invalid-result' }
+function mapConvertError(error) {
+  if (!error || typeof error !== 'object' || !('code' in error)) return 'invalid-result'
+  switch (error.code) {
+    case 'unsupported': return 'unsupported-format'
+    case 'malformed':
+    case 'missingPart':
+    case 'io': return 'invalid-result'
+    case 'encrypted': return 'encrypted'
+    case 'resourceLimit': return 'expanded-too-large'
+    default: return 'invalid-result'
+  }
+}
 function errorMessage(error) { return error instanceof Error ? error.message : String(error) }
 function backendUnavailable(error, bytes) { return failure('backend-unavailable', `Unable to load @firecrawl/anydoc@0.1.7 or @firecrawl/anydoc-linux-x64-gnu@0.1.7: ${errorMessage(error)}`, bytes) }
 function failure(error, diagnosis, bytes) { return success({ kind: 'anydoc-native-v1', outcome: { kind: 'failure', error, diagnosis }, facts: {} }, { outcome: { kind: 'failure', error, diagnosis } }, bytes.byteLength, []) }
@@ -159,3 +198,47 @@ function send(payload) {
   })
 }
 function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex') }
+function jsonBytes(value) { return Buffer.byteLength(JSON.stringify(value)) }
+function saturatedAdd(left, right) { return left > Number.MAX_SAFE_INTEGER - right ? Number.MAX_SAFE_INTEGER : left + right }
+function saturatedSum(...values) { return values.reduce((total, value) => saturatedAdd(total, value), 0) }
+
+function collectInlineFacts(blocks, notes) {
+  const facts = []
+  const visitBlocks = (items, path) => items.forEach((block, index) => {
+    const blockPath = `${path}/${index + 1}`
+    if (Array.isArray(block.content)) visitInlines(block.content, blockPath)
+    if (Array.isArray(block.blocks)) visitBlocks(block.blocks, blockPath)
+    if (block.list) block.list.items.forEach((item, itemIndex) => visitBlocks(item.blocks, `${blockPath}/item:${itemIndex + 1}`))
+    if (block.table) block.table.grid.forEach((row, rowIndex) => row.forEach((slot, columnIndex) => {
+      if (slot.kind === 'origin') visitBlocks(slot.cell.blocks, `${blockPath}/cell:${rowIndex + 1}:${columnIndex + 1}`)
+    }))
+  })
+  const visitInlines = (inlines, path) => inlines.forEach((inline, index) => {
+    const inlinePath = `${path}/inline:${index + 1}`
+    if (inline.kind === 'link') visitInlines(inline.content ?? [], inlinePath)
+    if (inline.kind === 'image' || inline.kind === 'anchor' || inline.kind === 'noteRef' || inline.kind === 'lineBreak') facts.push({ path: inlinePath, kind: inline.kind, ...(inline.source ? { source: inline.source } : {}), ...(inline.anchor ? { anchor: inline.anchor } : {}), ...(inline.noteId ? { noteId: inline.noteId } : {}) })
+  })
+  visitBlocks(blocks, 'blocks')
+  notes.forEach((note, index) => visitBlocks(note.blocks, `notes/${index + 1}`))
+  return facts
+}
+
+/** Test-only input covering every documented Anydoc 0.1.7 block and inline kind. */
+function syntheticDocument() {
+  return {
+    blocks: [
+      { kind: 'heading', level: 1, content: [{ kind: 'text', text: 'Heading' }] },
+      { kind: 'paragraph', content: [
+        { kind: 'text', text: 'text' }, { kind: 'lineBreak' },
+        { kind: 'link', content: [{ kind: 'text', text: 'link' }], target: { kind: 'external', value: 'https://example.test' } },
+        { kind: 'image', alt: 'image', source: { kind: 'asset', assetId: 0 } }, { kind: 'anchor', anchor: 'anchor' }, { kind: 'noteRef', noteId: 'note-1' },
+      ] },
+      { kind: 'list', list: { marker: 'bullet', start: 1, items: [{ blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'item' }] }] }] } },
+      { kind: 'table', table: { kind: 'data', headerRows: 1, grid: [[{ kind: 'origin', cell: { blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'cell' }] }], colSpan: 1, rowSpan: 1 } }]] } },
+      { kind: 'blockQuote', blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'quote' }] }] },
+      { kind: 'codeBlock', text: 'code' }, { kind: 'rule' },
+    ],
+    notes: [{ id: 'note-1', kind: 'footnote', blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'note' }] }] }],
+    assets: [{ id: 0, mediaType: 'image/png', originPart: 'word/media/image1.png', data: Buffer.from([1, 2, 3]) }],
+  }
+}

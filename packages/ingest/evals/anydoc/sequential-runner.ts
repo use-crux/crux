@@ -6,10 +6,13 @@ import { fileURLToPath } from 'node:url'
 import type { Readable } from 'node:stream'
 import { ANydocFixtureResourceCeilings } from './fixture-manifest.js'
 
-export type ParserRunFailure =
-  | 'backend-unavailable' | 'containment-unavailable' | 'cpu-limit' | 'expanded-too-large' | 'invalid-limit'
+/** Closed result codes admitted from an evaluation worker. */
+export type EvaluatedFailureCode =
+  | 'backend-unavailable' | 'containment-unavailable' | 'cpu-limit' | 'encrypted' | 'expanded-too-large' | 'invalid-limit'
   | 'invalid-result' | 'memory-limit' | 'cleanup-failed' | 'result-too-large' | 'source-too-large'
-  | 'pdf-control' | 'stderr-too-large' | 'stdout-too-large' | 'timeout' | 'worker-crash'
+  | 'pdf-control' | 'stderr-too-large' | 'stdout-too-large' | 'timeout' | 'unsupported-format' | 'worker-crash'
+
+export type ParserRunFailure = EvaluatedFailureCode
 
 export type ParserResourceLimits = { readonly [Key in keyof typeof ANydocFixtureResourceCeilings]: number }
 
@@ -296,9 +299,19 @@ function validateWorkerResult(value: unknown, limits: ParserResourceLimits): { r
 
 function invalidWorkerResult(): { readonly failure: 'invalid-result'; readonly diagnostics: readonly string[] } { return { failure: 'invalid-result', diagnostics: [] } }
 
-function adapterFailureOf(value: unknown): Extract<ParserRunFailure, 'backend-unavailable' | 'pdf-control'> | undefined {
+function adapterFailureOf(value: unknown): EvaluatedFailureCode | undefined {
   if (!isRecord(value) || !isRecord(value.outcome) || value.outcome.kind !== 'failure') return undefined
-  return value.outcome.error === 'backend-unavailable' || value.outcome.error === 'pdf-control' ? value.outcome.error : undefined
+  switch (value.outcome.error) {
+    case 'backend-unavailable':
+    case 'encrypted':
+    case 'expanded-too-large':
+    case 'invalid-result':
+    case 'pdf-control':
+    case 'unsupported-format':
+      return value.outcome.error
+    default:
+      return 'invalid-result'
+  }
 }
 
 function isSuccessPayload(value: unknown): value is { readonly diagnostics: readonly string[]; readonly assets: readonly { readonly byteLength: number }[]; readonly value: unknown } {

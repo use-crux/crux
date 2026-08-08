@@ -40,6 +40,23 @@ describe('runParserCandidate', () => {
     expect(result.metadata.cleanedUp).toBe(true)
   })
 
+  it.each([
+    ['unsupported', 'unsupported-format'],
+    ['malformed', 'invalid-result'],
+    ['encrypted', 'encrypted'],
+    ['resourceLimit', 'expanded-too-large'],
+    ['missingPart', 'invalid-result'],
+  ] as const)('maps Anydoc %s to the closed evaluation code %s', async (code, expected) => {
+    const result = await runParserCandidate({
+      workerPath: anydocWorkerPath,
+      source: new URL('./fixtures/csv-control-v1.csv', import.meta.url),
+      workerArguments: [`__convert_error__:${code}`],
+    })
+
+    expect(result.outcome).toEqual({ kind: 'failure', error: expected })
+    expect(result.hashes).toEqual({})
+  })
+
   it('rejects an oversized source before spawning a worker', async () => {
     const result = await runParserCandidate({
       workerPath,
@@ -116,6 +133,18 @@ describe('runParserCandidate', () => {
     expect(result.hashes.core).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('projects every documented Anydoc block and inline variant without loading native code', async () => {
+    const result = await runParserCandidate({
+      workerPath: anydocWorkerPath,
+      source: new URL('./fixtures/csv-control-v1.csv', import.meta.url),
+      workerArguments: ['__synthetic_all_variants__'],
+    })
+
+    expect(result.outcome).toEqual({ kind: 'success' })
+    expect(result.hashes.native).toMatch(/^[a-f0-9]{64}$/)
+    expect(result.hashes.core).toMatch(/^[a-f0-9]{64}$/)
+  })
+
   it('keeps PDF as a rejected control without loading a production parser route', async () => {
     const result = await runParserCandidate({
       workerPath: anydocWorkerPath,
@@ -124,6 +153,24 @@ describe('runParserCandidate', () => {
     })
 
     expect(result.outcome).toEqual({ kind: 'failure', error: 'pdf-control' })
+  })
+
+  it.each([
+    ['unsupported-format', 'unsupported-format'],
+    ['malformed', 'invalid-result'],
+    ['encrypted', 'encrypted'],
+    ['resourceLimit', 'invalid-result'],
+    ['missingPart', 'invalid-result'],
+    ['invalid-result', 'invalid-result'],
+  ] as const)('never admits adapter failure %s', async (workerError, expected) => {
+    const result = await runParserCandidate({
+      workerPath,
+      source: new URL('./fixtures/csv-control-v1.csv', import.meta.url),
+      workerArguments: [`adapter-failure:${workerError}`],
+    })
+
+    expect(result.outcome).toEqual({ kind: 'failure', error: expected })
+    expect(result.hashes).toEqual({})
   })
 
   it.each([

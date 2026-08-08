@@ -41,6 +41,18 @@ if (mode === 'timeout') {
     sendResult(chunks)
   })
   function sendResult(chunks) {
+    if (mode.startsWith('adapter-failure:')) {
+      const error = mode.slice('adapter-failure:'.length)
+      const payload = failurePayload(error)
+      const body = Buffer.from(JSON.stringify(payload))
+      const header = Buffer.alloc(4)
+      header.writeUInt32BE(body.length)
+      ipc.end(Buffer.concat([header, body]))
+      control.once('data', (ack) => {
+        if (ack.toString() === 'ACK\n') control.end('ACKED\n', () => process.exit(0))
+      })
+      return
+    }
     if (mode === 'invalid') {
       ipc.end(Buffer.from([0, 0, 0, 1, 123]))
       control.destroy()
@@ -88,4 +100,12 @@ function successPayload(sha) {
   const native = { value: { sha }, diagnostics, assets }
   const core = { value: { blocks: [] }, diagnostics, assets }
   return { kind: 'success', native, core, diagnostics: { count: 0, byteLength: 0 }, assets: { count: 0, byteLength: 0 }, expandedBytes: 1 }
+}
+
+function failurePayload(error) {
+  const diagnostics = [`adapter: ${error}`]
+  const assets = []
+  const native = { value: { outcome: { kind: 'failure', error } }, diagnostics, assets }
+  const core = { value: { outcome: { kind: 'failure', error } }, diagnostics, assets }
+  return { kind: 'success', native, core, diagnostics: { count: diagnostics.length, byteLength: Buffer.byteLength(diagnostics.join('')) }, assets: { count: 0, byteLength: 0 }, expandedBytes: 1 }
 }
