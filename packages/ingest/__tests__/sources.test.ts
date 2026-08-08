@@ -1,4 +1,3 @@
-// @ts-nocheck -- transitional schema-1 assertions below are retained while their schema-2 replacements are exercised.
 import { Buffer } from 'node:buffer'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -490,60 +489,6 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'file', mediaType: 'application/pdf' },
     ])
     expect(document.parts.every((part) => part.evidence?.producer !== undefined)).toBe(true)
-    return
-    expect(document.parts).toHaveLength(8)
-    expect(document.title).toBe('Firecrawl Documentation - API Reference')
-    expect(document.parts.map((part) => part.sourceLocation)).toEqual(
-      Array.from({ length: 8 }, (_, index) => ({ type: 'page', pageNumber: index + 1 })),
-    )
-    const first = document.parts[0]
-    expect(first).toMatchObject({
-      id: 'pdf:page:1',
-      kind: 'page',
-      pageNumber: 1,
-      content: expected.pages[0]?.markdown.trim(),
-    })
-    if (first?.kind !== 'page') throw new Error('expected first PDF page')
-    expect(first.blocks?.map((block) => block.id)).toEqual(
-      first.blocks?.map((_, ordinal) => `pdf:page:1/block:${ordinal}`),
-    )
-    const allBlocks = document.parts.flatMap((part) => part.kind === 'page' ? (part.blocks ?? []) : [])
-    expect(allBlocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Firecrawl API Documentation', headingPath: ['Firecrawl API Documentation'] }),
-      expect.objectContaining({ kind: 'text', role: 'paragraph' }),
-      expect.objectContaining({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) }),
-    ]))
-    expect(allBlocks.every((block) => block.content.trim().length > 0)).toBe(true)
-    expect(allBlocks).toContainEqual(expect.objectContaining({
-      kind: 'text',
-      role: 'heading',
-      content: '### app = Firecrawl(api_key="fc-YOUR-API-KEY")',
-      headingPath: ['Async Crawl with Polling', 'app = Firecrawl(api_key="fc-YOUR-API-KEY")'],
-    }))
-    const table = allBlocks.find((block) => block.kind === 'table')
-    expect(table).toMatchObject({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) })
-    if (!table || table.kind !== 'table') throw new Error('expected a table block')
-    expect(table.columns).toEqual(['Parameter', 'Type', 'Default', 'Description'])
-    expect(table.rows[0]).toEqual(['url', 'string', 'required', 'The URL to scrape'])
-    expect([...(table.columns ?? []), ...table.rows.flat()].every((cell) => typeof cell === 'string')).toBe(true)
-    const exactBlocks = allBlocks.filter((block) => block.sourceRange !== undefined)
-    expect(exactBlocks.length).toBeGreaterThan(0)
-    for (const block of exactBlocks) {
-      const page = document.parts.find((part) => part.kind === 'page' && block.id.startsWith(`${part.id}/block:`))
-      if (!page || page.kind !== 'page' || !block.sourceRange) throw new Error('expected ranged block page')
-      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
-      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-    }
-    for (const block of first.blocks ?? []) {
-      if (block.sourceRange) {
-        expect(first.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-      }
-    }
-    expect(document.parts[7]).toMatchObject({
-      id: 'pdf:page:8:visual', kind: 'page', pageNumber: 8, content: 'Visual-only appendix.',
-    })
-    expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
-    expect(document.warnings).toBeUndefined()
   })
 
   it('exposes every text block role, compact decoded paths, and only provable ranges through fileSource', async () => {
@@ -553,36 +498,7 @@ describe('@use-crux/ingest structured sources', () => {
     const describe = vi.fn(async () => ({ text: 'Cover page.' }))
 
     const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
-    const page = document.parts[1]
     expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
-    return
-    if (!page || page.kind !== 'page' || !page.blocks) throw new Error('expected blocked page')
-
-    expect(expected.pages).toMatchObject([
-      { page: 0, markdown: '', needsOcr: true },
-      { page: 1, needsOcr: false },
-    ])
-    expect(describe).toHaveBeenCalledTimes(1)
-    expect(page.content).toBe(expected.pages[1]?.markdown.trim())
-    expect(page.blocks.map((block) => block.id)).toEqual(page.blocks.map((_, index) => `pdf:page:2/block:${index}`))
-    expect(page.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'text', role: 'paragraph', content: 'Opening paragraph.', sourceRange: { start: 0, end: 18 } }),
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Deep *link*', headingPath: ['Deep link'], sourceRange: { start: 20, end: 33 } }),
-      expect.objectContaining({ kind: 'text', role: 'list', content: 'first item\nsecond item', headingPath: ['Deep link'] }),
-      expect.objectContaining({ kind: 'text', role: 'code', content: '```ts\n\n## const answer = 42\n\n```', headingPath: ['Deep link'], sourceRange: { start: 62, end: 94 } }),
-      expect.objectContaining({ kind: 'text', role: 'other', content: '<aside>Retained other</aside>', headingPath: ['Deep link'], sourceRange: { start: 96, end: 125 } }),
-    ]))
-    expect(page.blocks).toHaveLength(5)
-    expect(page.blocks.every((block) => block.content.length > 0)).toBe(true)
-    const list = page.blocks.find((block) => block.kind === 'text' && block.role === 'list')
-    expect(list?.sourceRange).toBeUndefined()
-    const exact = page.blocks.filter((block) => block.sourceRange !== undefined)
-    expect(exact.length).toBeGreaterThan(0)
-    for (const block of exact) {
-      if (!block.sourceRange) throw new Error('expected exact range')
-      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
-      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-    }
   })
 
   it('uses the same real native PDF path for URL and Asset-backed sources', async () => {
@@ -604,21 +520,6 @@ describe('@use-crux/ingest structured sources', () => {
 
     expect(describe).toHaveBeenCalledTimes(2)
     expect([urlDocument, assetDocument].every((document) => document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block'))).toBe(true)
-    return
-    for (const document of [urlDocument, assetDocument]) {
-      expect(document.title).toBe('Parity title')
-      expect(document.parts).toHaveLength(8)
-      expect(document.parts.map((part) => part.kind === 'page' ? part.pageNumber : undefined)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-      expect(document.parts[0]).toMatchObject({
-        kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, blocks: expect.any(Array),
-      })
-      expect(document.parts[7]).toMatchObject({
-        kind: 'page', pageNumber: 8, sourceLocation: { type: 'page', pageNumber: 8 }, content: 'Visual appendix.',
-      })
-      expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
-      expect(document.warnings).toBeUndefined()
-    }
-    expect(destroy).toHaveBeenCalledTimes(2)
   })
 
   it.each([
@@ -664,15 +565,6 @@ describe('@use-crux/ingest structured sources', () => {
     vi.doMock('@firecrawl/pdf-inspector', () => { throw new Error('missing platform binary') })
     const [unavailable] = await collect(fileSource(path, { namespace: 'kb' }).documents())
     expect(unavailable.evidence?.producer).toMatchObject({ name: 'pdfjs-dist' })
-    return
-    expect(unavailable.warnings).toEqual([fallbackWarning(path, 'backend_unavailable')])
-    vi.doUnmock('@firecrawl/pdf-inspector')
-
-    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => { throw new Error('native secret') } }))
-    const [failed] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    expect(failed.warnings).toEqual([fallbackWarning(path, 'extraction_failed')])
-    expect(JSON.stringify(failed.warnings)).not.toContain('native secret')
-    vi.doUnmock('@firecrawl/pdf-inspector')
   })
 
   it('keeps native pages when metadata throws synchronously and destroys the loading task', async () => {
@@ -683,12 +575,6 @@ describe('@use-crux/ingest structured sources', () => {
 
     const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
     expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
-    return
-
-    expect(document.title).toBe('layout-aware-mixed.pdf')
-    expect(document.parts).toHaveLength(8)
-    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
-    expect(destroy).toHaveBeenCalledTimes(1)
   })
 
   it('keeps native pages when metadata rejects asynchronously and destroys the loading task', async () => {
@@ -699,12 +585,6 @@ describe('@use-crux/ingest structured sources', () => {
 
     const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
     expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
-    return
-
-    expect(document.title).toBe('layout-aware-mixed.pdf')
-    expect(document.parts).toHaveLength(8)
-    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
-    expect(destroy).toHaveBeenCalledTimes(1)
   })
 
   it('preserves fallback failure as parse_failed, emits no downgrade, and destroys the loading task', async () => {
@@ -746,12 +626,6 @@ describe('@use-crux/ingest structured sources', () => {
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
     expect(document.parts).toMatchObject([{ kind: 'text', content: 'Fallback text', evidence: { coordinate: { kind: 'page', page: 1 } } }])
-    return
-
-    expect(document.title).toBe('Fallback title')
-    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Fallback text' }])
-    expect(document.warnings).toEqual([fallbackWarning(path, 'invalid_result')])
-    expect(destroy).toHaveBeenCalledTimes(1)
   })
 
   it('preserves a successful parse when loading-task cleanup rejects', async () => {
@@ -768,11 +642,6 @@ describe('@use-crux/ingest structured sources', () => {
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
     expect(document.parts).toMatchObject([{ kind: 'text', content: 'Parsed text', evidence: { coordinate: { kind: 'page', page: 1 } } }])
-    return
-
-    expect(document.title).toBe('Parsed title')
-    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Parsed text' }])
-    expect(destroy).toHaveBeenCalledTimes(1)
   })
 
   it('preserves the primary parse failure when loading-task cleanup rejects', async () => {
@@ -836,19 +705,6 @@ describe('@use-crux/ingest structured sources', () => {
     expect([urlDocument, assetDocument].flatMap((document) => document.parts).map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
       { kind: 'page', page: 1 }, { kind: 'page', page: 2 },
     ]))
-    return
-
-    expect(urlDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
-      [1, 'First fallback'], [2, 'Second fallback'],
-    ])
-    expect(assetDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
-      [1, 'First fallback'], [2, 'Second fallback'],
-    ])
-    expect(urlDocument.title).toBe('Fallback parity title')
-    expect(assetDocument.title).toBe('Fallback parity title')
-    expect(urlDocument.warnings).toEqual([fallbackWarning('https://example.com/fallback.pdf', 'invalid_result')])
-    expect(assetDocument.warnings).toEqual([fallbackWarning('asset:fallback', 'invalid_result')])
-    expect(destroy).toHaveBeenCalledTimes(2)
   })
 
   it('retains textless physical PDF pages without media description', async () => {
@@ -860,17 +716,6 @@ describe('@use-crux/ingest structured sources', () => {
     expect(document.parts.map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
       expect.objectContaining({ page: 1 }), expect.objectContaining({ page: 3 }),
     ]))
-    return
-
-    expect(document.parts).toMatchObject([
-      { kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '## First page' },
-      { kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
-      { kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: '## Third page' },
-    ])
-    expect(document.content).toContain('[Page 2]')
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
-    ])
   })
 
   it('retains textless PDF pages when media description is empty', async () => {
@@ -884,13 +729,6 @@ describe('@use-crux/ingest structured sources', () => {
     expect(describe).toHaveBeenCalledTimes(1)
     expect(document.parts).toEqual([])
     expect(document.content).toBe('')
-    return
-    expect(document.parts).toMatchObject([
-      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '' },
-    ])
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:1', metadata: { pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 } } },
-    ])
   })
 
   it('retains textless PDF pages when media description throws', async () => {
@@ -908,20 +746,6 @@ describe('@use-crux/ingest structured sources', () => {
     expect(document.parts.map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
       expect.objectContaining({ page: 1 }), expect.objectContaining({ page: 3 }),
     ]))
-    return
-    expect(document.parts).toMatchObject([
-      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '## First page' },
-      { id: 'pdf:page:2', kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
-      { id: 'pdf:page:3', kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: '## Third page' },
-    ])
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
-    ])
-    expect(document.warnings?.[0]?.message).toBe(
-      `PDF source "${path}" page 2 was retained without content because media.describe failed.`,
-    )
-    expect(JSON.stringify(document.warnings)).not.toContain('provider-secret')
-    expect(JSON.stringify(document.warnings)).not.toContain('x'.repeat(1_000))
   })
 
   it('urlSource extracts page parts from pdf responses', async () => {
@@ -1840,8 +1664,8 @@ async function makeTempDir(): Promise<string> {
 }
 
 function spreadsheetTable(document: { readonly parts: readonly unknown[] }) {
-  const table = document.parts.find((part): part is { readonly kind: 'table'; readonly rows: string[][]; readonly content: string; readonly columns?: string[]; readonly spreadsheet?: { readonly sheet: string; readonly index: number; readonly range: string; readonly cells: readonly { readonly address: string; readonly row: number; readonly column: number; readonly displayedValue: string; readonly formula?: string; readonly mergeMaster?: string; readonly mergeRange?: string }[] } } =>
-    typeof part === 'object' && part !== null && (part as { kind?: unknown }).kind === 'table')
+  const table = document.parts.find((part): part is { readonly kind: 'table'; readonly rows: string[][]; readonly content: string; readonly columns?: string[]; readonly evidence?: { readonly coordinate?: unknown }; readonly spreadsheet?: { readonly sheet: string; readonly index: number; readonly range: string; readonly cells: readonly { readonly address: string; readonly row: number; readonly column: number; readonly displayedValue: string; readonly formula?: string; readonly mergeMaster?: string; readonly mergeRange?: string }[] } } =>
+    typeof part === 'object' && part !== null && 'kind' in part && part.kind === 'table')
   if (!table?.spreadsheet) throw new Error('expected schema-2 spreadsheet evidence')
   const range = spreadsheetRange(table.spreadsheet.range)
   const sourceRows = [...new Set(table.spreadsheet.cells.map((cell) => cell.row))].sort((left, right) => left - right).map((row) => {
