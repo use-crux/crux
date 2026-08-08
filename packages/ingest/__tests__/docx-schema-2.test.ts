@@ -70,6 +70,23 @@ it('preserves text and nested-list interleavings within a list item', () => {
   ])
 })
 
+it('coalesces inline text around nested lists without changing DOM order', () => {
+  const document = adaptMammothDocxResult({
+    bytes: new TextEncoder().encode('inline list'),
+    html: '<ul><li>Before <strong>bold</strong> after<ul><li>Nested</li></ul>Finally <em>here</em></li></ul>',
+  })
+  const list = document.blocks[0]
+  if (!list || list.kind !== 'list') {
+    throw new Error('Expected a top-level list.')
+  }
+
+  expect(list.items[0]?.blocks.map(listFact)).toEqual([
+    ['text', 'Before bold after'],
+    ['list', false, [[['text', 'Nested']]]],
+    ['text', 'Finally here'],
+  ])
+})
+
 it('retains Mammoth table spans and only declares headers established by HTML', () => {
   const document = adaptMammothDocxResult({
     bytes: new TextEncoder().encode('merged table'),

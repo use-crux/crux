@@ -154,19 +154,28 @@ function listBlock(
     .each((itemIndex, item) => {
       const itemId = `${id}:item:${itemIndex + 1}`
       const blocks: (TextBlock | ListBlock)[] = []
+      let bufferedText = ''
+      let textIndex = 0
+      const flushText = () => {
+        const text = normalizedText(bufferedText)
+        bufferedText = ''
+        if (text) {
+          textIndex += 1
+          blocks.push(textBlock({ id: `${itemId}:text:${textIndex}`, coordinate, headingPath, role: 'paragraph', text }))
+        }
+      }
       $(item)
         .contents()
         .each((childIndex, child) => {
           const childId = `${itemId}:child:${childIndex + 1}`
           if (child.type === 'tag' && (child.tagName === 'ol' || child.tagName === 'ul')) {
+            flushText()
             blocks.push(listBlock($, child, childId, coordinate, headingPath))
             return
           }
-          const text = normalizedText($(child).text())
-          if (text) {
-            blocks.push(textBlock({ id: `${childId}:text`, coordinate, headingPath, role: 'paragraph', text }))
-          }
+          bufferedText = appendText(bufferedText, $(child).text())
         })
+      flushText()
       items.push({ id: itemId, coordinate, producer: MAMMOTH_PRODUCER, blocks })
     })
 
@@ -314,6 +323,13 @@ function docxId(documentSha256: string, structuralPath: string): string {
 
 function normalizedText(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+function appendText(buffer: string, value: string): string {
+  if (!buffer || !value || /\s$/.test(buffer) || /^\s/.test(value)) {
+    return buffer + value
+  }
+  return `${buffer} ${value}`
 }
 
 function sha256(bytes: Uint8Array): string {
