@@ -223,7 +223,11 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 			_ = os.Remove(resultPath)
 		}
 	}()
-	spec.ReadOnlyPaths = append(spec.ReadOnlyPaths, socketPath, resultPath)
+	spec.BindReadOnlyPaths = append(
+		spec.BindReadOnlyPaths,
+		socketPath+":"+authorizationSocketTarget,
+		resultPath+":"+resultSocketTarget,
+	)
 	properties := systemdProperties(spec)
 	err = b.bus.StartTransientUnit(ctx, name, properties)
 	closeErr := stdin.Close()
@@ -324,6 +328,11 @@ type restrictAddressFamilies struct {
 	Families []string
 }
 
+const (
+	authorizationSocketTarget = "/run/crux-anydoc/authorize.sock"
+	resultSocketTarget        = "/run/crux-anydoc/result.sock"
+)
+
 // bindReadOnlyPath matches systemd's a(ssbt) BindReadOnlyPaths wire contract.
 type bindReadOnlyPath struct {
 	Source        string
@@ -342,10 +351,7 @@ func bindReadOnlyPathProperties(paths []string) []bindReadOnlyPath {
 }
 
 func systemdProperties(spec ServiceSpec) []DBusProperty {
-	sockets := []string{}
-	if len(spec.ReadOnlyPaths) >= 2 {
-		sockets = spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-2:]
-	}
+	sockets := []string{authorizationSocketTarget, resultSocketTarget}
 	command := []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}
 	if spec.probe != nil {
 		command = []execStart{{Path: probeTarget, Args: append([]string{probeTarget, "-test.run=^TestContainmentProbeProcess$", "--", spec.probe.action, spec.probe.resultPath}, sockets...), Fail: false}}

@@ -81,15 +81,15 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal("invalid D-Bus FD property")
 	}
 	start, ok := got["ExecStart"].([]execStart)
-	if !ok || len(start) != 1 || start[0].Path != spec.Command[0] || len(start[0].Args) != 4 || start[0].Args[0] != start[0].Path || start[0].Args[1] != spec.Command[1] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[0] || start[0].Args[3] != got["ReadOnlyPaths"].([]string)[1] {
+	if !ok || len(start) != 1 || start[0].Path != spec.Command[0] || len(start[0].Args) != 4 || start[0].Args[0] != start[0].Path || start[0].Args[1] != spec.Command[1] || start[0].Args[2] != "/run/crux-anydoc/authorize.sock" || start[0].Args[3] != "/run/crux-anydoc/result.sock" {
 		t.Fatalf("unsafe ExecStart %#v", got["ExecStart"])
 	}
 	paths := got["ReadOnlyPaths"].([]string)
-	if len(paths) != 2 || !strings.HasPrefix(paths[0], tmp+"/.a-") || !strings.HasPrefix(paths[1], tmp+"/.r-") {
-		t.Fatalf("socket bind paths %#v", paths)
+	if len(paths) != 0 {
+		t.Fatalf("host socket paths exposed in unit namespace %#v", paths)
 	}
 	binds, ok := bindReadOnlyPathsValue(got["BindReadOnlyPaths"])
-	if !ok || !same(binds, []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) {
+	if !ok || len(binds) != 4 || !same(binds[:2], []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) || !strings.HasPrefix(binds[2], tmp+"/.a-") || !strings.HasSuffix(binds[2], ":/run/crux-anydoc/authorize.sock") || !strings.HasPrefix(binds[3], tmp+"/.r-") || !strings.HasSuffix(binds[3], ":/run/crux-anydoc/result.sock") {
 		t.Fatalf("source bind mapping %#v", got["BindReadOnlyPaths"])
 	}
 }
