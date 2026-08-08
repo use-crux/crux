@@ -4,6 +4,7 @@ import { indexingPipeline, type CruxChunk } from '../../src/indexing'
 import { assertions, knowledgeBase } from '../../src/knowledge'
 import { prompt } from '../../src/prompt'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const types = {
   fact: z.object({ id: z.string(), text: z.string(), detail: z.string().optional() }).describe('A fact'),
@@ -110,12 +111,12 @@ function chunk(
   detail?: string,
   metadata: Record<string, unknown> = {},
 ): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: 'docs',
     sourceId,
     chunkId: 'main',
     ordinal: 0,
     content,
     metadata: { ...metadata, ...(detail ? { detail } : {}) },
-  }
+  })
 }

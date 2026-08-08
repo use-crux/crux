@@ -9,6 +9,7 @@ import { MAX_DERIVE_BATCH_CHARS } from '../../src/knowledge/derive/bounds'
 import { runDeriveStages } from '../../src/knowledge/derive/runner'
 import type { KnowledgeModel } from '../../src/knowledge/model'
 import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 const namespace = 'derive-diag'
 const chunkRef = { kind: 'chunk' as const, sourceId: 'doc-1', chunkId: 'c1' }
@@ -133,11 +134,11 @@ function model(objects: readonly unknown[]): KnowledgeModel {
 }
 
 function document(sourceId: string, content: string): CruxDocument {
-  return { namespace, sourceId, content, metadata: {} }
+  return schema2TextDocument({ namespace, sourceId, content, metadata: {} })
 }
 
 function chunk(sourceId: string, chunkId: string, content: string, ns = namespace): CruxChunk {
-  return { namespace: ns, sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace: ns, sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }
 
 function receiptRef(receipt: EffectReceipt) {

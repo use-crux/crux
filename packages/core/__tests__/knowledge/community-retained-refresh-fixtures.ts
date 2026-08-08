@@ -3,6 +3,7 @@ import { communityPrefix, communityScopeKey } from '../../src/knowledge/communit
 import type { KnowledgeModel } from '../../src/knowledge'
 import type { CruxChunk } from '../../src/indexing'
 import type { JsonObject, RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 export function chunk(
   namespace: string,
@@ -11,7 +12,7 @@ export function chunk(
   content: string,
   metadata: Record<string, unknown> = {},
 ): CruxChunk {
-  return { namespace, sourceId, chunkId, ordinal: 0, content, metadata }
+  return schema2TextChunk({ namespace, sourceId, chunkId, ordinal: 0, content, metadata })
 }
 
 export function countingModel() {

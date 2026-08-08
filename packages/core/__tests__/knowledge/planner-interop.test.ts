@@ -16,6 +16,7 @@ import { assertions } from '../../src/knowledge'
 import type { CruxChunk } from '../../src/indexing'
 import type { AdapterResponse } from '../../src'
 import { inMemoryStorage, inMemoryRecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe.sequential('knowledge planner interop', () => {
   it('keeps unwrapped view retrieval and assertion contexts exact and required', async () => {
@@ -241,12 +242,12 @@ function chunk(input: {
   readonly content: string
   readonly metadata?: Record<string, unknown>
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: 'docs',
     sourceId: input.sourceId,
     chunkId: 'main',
     ordinal: 0,
     content: input.content,
     metadata: input.metadata ?? {},
-  }
+  })
 }
