@@ -76,5 +76,16 @@ describe('stored retrieval evidence', () => {
     }
 
     expect(indexedChunkToHit({ value: malformed, score: 0.9 })).toBeNull()
+
+    const zeroBased = {
+      ...record,
+      provenance: {
+        spreadsheets: [{
+          sheetBlockId: 'sheet:Revenue', tableBlockId: 'table:Revenue', sheet: 'Revenue', index: 0, range: 'A1',
+          cells: [{ id: 'cell:A1', address: 'A1', row: 0, column: 0, displayedValue: 'Plan' }],
+        }],
+      },
+    }
+    expect(indexedChunkToHit({ value: zeroBased, score: 0.9 })).toBeNull()
   })
 })

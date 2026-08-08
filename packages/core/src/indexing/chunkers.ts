@@ -374,12 +374,16 @@ function chunkTablePart(
       ...(includesHeaderRow && index === 0 ? [0] : []),
       ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
     ]
+    const evidenceRowIndexes = [
+      ...(includesHeaderRow ? [0] : []),
+      ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
+    ]
     chunks.push(
       createPartChunk(document, renderedRows, chunks.length, {
         ...coarseProvenance([part]),
         ...(part.spreadsheet && spreadsheetRows ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, spreadsheetRows, sourceRowIndexes)] } : {}),
         confidence: 'derived',
-      }, tableEvidenceOrigin(part, spreadsheetRows, sourceRowIndexes)),
+      }, tableEvidenceOrigin(part, spreadsheetRows, evidenceRowIndexes)),
     )
   }
   return chunks

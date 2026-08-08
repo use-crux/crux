@@ -249,7 +249,7 @@ function structuredSourceFromRecord(value: unknown): { readonly spreadsheets: re
     for (const cell of item.cells) {
       if (!isRecord(cell) || !hasAllowedKeys(cell, ['id', 'address', 'row', 'column', 'displayedValue'], ['formula', 'mergeMaster', 'mergeRange']) ||
         typeof cell.id !== 'string' || typeof cell.address !== 'string' || typeof cell.row !== 'number' || !Number.isInteger(cell.row) ||
-        typeof cell.column !== 'number' || !Number.isInteger(cell.column) || typeof cell.displayedValue !== 'string' ||
+        cell.row < 1 || typeof cell.column !== 'number' || !Number.isInteger(cell.column) || cell.column < 1 || typeof cell.displayedValue !== 'string' ||
         (cell.formula !== undefined && typeof cell.formula !== 'string') || (cell.mergeMaster !== undefined && typeof cell.mergeMaster !== 'string') ||
         (cell.mergeRange !== undefined && typeof cell.mergeRange !== 'string')) {
         return null

@@ -64,6 +64,7 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
   })
 
   const mergeSpreadsheet = chunks.find((chunk) => chunk.content.includes('Annual plan'))?.provenance?.spreadsheets?.[0]
+  const mergeEvidence = chunks.find((chunk) => chunk.content.includes('Annual plan'))?.evidence
   expect(mergeSpreadsheet).toMatchObject({
     sheet: 'Revenue',
     index: 0,
@@ -81,6 +82,11 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
       id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[1]?.id : undefined,
       address: 'C6', displayedValue: '', mergeMaster: 'B6', mergeRange: 'B6:C6',
     }),
+  ]))
+  expect(mergeSpreadsheet?.cells.some((cell) => cell.address === 'B2')).toBe(false)
+  expect(mergeEvidence?.blockIds).toEqual(expect.arrayContaining([
+    ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[0]?.[0]?.id : undefined,
+    ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[0]?.[2]?.id : undefined,
   ]))
 
   await docs.indexDocuments([document])
