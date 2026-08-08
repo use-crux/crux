@@ -78,7 +78,7 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	}
 	result, err := run.Execute(ctx)
 	if err != nil {
-		t.Fatalf("execute packaged runner: %v", err)
+		t.Fatalf("execute packaged runner: %s", safeRunnerDiagnostic(err, run.TerminalReport()))
 	}
 	if !result.OK || result.Accounting == nil || result.Accounting.SourceBytes != int64(len(input)) || result.SourceSHA256 != sha256Hex(input) || result.Format != "docx" {
 		t.Fatalf("unbound or invalid runner result: %#v", result)
@@ -86,6 +86,38 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 	assertIntegrationCleanup(t, root, stagingRoot, privateTemp, run)
 	hostile := runHostileContainmentCases(t, launch, root)
 	writeContainmentEvidence(t, result, run.TerminalReport(), hostile)
+}
+
+func safeRunnerDiagnostic(err error, terminal TerminalReport) string {
+	outcome := string(terminal.Outcome)
+	switch terminal.Outcome {
+	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted:
+	default:
+		outcome = "unknown"
+	}
+	serviceResult := terminal.PreStop.ServiceResult
+	switch serviceResult {
+	case "success", "timeout", "oom-kill", "signal", "exit-code", "core-dump", "resources":
+	default:
+		serviceResult = "unknown"
+	}
+	oomKilled := terminal.PreStop.MemoryEvents["oom_kill"] > 0
+	pidsLimited := terminal.PreStop.PIDsEvents["max"] > 0
+	return "error=" + safeExecutionError(err) + " outcome=" + outcome + " service=" + serviceResult + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+}
+
+func safeExecutionError(err error) string {
+	var supervisorError *SupervisorError
+	if errors.As(err, &supervisorError) {
+		switch supervisorError.Code {
+		case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted:
+			return string(supervisorError.Code)
+		}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline"
+	}
+	return "unknown"
 }
 
 func safeContainmentDiagnostic(err error) string {
@@ -156,6 +188,24 @@ func TestSafeContainmentDiagnosticTraversesTypedCauseAndRedactsDetails(t *testin
 		if got := safeContainmentDiagnostic(unsafeError); got != "containment-unavailable" {
 			t.Fatalf("unsafe diagnostic was not redacted: %q", got)
 		}
+	}
+}
+
+func TestSafeRunnerDiagnosticReportsOnlyBoundedTerminalCategories(t *testing.T) {
+	unsafe := "/private/path nonce=secret input=customer.docx"
+	got := safeRunnerDiagnostic(errors.New(unsafe), TerminalReport{
+		PreStop: SandboxReport{
+			ServiceResult: unsafe,
+			MemoryEvents:  map[string]int64{"oom_kill": 1},
+			PIDsEvents:    map[string]int64{"max": 1},
+		},
+	})
+	const want = "error=unknown outcome=unknown service=unknown oom-killed=true pids-limited=true"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+	if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
+		t.Fatalf("diagnostic leaked unsafe details: %q", got)
 	}
 }
 
