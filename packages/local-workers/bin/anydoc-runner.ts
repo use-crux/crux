@@ -38,6 +38,14 @@ type Result = (Request & { ok: true; payload: string; accounting: Accounting }) 
 
 const [capabilityPath, resultPath] = process.argv.slice(2)
 
+// Declared before main() so synchronous early aborts (missing argv) are not
+// hit by the class temporal dead zone and mis-mapped to conversion (74).
+class StageFailure extends Error {
+  constructor(readonly exitCode: number) { super('runner-stage') }
+}
+
+function abort(exitCode: number): never { throw new StageFailure(exitCode) }
+
 void main().catch((error: unknown) => {
   // Force the allowlisted stage code so systemd ExecMainStatus cannot be masked
   // by leftover handles after an early trust-boundary failure.
@@ -164,8 +172,6 @@ async function fail(error: ParserError, request: Request): Promise<void> {
   process.exitCode = 1
 }
 
-function abort(exitCode: number): never { throw new StageFailure(exitCode) }
-
 async function send(result: Result): Promise<void> {
   const payload = encodeResult(result)
   if (payload.byteLength === 0 || payload.byteLength > maxResultBytes || payload.byteLength > result.limits.resultBytes) throw new StageFailure(stageExit.resultWrite)
@@ -175,10 +181,6 @@ async function send(result: Result): Promise<void> {
     const ack = await withTimeout(new BufferedReader(socket).read(4), socket).catch(() => { throw new StageFailure(stageExit.acknowledgement) })
     if (!ack.equals(Buffer.from('ACK\n'))) throw new StageFailure(stageExit.acknowledgement)
   } finally { socket.destroy() }
-}
-
-class StageFailure extends Error {
-  constructor(readonly exitCode: number) { super('runner-stage') }
 }
 
 function encodeResult(result: Result): Buffer { return Buffer.from(JSON.stringify(result)) }

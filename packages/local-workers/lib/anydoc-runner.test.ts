@@ -31,6 +31,10 @@ describe('anydoc runner trust boundary', () => {
     expect(source).toContain('process.exit(error instanceof StageFailure ? error.exitCode : stageExit.conversion)')
     expect(source).toContain("import('@firecrawl/anydoc').catch")
     expect(source).not.toContain('console.')
+    // StageFailure must be initialized before main() so synchronous early aborts
+    // (missing argv) do not hit the class TDZ and collapse to conversion (74).
+    expect(source.indexOf('class StageFailure')).toBeLessThan(source.indexOf('void main()'))
+    expect(source.indexOf('function abort(exitCode: number)')).toBeLessThan(source.indexOf('void main()'))
     // Hard invariant: native load stage remains after authorization and source validation.
     const nativeStage = source.indexOf('stageExit.nativeLoad')
     expect(nativeStage).toBeGreaterThan(source.indexOf('stageExit.authorization'))
