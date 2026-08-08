@@ -1,4 +1,3 @@
-import { parse as parseCsv } from 'csv-parse/sync'
 import ExcelJS from 'exceljs'
 import { load as loadHtml } from 'cheerio'
 import mammoth from 'mammoth'
@@ -9,6 +8,7 @@ import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
+import { parseCsvRows } from './csv'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
 import { imageParser } from './visual-image'
@@ -217,8 +217,7 @@ export const csvParser: IngestParser = {
   formats: ['csv'],
   parse(input) {
     const text = input.text ?? new TextDecoder('utf-8').decode(input.bytes)
-    const records = parseCsv(text, { relax_column_count: true, skip_empty_lines: true }) as string[][]
-    const rows = records.map((row) => row.map((cell) => String(cell ?? '')))
+    const rows = parseCsvRows(text)
     const table: IngestTablePart = {
       id: 'csv:table:1',
       kind: 'table',
