@@ -6,7 +6,6 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { gfm } from 'micromark-extension-gfm'
-import type { Content, List, ListItem } from 'mdast'
 import type {
   ApplicationOperationProducer,
   DocumentProducer,
@@ -33,6 +32,9 @@ import { observeIngestMediaCall } from './media-observation'
 
 type PdfContext = Pick<ParseContext, 'warn' | 'media'>
 type FallbackReason = 'backend_unavailable' | 'extraction_failed' | 'invalid_result'
+type MarkdownContent = ReturnType<typeof fromMarkdown>['children'][number]
+type MarkdownList = Extract<MarkdownContent, { readonly type: 'list' }>
+type MarkdownListItem = MarkdownList['children'][number]
 
 interface NativePage {
   readonly page: number
@@ -440,7 +442,7 @@ function pdfLayoutBlock(input: {
   readonly page: number
   readonly block: IngestPageBlock
   readonly ordinal: number
-  readonly markdownNode?: Content
+  readonly markdownNode?: MarkdownContent
   readonly producer: DocumentProducer
 }): TextBlock | ListBlock | TableBlock {
   const coordinate = pdfBlockCoordinate(input.page, input.ordinal, input.block)
@@ -500,7 +502,7 @@ function pdfLayoutBlock(input: {
   })
 }
 
-function layoutMarkdownNodes(markdown: string): readonly Content[] {
+function layoutMarkdownNodes(markdown: string): readonly MarkdownContent[] {
   const tree = fromMarkdown(markdown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] })
   return tree.children.filter((node) => {
     const range = readSourceRange(node)
@@ -516,7 +518,7 @@ function layoutMarkdownNodes(markdown: string): readonly Content[] {
 }
 
 function markdownListBlock(
-  node: List,
+  node: MarkdownList,
   id: string,
   coordinate: SourceCoordinate,
   headingPath: readonly string[],
@@ -534,7 +536,7 @@ function markdownListBlock(
 }
 
 function markdownListItem(
-  item: ListItem,
+  item: MarkdownListItem,
   id: string,
   coordinate: SourceCoordinate,
   headingPath: readonly string[],
