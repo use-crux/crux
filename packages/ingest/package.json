@@ -58,8 +58,11 @@
   "devDependencies": {
     "@types/node": "^24.12.4",
     "docx": "^9.6.1",
+    "jszip": "3.10.1",
+    "pptxgenjs": "4.0.1",
     "typescript": "5.9.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "xlsx": "0.18.5"
   },
   "repository": {
     "type": "git",
