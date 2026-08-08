@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addReviewCase } from "../../src/eval/node/runner";
 import { resolveReviewSidecar } from "../../src/eval/node/review/filesystem";
 
@@ -20,14 +20,14 @@ const fixtureRoot = dirname(
     new URL("./fixtures/node-run-project/package.json", import.meta.url),
   ),
 );
-let temporaryRoot: string;
+let temporaryRoot: string | undefined;
 let root: string;
 let sidecar: string;
 
 describe.sequential("Review repository writer", () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
     // Created under the OS temp dir, never inside the repo: an interrupted run
-    // (killed process, crashed worker) skips `afterAll` and would otherwise leave an
+    // (killed process, crashed worker) skips cleanup and would otherwise leave an
     // untracked fixture directory dirtying the worktree.
     temporaryRoot = await mkdtemp(join(tmpdir(), "crux-review-writer-"));
     root = temporaryRoot;
@@ -48,13 +48,11 @@ describe.sequential("Review repository writer", () => {
     sidecar = join(root, "evals/review.cases.jsonl");
   });
 
-  afterAll(async () => {
-    await rm(temporaryRoot, { recursive: true, force: true });
-  });
-
   afterEach(async () => {
-    await rm(sidecar, { force: true });
-    await rm(`${sidecar}.lock`, { force: true });
+    if (temporaryRoot) {
+      await rm(temporaryRoot, { recursive: true, force: true });
+      temporaryRoot = undefined;
+    }
   });
 
   it("prefills input/call only and requires an explicit correction save", async () => {
@@ -205,6 +203,12 @@ describe.sequential("Review repository writer", () => {
 
   it("does not write through a held lock and rejects escaped generated paths", async () => {
     const lock = await open(`${sidecar}.lock`, "wx");
+    const retryDelay = vi
+      .spyOn(global, "setTimeout")
+      .mockImplementation((callback) => {
+        callback();
+        return 0 as unknown as NodeJS.Timeout;
+      });
     try {
       await expect(
         addReviewCase({
@@ -217,6 +221,7 @@ describe.sequential("Review repository writer", () => {
         }),
       ).rejects.toThrow(/holds the sidecar lock/i);
     } finally {
+      retryDelay.mockRestore();
       await lock.close();
     }
     await expect(
