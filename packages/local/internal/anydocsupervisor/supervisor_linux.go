@@ -244,6 +244,9 @@ type Run struct {
 	nonce, digest string
 	mu            sync.Mutex
 	stopOnce      sync.Once
+	finishOnce    sync.Once
+	finished      chan struct{}
+	result        error
 	done          bool
 	stop          chan struct{}
 }
@@ -278,23 +281,21 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	d := sha256.Sum256(input)
-	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), stop: make(chan struct{})}
+	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), stop: make(chan struct{}), finished: make(chan struct{})}
 	go r.monitor()
 	return r, nil
 }
-func (r *Run) Authorize(v Request) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r == nil || r.done {
+func (r *Run) Authorize() error {
+	if r == nil {
 		return closed(ErrReplay)
 	}
-	if !validRequest(v) {
-		return closed(ErrInvalidRequest)
-	}
-	if v.Nonce != r.nonce || v.Digest != r.digest {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
 		return closed(ErrReplay)
 	}
 	r.done = true
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, Digest: r.digest}
 	e := EncodeRequest(r.write, v)
 	closeErr := r.write.Close()
 	if e != nil || closeErr != nil {
@@ -303,14 +304,30 @@ func (r *Run) Authorize(v Request) error {
 	return nil
 }
 func (r *Run) Finish(_ context.Context, out error) error {
-	r.mu.Lock()
-	if !r.done {
-		r.done = true
-		r.write.Close()
+	if r == nil {
+		return closed(ErrReplay)
 	}
-	r.stopOnce.Do(func() { close(r.stop) })
-	r.mu.Unlock()
-	cleanup(r.unit)
+	r.finishOnce.Do(func() {
+		r.mu.Lock()
+		r.done = true
+		_ = r.write.Close()
+		r.stopOnce.Do(func() { close(r.stop) })
+		r.mu.Unlock()
+		result := outcomeCode(out)
+		if !cleanup(r.unit) {
+			result = closed(ErrContainmentUnavailable)
+		}
+		r.mu.Lock()
+		r.result = result
+		r.mu.Unlock()
+		close(r.finished)
+	})
+	<-r.finished
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.result
+}
+func outcomeCode(out error) error {
 	if errors.Is(out, context.DeadlineExceeded) {
 		return closed(ErrTimeout)
 	}
@@ -331,23 +348,38 @@ func (r *Run) monitor() {
 			return
 		case <-tick.C:
 			u, e := r.unit.CPUUsage(context.Background())
-			if e == nil && u > CPUCeiling {
+			if e != nil {
+				r.Finish(context.Background(), errors.New("cpu accounting"))
+				return
+			}
+			if u >= CPUCeiling {
 				r.Finish(context.Background(), context.DeadlineExceeded)
 				return
 			}
 		}
 	}
 }
-func cleanup(unit Unit) {
+func cleanup(unit Unit) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
-		return
+		return false
 	}
-	_ = unit.Stop(ctx)
-	_ = unit.WaitInactive(ctx)
-	_, _ = unit.Report(ctx)
-	_ = unit.Cleanup(ctx)
+	ok := true
+	if unit.Stop(ctx) != nil {
+		ok = false
+	}
+	if unit.WaitInactive(ctx) != nil {
+		ok = false
+	}
+	report, err := unit.Report(ctx)
+	if err != nil || report.Populated {
+		ok = false
+	}
+	if unit.Cleanup(ctx) != nil {
+		ok = false
+	}
+	return ok
 }
 func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if u == nil {

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -22,7 +21,7 @@ func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	}
 	d := sha256.Sum256([]byte("x"))
 	v := Request{1, r.nonce, hex.EncodeToString(d[:])}
-	if e = r.Authorize(v); e != nil {
+	if e = r.Authorize(); e != nil {
 		t.Fatal(e)
 	}
 	got, e := DecodeRequest(b.read)
@@ -33,17 +32,14 @@ func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	if !errors.Is(e, io.EOF) {
 		t.Fatal("want EOF")
 	}
-	assert(t, r.Authorize(v), ErrReplay)
+	assert(t, r.Authorize(), ErrReplay)
 }
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
 	r, _ := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
-	assert(t, r.Authorize(Request{1, strings.Repeat("a", 32), strings.Repeat("b", 64)}), ErrReplay)
-	d := sha256.Sum256([]byte("x"))
-	v := Request{1, r.nonce, hex.EncodeToString(d[:])}
 	ch := make(chan error, 2)
-	go func() { ch <- r.Authorize(v) }()
-	go func() { ch <- r.Authorize(v) }()
+	go func() { ch <- r.Authorize() }()
+	go func() { ch <- r.Authorize() }()
 	a, z := <-ch, <-ch
 	if (a == nil) == (z == nil) {
 		t.Fatal("exactly one authorization")
