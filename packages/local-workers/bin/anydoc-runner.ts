@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 
 async function receiveRequest(path: string): Promise<Request> {
   const socket = await connect(path)
-  try { return await readFrame<Request>(socket) } finally { socket.destroy() }
+  try { return await withTimeout(readFrame<Request>(socket), socket) } finally { socket.destroy() }
 }
 
 async function readSource(path: string, limit: number): Promise<Buffer> {
@@ -70,7 +70,9 @@ function validRequest(value: unknown): value is Request {
     && /^[a-f0-9]{64}$/.test((value as Request).sourceSha256)
     && candidateFormats.has((value as Request).format)
     && Number.isSafeInteger((value as Request).sourceBytes) && (value as Request).sourceBytes >= 0
-    && Number.isSafeInteger((value as Request).limits?.sourceBytes) && Number.isSafeInteger((value as Request).limits?.resultBytes)
+    && Number.isSafeInteger((value as Request).limits?.sourceBytes) && (value as Request).limits.sourceBytes >= (value as Request).sourceBytes && (value as Request).limits.sourceBytes <= maxSourceBytes
+    && Number.isSafeInteger((value as Request).limits?.resultBytes) && (value as Request).limits.resultBytes > 0 && (value as Request).limits.resultBytes <= maxResultBytes
+    && (value as Request).requestDigest === requestDigest(value as Request)
 }
 
 async function fail(error: string, request?: Request): Promise<void> {
@@ -80,13 +82,27 @@ async function fail(error: string, request?: Request): Promise<void> {
 
 async function send(result: Result): Promise<void> {
   const payload = Buffer.from(JSON.stringify(result))
-  if (payload.byteLength === 0 || payload.byteLength > maxResultBytes) throw new Error('result')
+  if (payload.byteLength === 0 || payload.byteLength > maxResultBytes || payload.byteLength > result.limits.resultBytes) throw new Error('result')
   const socket = await connect(resultPath)
   try {
-    await write(socket, Buffer.concat([u32(payload.byteLength), payload]))
-    const ack = await new BufferedReader(socket).read(4)
+    await withTimeout(write(socket, Buffer.concat([u32(payload.byteLength), payload])), socket)
+    const ack = await withTimeout(new BufferedReader(socket).read(4), socket)
     if (!ack.equals(Buffer.from('ACK\n'))) throw new Error('ack')
   } finally { socket.destroy() }
+}
+
+// SHA-256 encoding: "crux-anydoc-job-digest-v1\\0", u32be(version), then
+// u32be(length)+UTF-8 bytes for nonce, format, sourceSha256, followed by
+// u64be(sourceBytes), u64be(limits.sourceBytes), u64be(limits.resultBytes).
+function requestDigest(request: Request): string {
+  const hash = createHash('sha256').update('crux-anydoc-job-digest-v1\0', 'utf8')
+  hash.update(u32(request.version))
+  for (const value of [request.nonce, request.format, request.sourceSha256]) {
+    const bytes = Buffer.from(value, 'utf8')
+    hash.update(u32(bytes.byteLength)).update(bytes)
+  }
+  for (const value of [request.sourceBytes, request.limits.sourceBytes, request.limits.resultBytes]) hash.update(u64(value))
+  return hash.digest('hex')
 }
 
 function connect(path: string): Promise<Socket> {
@@ -95,6 +111,16 @@ function connect(path: string): Promise<Socket> {
     const timer = setTimeout(() => { socket.destroy(); reject(new Error('timeout')) }, timeoutMilliseconds)
     socket.once('error', reject)
     socket.connect(path, () => { clearTimeout(timer); socket.off('error', reject); resolve(socket) })
+  })
+}
+
+function withTimeout<Value>(operation: Promise<Value>, socket: Socket): Promise<Value> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { socket.destroy(); reject(new Error('timeout')) }, timeoutMilliseconds)
+    operation.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      (error: unknown) => { clearTimeout(timer); reject(error) },
+    )
   })
 }
 
@@ -130,4 +156,10 @@ function write(socket: Socket, value: Buffer): Promise<void> {
 }
 
 function u32(value: number): Buffer { const buffer = Buffer.allocUnsafe(4); buffer.writeUInt32BE(value); return buffer }
+function u64(value: number): Buffer {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error('integer')
+  const buffer = Buffer.allocUnsafe(8)
+  buffer.writeBigUInt64BE(BigInt(value))
+  return buffer
+}
 function sha256(value: Buffer): string { return createHash('sha256').update(value).digest('hex') }

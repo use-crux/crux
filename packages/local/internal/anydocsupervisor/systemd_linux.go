@@ -187,7 +187,7 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 }
 
 func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.UnixListener, error) {
-	runtime := spec.ReadOnlyPaths[1]
+	runtime := spec.ReadOnlyPaths[0]
 	token, err := transientUnitName()
 	if err != nil {
 		return "", nil, err
@@ -206,7 +206,7 @@ func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.U
 }
 
 func validBackendSpec(spec ServiceSpec) bool {
-	if len(spec.Command) != 1 || spec.Command[0] != "/usr/lib/crux/anydoc-runner" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+	if len(spec.Command) != 1 || spec.Command[0] != "/usr/lib/crux/anydoc-runner" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 1 || len(spec.BindReadOnlyPaths) != 1 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
 		return false
 	}
 	paths := append(append([]string{}, spec.ReadOnlyPaths...), spec.ReadWritePaths...)
@@ -219,6 +219,10 @@ func validBackendSpec(spec ServiceSpec) bool {
 				return false
 			}
 		}
+	}
+	parts := strings.Split(spec.BindReadOnlyPaths[0], ":")
+	if len(parts) != 2 || !validAbsolutePath(parts[0]) || parts[1] != stagedSourceTarget {
+		return false
 	}
 	return spec.MemoryMax > 0 && spec.MemorySwapMax == 0 && spec.TasksMax > 0 && spec.CPUQuotaPercent > 0 && spec.CPUQuotaPeriodUSec == CPUPeriodUSec && spec.RuntimeMax > 0 && spec.KillMode == "control-group" && spec.ProtectSystem == "strict" && spec.CPUAccounting && spec.NoNewPrivileges && spec.PrivateNetwork && spec.PrivateTmp && spec.ProtectHome
 }
@@ -243,10 +247,14 @@ type restrictAddressFamilies struct {
 }
 
 func systemdProperties(spec ServiceSpec) []DBusProperty {
+	sockets := []string{}
+	if len(spec.ReadOnlyPaths) >= 2 {
+		sockets = spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-2:]
+	}
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
-		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), spec.ReadOnlyPaths[len(spec.ReadOnlyPaths)-2:]...), Fail: false}}},
+		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}},
 		{"Environment", spec.Environment},
 		{"CPUAccounting", spec.CPUAccounting},
 		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
@@ -269,6 +277,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"ProtectSystem", spec.ProtectSystem},
 		{"ProtectHome", spec.ProtectHome},
 		{"ReadOnlyPaths", spec.ReadOnlyPaths},
+		{"BindReadOnlyPaths", spec.BindReadOnlyPaths},
 		{"ReadWritePaths", spec.ReadWritePaths},
 	}
 }
@@ -357,7 +366,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, errors.New("invalid sandbox properties")
 	}
-	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: intValue(p, "MainPID"), UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ControlGroupMembers: members, MemoryMax: memory, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) error {
@@ -416,7 +425,7 @@ func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
 	return nil
 }
 
-func (u *systemdUnit) ReceiveResult(ctx context.Context) (Result, error) {
+func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Result, error) {
 	if u.resultListener == nil || u.peers == nil {
 		return Result{}, errors.New("result unavailable")
 	}
@@ -440,6 +449,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context) (Result, error) {
 				_ = conn.SetDeadline(deadline)
 			}
 			result, decodeErr := DecodeResult(conn)
+			if decodeErr == nil && result.Request != expected {
+				decodeErr = errors.New("result capability mismatch")
+			}
 			if decodeErr == nil {
 				_, decodeErr = conn.Write([]byte("ACK\n"))
 			}

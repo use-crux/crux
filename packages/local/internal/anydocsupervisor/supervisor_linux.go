@@ -75,7 +75,29 @@ type ResultAccounting struct {
 }
 
 func validRequest(v Request) bool {
-	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= MaxFrameBytes*8 && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= MaxFrameBytes*8 && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes && v.RequestDigest == requestDigest(v.Version, v.Nonce, v.Format, v.SourceSHA256, v.SourceBytes, v.Limits)
+}
+
+// requestDigest is SHA-256 over this language-independent encoding:
+// "crux-anydoc-job-digest-v1\\x00", u32be(version), u32be(len(nonce)), nonce,
+// u32be(len(format)), format, u32be(len(sourceSha256)), sourceSha256,
+// u64be(sourceBytes), u64be(limits.sourceBytes), u64be(limits.resultBytes).
+func requestDigest(version int, nonce, format, sourceSHA256 string, sourceBytes int64, limits JobLimits) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte("crux-anydoc-job-digest-v1\x00"))
+	var word [8]byte
+	binary.BigEndian.PutUint32(word[:4], uint32(version))
+	_, _ = h.Write(word[:4])
+	for _, field := range []string{nonce, format, sourceSHA256} {
+		binary.BigEndian.PutUint32(word[:4], uint32(len(field)))
+		_, _ = h.Write(word[:4])
+		_, _ = h.Write([]byte(field))
+	}
+	for _, value := range []int64{sourceBytes, limits.SourceBytes, limits.ResultBytes} {
+		binary.BigEndian.PutUint64(word[:], uint64(value))
+		_, _ = h.Write(word[:])
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 func validFormat(format string) bool {
 	switch format {
@@ -179,7 +201,7 @@ func validResult(v Result) bool {
 		return false
 	}
 	if v.OK {
-		return v.Error == "" && len(v.Payload) > 0 && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes
+		return v.Error == "" && len(v.Payload) > 0 && int64(len(v.Payload)) <= v.Limits.ResultBytes && v.Accounting != nil && v.Accounting.SourceBytes == v.SourceBytes
 	}
 	return v.Error != "" && known(v.Error) && len(v.Payload) == 0 && v.Accounting == nil
 }
@@ -214,16 +236,16 @@ func (l Limits) Clamp() Limits {
 }
 
 type ServiceSpec struct {
-	Command, Environment, ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
-	MemoryMax, MemorySwapMax                                                     int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                int
-	RuntimeMax                                                                   time.Duration
-	KillMode, ProtectSystem                                                      string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome      bool
+	Command, Environment, ReadOnlyPaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	MemoryMax, MemorySwapMax                                                                        int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                                   int
+	RuntimeMax                                                                                      time.Duration
+	KillMode, ProtectSystem                                                                         string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                         bool
 }
 
-func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
-	paths := []string{input, runtime, tmp}
+func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, error) {
+	paths := []string{hostSource, runtime, tmp}
 	for _, p := range paths {
 		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
 			return ServiceSpec{}, closed(ErrInvalidRequest)
@@ -237,25 +259,25 @@ func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
 		}
 	}
 	l = l.Clamp()
-	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{input, runtime}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 type SandboxReport struct {
-	MainPID                                                                 int
-	ControlGroupMembers                                                     []int
-	MemoryMax, MemorySwapMax                                                int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
-	RuntimeMax                                                              time.Duration
-	KillMode, ProtectSystem                                                 string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
-	ReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies                  []string
-	CapabilityBoundingSet, AmbientCapabilities                              uint64
-	RestrictAddressFamiliesAllow                                            bool
-	DynamicUser                                                             bool
-	UID                                                                     uint64
-	PrivateUsers                                                            bool
-	ProtectProc, ProcSubset                                                 string
-	Populated                                                               bool
+	MainPID                                                                   int
+	ControlGroupMembers                                                       []int
+	MemoryMax, MemorySwapMax                                                  int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                             int
+	RuntimeMax                                                                time.Duration
+	KillMode, ProtectSystem                                                   string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome   bool
+	ReadOnlyPaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	CapabilityBoundingSet, AmbientCapabilities                                uint64
+	RestrictAddressFamiliesAllow                                              bool
+	DynamicUser                                                               bool
+	UID                                                                       uint64
+	PrivateUsers                                                              bool
+	ProtectProc, ProcSubset                                                   string
+	Populated                                                                 bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -271,7 +293,7 @@ type capabilityAuthorizer interface {
 	AuthorizeCapability(context.Context, Request) error
 }
 type resultReceiver interface {
-	ReceiveResult(context.Context) (Result, error)
+	ReceiveResult(context.Context, Request) (Result, error)
 }
 type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
 type verifiedServiceSpec interface {
@@ -280,17 +302,24 @@ type verifiedServiceSpec interface {
 type PipeFactory func() (*os.File, *os.File, error)
 type Supervisor struct {
 	backend Backend
+	stager  *Stager
 	pipe    PipeFactory
 	now     func() time.Time
 }
 
-func New(b Backend) *Supervisor { return &Supervisor{backend: b, pipe: os.Pipe, now: time.Now} }
+func New(b Backend) *Supervisor { return NewWithStager(b, NewStager("/run/crux-anydoc/input")) }
+func NewWithStager(b Backend, stager *Stager) *Supervisor {
+	return &Supervisor{backend: b, stager: stager, pipe: os.Pipe, now: time.Now}
+}
 
 type Run struct {
 	unit          Unit
 	write         *os.File
 	nonce, digest string
+	sourceSHA     string
 	sourceBytes   int64
+	limits        JobLimits
+	staged        *StagedSource
 	mu            sync.Mutex
 	stopOnce      sync.Once
 	finishOnce    sync.Once
@@ -300,22 +329,30 @@ type Run struct {
 	stop          chan struct{}
 }
 
-func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l Limits) (*Run, error) {
-	if s == nil || s.backend == nil {
+func (s *Supervisor) Start(ctx context.Context, input []byte, runtime, tmp string, l Limits) (*Run, error) {
+	if s == nil || s.backend == nil || s.stager == nil {
 		return nil, closed(ErrContainmentUnavailable)
 	}
-	spec, e := NewServiceSpec(a, b, c, l)
+	limits := JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}
+	staged, e := s.stager.Stage(input, limits.SourceBytes)
 	if e != nil {
+		return nil, closed(ErrInvalidRequest)
+	}
+	spec, e := NewServiceSpec(staged.HostPath, runtime, tmp, l)
+	if e != nil {
+		_ = staged.Cleanup()
 		return nil, e
 	}
 	read, write, e := s.pipe()
 	if e != nil {
+		_ = staged.Cleanup()
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	unit, e := s.backend.Start(ctx, spec, read)
 	if e != nil {
 		read.Close()
 		write.Close()
+		_ = staged.Cleanup()
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	if adjusted, ok := unit.(verifiedServiceSpec); ok {
@@ -323,12 +360,14 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 	}
 	if !verify(ctx, unit, spec) {
 		write.Close()
+		_ = staged.Cleanup()
 		cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	if preparer, ok := unit.(authorizationPreparer); ok {
 		if preparer.PrepareAuthorization(ctx) != nil {
 			write.Close()
+			_ = staged.Cleanup()
 			cleanup(unit)
 			return nil, closed(ErrContainmentUnavailable)
 		}
@@ -336,11 +375,14 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l 
 	var n [16]byte
 	if _, e = rand.Read(n[:]); e != nil {
 		write.Close()
+		_ = staged.Cleanup()
 		cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	d := sha256.Sum256(input)
-	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), sourceBytes: int64(len(input)), stop: make(chan struct{}), finished: make(chan struct{})}
+	nonce := hex.EncodeToString(n[:])
+	sourceSHA := hex.EncodeToString(d[:])
+	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, "docx", sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{})}
 	go r.monitor()
 	return r, nil
 }
@@ -354,7 +396,7 @@ func (r *Run) Authorize() error {
 		return closed(ErrReplay)
 	}
 	r.done = true
-	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.digest, Format: "docx", SourceBytes: r.sourceBytes, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.sourceSHA, Format: "docx", SourceBytes: r.sourceBytes, Limits: r.limits}
 	var e error
 	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -380,11 +422,12 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	if !ok {
 		return Result{}, closed(ErrContainmentUnavailable)
 	}
-	result, err := receiver.ReceiveResult(ctx)
+	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: "docx", SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	result, err := receiver.ReceiveResult(ctx, expected)
 	if err != nil {
 		return Result{}, closed(ErrWorkerCrash)
 	}
-	if result.Nonce != r.nonce || result.RequestDigest != r.digest || result.SourceSHA256 != r.digest || result.SourceBytes != r.sourceBytes || result.Format != "docx" {
+	if result.Request != expected {
 		return Result{}, closed(ErrReplay)
 	}
 	return result, nil
@@ -411,6 +454,9 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.mu.Unlock()
 		result := outcomeCode(out)
 		if !cleanup(r.unit) {
+			result = closed(ErrContainmentUnavailable)
+		}
+		if r.staged == nil || r.staged.Cleanup() != nil {
 			result = closed(ErrContainmentUnavailable)
 		}
 		r.mu.Lock()
@@ -490,7 +536,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if e != nil {
 		return false
 	}
-	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }
 func contains(a []int, x int) bool {
 	for _, v := range a {

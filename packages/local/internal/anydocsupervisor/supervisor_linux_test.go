@@ -19,12 +19,12 @@ import (
 
 func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 	b := &fakeBackend{}
-	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
 	d := sha256.Sum256([]byte("x"))
-	v := Request{Version: 1, Nonce: r.nonce, RequestDigest: hex.EncodeToString(d[:]), SourceSHA256: hex.EncodeToString(d[:]), Format: "docx", SourceBytes: 1, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
+	v := Request{Version: 1, Nonce: r.nonce, RequestDigest: requestDigest(1, r.nonce, "docx", hex.EncodeToString(d[:]), 1, JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}), SourceSHA256: hex.EncodeToString(d[:]), Format: "docx", SourceBytes: 1, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
 	if e = r.Authorize(); e != nil {
 		t.Fatal(e)
 	}
@@ -40,7 +40,7 @@ func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 }
 func TestWrongAndConcurrentAuthorize(t *testing.T) {
 	b := &fakeBackend{}
-	r, _ := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	r, _ := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	ch := make(chan error, 2)
 	go func() { ch <- r.Authorize() }()
 	go func() { ch <- r.Authorize() }()
@@ -54,15 +54,20 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	_, e := NewServiceSpec("/run/x", "/run/x/a", "/run/t", Limits{})
 	assert(t, e, ErrInvalidRequest)
 	b := &fakeBackend{bad: true}
-	_, e = New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	supervisor := newTestSupervisor(t, b)
+	_, e = supervisor.Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	assert(t, e, ErrContainmentUnavailable)
 	if !b.u.Stopped() || !b.u.Cleaned() {
 		t.Fatal("cleanup")
 	}
+	entries, readErr := os.ReadDir(supervisor.stager.root)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("start failure retained staged source: %#v, %v", entries, readErr)
+	}
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
-	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -82,7 +87,8 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 }
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	b := &fakeBackend{}
-	r, err := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	supervisor := newTestSupervisor(t, b)
+	r, err := supervisor.Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,18 +97,98 @@ func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 	if !b.u.Cleaned() {
 		t.Fatal("result failure did not clean up")
 	}
+	entries, readErr := os.ReadDir(supervisor.stager.root)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("terminal failure retained staged source: %#v, %v", entries, readErr)
+	}
 }
 func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 	if time.Duration(CPUQuotaPercent)*RuntimeCeiling/100 >= CPUCeiling {
 		t.Fatal("service quota can exceed CPU budget")
 	}
 	b := &fakeBackend{cpuErr: true}
-	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	r, e := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), "/run/run", "/run/tmp", Limits{})
 	if e != nil {
 		t.Fatal(e)
 	}
 	time.Sleep(30 * time.Millisecond)
 	assert(t, r.Finish(context.Background(), nil), ErrContainmentUnavailable)
+}
+
+func newTestSupervisor(t *testing.T, backend Backend) *Supervisor {
+	t.Helper()
+	return NewWithStager(backend, NewStager(t.TempDir()))
+}
+
+func TestRequestDigestBindsEveryJobField(t *testing.T) {
+	limits := JobLimits{SourceBytes: 1024, ResultBytes: 2048}
+	base := requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, limits)
+	if base != "4e4347a464cdcead83d42ecbfbbe90a15bc0c95cfeb01b5b9158b2c5af2220c2" {
+		t.Fatalf("fixed digest = %s", base)
+	}
+	for _, changed := range []string{
+		requestDigest(1, strings.Repeat("c", 32), "docx", strings.Repeat("b", 64), 3, limits),
+		requestDigest(1, strings.Repeat("a", 32), "odt", strings.Repeat("b", 64), 3, limits),
+		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("c", 64), 3, limits),
+		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 4, limits),
+		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, JobLimits{SourceBytes: 1025, ResultBytes: 2048}),
+		requestDigest(1, strings.Repeat("a", 32), "docx", strings.Repeat("b", 64), 3, JobLimits{SourceBytes: 1024, ResultBytes: 2049}),
+	} {
+		if changed == base {
+			t.Fatal("digest omitted a job field")
+		}
+	}
+}
+
+func TestStagerCreatesVerifiedPrivateSourceAndCleansIt(t *testing.T) {
+	stager := NewStager(t.TempDir())
+	staged, err := stager.Stage([]byte("source"), 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(staged.HostPath)
+	if err != nil || info.Mode().Perm() != 0400 || !info.Mode().IsRegular() {
+		t.Fatalf("staged source = %#v, %v", info, err)
+	}
+	if err := staged.Cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(staged.HostPath); !os.IsNotExist(err) {
+		t.Fatalf("staged source retained: %v", err)
+	}
+}
+
+func TestStagerRejectsTamperingAndUnsafeRoots(t *testing.T) {
+	root := t.TempDir()
+	stager := NewStager(root)
+	staged, err := stager.Stage([]byte("source"), 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(staged.HostPath, 0600); err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256([]byte("source"))
+	if err := verifyStagedSource(staged.HostPath, 6, hash[:], 16); err == nil {
+		t.Fatal("tampered staged source accepted")
+	}
+	if err := staged.Cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	file := t.TempDir() + "/not-a-directory"
+	if err := os.WriteFile(file, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewStager(file).Stage([]byte("x"), 1); err == nil {
+		t.Fatal("non-directory stage root accepted")
+	}
+	link := t.TempDir() + "/stage-link"
+	if err := os.Symlink(root, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewStager(link).Stage([]byte("x"), 1); err == nil {
+		t.Fatal("symlink stage root accepted")
+	}
 }
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
@@ -122,7 +208,7 @@ type fakeBackend struct {
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
 	b.read = r
-	rep := SandboxReport{MainPID: 42, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
+	rep := SandboxReport{MainPID: 42, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, BindReadOnlyPaths: s.BindReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
 	if b.bad {
 		rep.MemoryMax = 1
 	}
