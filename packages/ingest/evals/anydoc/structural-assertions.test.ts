@@ -1,15 +1,19 @@
 import { expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { IngestedDocument, ParserIdentity } from '@use-crux/core/indexing'
-import { expectedFactsForFixture, validateExpectedFacts } from './expected-facts'
+import { expectedFactsByFixture, expectedFactsForFixture, validateExpectedFacts } from './expected-facts'
 import { fixtureManifests } from './fixture-manifest'
 import {
   assertCoreProjectionFacts,
   assertParserNativeFacts,
   compareProjectionFacts,
+  pageContentHash,
   type ParserNativeFact,
   type ParserNativeFacts,
   type ExpectedFactManifest,
 } from './structural-assertions'
+import { parsePdfDocument } from '../../src/pdf'
 
 const producer: ParserIdentity = { kind: 'parser', name: 'anydoc', version: 'test', adapterVersion: '2' }
 const coordinate = { kind: 'document', documentSha256: 'a'.repeat(64) } as const
@@ -69,7 +73,7 @@ it('asserts typed presentation and spreadsheet facts through both schema-2 entry
   expect(coreResult).toMatchObject({ passed: true, admitted: true })
   const native: ParserNativeFacts = {
     outcome: { kind: 'success' },
-    facts: expected.assertions.map(({ id, role: _role, ...fact }) => ({ ...fact, assertionId: id, path: `test/${id}` })),
+    facts: expected.assertions.map(({ id, role: _role, ...fact }) => ({ ...fact, assertionId: id, factPath: `test/${id}` })),
   }
   expect(assertParserNativeFacts(expected, native)).toMatchObject({ passed: true, admitted: true })
 })
@@ -79,7 +83,7 @@ it('detects facts retained by a native parser but lost by the Core projection', 
     fixtureId: 'projection-loss', expectedOutcome: { kind: 'success' },
     assertions: [{ id: 'asset', role: 'required', kind: 'asset-count', count: 1 }],
   }
-  const native = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [{ kind: 'asset-count', count: 1, assertionId: 'asset', path: 'assets/1' }] })
+  const native = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [{ kind: 'asset-count', count: 1, assertionId: 'asset', factPath: 'assets/1' }] })
   const core = assertCoreProjectionFacts(expected, { ...document, assets: [] })
 
   expect(native).toMatchObject({ passed: true, admitted: true })
@@ -96,12 +100,12 @@ it('matches native facts by their unique assertion ID rather than their kind', (
     ],
   }
   const facts: ParserNativeFact[] = [
-    { assertionId: 'a1', path: 'Pricing/A1', kind: 'cell', sheet: 'Pricing', address: 'A1', displayedValue: 'Plan' },
-    { assertionId: 'b1', path: 'Pricing/B1', kind: 'cell', sheet: 'Pricing', address: 'B1', displayedValue: 'Price' },
+    { assertionId: 'a1', factPath: 'Pricing/A1', kind: 'cell', sheet: 'Pricing', address: 'A1', displayedValue: 'Plan' },
+    { assertionId: 'b1', factPath: 'Pricing/B1', kind: 'cell', sheet: 'Pricing', address: 'B1', displayedValue: 'Price' },
   ]
 
   expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts })).toMatchObject({ passed: true, admitted: true })
-  expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [...facts, { ...facts[1]!, path: 'duplicate' }] })).toMatchObject({ passed: false, admitted: false })
+  expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [...facts, { ...facts[1]!, factPath: 'duplicate' }] })).toMatchObject({ passed: false, admitted: false })
   expect(assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: facts.slice(0, 1) })).toMatchObject({ passed: false, admitted: false })
 })
 
@@ -123,6 +127,44 @@ it('keeps presentation notes scoped to their owning slide', () => {
   expect(assertCoreProjectionFacts(expected, swapped)).toMatchObject({ passed: false, admitted: false })
 })
 
+it('binds provenance to one fact path, full coordinate, and producer ownership', () => {
+  const expected: ExpectedFactManifest = {
+    fixtureId: 'provenance', expectedOutcome: { kind: 'success' },
+    assertions: [{ id: 'slide-1-provenance', role: 'required', kind: 'provenance', path: 'blocks/1', coordinate: { kind: 'slide', slide: 1 }, producer }],
+  }
+  const nativeFact: ParserNativeFact = { assertionId: 'slide-1-provenance', factPath: 'blocks/1', path: 'blocks/1', kind: 'provenance', coordinate: { kind: 'slide', slide: 1 }, producer }
+  const detached = { ...document, blocks: [{ ...(document.blocks[0] as Extract<typeof document.blocks[number], { kind: 'slide' }>), coordinate: { kind: 'document' as const, documentSha256: 'c'.repeat(64) } }, ...document.blocks.slice(1)] }
+
+  const nativeResult = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [nativeFact] })
+  expect(nativeResult.assertions.filter((assertion) => !assertion.passed)).toEqual([])
+  expect(nativeResult).toMatchObject({ passed: true })
+  expect(assertCoreProjectionFacts(expected, document)).toMatchObject({ passed: true })
+  expect(assertCoreProjectionFacts(expected, detached)).toMatchObject({ passed: false, admitted: false })
+})
+
+it('pins every canonical PDF page payload and rejects corruption on pages 2 through 8', async () => {
+  const pdf = await parsePdfDocument({ bytes: await readFile(join(import.meta.dirname, '../../__tests__/fixtures/layout-aware-mixed.pdf')) })
+  const expected = expectedFactsByFixture['pdf-control-v1']!
+  const hashes = expected.assertions.filter((assertion) => assertion.kind === 'page-content-hash')
+  expect(hashes).toHaveLength(8)
+  for (const assertion of hashes) {
+    if (assertion.kind !== 'page-content-hash') continue
+    expect(pageContentHash(pdf, assertion.page)).toBe(assertion.sha256)
+  }
+  for (let page = 2; page <= 8; page += 1) {
+    const corrupted = {
+      ...pdf,
+      blocks: pdf.blocks.map((block) => block.kind !== 'page' || block.page !== page ? block : {
+        ...block,
+        blocks: block.blocks.length ? [{ ...block.blocks[0]!, id: `${block.blocks[0]!.id}:corrupt` }, ...block.blocks.slice(1)] : [{
+          id: 'corrupt', kind: 'text' as const, role: 'paragraph' as const, text: 'corrupt', coordinate: { kind: 'page' as const, page }, headingPath: [], producer: pdf.producer, inlines: [],
+        }],
+      }),
+    }
+    expect(pageContentHash(corrupted, page)).not.toBe(hashes[page - 1]!.sha256)
+  }
+})
+
 it('never admits a success without a document or required assertions, and ignores informational failures', () => {
   const noFacts: ExpectedFactManifest = { fixtureId: 'empty', expectedOutcome: { kind: 'success' }, assertions: [] }
   expect(assertParserNativeFacts(noFacts, { outcome: { kind: 'success' }, facts: [] })).toMatchObject({ passed: false, admitted: false })
@@ -142,14 +184,14 @@ it('deeply bounds and canonically orders retained assertion evidence', () => {
     fixtureId: 'bounded', expectedOutcome: { kind: 'success' },
     assertions: [{ id: 'asset', role: 'required', kind: 'asset-count', count: 1 }],
   }
-  const actual = { kind: 'asset-count', count: 1, assertionId: 'asset', path: 'assets/1', z: { deeply: { nested: { value: 'x'.repeat(4_000) } } }, a: Array.from({ length: 30 }, () => 'y'.repeat(400)) } as unknown as ParserNativeFact
+  const actual = { kind: 'asset-count', count: 1, assertionId: 'asset', factPath: 'assets/1', z: { deeply: { nested: { value: 'x'.repeat(4_000) } } }, a: Array.from({ length: 30 }, () => 'y'.repeat(400)) } as unknown as ParserNativeFact
   const result = assertParserNativeFacts(expected, { outcome: { kind: 'success' }, facts: [actual] })
   const evidence = result.assertions.find((assertion) => assertion.id === 'asset')?.actual
 
   expect(evidence).toMatchObject({ a: expect.any(Array), z: expect.any(Object) })
   expect(JSON.stringify(evidence)).toContain('truncated')
   expect(JSON.stringify(evidence).length).toBeLessThan(8_000)
-  expect(Object.keys(evidence as Record<string, unknown>)).toEqual(['a', 'assertionId', 'count', 'kind', 'path', 'z'])
+  expect(Object.keys(evidence as Record<string, unknown>)).toEqual(['a', 'assertionId', 'count', 'factPath', 'kind', 'z'])
 })
 
 it('fails closed for missing or hostile fixtures and bounds assertion evidence', () => {

@@ -1,4 +1,5 @@
-import type { DocumentBlock, IngestedDocument, ListBlock, SourceCoordinate, TableBlock, TextBlock } from '@use-crux/core/indexing'
+import { createHash } from 'node:crypto'
+import type { DocumentBlock, DocumentProducer, IngestedDocument, ListBlock, SourceCoordinate, TableBlock, TextBlock } from '@use-crux/core/indexing'
 
 export type AssertionRole = 'required' | 'informational'
 
@@ -17,6 +18,7 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-note'; readonly slide: number; readonly text: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'asset-count'; readonly count: number }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'coordinate-kinds'; readonly kinds: readonly SourceCoordinate['kind'][] }
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'provenance'; readonly path: string; readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-order'; readonly slides: readonly number[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-boundary'; readonly slide: number; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'sheet-order'; readonly sheets: readonly string[] }
@@ -26,6 +28,7 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'logical-row-bounds'; readonly start: number; readonly end: number }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'page-order'; readonly pages: readonly number[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'page-block'; readonly page: number; readonly block: number; readonly text: string }
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'page-content-hash'; readonly page: number; readonly sha256: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'metadata'; readonly key: string; readonly value: string | number | boolean }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'parser-downgrade'; readonly from: string; readonly to: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'no-parser-downgrade' }
@@ -56,7 +59,7 @@ export type ParserNativeFact = WithoutIdentity<StructuralAssertion> & {
   /** Exactly one native fact must identify each expected assertion. */
   readonly assertionId: string
   /** Parser-owned structural location, retained for duplicate-kind disambiguation. */
-  readonly path: string
+  readonly factPath: string
 }
 
 export interface ParserNativeFacts {
@@ -71,7 +74,7 @@ export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: 
   const completeIdSet = uniqueIds.size === actual.facts.length
     && actual.facts.length === expectedIds.length
     && expectedIds.every((id) => uniqueIds.has(id))
-  const results = [outcomeResult(expected.expectedOutcome, actual.outcome), result('native-fact-ids', 'required', completeIdSet, expectedIds, actual.facts.map((fact) => ({ assertionId: fact.assertionId, path: fact.path })))]
+  const results = [outcomeResult(expected.expectedOutcome, actual.outcome), result('native-fact-ids', 'required', completeIdSet, expectedIds, actual.facts.map((fact) => ({ assertionId: fact.assertionId, path: fact.factPath })))]
   for (const assertion of expected.assertions) {
     const matches = actual.facts.filter((fact) => fact.assertionId === assertion.id)
     const native = matches[0]
@@ -131,6 +134,7 @@ function assertFact(assertion: StructuralAssertion, document: IngestedDocument):
     case 'slide-note': return compare(assertion, document.blocks.filter(isSlide).find((slide) => slide.slide === assertion.slide)?.notes.map((note) => note.text), [assertion.text])
     case 'asset-count': return compare(assertion, document.assets.length, assertion.count)
     case 'coordinate-kinds': return compare(assertion, coordinateKinds(document), assertion.kinds)
+    case 'provenance': return provenanceResult(assertion, document)
     case 'slide-order': return compare(assertion, document.blocks.filter(isSlide).map((slide) => slide.slide), assertion.slides)
     case 'slide-boundary': return compare(assertion, slideText(document, assertion.slide), assertion.text)
     case 'sheet-order': return compare(assertion, document.blocks.filter(isSheet).sort((a, b) => a.index - b.index).map((sheet) => sheet.sheet), assertion.sheets)
@@ -140,6 +144,7 @@ function assertFact(assertion: StructuralAssertion, document: IngestedDocument):
     case 'logical-row-bounds': return logicalBoundsResult(assertion, document)
     case 'page-order': return compare(assertion, document.blocks.filter(isPage).map((page) => page.page), assertion.pages)
     case 'page-block': return compare(assertion, pageBlockText(document, assertion.page, assertion.block), assertion.text)
+    case 'page-content-hash': return compare(assertion, pageContentHash(document, assertion.page), assertion.sha256)
     case 'metadata': return compare(assertion, document.metadata[assertion.key], assertion.value)
     case 'parser-downgrade': return compare(assertion, document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade' && diagnostic.from === assertion.from && diagnostic.to === assertion.to), true)
     case 'no-parser-downgrade': return compare(assertion, document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade'), false)
@@ -151,6 +156,25 @@ function cellResult(assertion: Extract<StructuralAssertion, { kind: 'cell' }>, d
   const actual = cell && { displayedValue: cell.displayedValue ?? '', ...(cell.formula ? { formula: cell.formula } : {}), ...(cell.mergeRange ? { mergeRange: cell.mergeRange } : {}) }
   const expected = { displayedValue: assertion.displayedValue, ...(assertion.formula ? { formula: assertion.formula } : {}), ...(assertion.mergeRange ? { mergeRange: assertion.mergeRange } : {}) }
   return result(assertion.id, assertion.role, equal(actual, expected), expected, actual)
+}
+
+function provenanceResult(assertion: Extract<StructuralAssertion, { kind: 'provenance' }>, document: IngestedDocument): AssertionResult {
+  const actual = coreProvenance(document, assertion.path)
+  const expected = { coordinate: assertion.coordinate, producer: assertion.producer }
+  return result(assertion.id, assertion.role, equal(actual, expected), expected, actual)
+}
+
+/** Stable projection paths make provenance assertions independent of generated schema IDs. */
+function coreProvenance(document: IngestedDocument, path: string): { readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer } | undefined {
+  const asset = /^assets\/(\d+)$/.exec(path)
+  if (asset) {
+    const value = document.assets[Number(asset[1]) - 1]
+    return value && { coordinate: value.coordinate, producer: value.producer }
+  }
+  const block = /^blocks\/(\d+)$/.exec(path)
+  if (!block) return undefined
+  const value = document.blocks[Number(block[1]) - 1]
+  return value && { coordinate: value.coordinate, producer: value.producer }
 }
 
 function logicalBoundsResult(assertion: Extract<StructuralAssertion, { kind: 'logical-row-bounds' }>, document: IngestedDocument): AssertionResult {
@@ -194,6 +218,12 @@ function csvMatrix(document: IngestedDocument): readonly (readonly string[])[] |
 function pageBlockText(document: IngestedDocument, page: number, block: number): string | undefined {
   const candidate = document.blocks.filter(isPage).find((item) => item.page === page)?.blocks[block - 1]
   return candidate?.kind === 'text' ? candidate.text : undefined
+}
+
+/** Hashes the complete normalized block payload, including exact block coordinates and explicit empty pages. */
+export function pageContentHash(document: IngestedDocument, page: number): string | undefined {
+  const value = document.blocks.filter(isPage).find((item) => item.page === page)
+  return value ? createHash('sha256').update(JSON.stringify(value.blocks)).digest('hex') : undefined
 }
 
 function slideText(document: IngestedDocument, slide: number): readonly string[] | undefined {
@@ -254,9 +284,15 @@ function compare(assertion: StructuralAssertion, actual: unknown, expected: unkn
 
 function failed(id: string, role: AssertionRole, expected: unknown, actual: unknown): AssertionResult { return result(id, role, false, expected, actual) }
 function result(id: string, role: AssertionRole, passed: boolean, expected: unknown, actual: unknown): AssertionResult { return { id, role, passed, expected: bounded(expected), actual: bounded(actual) } }
-function equal(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right) }
+function equal(left: unknown, right: unknown): boolean { return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right)) }
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonical(item)]))
+  return value
+}
 function withoutIdentity(assertion: StructuralAssertion): WithoutIdentity<StructuralAssertion> { const { id: _id, role: _role, ...fact } = assertion; return fact as WithoutIdentity<StructuralAssertion> }
-function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { assertionId: _id, path: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
+function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { assertionId: _id, factPath: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
 type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role'> : never
 
 const MAX_EVIDENCE_DEPTH = 3
