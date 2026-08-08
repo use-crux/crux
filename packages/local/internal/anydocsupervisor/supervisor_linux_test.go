@@ -24,7 +24,7 @@ func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
 		t.Fatal(e)
 	}
 	d := sha256.Sum256([]byte("x"))
-	v := Request{Version: 1, Nonce: r.nonce, RequestDigest: hex.EncodeToString(d[:]), SourceSHA256: hex.EncodeToString(d[:]), Format: "docx", SourceBytes: 1, Limits: Limits{}.Clamp()}
+	v := Request{Version: 1, Nonce: r.nonce, RequestDigest: hex.EncodeToString(d[:]), SourceSHA256: hex.EncodeToString(d[:]), Format: "docx", SourceBytes: 1, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
 	if e = r.Authorize(); e != nil {
 		t.Fatal(e)
 	}
@@ -77,7 +77,7 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 	binary.BigEndian.PutUint32(oversized, MaxFrameBytes+1)
 	_, err := DecodeResult(bytes.NewReader(oversized))
 	assert(t, err, ErrInvalidFrame)
-	err = EncodeResult(bytes.NewBuffer(nil), Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx"}, OK: true, Error: ErrTimeout})
+	err = EncodeResult(bytes.NewBuffer(nil), Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}, OK: true, Error: ErrTimeout})
 	assert(t, err, ErrInvalidRequest)
 }
 func TestExecuteFinishesAfterResultFailure(t *testing.T) {

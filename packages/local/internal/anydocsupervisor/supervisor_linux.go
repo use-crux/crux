@@ -51,13 +51,17 @@ func closed(code ErrorCode) error        { return &SupervisorError{Code: code} }
 var errCPUAccounting = errors.New("cpu accounting unavailable")
 
 type Request struct {
-	Version       int    `json:"version"`
-	Nonce         string `json:"nonce"`
-	RequestDigest string `json:"requestDigest"`
-	Format        string `json:"format"`
-	SourceSHA256  string `json:"sourceSha256"`
-	SourceBytes   int64  `json:"sourceBytes"`
-	Limits        Limits `json:"limits"`
+	Version       int       `json:"version"`
+	Nonce         string    `json:"nonce"`
+	RequestDigest string    `json:"requestDigest"`
+	Format        string    `json:"format"`
+	SourceSHA256  string    `json:"sourceSha256"`
+	SourceBytes   int64     `json:"sourceBytes"`
+	Limits        JobLimits `json:"limits"`
+}
+type JobLimits struct {
+	SourceBytes int64 `json:"sourceBytes"`
+	ResultBytes int64 `json:"resultBytes"`
 }
 type Result struct {
 	Request
@@ -71,7 +75,7 @@ type ResultAccounting struct {
 }
 
 func validRequest(v Request) bool {
-	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= MaxFrameBytes*8 && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes
 }
 func validFormat(format string) bool {
 	switch format {
@@ -350,7 +354,7 @@ func (r *Run) Authorize() error {
 		return closed(ErrReplay)
 	}
 	r.done = true
-	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.digest, Format: "docx", SourceBytes: r.sourceBytes, Limits: Limits{}.Clamp()}
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.digest, Format: "docx", SourceBytes: r.sourceBytes, Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}
 	var e error
 	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)

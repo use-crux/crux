@@ -154,7 +154,7 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	go func() {
-		done <- u.AuthorizeCapability(ctx, Request{Version: 1, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: Limits{}.Clamp()})
+		done <- u.AuthorizeCapability(ctx, Request{Version: 1, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}})
 	}()
 	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -191,7 +191,7 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := EncodeResult(conn, Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx"}, OK: true, Payload: []byte("ok"), Accounting: &ResultAccounting{}}); err != nil {
+	if err := EncodeResult(conn, Result{Request: Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), RequestDigest: strings.Repeat("b", 64), SourceSHA256: strings.Repeat("c", 64), Format: "docx", Limits: JobLimits{SourceBytes: MaxFrameBytes * 8, ResultBytes: MaxFrameBytes}}, OK: true, Payload: []byte("ok"), Accounting: &ResultAccounting{}}); err != nil {
 		t.Fatal(err)
 	}
 	ack := make([]byte, 4)
