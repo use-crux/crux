@@ -105,7 +105,7 @@ function tablePart(table: TableBlock, blockIds: readonly string[], sheet: SheetB
   return {
     id: table.id,
     kind: 'table',
-    content: rows.map((row) => row.join(' | ')).join('\n'),
+    content: rows.map((row) => `| ${row.join(' | ')} |`).join('\n'),
     columns: [...table.columns],
     rows,
     ...(spreadsheet ? { sheetName: spreadsheet.sheet, spreadsheet } : {}),

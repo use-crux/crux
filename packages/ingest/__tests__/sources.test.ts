@@ -25,6 +25,11 @@ const removedOcrOptions = {
 } satisfies ParserOptions
 void removedOcrOptions
 
+const mediaProducers = {
+  describe: { kind: 'application-operation' as const, operation: 'media.describe' as const, identity: 'test:describe', version: '1' },
+  transcribe: { kind: 'application-operation' as const, operation: 'media.transcribe' as const, identity: 'test:transcribe', version: '1' },
+} satisfies NonNullable<ParserOptions['mediaProducers']>
+
 if (false) {
   const asset = {} as Asset
   // @ts-expect-error Asset sources require an explicit sourceId.
@@ -55,12 +60,12 @@ describe('@use-crux/ingest structured sources', () => {
       providerMetadata: { secret: 'provider-secret' }, raw: { secret: 'raw-secret' }, execution: { kind: 'native' as const, calls: 1 },
     }))
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe } }).documents())
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe }, mediaProducers }).documents())
 
     expect(transcribe).toHaveBeenCalledTimes(1)
     expect(document.parts).toMatchObject([
-      { content: 'Hello', sourceLocation: { type: 'time', unit: 'seconds', start: 0, end: 0.5 } },
-      { content: 'world', sourceLocation: { type: 'time', unit: 'seconds', start: 0.5, end: 1 } },
+      { content: 'Hello', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 0, end: 0.5 }, producer: mediaProducers.transcribe } },
+      { content: 'world', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 0.5, end: 1 }, producer: mediaProducers.transcribe } },
     ])
     expect(document.source).toEqual({ path, mediaType: 'audio/wav' })
     expect(document.metadata).toMatchObject({ format: 'audio', parser: 'audio', language: 'en', durationInSeconds: 1 })
@@ -80,7 +85,7 @@ describe('@use-crux/ingest structured sources', () => {
       ref: { uri: 'asset://meeting' },
     }
     const [document] = await collect(fileSource(stored, {
-      namespace: 'kb', sourceId: 'meeting', media: { transcribe },
+      namespace: 'kb', sourceId: 'meeting', media: { transcribe }, mediaProducers,
     }).documents())
 
     expect(document.parts).toMatchObject([{ id: 'audio:text:1', content: 'Full transcript' }])
@@ -92,7 +97,7 @@ describe('@use-crux/ingest structured sources', () => {
   it('does not retain signed audio URLs after fetching', async () => {
     const transcribe = vi.fn(async () => ({ text: 'Remote transcript', segments: [], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 } }))
     const [document] = await collect(urlSource('https://example.com/meeting.wav?signature=secret', {
-      namespace: 'kb', media: { transcribe },
+      namespace: 'kb', media: { transcribe }, mediaProducers,
       fetch: async () => new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]), {
         headers: { 'content-type': 'audio/wav' },
       }),
@@ -133,15 +138,15 @@ describe('@use-crux/ingest structured sources', () => {
     }))
 
     const [document] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'demo', media: { describe, transcribe },
+      namespace: 'kb', sourceId: 'demo', media: { describe, transcribe }, mediaProducers,
     }).documents())
 
     expect(describe.mock.calls[0]?.[0].messages[0]).toMatchObject({
       content: [{ type: 'text' }, { type: 'video', mediaType: 'video/mp4' }],
     })
     expect(document.parts).toMatchObject([
-      { id: 'video:visual:1', content: 'A chart is shown.' },
-      { id: 'video:soundtrack:1', content: 'Revenue doubled.', sourceLocation: { type: 'time', start: 2, end: 4 } },
+      { content: 'A chart is shown.', evidence: { coordinate: { kind: 'document' }, producer: mediaProducers.describe } },
+      { content: 'Revenue doubled.', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 2, end: 4 }, producer: mediaProducers.transcribe } },
     ])
     expect(document.metadata).toMatchObject({ format: 'video', parser: 'video', derivationMode: 'visual-and-soundtrack' })
     expect(document.warnings).toEqual([{ code: 'parser_warning', message: 'Video derivation used visual and soundtrack evidence.' }])
@@ -157,6 +162,7 @@ describe('@use-crux/ingest structured sources', () => {
     const docs = await collect(fileSource(path, {
       namespace: 'kb',
       media,
+      mediaProducers,
     }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
@@ -164,7 +170,12 @@ describe('@use-crux/ingest structured sources', () => {
       role: 'user',
       content: [{ type: 'text' }, { type: 'image', mediaType: 'image/png' }],
     })
-    expect(docs[0].parts).toEqual([{ id: 'image:text:1', kind: 'text', role: 'paragraph', content: 'Revenue rose from 10 to 20.' }])
+    expect(docs[0].parts).toMatchObject([{
+      kind: 'text',
+      role: 'paragraph',
+      content: 'Revenue rose from 10 to 20.',
+      evidence: { coordinate: { kind: 'document' }, producer: mediaProducers.describe },
+    }])
   })
 
   it('accepts explicitly identified Assets without retaining their bytes', async () => {
@@ -176,7 +187,7 @@ describe('@use-crux/ingest structured sources', () => {
       filename: 'chart.png',
     }
     const [document] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'asset:chart', media: { describe },
+      namespace: 'kb', sourceId: 'asset:chart', media: { describe }, mediaProducers,
     }).documents())
 
     expect(document.sourceId).toBe('asset:chart')
@@ -203,8 +214,8 @@ describe('@use-crux/ingest structured sources', () => {
     await writeFile(visualPath, makePdf(''))
     const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'Diagram page.' }))
 
-    await collect(fileSource(textPath, { namespace: 'kb', media: { describe } }).documents())
-    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { describe } }).documents())
+    await collect(fileSource(textPath, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
+    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
     expect(describe.mock.calls[0]?.[0].messages[0].content).toMatchObject([
@@ -212,7 +223,7 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'file', mediaType: 'application/pdf' },
     ])
     expect(visual[0].parts).toMatchObject([
-      { id: 'pdf:page:1:visual', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: 'Diagram page.' },
+      { kind: 'text', content: 'Diagram page.', evidence: { coordinate: { kind: 'page', page: 1 }, producer: mediaProducers.describe } },
     ])
     expect(visual[0].content).toContain('Diagram page.')
     expect(visual[0].warnings).toBeUndefined()
@@ -228,12 +239,12 @@ describe('@use-crux/ingest structured sources', () => {
       mediaType: 'audio/wav', filename: 'meeting.wav', ref: { uri: 'asset://meeting' },
     }
     const [pdfDocument] = await collect(fileSource(pdf, {
-      namespace: 'kb', sourceId: 'visual-pdf', media: { describe: async () => ({ text: 'Architecture diagram' }) },
+      namespace: 'kb', sourceId: 'visual-pdf', media: { describe: async () => ({ text: 'Architecture diagram' }) }, mediaProducers,
     }).documents())
     const [audioDocument] = await collect(fileSource(audio, {
       namespace: 'kb', sourceId: 'meeting-audio', media: { transcribe: async () => ({
         text: 'Launch discussion', segments: [{ text: 'Launch discussion', startSecond: 1, endSecond: 2.5 }], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 },
-      }) },
+      }) }, mediaProducers,
     }).documents())
     const records = inMemoryRecordStore()
     const searchStore = inMemorySearchStore()
@@ -252,14 +263,14 @@ describe('@use-crux/ingest structured sources', () => {
     await expect(search.retrieve('diagram', { limit: 1 })).resolves.toMatchObject([{
       source: {
         id: 'visual-pdf', assetRef: { uri: 'asset://diagram' }, mediaType: 'application/pdf',
-        location: { type: 'page', pageNumber: 1 },
       },
+      evidence: { coordinate: { kind: 'page', page: 1 }, producer: mediaProducers.describe },
     }])
     await expect(search.retrieve('launch', { limit: 1 })).resolves.toMatchObject([{
       source: {
         id: 'meeting-audio', assetRef: { uri: 'asset://meeting' }, mediaType: 'audio/wav',
-        location: { type: 'time', unit: 'seconds', start: 1, end: 2.5 },
       },
+      evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 1, end: 2.5 }, producer: mediaProducers.transcribe },
     }])
   })
 

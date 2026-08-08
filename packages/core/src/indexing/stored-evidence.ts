@@ -233,8 +233,8 @@ function sourceCoordinate(value: unknown, path: string): SourceCoordinate {
   }
   if (record.kind === 'time') {
     exact(record, path, ['kind', 'unit', 'start', 'end'])
-    const start = nonNegative(record.start, `${path}.start`)
-    const end = nonNegative(record.end, `${path}.end`)
+    const start = nonNegativeNumber(record.start, `${path}.start`)
+    const end = nonNegativeNumber(record.end, `${path}.end`)
     if (record.unit !== 'seconds' || end < start) {
       fail(path, 'must be an ordered seconds interval')
     }
@@ -319,6 +319,12 @@ function positive(value: unknown, path: string): number {
 function nonNegative(value: unknown, path: string): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     fail(path, 'must be a non-negative integer')
+  }
+  return value
+}
+function nonNegativeNumber(value: unknown, path: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    fail(path, 'must be a non-negative number')
   }
   return value
 }

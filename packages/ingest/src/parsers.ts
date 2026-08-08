@@ -63,16 +63,27 @@ export async function parseDocument(input: {
 
   return await parseObservation.withContext(async () => {
     try {
-      const schema2 = await parseSchema2Document(input, parser, warnings)
-      if (schema2) {
-        const document = normalizeIngestedDocument(schema2, {
+      const schema2Result = await parseSchema2Document(input, parser, warnings)
+      if (schema2Result) {
+        const metadata = {
+          ...(input.metadata ?? {}),
+          ...schema2Result.document.metadata,
+          format: input.format,
+          parser: parser.name,
+        }
+        const title = schema2Result.title ?? schema2Title(schema2Result.document.metadata) ?? input.title
+        const document = normalizeIngestedDocument(schema2Result.document, {
           namespace: input.namespace,
           sourceId: input.sourceId,
           ...(input.source ? { source: input.source } : {}),
-          ...(input.title ? { title: input.title } : {}),
+          ...(title ? { title } : {}),
         })
-        parseObservation.end({ partCount: document.parts?.length ?? 0, warningCount: schema2.diagnostics.length })
-        return document as IngestDocument
+        parseObservation.end({ partCount: document.parts?.length ?? 0, warningCount: schema2Result.document.diagnostics.length })
+        return {
+          ...document,
+          metadata,
+          ...(warnings.length ? { warnings } : {}),
+        } as IngestDocument
       }
       const parsed = await parser.parse(
         {
@@ -124,6 +135,10 @@ export async function parseDocument(input: {
   })
 }
 
+function schema2Title(metadata: Readonly<Record<string, string | number | boolean>>): string | undefined {
+  return typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title : undefined
+}
+
 async function parseSchema2Document(
   input: Parameters<typeof parseDocument>[0],
   parser: IngestParser,
@@ -134,38 +149,45 @@ async function parseSchema2Document(
     if (!parser.schema2) {
       throw new IngestEvidenceRequiredError(parser.name)
     }
-    return validateIngestedDocument(await parser.schema2.parse(
-      parseInput(input),
-      { media: input.options?.media, warn: (warning) => warnings.push(warning) },
-    ))
+    return {
+      document: validateIngestedDocument(await parser.schema2.parse(
+        parseInput(input),
+        { media: input.options?.media, warn: (warning) => warnings.push(warning) },
+      )),
+    }
   }
-  const mediaType = input.contentType?.split(';', 1)[0]
+  const mediaType = input.contentType?.split(';', 1)[0] ?? input.source?.mediaType
   if (input.format === 'csv') {
-    return parseCsvDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+    return { document: await parseCsvDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
   }
   if (input.format === 'docx') {
-    return parseDocxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+    return { document: await parseDocxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
   }
   if (input.format === 'xlsx') {
-    return parseXlsxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+    return { document: await parseXlsxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
   }
   if (input.format === 'pdf') {
-    return parsePdfDocument({
-      bytes: input.bytes,
-      ...(mediaType ? { mediaType } : {}),
-      media: input.options?.media,
-      ...(input.options?.mediaProducers ? { mediaProducers: input.options.mediaProducers } : {}),
-    })
+    return {
+      document: await parsePdfDocument({
+        bytes: input.bytes,
+        ...(mediaType ? { mediaType } : {}),
+        media: input.options?.media,
+        ...(input.options?.mediaProducers ? { mediaProducers: input.options.mediaProducers } : {}),
+      }),
+    }
   }
   const parsed = await parser.parse(parseInput(input), { media: input.options?.media, warn: (warning) => warnings.push(warning) })
   warnings.push(...(parsed.warnings ?? []))
-  return adaptBuiltInParseResult({
-    bytes: input.bytes,
-    format: input.format,
-    result: parsed,
-    ...(input.contentType ? { mediaType: input.contentType.split(';', 1)[0] } : {}),
-    options: input.options,
-  })
+  return {
+    document: adaptBuiltInParseResult({
+      bytes: input.bytes,
+      format: input.format,
+      result: parsed,
+      ...(mediaType ? { mediaType } : {}),
+      options: input.options,
+    }),
+    ...(parsed.title ? { title: parsed.title } : {}),
+  }
 }
 
 function parseInput(input: Parameters<typeof parseDocument>[0]): ParseInput {
