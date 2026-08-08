@@ -10,6 +10,7 @@ import { expandRelations, knowledgeBase, retrieve } from '../../src/retrieval'
 import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
 import { inMemoryStorage, type ExactFilter, type JsonObject, type SearchQuery } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk, schema2TextRecord } from '../fixtures/schema2-stored-evidence'
 
 const schema = z.object({
   status: z.enum(['open', 'closed']),
@@ -152,19 +153,18 @@ async function writeUnindexedSearchHit(
   metadata: Record<string, unknown>,
 ): Promise<void> {
   const key = indexedChunkKey('docs', 'docs', sourceId, 'main')
-  await storage.records.put(key, {
-    _cruxRecordType: 'chunk',
-    namespace: 'docs',
-    sourceId,
-    chunkId: 'main',
+  await storage.records.put(key, schema2TextRecord({
+    indexerId: 'docs',
     generationId: 'manual',
-    active: true,
-    ordinal: 0,
-    content: sourceId,
-    metadata: metadata as JsonObject,
-    createdAt: 1,
-    updatedAt: 1,
-  })
+    chunk: {
+      namespace: 'docs',
+      sourceId,
+      chunkId: 'main',
+      ordinal: 0,
+      content: sourceId,
+      metadata: metadata as JsonObject,
+    },
+  }))
   await storage.search!.upsert([{
     key,
     dense: [1, 0],
@@ -213,14 +213,14 @@ function chunk(input: {
   readonly content: string
   readonly metadata: Record<string, unknown>
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: input.namespace ?? 'docs',
     sourceId: input.sourceId,
     chunkId: 'main',
     ordinal: 0,
     content: input.content,
     metadata: input.metadata,
-  }
+  })
 }
 
 function chunkRef(sourceId: string, chunkId: string): KnowledgeRef {

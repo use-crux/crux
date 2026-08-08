@@ -3,6 +3,7 @@ import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
 import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { SearchHit, SearchStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('indexed knowledge store', () => {
   it('persists only validated allowlisted source facts outside search metadata', async () => {
@@ -10,7 +11,7 @@ describe('indexed knowledge store', () => {
     const search = inMemorySearchStore()
     const records = createIndexedKnowledgeStore({ indexerId: 'docs', namespace: 'kb', records: data, search })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [{
         namespace: 'kb', sourceId: 'visual', chunkId: 'page-2', ordinal: 0, content: 'diagram',
         metadata: { topic: 'architecture', sourceUrl: 'https://evil.example/signed?token=secret' },
@@ -45,7 +46,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -71,7 +72,7 @@ describe('indexed knowledge store', () => {
       replaceSources: true,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -124,7 +125,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -145,7 +146,7 @@ describe('indexed knowledge store', () => {
     expect(hit).toMatchObject({ provenance: { matches: [{ kind: 'dense', rank: 1, score: 1 }] } })
   })
 
-  it('retains fused SearchStore matches while preserving stored provenance', async () => {
+  it('retains fused SearchStore matches on schema-2 evidence hits', async () => {
     const data = inMemoryRecordStore()
     const backingSearch = inMemorySearchStore()
     let capturedSearchHit: SearchHit | undefined
@@ -167,7 +168,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -176,7 +177,6 @@ describe('indexed knowledge store', () => {
           ordinal: 0,
           content: 'alpha beta',
           metadata: {},
-          provenance: { confidence: 'exact', sourceLocations: [{ type: 'page', pageNumber: 3 }] },
         },
       ],
       parents: [],
@@ -196,8 +196,6 @@ describe('indexed knowledge store', () => {
 
     expect(hit).toMatchObject({
       provenance: {
-        confidence: 'exact',
-        sourceLocations: [{ type: 'page', pageNumber: 3 }],
         matches: [
           { kind: 'dense', rank: 1, score: 1 },
           { kind: 'sparse', rank: 1, score: 1 },
@@ -231,7 +229,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -265,7 +263,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -308,7 +306,7 @@ describe('indexed knowledge store', () => {
       records: data,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [],
       parents: [
         {
@@ -365,7 +363,7 @@ describe('indexed knowledge store', () => {
       records: data,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -399,7 +397,7 @@ describe('indexed knowledge store', () => {
       search,
     })
 
-    await records.persistGeneration({
+    await persistSchema2Generation(records, {
       chunks: [
         {
           namespace: 'kb',
@@ -423,3 +421,16 @@ describe('indexed knowledge store', () => {
     })
   })
 })
+
+async function persistSchema2Generation(
+  records: ReturnType<typeof createIndexedKnowledgeStore>,
+  input: Parameters<ReturnType<typeof createIndexedKnowledgeStore>['persistGeneration']>[0],
+): Promise<void> {
+  await records.persistGeneration({
+    ...input,
+    chunks: input.chunks.map((value) => {
+      const { evidence: _, ...chunk } = value
+      return schema2TextChunk(chunk)
+    }),
+  })
+}
