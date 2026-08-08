@@ -446,6 +446,7 @@ function tableEvidenceOrigin(
   }
   return {
     coordinate: part.evidence.coordinate,
+    producer: part.evidence.producer,
     blockIds: [...part.evidence.blockIds.slice(0, 2), ...indexes.flatMap((index) => rows[index]?.map((cell) => cell.id) ?? [])],
   }
 }
@@ -590,7 +591,7 @@ export function chunkDocumentParentChild(
         },
         ...(childProvenance ? { provenance: childProvenance } : {}),
         ...(document.evidence && sourceEvidence
-          ? { evidence: createStoredEvidence({ document: document.evidence, origin: { coordinate: sourceEvidence.coordinate, blockIds: sourceEvidence.blockIds }, chunkId, normalizedContent: slice.content, chunkerVersion: 'parent-child:2' }) }
+          ? { evidence: createStoredEvidence({ document: document.evidence, origin: { coordinate: sourceEvidence.coordinate, producer: sourceEvidence.producer, blockIds: sourceEvidence.blockIds }, chunkId, normalizedContent: slice.content, chunkerVersion: 'parent-child:2' }) }
           : {}),
       })
     })

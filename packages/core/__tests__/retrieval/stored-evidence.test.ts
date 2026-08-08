@@ -57,4 +57,24 @@ describe('stored retrieval evidence', () => {
     const persisted = createIndexedChunkRecord({ indexerId: 'docs', generationId: 'g1', chunk: chunk(), now: 1 })
     expect(indexedChunkToHit({ value: { ...persisted, evidence: undefined }, score: 0.9 })).toBeNull()
   })
+
+  it('rejects malformed persisted structured spreadsheet facts', () => {
+    const record = createIndexedChunkRecord({ indexerId: 'docs', generationId: 'g1', chunk: chunk(), now: 1 })
+    const malformed = {
+      ...record,
+      provenance: {
+        spreadsheets: [{
+          sheetBlockId: 'sheet:Revenue',
+          tableBlockId: 'table:Revenue',
+          sheet: 'Revenue',
+          index: 0,
+          range: 'A1:B2',
+          cells: [],
+          unexpected: true,
+        }],
+      },
+    }
+
+    expect(indexedChunkToHit({ value: malformed, score: 0.9 })).toBeNull()
+  })
 })

@@ -28,6 +28,7 @@ export interface StoredEvidenceDocument {
 /** Schema-2 facts owned by a normalized source block. */
 export interface StoredEvidenceOrigin {
   readonly coordinate: SourceCoordinate
+  readonly producer: DocumentProducer
   readonly blockIds: readonly string[]
 }
 
@@ -104,7 +105,7 @@ export function createStoredEvidence(input: {
   return validateStoredEvidence({
     schemaVersion: 2,
     documentSha256: input.document.documentSha256,
-    producer: input.document.producer,
+    producer: input.origin.producer,
     coordinate: input.origin.coordinate,
     blockIds: input.origin.blockIds,
     chunkId: input.chunkId,

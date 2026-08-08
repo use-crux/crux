@@ -212,9 +212,10 @@ export function indexedChunkToHit(input: {
   }
   const matches = input.matches?.map((match) => ({ ...match }))
   const provenance = matches ? { matches } : undefined
-  const structuredSource = isRecord(value.provenance) && Array.isArray(value.provenance.spreadsheets)
-    ? { spreadsheets: value.provenance.spreadsheets as readonly SpreadsheetProvenance[] }
-    : undefined
+  const structuredSource = structuredSourceFromRecord(value.provenance)
+  if (structuredSource === null) {
+    return null
+  }
 
   return {
     namespace: value.namespace,
@@ -228,6 +229,54 @@ export function indexedChunkToHit(input: {
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
     ...(provenance ? { provenance } : {}),
   }
+}
+
+function structuredSourceFromRecord(value: unknown): { readonly spreadsheets: readonly SpreadsheetProvenance[] } | undefined | null {
+  if (!isRecord(value) || value.spreadsheets === undefined) {
+    return undefined
+  }
+  if (!Array.isArray(value.spreadsheets)) {
+    return null
+  }
+  const spreadsheets: SpreadsheetProvenance[] = []
+  for (const item of value.spreadsheets) {
+    if (!isRecord(item) || !hasExactKeys(item, ['sheetBlockId', 'tableBlockId', 'sheet', 'index', 'range', 'cells']) ||
+      typeof item.sheetBlockId !== 'string' || typeof item.tableBlockId !== 'string' || typeof item.sheet !== 'string' ||
+      typeof item.index !== 'number' || !Number.isInteger(item.index) || item.index < 0 || typeof item.range !== 'string' || !Array.isArray(item.cells)) {
+      return null
+    }
+    const cells: SpreadsheetProvenance['cells'][number][] = []
+    for (const cell of item.cells) {
+      if (!isRecord(cell) || !hasAllowedKeys(cell, ['id', 'address', 'row', 'column', 'displayedValue'], ['formula', 'mergeMaster', 'mergeRange']) ||
+        typeof cell.id !== 'string' || typeof cell.address !== 'string' || typeof cell.row !== 'number' || !Number.isInteger(cell.row) ||
+        typeof cell.column !== 'number' || !Number.isInteger(cell.column) || typeof cell.displayedValue !== 'string' ||
+        (cell.formula !== undefined && typeof cell.formula !== 'string') || (cell.mergeMaster !== undefined && typeof cell.mergeMaster !== 'string') ||
+        (cell.mergeRange !== undefined && typeof cell.mergeRange !== 'string')) {
+        return null
+      }
+      cells.push(Object.freeze({
+        id: cell.id as string,
+        address: cell.address as string,
+        row: cell.row as number,
+        column: cell.column as number,
+        displayedValue: cell.displayedValue as string,
+        ...(cell.formula === undefined ? {} : { formula: cell.formula as string }),
+        ...(cell.mergeMaster === undefined ? {} : { mergeMaster: cell.mergeMaster as string }),
+        ...(cell.mergeRange === undefined ? {} : { mergeRange: cell.mergeRange as string }),
+      }))
+    }
+    spreadsheets.push(Object.freeze({ ...item, cells: Object.freeze(cells) }) as SpreadsheetProvenance)
+  }
+  return Object.freeze({ spreadsheets: Object.freeze(spreadsheets) })
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return hasAllowedKeys(value, keys, [])
+}
+
+function hasAllowedKeys(value: Record<string, unknown>, required: readonly string[], optional: readonly string[]): boolean {
+  const allowed = new Set([...required, ...optional])
+  return required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => allowed.has(key))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

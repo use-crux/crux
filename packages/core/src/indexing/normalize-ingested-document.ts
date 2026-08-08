@@ -84,7 +84,7 @@ function textPart(block: TextBlock, blockIds: readonly string[]): CruxIngestPart
     content: block.text,
     role: block.role,
     headingPath: [...block.headingPath],
-    evidence: { coordinate: block.coordinate, blockIds },
+    evidence: { coordinate: block.coordinate, producer: block.producer, blockIds },
   }
 }
 
@@ -95,7 +95,7 @@ function listPart(block: ListBlock, blockIds: readonly string[]): CruxIngestPart
     content: renderList(block),
     role: 'list',
     headingPath: [...block.headingPath],
-    evidence: { coordinate: block.coordinate, blockIds: [...blockIds, ...listDescendantIds(block)] },
+    evidence: { coordinate: block.coordinate, producer: block.producer, blockIds: [...blockIds, ...listDescendantIds(block)] },
   }
 }
 
@@ -109,7 +109,11 @@ function tablePart(table: TableBlock, blockIds: readonly string[], sheet: SheetB
     columns: [...table.columns],
     rows,
     ...(spreadsheet ? { sheetName: spreadsheet.sheet, spreadsheet } : {}),
-    evidence: { coordinate: table.coordinate, blockIds: [...blockIds, ...table.rows.flatMap((row) => row.map((cell) => cell.id))] },
+    evidence: {
+      coordinate: table.coordinate,
+      producer: table.producer,
+      blockIds: [...blockIds, ...table.rows.flatMap((row) => row.flatMap((cell) => [cell.id, ...cell.blocks.flatMap(blockTreeIds)]))],
+    },
   }
 }
 
@@ -157,6 +161,12 @@ function renderList(block: ListBlock): string {
 
 function listDescendantIds(block: ListBlock): string[] {
   return block.items.flatMap((item) => [item.id, ...item.blocks.flatMap((child) => child.kind === 'list' ? [child.id, ...listDescendantIds(child)] : [child.id])])
+}
+
+function blockTreeIds(block: TextBlock | ListBlock): string[] {
+  return block.kind === 'text'
+    ? [block.id]
+    : [block.id, ...listDescendantIds(block)]
 }
 
 function partContent(part: CruxIngestPart): string {
