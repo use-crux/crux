@@ -9,6 +9,7 @@ import { expectedFactsForCandidate, expectedFactsForFixture } from './expected-f
 import { fixtureManifests, validateFixtureSourceHash, type AnydocFixtureManifest } from './fixture-manifest.js'
 import { collectDeterminismEvidence, runParserCandidate, type DeterminismEvidence, type ParserRunResult } from './sequential-runner.js'
 import { assertCoreProjectionFacts, assertParserNativeFacts, type ParserNativeFact, type ParserNativeFacts, type StructuralAssertionResult } from './structural-assertions.js'
+import { phase2AnydocWorkerContainment } from './containment.js'
 
 const directory = process.env.CRUX_ANYDOC_EVAL_DIRECTORY ?? dirname(fileURLToPath(import.meta.url))
 const anydocWorkerPath = resolve(directory, 'anydoc-worker.mjs')
@@ -124,7 +125,6 @@ export async function runAdmissionSuite(options: {
   readonly fixtureIds?: readonly string[]
   readonly formats?: readonly string[]
   readonly determinismRuns?: boolean
-  readonly containmentUnavailable?: boolean
 } = {}): Promise<AdmissionSuiteEvidence> {
   const selected = fixtureManifests.filter((fixture) =>
     (!options.fixtureIds || options.fixtureIds.includes(fixture.id))
@@ -139,7 +139,7 @@ export async function runAdmissionSuite(options: {
     const mismatch = validateFixtureSourceHash(fixture, bytes)
     const candidates: AdmissionCandidateEvidence[] = []
     for (const parser of fixture.parserApplicability.candidates) {
-      candidates.push(options.containmentUnavailable && parser === 'anydoc'
+      candidates.push(parser === 'anydoc' && phase2AnydocWorkerContainment() === undefined
         ? unavailableContainmentEvidence(parser, fixture)
         : await runCandidate(fixture, bytes, parser, options.determinismRuns === true))
     }
@@ -148,7 +148,7 @@ export async function runAdmissionSuite(options: {
       fixtureId: fixture.id,
       format: fixture.declaredFormat,
       role: mismatch ? 'not-admitted' : control ? 'control' : 'candidate',
-      sourceHash: fixture.source.kind === 'file' ? fixture.source.sha256 : '',
+      sourceHash: fixture.source.kind === 'file' ? createHash('sha256').update(bytes).digest('hex') : '',
       sourceHashMatches: mismatch === undefined,
       candidates,
     })

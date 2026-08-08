@@ -30,5 +30,9 @@ describe('runAdmissionSuite', () => {
     const evidence = await runAdmissionSuite({ fixtureIds: ['docx-structure-v1'], determinismRuns: false })
 
     expect(evidence.docxDecision).toEqual({ primary: null, reason: 'No candidate passed every format-wide gate.' })
+    expect(evidence.results[0]?.candidates.find((candidate) => candidate.parser === 'anydoc')?.outcome).toEqual({
+      kind: 'failure',
+      error: 'containment-unavailable',
+    })
   })
 })

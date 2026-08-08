@@ -1,19 +1,21 @@
 import { execFile } from 'node:child_process'
-import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { createHash } from 'node:crypto'
 import { build, stop } from 'esbuild'
 
-const directory = dirname(fileURLToPath(import.meta.url))
-const worker = resolve(directory, '../../node_modules/.cache/crux-anydoc-eval/admission-family-worker.mjs')
-const resultDirectory = resolve(directory, '../../node_modules/.cache/crux-anydoc-eval/families')
+const directory = process.env.CRUX_ANYDOC_EVAL_DIRECTORY ?? dirname(fileURLToPath(import.meta.url))
+const cacheDirectory = process.env.CRUX_ANYDOC_EVAL_CACHE_DIRECTORY ?? resolve(directory, '../../node_modules/.cache/crux-anydoc-eval')
+const worker = resolve(cacheDirectory, 'admission-family-worker.mjs')
+const resultDirectory = resolve(cacheDirectory, 'families')
 const allFormats = ['csv', 'doc', 'docm', 'docx', 'epub', 'ods', 'odt', 'pdf', 'ppt', 'pptx', 'rtf', 'xls', 'xlsx']
 const formats = process.env.CRUX_ANYDOC_FORMATS?.split(',').filter((format) => allFormats.includes(format)) ?? allFormats
 const execute = promisify(execFile)
-const hardMemoryContainment = await hasHardMemoryContainment()
+const hardMemoryContainment = false
 const cacheIdentity = await evidenceCacheIdentity()
+const sourceHashes = await currentFixtureHashes()
 
 await mkdir(dirname(worker), { recursive: true })
 await mkdir(resultDirectory, { recursive: true })
@@ -35,15 +37,14 @@ for (const format of formats) {
   const resultPath = resolve(resultDirectory, `${format}.json`)
   let family
   try {
-    family = validateFamily(JSON.parse(await readFile(resultPath, 'utf8')), format, cacheIdentity)
+    family = validateFamily(JSON.parse(await readFile(resultPath, 'utf8')), format, cacheIdentity, sourceHashes)
   } catch {
     const arguments_ = [worker, format]
-    if (!hardMemoryContainment) arguments_.push('--containment-unavailable')
     const { stdout } = await execute(process.execPath, arguments_, {
       maxBuffer: 32 * 1024 * 1024,
       env: { ...process.env, CRUX_ANYDOC_EVAL_DIRECTORY: directory },
     })
-    family = { ...validateFamily(JSON.parse(stdout), format), cacheIdentity }
+    family = { ...validateFamily(JSON.parse(stdout), format, undefined, sourceHashes), cacheIdentity }
     const temporary = `${resultPath}.tmp`
     await writeFile(temporary, `${JSON.stringify(family)}\n`)
     await rename(temporary, resultPath)
@@ -69,37 +70,83 @@ process.stdout.write(JSON.stringify({
   cacheIdentity,
 }))
 
-async function hasHardMemoryContainment() {
-  try {
-    await access('/sys/fs/cgroup/memory.max')
-    const { readFile } = await import('node:fs/promises')
-    const value = (await readFile('/sys/fs/cgroup/memory.max', 'utf8')).trim()
-    return value !== '' && value !== 'max' && Number.isSafeInteger(Number(value)) && Number(value) > 0
-  } catch {
-    return false
-  }
-}
-
-function validateFamily(value, format, identity) {
+function validateFamily(value, format, identity, currentSources) {
   if (!value || value.schemaVersion !== 1 || !Array.isArray(value.results) || !Array.isArray(value.formats)
     || (identity !== undefined && value.cacheIdentity !== identity)
-    || value.results.some((result) => result.format !== format || typeof result.fixtureId !== 'string' || typeof result.sourceHashMatches !== 'boolean')) {
+    || value.results.some((result) => result.format !== format || typeof result.fixtureId !== 'string' || typeof result.sourceHashMatches !== 'boolean'
+      || (currentSources.has(result.fixtureId) && result.sourceHash !== currentSources.get(result.fixtureId)))) {
     throw new Error(`Invalid cached admission family result for ${format}.`)
   }
   return value
+}
+
+async function currentFixtureHashes() {
+  const sources = new Map([
+    ['docx-structure-v1', 'fixtures/prose.docx'], ['doc-legacy-v1', 'fixtures/prose.doc'],
+    ['rtf-prose-v1', 'fixtures/prose.rtf'], ['odt-prose-v1', 'fixtures/prose.odt'],
+    ['epub-prose-v1', 'fixtures/prose.epub'], ['pptx-structure-v1', 'fixtures/slides.pptx'],
+    ['xls-spreadsheet-v1', 'fixtures/sheet.xls'], ['ods-spreadsheet-v1', 'fixtures/sheet.ods'],
+    ['csv-control-v1', 'fixtures/csv-control-v1.csv'], ['xlsx-control-v1', 'fixtures/sheet.xlsx'],
+    ['pdf-control-v1', '../../__tests__/fixtures/layout-aware-mixed.pdf'], ['truncated-v1', 'fixtures/truncated.docx'],
+    ['malformed-v1', 'fixtures/malformed.docx'], ['mislabeled-v1', 'fixtures/mislabeled.docx'],
+    ['expansion-heavy-v1', 'fixtures/expansion-heavy.docx'], ['external-link-v1', 'fixtures/external-link.docx'],
+  ])
+  await Promise.all([...sources].map(async ([id, path]) => {
+    sources.set(id, createHash('sha256').update(await readFile(resolve(directory, path))).digest('hex'))
+  }))
+  return sources
 }
 
 async function evidenceCacheIdentity() {
   const files = [
     'admission-family-worker.ts', 'admission-suite.ts', 'anydoc-worker.mjs', 'expected-facts.ts',
     'fixture-manifest.ts', 'incumbent-worker.ts', 'sequential-runner.ts', 'structural-assertions.ts',
+    'native-anydoc-facts.mjs', 'native-csv-facts.ts', 'native-fact-schema.ts', 'native-mammoth-facts.ts',
+    'native-pdf-facts.ts', 'native-xlsx-facts.ts', 'containment.ts',
   ]
+  const coreProjectors = [
+    '../../src/csv.ts', '../../src/docx.ts', '../../src/parsers.ts', '../../src/pdf.ts',
+    '../../src/parse-result-schema-2.ts', '../../src/xlsx.ts',
+  ]
+  const nativeArtifact = process.env.CRUX_ANYDOC_NATIVE_ARTIFACT
+    ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc-linux-x64-gnu@0.1.7/node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node')
+  const packageJson = process.env.CRUX_ANYDOC_PACKAGE_JSON
+    ?? resolve(directory, '../../../../node_modules/.pnpm/@firecrawl+anydoc@0.1.7/node_modules/@firecrawl/anydoc/package.json')
   const hash = createHash('sha256')
-  hash.update('admission-evidence-schema:2\nrunner:family-v2\nassertions:native-raw-v2\n')
+  hash.update('admission-evidence-schema:3\nrunner:family-v3\nassertions:native-raw-v3\n')
   hash.update(`${process.platform}:${process.arch}:node-${process.versions.node}\ncontainment:${hardMemoryContainment}\n`)
-  for (const file of files) hash.update(await readFile(resolve(directory, file)))
-  hash.update(await readFile(resolve(directory, '../../../../pnpm-lock.yaml')))
+  for (const file of [...files, ...coreProjectors]) await hashFile(hash, resolve(directory, file))
+  for (const file of await fixtureFiles()) await hashFile(hash, file)
+  await hashFile(hash, nativeArtifact)
+  await hashFile(hash, packageJson)
+  const lockfile = await readFile(process.env.CRUX_ANYDOC_LOCKFILE ?? resolve(directory, '../../../../pnpm-lock.yaml'), 'utf8')
+  const integrity = lockfile.match(/'@firecrawl\/anydoc@0\.1\.7':\n\s+resolution: \{integrity: ([^}]+)\}/)?.[1]
+  if (!integrity) throw new Error('Could not determine the installed @firecrawl/anydoc tarball integrity.')
+  hash.update(`@firecrawl/anydoc@0.1.7 tarball-integrity:${integrity}\n`)
   return hash.digest('hex')
+}
+
+async function fixtureFiles() {
+  const files = await filesUnder(resolve(directory, 'fixtures'))
+  files.push(resolve(directory, '../../__tests__/fixtures/layout-aware-mixed.pdf'))
+  return files.sort()
+}
+
+async function filesUnder(path) {
+  const entries = await readdir(path, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const child = resolve(path, entry.name)
+    if (entry.isDirectory()) files.push(...await filesUnder(child))
+    else if (entry.isFile()) files.push(child)
+  }
+  return files
+}
+
+async function hashFile(hash, path) {
+  const bytes = await readFile(path)
+  const info = await stat(path)
+  hash.update(`${path}:${info.size}:${createHash('sha256').update(bytes).digest('hex')}\n`)
 }
 
 function containmentUnavailableCandidate(parser, fixtureId) {

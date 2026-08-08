@@ -4,7 +4,7 @@ Status: Accepted
 
 Date: 2026-08-08
 
-Baseline SHA-256: `08e26e0eea391af009786782f67d01917310c50bd5a22c1650f93cc56f548f82`
+Baseline SHA-256: `d7f02d2c0475634f4ccd9b7c2593af131ee57de5705439f0abbc764dac16151f`
 
 ## Decision
 
