@@ -33,6 +33,7 @@ const (
 	CPUCeiling      = 20 * time.Second
 	usageTimeout    = 100 * time.Millisecond
 	runtimeTarget   = "/run/crux-anydoc/runtime"
+	probeTarget     = "/run/crux-anydoc/probe"
 )
 
 type ErrorCode string
@@ -256,9 +257,10 @@ type ServiceSpec struct {
 // executable. It cannot be constructed through the public ingestion or backend
 // APIs and is never present in production service specifications.
 type containmentProbe struct {
-	executable string
-	action     string
-	resultPath string
+	hostExecutable string
+	executableSHA  string
+	action         string
+	resultPath     string
 }
 
 type LaunchDependency struct {
@@ -326,6 +328,7 @@ func serviceSpec(hostSource string, launch LaunchDependency, tmp string, l Limit
 
 type SandboxReport struct {
 	MainPID                                                                   int
+	ControlGroup                                                              string
 	ControlGroupMembers                                                       []int
 	MemoryMax, MemorySwapMax                                                  int64
 	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                             int
@@ -345,20 +348,32 @@ type SandboxReport struct {
 	Populated                                                                 bool
 	MemoryCurrent                                                             int64
 	MemoryEvents                                                              map[string]int64
+	CPUStats, PIDsEvents                                                      map[string]int64
 	RuntimeTreeDigest                                                         string
 }
+
+// TerminationEvidence is gathered after the unit is inactive and before it is
+// unloaded. It is intentionally independent from the pre-stop snapshot.
+type TerminationEvidence struct {
+	ControlGroup string
+	Empty        bool
+	Absent       bool
+}
+
 type TerminalReport struct {
-	Sandbox SandboxReport
-	CPU     time.Duration
-	Wall    time.Duration
-	Outcome ErrorCode
-	Cleaned bool
+	PreStop     SandboxReport
+	Termination TerminationEvidence
+	CPU         time.Duration
+	Wall        time.Duration
+	Outcome     ErrorCode
+	Cleaned     bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
 	CPUUsage(context.Context) (time.Duration, error)
 	Stop(context.Context) error
 	WaitInactive(context.Context) error
+	TerminationEvidence(context.Context, string) (TerminationEvidence, error)
 	Cleanup(context.Context) error
 }
 type Backend interface {
@@ -376,6 +391,9 @@ type verifiedServiceSpec interface {
 }
 type attestedNodeVerifier interface {
 	VerifyAttestedNode(context.Context, assets.AttestedNode) error
+}
+type attestedProbeVerifier interface {
+	VerifyAttestedProbe(context.Context, *containmentProbe) error
 }
 type PipeFactory func() (*os.File, *os.File, error)
 type Supervisor struct {
@@ -441,14 +459,14 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDepen
 	if !verify(ctx, unit, spec) {
 		write.Close()
 		_ = staged.Cleanup()
-		_, _, _ = cleanup(unit)
+		_, _, _, _ = cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	if preparer, ok := unit.(authorizationPreparer); ok {
 		if preparer.PrepareAuthorization(ctx) != nil {
 			write.Close()
 			_ = staged.Cleanup()
-			_, _, _ = cleanup(unit)
+			_, _, _, _ = cleanup(unit)
 			return nil, closed(ErrContainmentUnavailable)
 		}
 	}
@@ -456,7 +474,7 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, launch LaunchDepen
 	if _, e = rand.Read(n[:]); e != nil {
 		write.Close()
 		_ = staged.Cleanup()
-		_, _, _ = cleanup(unit)
+		_, _, _, _ = cleanup(unit)
 		return nil, closed(ErrContainmentUnavailable)
 	}
 	d := sha256.Sum256(input)
@@ -506,6 +524,9 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: "docx", SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
 	result, err := receiver.ReceiveResult(ctx, expected)
 	if err != nil {
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
+		}
 		return Result{}, closed(ErrWorkerCrash)
 	}
 	if result.Request != expected {
@@ -534,7 +555,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.stopOnce.Do(func() { close(r.stop) })
 		r.mu.Unlock()
 		result := outcomeCode(out)
-		report, cpu, cleaned := cleanup(r.unit)
+		report, cpu, termination, cleaned := cleanup(r.unit)
 		if !cleaned {
 			result = closed(ErrContainmentUnavailable)
 		}
@@ -542,7 +563,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 			result = closed(ErrContainmentUnavailable)
 		}
 		r.mu.Lock()
-		r.terminal = TerminalReport{Sandbox: cloneSandboxReport(report), CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
+		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
 		r.result = result
 		r.mu.Unlock()
 		close(r.finished)
@@ -558,14 +579,32 @@ func (r *Run) TerminalReport() TerminalReport {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return TerminalReport{Sandbox: cloneSandboxReport(r.terminal.Sandbox), CPU: r.terminal.CPU, Wall: r.terminal.Wall, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
+	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
 }
 func cloneSandboxReport(in SandboxReport) SandboxReport {
 	out := in
+	out.ControlGroupMembers = append([]int(nil), in.ControlGroupMembers...)
+	out.ReadOnlyPaths = append([]string(nil), in.ReadOnlyPaths...)
+	out.InaccessiblePaths = append([]string(nil), in.InaccessiblePaths...)
+	out.BindReadOnlyPaths = append([]string(nil), in.BindReadOnlyPaths...)
+	out.ReadWritePaths = append([]string(nil), in.ReadWritePaths...)
+	out.RestrictAddressFamilies = append([]string(nil), in.RestrictAddressFamilies...)
 	if in.MemoryEvents != nil {
 		out.MemoryEvents = make(map[string]int64, len(in.MemoryEvents))
 		for k, v := range in.MemoryEvents {
 			out.MemoryEvents[k] = v
+		}
+	}
+	if in.CPUStats != nil {
+		out.CPUStats = make(map[string]int64, len(in.CPUStats))
+		for k, v := range in.CPUStats {
+			out.CPUStats[k] = v
+		}
+	}
+	if in.PIDsEvents != nil {
+		out.PIDsEvents = make(map[string]int64, len(in.PIDsEvents))
+		for k, v := range in.PIDsEvents {
+			out.PIDsEvents[k] = v
 		}
 	}
 	return out
@@ -614,11 +653,11 @@ func (r *Run) monitor() {
 		}
 	}
 }
-func cleanup(unit Unit) (SandboxReport, time.Duration, bool) {
+func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
-		return SandboxReport{}, 0, false
+		return SandboxReport{}, 0, TerminationEvidence{}, false
 	}
 	ok := true
 	report, err := unit.Report(ctx)
@@ -635,10 +674,14 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, bool) {
 	if unit.WaitInactive(ctx) != nil {
 		ok = false
 	}
+	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
+	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
+		ok = false
+	}
 	if unit.Cleanup(ctx) != nil {
 		ok = false
 	}
-	return report, cpu, ok
+	return report, cpu, termination, ok
 }
 func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if u == nil {
@@ -648,7 +691,12 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if e != nil {
 		return false
 	}
-	if verifier, ok := u.(attestedNodeVerifier); ok {
+	if s.probe != nil {
+		verifier, ok := u.(attestedProbeVerifier)
+		if !ok || verifier.VerifyAttestedProbe(ctx, s.probe) != nil {
+			return false
+		}
+	} else if verifier, ok := u.(attestedNodeVerifier); ok {
 		if err := verifier.VerifyAttestedNode(ctx, s.Node); err != nil {
 			return false
 		}

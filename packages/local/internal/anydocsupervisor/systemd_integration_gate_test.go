@@ -4,6 +4,7 @@ package anydocsupervisor
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,5 +72,27 @@ func TestHostileProbeCannotBeSelectedByOrdinaryServiceSpec(t *testing.T) {
 	exec, ok := properties["ExecStart"].([]execStart)
 	if !ok || len(exec) != 1 || exec[0].Path != spec.Command[0] {
 		t.Fatal("ordinary service spec did not retain the attested production runner")
+	}
+}
+
+func TestSealedHostileProbeUsesOnlyFixedAttestedMount(t *testing.T) {
+	spec, err := newTestServiceSpec("/run/crux-anydoc-test/input/source", "/run/crux-anydoc-test/runtime", "/run/crux-anydoc-test/private", Limits{64 << 20, 8, 25, time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := &containmentProbe{hostExecutable: "/run/crux-anydoc-test/staged-probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: "/run/crux-anydoc-test/private/result"}
+	spec.probe = probe
+	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probe.hostExecutable+":"+probeTarget)
+	if !validBackendSpec(spec) {
+		t.Fatal("sealed fixed probe was rejected")
+	}
+	properties := propertiesByName(systemdProperties(spec))
+	exec, ok := properties["ExecStart"].([]execStart)
+	if !ok || len(exec) != 1 || exec[0].Path != probeTarget {
+		t.Fatal("probe did not execute exclusively through its fixed read-only mount")
+	}
+	spec.BindReadOnlyPaths[2] = "/tmp/arbitrary:" + probeTarget
+	if validBackendSpec(spec) {
+		t.Fatal("arbitrary probe executable authority was accepted")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -86,14 +87,18 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 }
 
 type hostileEvidence struct {
-	Name         string           `json:"name"`
-	Outcome      ErrorCode        `json:"outcome"`
-	Observed     map[string]bool  `json:"observed,omitempty"`
-	MemoryEvents map[string]int64 `json:"memoryEvents,omitempty"`
-	CPUUsec      int64            `json:"cpuUsec"`
-	WallMillis   int64            `json:"wallMillis"`
-	Cleaned      bool             `json:"cleaned"`
-	Populated    bool             `json:"populated"`
+	Name              string           `json:"name"`
+	Outcome           ErrorCode        `json:"outcome"`
+	Observed          map[string]bool  `json:"observed,omitempty"`
+	MemoryEvents      map[string]int64 `json:"memoryEvents,omitempty"`
+	CPUUsec           int64            `json:"cpuUsec"`
+	CPUThrottled      int64            `json:"cpuThrottledUsec"`
+	CPUPeriods        int64            `json:"cpuThrottledPeriods"`
+	PIDsMax           int64            `json:"pidsMaxEvents"`
+	WallMillis        int64            `json:"wallMillis"`
+	Cleaned           bool             `json:"cleaned"`
+	TerminationEmpty  bool             `json:"terminationEmpty"`
+	TerminationAbsent bool             `json:"terminationAbsent"`
 }
 
 type probeObservation struct {
@@ -103,10 +108,6 @@ type probeObservation struct {
 
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
 	t.Helper()
-	testBinary, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
 	cases := []struct {
 		name    string
 		action  string
@@ -127,13 +128,13 @@ func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root stri
 	results := make([]hostileEvidence, 0, len(cases))
 	for _, tc := range cases {
 		t.Run("hostile/"+tc.name, func(t *testing.T) {
-			results = append(results, runContainmentProbe(t, launch, testBinary, root, tc.name, tc.action, tc.control, tc.limits))
+			results = append(results, runContainmentProbe(t, launch, root, tc.name, tc.action, tc.control, tc.limits))
 		})
 	}
 	return results
 }
 
-func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root, name, action, control string, limits Limits) hostileEvidence {
+func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, action, control string, limits Limits) hostileEvidence {
 	t.Helper()
 	caseRoot := filepath.Join(root, "hostile-"+name)
 	stagingRoot := filepath.Join(caseRoot, "input")
@@ -142,6 +143,22 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
+	}
+	hostTemp, workerTemp := "", ""
+	if name == "filesystem" {
+		token := strconv.Itoa(os.Getpid()) + "-" + filepath.Base(caseRoot)
+		hostTemp = filepath.Join(os.TempDir(), "crux-anydoc-host-"+token)
+		workerTemp = filepath.Join(os.TempDir(), "crux-anydoc-worker-"+token)
+		if err := os.WriteFile(hostTemp, []byte("host-sentinel"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(hostTemp)
+		action = "filesystem:" + token
+	}
+	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
+	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: filepath.Join(privateTemp, "observation.json")}
+	if control == "abort" {
+		return runCanceledSupervisorProbe(t, launch, probe, stagingRoot, privateTemp, name, limits)
 	}
 	staged, err := NewStager(stagingRoot).Stage([]byte("probe"), 1024)
 	if err != nil {
@@ -152,8 +169,9 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 	if err != nil {
 		t.Fatal(err)
 	}
-	resultPath := filepath.Join(privateTemp, "observation.json")
-	spec.probe = &containmentProbe{executable: executable, action: action, resultPath: resultPath}
+	resultPath := probe.resultPath
+	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probePath+":"+probeTarget)
+	spec.probe = probe
 	read, write, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -166,15 +184,14 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 		t.Fatalf("start %s probe: %v", name, err)
 	}
 	started := time.Now()
-	initial, err := unit.Report(ctx)
-	if err != nil || initial.MainPID <= 0 || initial.RuntimeTreeDigest != spec.runtimeTreeDigest {
-		_, _, _ = cleanup(unit)
-		t.Fatalf("%s probe did not enter verified production sandbox: %#v %v", name, initial, err)
+	if !verify(ctx, unit, spec) {
+		_, _, _, _ = cleanup(unit)
+		t.Fatalf("%s probe did not enter the centrally verified production sandbox", name)
 	}
 	preparer, prepareOK := unit.(authorizationPreparer)
 	authorizer, authorizeOK := unit.(capabilityAuthorizer)
 	if !prepareOK || !authorizeOK || preparer.PrepareAuthorization(ctx) != nil {
-		_, _, _ = cleanup(unit)
+		_, _, _, _ = cleanup(unit)
 		t.Fatalf("%s probe could not prepare its production authorization channel", name)
 	}
 	sourceSHA := sha256Hex([]byte("probe"))
@@ -183,7 +200,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 	request := Request{Version: ProtocolVersion, Nonce: nonce, Format: "docx", SourceSHA256: sourceSHA, SourceBytes: 5, Limits: jobLimits}
 	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
 	if err := authorizer.AuthorizeCapability(ctx, request); err != nil {
-		_, _, _ = cleanup(unit)
+		_, _, _, _ = cleanup(unit)
 		t.Fatalf("%s probe authorization failed: %v", name, err)
 	}
 
@@ -191,6 +208,15 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 	switch control {
 	case "result", "descendant":
 		observation = awaitProbeObservation(t, ctx, resultPath)
+		if name == "filesystem" {
+			_, hostErr := os.Stat(workerTemp)
+			observation.Checks["workerTempInvisibleOutside"] = os.IsNotExist(hostErr)
+			if bytes, err := os.ReadFile(hostTemp); err != nil || string(bytes) != "host-sentinel" {
+				observation.Checks["hostTempUnchanged"] = false
+			} else {
+				observation.Checks["hostTempUnchanged"] = true
+			}
+		}
 	case "cpu":
 		for {
 			usage, usageErr := unit.CPUUsage(ctx)
@@ -211,15 +237,18 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 	case "abort":
 		// Cancellation is represented by the caller terminating the isolated job.
 	}
-	report, cpu, cleaned := cleanup(unit)
+	report, cpu, termination, cleaned := cleanup(unit)
 	wall := time.Since(started)
 	outcome := observedProbeOutcome(name, observation, report, cpu, wall)
-	terminal := TerminalReport{Sandbox: report, CPU: cpu, Wall: wall, Outcome: outcome, Cleaned: cleaned}
-	if !terminal.Cleaned || terminal.Sandbox.Populated {
-		t.Fatalf("%s left a populated cgroup", name)
+	if outcome != expectedProbeOutcome(name) {
+		t.Fatalf("%s observed unexpected outcome %q", name, outcome)
 	}
-	if terminal.Sandbox.MemoryMax > 128<<20 || terminal.Sandbox.MemorySwapMax != 0 || terminal.Sandbox.TasksMax != limits.TasksMax {
-		t.Fatalf("%s effective limits drifted: %#v", name, terminal.Sandbox)
+	terminal := TerminalReport{PreStop: report, Termination: termination, CPU: cpu, Wall: wall, Outcome: outcome, Cleaned: cleaned}
+	if !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
+		t.Fatalf("%s lacked verified termination evidence", name)
+	}
+	if terminal.PreStop.MemoryMax > 128<<20 || terminal.PreStop.MemorySwapMax != 0 || terminal.PreStop.TasksMax != limits.TasksMax {
+		t.Fatalf("%s effective limits drifted: %#v", name, terminal.PreStop)
 	}
 	if control == "result" {
 		for check, ok := range observation.Checks {
@@ -231,11 +260,22 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 	if terminal.Outcome == ErrContainmentUnavailable {
 		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
 	}
-	if name == "memory" && terminal.Sandbox.MemoryEvents["oom_kill"] < 1 {
-		t.Fatalf("memory probe lacked observed OOM kill: %#v", terminal.Sandbox.MemoryEvents)
+	if name == "memory" && terminal.PreStop.MemoryEvents["oom_kill"] < 1 {
+		t.Fatalf("memory probe lacked observed OOM kill: %#v", terminal.PreStop.MemoryEvents)
 	}
 	if name == "cpu" && (terminal.CPU < 300*time.Millisecond || terminal.CPU > 900*time.Millisecond) {
 		t.Fatalf("CPU probe exceeded bounded cumulative ceiling: %s", terminal.CPU)
+	}
+	if name == "cpu" {
+		if terminal.PreStop.CPUStats["nr_throttled"] < 1 || terminal.PreStop.CPUStats["throttled_usec"] < 1 {
+			t.Fatalf("CPU quota did not produce throttling evidence: %#v", terminal.PreStop.CPUStats)
+		}
+		if terminal.CPU*100 > terminal.Wall*time.Duration(limits.CPUQuotaPercent+15) {
+			t.Fatalf("CPU/wall ratio exceeded quota tolerance: cpu=%s wall=%s quota=%d", terminal.CPU, terminal.Wall, limits.CPUQuotaPercent)
+		}
+	}
+	if name == "pids" && terminal.PreStop.PIDsEvents["max"] < 1 {
+		t.Fatalf("TasksMax did not increment pids.events: %#v", terminal.PreStop.PIDsEvents)
 	}
 	if name == "wall" && terminal.Wall > 2*time.Second {
 		t.Fatalf("wall timeout was not prompt: %s", terminal.Wall)
@@ -249,7 +289,95 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, executable, root
 			t.Fatalf("descendant %d escaped cgroup cleanup", observation.PID)
 		}
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, Observed: observation.Checks, MemoryEvents: terminal.Sandbox.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, Populated: terminal.Sandbox.Populated}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+}
+
+func expectedProbeOutcome(name string) ErrorCode {
+	switch name {
+	case "network", "filesystem", "privileges", "pids":
+		return OutcomeSuccess
+	case "memory", "crash":
+		return ErrWorkerCrash
+	case "cpu", "wall":
+		return ErrTimeout
+	case "abort", "descendants":
+		return ErrAborted
+	}
+	return ErrContainmentUnavailable
+}
+
+type sealedProbeBackend struct {
+	delegate Backend
+	probe    *containmentProbe
+}
+
+func (b *sealedProbeBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.File) (Unit, error) {
+	if b == nil || b.delegate == nil || b.probe == nil {
+		return nil, closed(ErrContainmentUnavailable)
+	}
+	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, b.probe.hostExecutable+":"+probeTarget)
+	spec.probe = b.probe
+	return b.delegate.Start(ctx, spec, stdin)
+}
+
+func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *containmentProbe, stagingRoot, privateTemp, name string, limits Limits) hostileEvidence {
+	t.Helper()
+	backend := &sealedProbeBackend{delegate: NewSystemdBackend(), probe: probe}
+	supervisor := NewWithStager(backend, NewStager(stagingRoot))
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	run, err := supervisor.Start(ctx, []byte("probe"), launch, privateTemp, limits)
+	if err != nil {
+		t.Fatalf("start canceled probe: %v", err)
+	}
+	if err := run.Authorize(); err != nil {
+		_ = run.Finish(context.Background(), err)
+		t.Fatalf("authorize canceled probe: %v", err)
+	}
+	canceled, cancelNow := context.WithCancel(ctx)
+	cancelNow()
+	_, err = run.Execute(canceled)
+	if errorCode(err) != ErrAborted {
+		t.Fatalf("caller cancellation was not mapped to abort: %v", err)
+	}
+	terminal := run.TerminalReport()
+	if terminal.Outcome != ErrAborted || !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
+		t.Fatalf("caller cancellation lacked closed terminal evidence: %#v", terminal)
+	}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+}
+
+func stageProbeExecutable(t *testing.T, root string) (string, string) {
+	t.Helper()
+	// /proc/self/exe is the already-running, kernel-held integration binary;
+	// callers cannot substitute an arbitrary executable path.
+	input, err := os.Open("/proc/self/exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer input.Close()
+	path := filepath.Join(root, "probe")
+	output, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o555)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(output, hash), io.LimitReader(input, (128<<20)+1)); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Sync(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 || info.Size() <= 0 || info.Size() > 128<<20 {
+		t.Fatal("unsafe staged probe executable")
+	}
+	return path, hex.EncodeToString(hash.Sum(nil))
 }
 
 func observedProbeOutcome(name string, observation probeObservation, report SandboxReport, cpu time.Duration, wall time.Duration) ErrorCode {
@@ -353,6 +481,22 @@ func TestContainmentProbeProcess(t *testing.T) {
 		bytes, _ := json.Marshal(probeObservation{Checks: checks, PID: pid})
 		_ = os.WriteFile(resultPath, bytes, 0o600)
 	}
+	if strings.HasPrefix(action, "filesystem:") {
+		token := strings.TrimPrefix(action, "filesystem:")
+		for name, path := range map[string]string{"home": "/root/.ssh", "project": "/home", "host": "/var/lib"} {
+			_, err := os.ReadDir(path)
+			checks[name+"ReadDenied"] = err != nil
+		}
+		checks["hostWriteDenied"] = os.WriteFile("/etc/crux-probe", []byte("x"), 0o600) != nil
+		hostSentinel := filepath.Join(os.TempDir(), "crux-anydoc-host-"+token)
+		_, sentinelErr := os.ReadFile(hostSentinel)
+		checks["hostTempInvisible"] = os.IsNotExist(sentinelErr)
+		tmp := filepath.Join(os.TempDir(), "crux-anydoc-worker-"+token)
+		checks["privateTempWritable"] = os.WriteFile(tmp, []byte("ok"), 0o600) == nil
+		write(0)
+		time.Sleep(300 * time.Millisecond)
+		return
+	}
 	switch action {
 	case "network":
 		for name, address := range map[string]string{"ipv4": "1.1.1.1:53", "ipv6": "[2606:4700:4700::1111]:53"} {
@@ -364,15 +508,6 @@ func TestContainmentProbeProcess(t *testing.T) {
 		}
 		_, err := net.LookupHost("example.com")
 		checks["dnsDenied"] = err != nil
-		write(0)
-	case "filesystem":
-		for name, path := range map[string]string{"home": "/root/.ssh", "project": "/home", "host": "/var/lib"} {
-			_, err := os.ReadDir(path)
-			checks[name+"ReadDenied"] = err != nil
-		}
-		checks["hostWriteDenied"] = os.WriteFile("/etc/crux-probe", []byte("x"), 0o600) != nil
-		tmp := filepath.Join(os.TempDir(), "crux-private-probe")
-		checks["privateTempWritable"] = os.WriteFile(tmp, []byte("ok"), 0o600) == nil
 		write(0)
 	case "privileges":
 		status, _ := os.ReadFile("/proc/self/status")
@@ -467,21 +602,23 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 	// Deliberately omit source paths and payload: the artifact is containment
 	// evidence, not a document-exfiltration channel.
 	evidence := struct {
-		Format        string            `json:"format"`
-		SourceSHA256  string            `json:"sourceSha256"`
-		SourceBytes   int64             `json:"sourceBytes"`
-		ResultBytes   int               `json:"resultBytes"`
-		Outcome       ErrorCode         `json:"outcome"`
-		Cleaned       bool              `json:"cleaned"`
-		MemoryMax     int64             `json:"memoryMax"`
-		MemoryCurrent int64             `json:"memoryCurrent"`
-		MemoryEvents  map[string]int64  `json:"memoryEvents"`
-		TasksMax      int               `json:"tasksMax"`
-		CPUUsec       int64             `json:"cpuUsec"`
-		WallMillis    int64             `json:"wallMillis"`
-		Hostile       []hostileEvidence `json:"hostile"`
-	}{result.Format, result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.Sandbox.MemoryMax, terminal.Sandbox.MemoryCurrent, terminal.Sandbox.MemoryEvents, terminal.Sandbox.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile}
-	if evidence.MemoryMax > MemoryCeiling/2 {
+		Format               string            `json:"format"`
+		SourceSHA256         string            `json:"sourceSha256"`
+		SourceBytes          int64             `json:"sourceBytes"`
+		ResultBytes          int               `json:"resultBytes"`
+		Outcome              ErrorCode         `json:"outcome"`
+		Cleaned              bool              `json:"cleaned"`
+		PreStopMemoryMax     int64             `json:"preStopMemoryMax"`
+		PreStopMemoryCurrent int64             `json:"preStopMemoryCurrent"`
+		PreStopMemoryEvents  map[string]int64  `json:"preStopMemoryEvents"`
+		TasksMax             int               `json:"tasksMax"`
+		CPUUsec              int64             `json:"cpuUsec"`
+		WallMillis           int64             `json:"wallMillis"`
+		Hostile              []hostileEvidence `json:"hostile"`
+		TerminationEmpty     bool              `json:"terminationEmpty"`
+		TerminationAbsent    bool              `json:"terminationAbsent"`
+	}{result.Format, result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
+	if evidence.PreStopMemoryMax > MemoryCeiling/2 {
 		t.Fatal("integration memory ceiling exceeds half the production ceiling")
 	}
 	bytes, err := json.Marshal(evidence)

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -230,10 +231,14 @@ func validBackendSpec(spec ServiceSpec) bool {
 	if spec.probe == nil && (len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1])) {
 		return false
 	}
-	if spec.probe != nil && (spec.probe.executable == "" || spec.probe.action == "" || spec.probe.resultPath == "") {
+	if spec.probe != nil && (!validAbsolutePath(spec.probe.hostExecutable) || len(spec.probe.executableSHA) != sha256.Size*2 || spec.probe.action == "" || spec.probe.resultPath == "") {
 		return false
 	}
-	if spec.NodeSHA256 == "" || len(spec.runtimeTreeDigest) != sha256.Size*2 || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 0 || len(spec.BindReadOnlyPaths) != 2 || len(spec.ReadWritePaths) != 1 || !same(spec.InaccessiblePaths, []string{"/opt", "/srv", "/var/lib"}) || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+	wantBinds := 2
+	if spec.probe != nil {
+		wantBinds = 3
+	}
+	if spec.NodeSHA256 == "" || len(spec.runtimeTreeDigest) != sha256.Size*2 || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 0 || len(spec.BindReadOnlyPaths) != wantBinds || len(spec.ReadWritePaths) != 1 || !same(spec.InaccessiblePaths, []string{"/opt", "/srv", "/var/lib"}) || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
 		return false
 	}
 	if spec.Command[1] != filepath.Join(runtimeTarget, "runner.mjs") {
@@ -254,6 +259,12 @@ func validBackendSpec(spec ServiceSpec) bool {
 	sourceBind := strings.Split(spec.BindReadOnlyPaths[1], ":")
 	if len(runtimeBind) != 2 || !validAbsolutePath(runtimeBind[0]) || runtimeBind[1] != runtimeTarget || len(sourceBind) != 2 || !validAbsolutePath(sourceBind[0]) || sourceBind[1] != stagedSourceTarget {
 		return false
+	}
+	if spec.probe != nil {
+		probeBind := strings.Split(spec.BindReadOnlyPaths[2], ":")
+		if len(probeBind) != 2 || probeBind[0] != spec.probe.hostExecutable || probeBind[1] != probeTarget {
+			return false
+		}
 	}
 	return spec.MemoryMax > 0 && spec.MemorySwapMax == 0 && spec.TasksMax > 0 && spec.CPUQuotaPercent > 0 && spec.CPUQuotaPeriodUSec == CPUPeriodUSec && spec.RuntimeMax > 0 && spec.KillMode == "control-group" && spec.ProtectSystem == "strict" && spec.CPUAccounting && spec.NoNewPrivileges && spec.PrivateNetwork && spec.PrivateTmp && spec.ProtectHome
 }
@@ -284,7 +295,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	}
 	command := []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}
 	if spec.probe != nil {
-		command = []execStart{{Path: spec.probe.executable, Args: append([]string{spec.probe.executable, "-test.run=^TestContainmentProbeProcess$", "--", spec.probe.action, spec.probe.resultPath}, sockets...), Fail: false}}
+		command = []execStart{{Path: probeTarget, Args: append([]string{probeTarget, "-test.run=^TestContainmentProbeProcess$", "--", spec.probe.action, spec.probe.resultPath}, sockets...), Fail: false}}
 	}
 	return []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
@@ -319,6 +330,34 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	}
 }
 
+func (u *systemdUnit) VerifyAttestedProbe(ctx context.Context, want *containmentProbe) error {
+	if want == nil || len(want.executableSHA) != sha256.Size*2 || ctx.Err() != nil {
+		return errors.New("missing probe attestation")
+	}
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil {
+		return err
+	}
+	pid := intValue(p, "MainPID")
+	if pid <= 0 {
+		return errors.New("missing probe pid")
+	}
+	exe := filepath.Join("/proc", strconv.Itoa(pid), "exe")
+	path, err := os.Readlink(exe)
+	if err != nil || path != probeTarget {
+		return errors.New("probe executable path mismatch")
+	}
+	bytes, err := os.ReadFile(exe)
+	if err != nil {
+		return errors.New("probe executable unavailable")
+	}
+	sum := sha256.Sum256(bytes)
+	if hex.EncodeToString(sum[:]) != want.executableSHA {
+		return errors.New("probe executable hash mismatch")
+	}
+	return nil
+}
+
 func onlyPrivateTemp(spec ServiceSpec) string {
 	if len(spec.ReadWritePaths) != 1 || !validAbsolutePath(spec.ReadWritePaths[0]) {
 		return ""
@@ -343,6 +382,8 @@ type systemdUnit struct {
 	resultSocket   string
 	peers          PeerVerifier
 	spec           ServiceSpec
+	reportMu       sync.Mutex
+	controlGroup   string
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -417,6 +458,15 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	if !validCgroup(cgroup) {
 		return SandboxReport{}, errors.New("invalid cgroup")
 	}
+	u.reportMu.Lock()
+	if u.controlGroup == "" {
+		u.controlGroup = cgroup
+	}
+	matchedCgroup := u.controlGroup == cgroup
+	u.reportMu.Unlock()
+	if !matchedCgroup {
+		return SandboxReport{}, errors.New("control group identity changed")
+	}
 	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
 	if err != nil {
 		return SandboxReport{}, err
@@ -426,6 +476,14 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		return SandboxReport{}, err
 	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
+	if err != nil {
+		return SandboxReport{}, err
+	}
+	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
 	if err != nil {
 		return SandboxReport{}, err
 	}
@@ -465,7 +523,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	return SandboxReport{MainPID: pid, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
+	return SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}, nil
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -589,6 +647,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		u.resultListener = nil
 		_ = os.Remove(u.resultSocket)
 	}()
+	listener := u.resultListener
+	stopCancel := context.AfterFunc(ctx, func() { _ = listener.SetDeadline(time.Now()) })
+	defer stopCancel()
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = u.resultListener.SetDeadline(deadline)
 	}
@@ -672,7 +733,8 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 		if err != nil {
 			return errors.New("unit status unavailable")
 		}
-		if stringValue(p, "ActiveState") == "inactive" {
+		state := stringValue(p, "ActiveState")
+		if (state == "inactive" || state == "failed") && intValue(p, "MainPID") == 0 {
 			return nil
 		}
 		select {
@@ -681,6 +743,33 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}
+}
+
+func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
+	if u == nil || u.fs == nil || !validCgroup(cgroup) {
+		return TerminationEvidence{}, errors.New("termination evidence unavailable")
+	}
+	u.reportMu.Lock()
+	matchedCgroup := u.controlGroup != "" && u.controlGroup == cgroup
+	u.reportMu.Unlock()
+	if !matchedCgroup {
+		return TerminationEvidence{}, errors.New("termination cgroup identity mismatch")
+	}
+	events, err := u.fs.ReadFile(cgroupFile(cgroup, "cgroup.events"))
+	if os.IsNotExist(err) {
+		return TerminationEvidence{ControlGroup: cgroup, Absent: true}, nil
+	}
+	if err != nil || cgroupIsPopulated(events) {
+		return TerminationEvidence{}, errors.New("original cgroup is not empty")
+	}
+	members, err := u.fs.ReadFile(cgroupFile(cgroup, "cgroup.procs"))
+	if os.IsNotExist(err) {
+		return TerminationEvidence{ControlGroup: cgroup, Absent: true}, nil
+	}
+	if err != nil || len(strings.Fields(string(members))) != 0 {
+		return TerminationEvidence{}, errors.New("original cgroup is not empty")
+	}
+	return TerminationEvidence{ControlGroup: cgroup, Empty: true}, nil
 }
 
 func (u *systemdUnit) Cleanup(ctx context.Context) error {
@@ -802,6 +891,16 @@ func cgroupPopulated(fs FileSystem, cgroup string) (bool, error) {
 		}
 	}
 	return false, errors.New("invalid cgroup events")
+}
+
+func cgroupIsPopulated(events []byte) bool {
+	for _, line := range strings.Split(string(events), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "populated" {
+			return fields[1] != "0"
+		}
+	}
+	return true
 }
 func stringValue(p map[string]any, key string) string    { v, _ := p[key].(string); return v }
 func boolValue(p map[string]any, key string) bool        { v, _ := p[key].(bool); return v }

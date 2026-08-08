@@ -29,3 +29,13 @@ caller cancellation, and descendant cleanup. Each hostile case runs in a fresh
 production transient-unit sandbox through an internal probe seal that cannot be
 selected by ingestion callers. Services are capped at 128 MiB or less and eight
 tasks, and the entire CI job remains bounded to ten minutes.
+
+Accounting and effective properties are captured before stop. Termination is
+reported separately only after systemd reaches an inactive terminal state and
+the exact original cgroup is observed empty or already absent. CPU evidence
+includes throttling counters and its CPU-to-wall ratio; task exhaustion uses
+`pids.events`; and private-temporary-directory checks compare host and worker
+sentinels across the namespace boundary. The hostile helper itself is copied,
+hashed, and mounted read-only at one fixed internal path before the same full
+effective-property, cgroup, runtime-tree, and executable verification used by
+the production launch releases its authorization.

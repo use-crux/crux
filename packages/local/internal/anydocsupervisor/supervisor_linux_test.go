@@ -122,6 +122,24 @@ func TestExecuteFinishesAfterResultFailure(t *testing.T) {
 		t.Fatalf("terminal failure retained staged source: %#v, %v", entries, readErr)
 	}
 }
+
+func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
+	b := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {
+		<-ctx.Done()
+		return Result{}, ctx.Err()
+	}}
+	r, err := newTestSupervisor(t, b).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = r.Execute(ctx)
+	assert(t, err, ErrAborted)
+	if report := r.TerminalReport(); report.Outcome != ErrAborted || !report.Cleaned {
+		t.Fatalf("cancellation terminal report = %#v", report)
+	}
+}
 func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 	if time.Duration(CPUQuotaPercent)*RuntimeCeiling/100 >= CPUCeiling {
 		t.Fatal("service quota can exceed CPU budget")
@@ -141,18 +159,39 @@ func TestTerminalReportCopiesConcurrentAccounting(t *testing.T) {
 	go func() {
 		for i := 0; i < 1_000; i++ {
 			r.mu.Lock()
-			r.terminal = TerminalReport{Sandbox: SandboxReport{MemoryEvents: map[string]int64{"oom": int64(i)}}}
+			r.terminal = TerminalReport{PreStop: SandboxReport{MemoryEvents: map[string]int64{"oom": int64(i)}}}
 			r.mu.Unlock()
 		}
 		close(done)
 	}()
 	for i := 0; i < 1_000; i++ {
 		report := r.TerminalReport()
-		if report.Sandbox.MemoryEvents != nil {
-			report.Sandbox.MemoryEvents["caller"] = 1
+		if report.PreStop.MemoryEvents != nil {
+			report.PreStop.MemoryEvents["caller"] = 1
 		}
 	}
 	<-done
+}
+
+func TestTerminalReportSeparatesPreStopSnapshotFromTerminationEvidence(t *testing.T) {
+	backend := &fakeBackend{}
+	run, err := newTestSupervisor(t, backend).Start(context.Background(), []byte("x"), testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Finish(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	report := run.TerminalReport()
+	if !report.PreStop.Populated {
+		t.Fatal("pre-stop report was replaced with termination state")
+	}
+	if report.Termination != (TerminationEvidence{ControlGroup: "/fake", Empty: true}) {
+		t.Fatalf("termination evidence = %#v", report.Termination)
+	}
+	if !report.Cleaned {
+		t.Fatal("cleanup rejected a populated pre-stop cgroup")
+	}
 }
 
 func newTestSupervisor(t *testing.T, backend Backend) *Supervisor {
@@ -256,20 +295,21 @@ func assert(t *testing.T, e error, c ErrorCode) {
 }
 
 type fakeBackend struct {
-	u      *fakeUnit
-	read   *os.File
-	bad    bool
-	cpu    time.Duration
-	cpuErr bool
+	u       *fakeUnit
+	read    *os.File
+	bad     bool
+	cpu     time.Duration
+	cpuErr  bool
+	receive func(context.Context, Request) (Result, error)
 }
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
 	b.read = r
-	rep := SandboxReport{MainPID: 42, RuntimeTreeDigest: s.runtimeTreeDigest, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, InaccessiblePaths: s.InaccessiblePaths, BindReadOnlyPaths: s.BindReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
+	rep := SandboxReport{MainPID: 42, ControlGroup: "/fake", RuntimeTreeDigest: s.runtimeTreeDigest, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, InaccessiblePaths: s.InaccessiblePaths, BindReadOnlyPaths: s.BindReadOnlyPaths, ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
 	if b.bad {
 		rep.MemoryMax = 1
 	}
-	b.u = &fakeUnit{rep: rep, cpu: b.cpu, cpuErr: b.cpuErr}
+	b.u = &fakeUnit{rep: rep, cpu: b.cpu, cpuErr: b.cpuErr, receive: b.receive}
 	return b.u, nil
 }
 
@@ -277,11 +317,18 @@ type fakeUnit struct {
 	rep              SandboxReport
 	cpu              time.Duration
 	cpuErr           bool
+	receive          func(context.Context, Request) (Result, error)
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
 
 func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, nil }
+func (u *fakeUnit) ReceiveResult(ctx context.Context, request Request) (Result, error) {
+	if u.receive != nil {
+		return u.receive(ctx, request)
+	}
+	return Result{}, errors.New("worker failed")
+}
 func (u *fakeUnit) CPUUsage(context.Context) (time.Duration, error) {
 	if u.cpuErr {
 		return 0, errors.New("unavailable")
@@ -296,6 +343,12 @@ func (u *fakeUnit) Stop(context.Context) error {
 	return nil
 }
 func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
+func (u *fakeUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
+	if cgroup != "/fake" {
+		return TerminationEvidence{}, errors.New("unexpected cgroup")
+	}
+	return TerminationEvidence{ControlGroup: cgroup, Empty: true}, nil
+}
 func (u *fakeUnit) Cleanup(context.Context) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()

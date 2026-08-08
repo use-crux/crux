@@ -126,6 +126,32 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 	}
 }
 
+func TestSystemdTerminationEvidenceRequiresOriginalCgroupToBeEmptyOrAbsent(t *testing.T) {
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = nil
+	evidence, err := unit.TerminationEvidence(context.Background(), "/crux.slice/test")
+	if err != nil || evidence != (TerminationEvidence{ControlGroup: "/crux.slice/test", Empty: true}) {
+		t.Fatalf("empty original cgroup evidence = %#v, %v", evidence, err)
+	}
+
+	delete(fs.files, cgroupFile("/crux.slice/test", "cgroup.events"))
+	delete(fs.files, cgroupFile("/crux.slice/test", "cgroup.procs"))
+	evidence, err = unit.TerminationEvidence(context.Background(), "/crux.slice/test")
+	if err != nil || evidence != (TerminationEvidence{ControlGroup: "/crux.slice/test", Absent: true}) {
+		t.Fatalf("absent original cgroup evidence = %#v, %v", evidence, err)
+	}
+
+	if _, err := unit.TerminationEvidence(context.Background(), "/crux.slice/other"); err == nil {
+		t.Fatal("different cgroup accepted as termination evidence")
+	}
+}
+
 func TestMountedRuntimeAttestationRejectsTreeTamperingAndProcErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".complete"), nil, 0o444); err != nil {
@@ -226,6 +252,7 @@ func TestSystemdStopFallsBackToCgroupKillAndCleanup(t *testing.T) {
 		t.Fatal("cgroup.kill fallback not used")
 	}
 	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
 	if err := u.WaitInactive(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -391,6 +418,7 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 	b.name, b.properties = name, props
 	values := propertiesByName(props)
 	b.values["ReadOnlyPaths"] = values["ReadOnlyPaths"]
+	b.values["InaccessiblePaths"] = values["InaccessiblePaths"]
 	b.values["BindReadOnlyPaths"] = values["BindReadOnlyPaths"]
 	b.values["ReadWritePaths"] = values["ReadWritePaths"]
 	b.values["RestrictAddressFamilies"] = values["RestrictAddressFamilies"]
@@ -413,7 +441,7 @@ type fakeFS struct {
 }
 
 func newFakeFS() *fakeFS {
-	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("64\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
+	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("64\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	if strings.HasSuffix(path, "/.complete") {
