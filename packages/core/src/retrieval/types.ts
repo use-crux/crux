@@ -82,8 +82,8 @@ export interface EvidenceHit {
   content: string
   metadata: Record<string, unknown>
   score: number
-  /** Immutable schema-2 evidence hydrated from the indexed record, when retained. */
-  evidence?: StoredEvidence
+  /** Immutable schema-2 evidence hydrated from the indexed record. */
+  evidence: StoredEvidence
   /** Typed source facts retained for retrieval display; never scoring metadata. */
   structuredSource?: RetrievedStructuredSource
   parent?: {

@@ -14,6 +14,36 @@ import {
   resolveXlsxMerge,
 } from '../src/xlsx'
 
+it('preserves XLSM format while parsing workbook cells as inert data', async () => {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Pricing')
+  sheet.addRow(['Plan', 'Price'])
+  sheet.addRow(['Pro', 20])
+
+  const document = await parseXlsxDocument({
+    bytes: new Uint8Array(await workbook.xlsx.writeBuffer()),
+    format: 'xlsm',
+  })
+
+  expect(document.source).toMatchObject({
+    format: 'xlsm',
+    mediaType: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+  })
+  expect(document.blocks[0]).toMatchObject({
+    kind: 'sheet',
+    sheet: 'Pricing',
+    blocks: [
+      {
+        kind: 'table',
+        rows: [
+          [{ displayedValue: 'Plan' }, { displayedValue: 'Price' }],
+          [{ displayedValue: 'Pro' }, { displayedValue: '20' }],
+        ],
+      },
+    ],
+  })
+})
+
 it('preserves exact XLSX provenance through normalization, structured indexing, storage, and retrieval', async () => {
   const workbook = new ExcelJS.Workbook()
   const revenue = workbook.addWorksheet('Revenue')

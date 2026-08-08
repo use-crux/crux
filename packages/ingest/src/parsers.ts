@@ -163,8 +163,14 @@ async function parseSchema2Document(
   if (input.format === 'docx') {
     return { document: await parseDocxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
   }
-  if (input.format === 'xlsx') {
-    return { document: await parseXlsxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
+  if (input.format === 'xlsx' || input.format === 'xlsm') {
+    return {
+      document: await parseXlsxDocument({
+        bytes: input.bytes,
+        format: input.format,
+        ...(mediaType ? { mediaType } : {}),
+      }),
+    }
   }
   if (input.format === 'pdf') {
     return {
@@ -359,7 +365,7 @@ export const docxParser: IngestParser = {
 
 export const xlsxParser: IngestParser = {
   name: 'xlsx',
-  formats: ['xlsx'],
+  formats: ['xlsx', 'xlsm'],
   async parse(input, ctx) {
     const workbook = new ExcelJS.Workbook()
     const workbookBytes = input.bytes.buffer.slice(

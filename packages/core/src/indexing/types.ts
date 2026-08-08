@@ -34,7 +34,11 @@ export interface CruxDocument {
   evidence?: StoredEvidenceDocument
 }
 
-/** An indexed content chunk. */
+/**
+ * An in-memory content chunk. Chunks without evidence are non-persistable
+ * intermediates for custom or mixed-origin pipelines; stored/retrieved chunks
+ * always require immutable evidence.
+ */
 export interface CruxChunk {
   namespace: string
   sourceId: string
@@ -53,7 +57,7 @@ export interface CruxChunk {
     readonly sha256?: string
   }
   metadata: Record<string, unknown>
-  /** Immutable schema-2 evidence for citation-capable retrieval. */
+  /** Immutable schema-2 evidence required before persistence and retrieval. */
   evidence?: StoredEvidence
   parent?: {
     parentId?: string

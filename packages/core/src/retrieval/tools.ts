@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { ToolDef } from '../types/tool'
 import type { ExactFilter } from '../storage'
 import type { FindingCitation, RetrievalToolConfig, RetrievalToolName, Retriever, RetrieverHit, RetrieverSource } from './types'
+import type { StoredEvidence } from '../indexing'
 import { normalizeRetrieverSource } from './source'
 
 /** Discriminator for typed retrieval tool results. */
@@ -24,6 +25,8 @@ export interface RetrievalEvidenceToolHit {
   chunkId: string
   content: string
   score: number
+  /** Immutable evidence retained so tool-grounded results remain citation-capable. */
+  evidence: StoredEvidence
 }
 
 /** Lean finding hit exposed through typed tool results. */
@@ -259,6 +262,7 @@ function toToolHit(hit: RetrieverHit): RetrievalToolHit {
     chunkId: hit.chunkId,
     content: hit.content,
     score: hit.score,
+    evidence: hit.evidence,
   }
 }
 

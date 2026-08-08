@@ -6,6 +6,7 @@
  */
 
 import { expectTypeOf } from 'vitest'
+import { createStoredEvidence } from '../src/indexing'
 import { z } from 'zod'
 import type { Citation } from '../src/citations'
 import type { DenseEmbedding, EmbeddingModality } from '../src/embedding'
@@ -41,6 +42,22 @@ import type {
   RetrieverHit,
   RetrieverTools,
 } from '../src/retrieval'
+
+const evidence = createStoredEvidence({
+  document: {
+    documentSha256: 'a'.repeat(64),
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    normalizationVersion: 'test',
+  },
+  origin: {
+    coordinate: { kind: 'document', documentSha256: 'a'.repeat(64) },
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    blockIds: ['block'],
+  },
+  chunkId: 'chunk-1',
+  normalizedContent: 'evidence',
+  chunkerVersion: 'test',
+})
 
 declare const corpus: Corpus
 declare const embeddings: DenseEmbedding
@@ -141,6 +158,7 @@ const custom = retrieval.retriever({
       metadata: {},
       score: 1,
       provenance: { rawScore: 1 },
+      evidence,
     },
   ],
 })

@@ -1,5 +1,6 @@
 import { expectTypeOf } from 'vitest'
 import type { EvidenceHit, FindingHit, RetrieverHit } from '../src/retrieval'
+import type { StoredEvidence } from '../src/indexing'
 
 declare const hit: RetrieverHit
 
@@ -12,4 +13,5 @@ if (hit.kind === 'finding') {
   expectTypeOf(hit).toEqualTypeOf<EvidenceHit>()
   expectTypeOf(hit.source.id).toEqualTypeOf<string>()
   expectTypeOf(hit.chunkId).toEqualTypeOf<string>()
+  expectTypeOf(hit.evidence).toEqualTypeOf<StoredEvidence>()
 }

@@ -129,6 +129,9 @@ function inferFormat(contentType: string, url: string, bytes: Uint8Array): Inges
   if (lowerUrl.endsWith('.xlsx')) {
     return 'xlsx'
   }
+  if (lowerUrl.endsWith('.xlsm')) {
+    return 'xlsm'
+  }
   if (contentType.includes('text/plain') || contentType.startsWith('text/')) {
     return 'txt'
   }

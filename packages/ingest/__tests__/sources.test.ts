@@ -832,6 +832,27 @@ describe('@use-crux/ingest structured sources', () => {
     expect(docs[0].content).toContain('| Plan | Price |')
   })
 
+  it('fileSource extracts XLSM sheets as inert spreadsheet data', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'pricing.xlsm')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Pricing')
+    sheet.addRow(['Plan', 'Price'])
+    sheet.addRow(['Pro', 20])
+    await workbook.xlsx.writeFile(path)
+
+    const docs = await collect(fileSource(path, { namespace: 'kb' }).documents())
+
+    expect(docs[0]).toMatchObject({
+      metadata: { format: 'xlsm', parser: 'xlsx' },
+      source: { mediaType: 'application/vnd.ms-excel.sheet.macroEnabled.12' },
+    })
+    expect(spreadsheetTable(docs[0])).toMatchObject({
+      sheetName: 'Pricing',
+      rows: [['Plan', 'Price'], ['Pro', '20']],
+    })
+  })
+
   it('renders xlsx numeric cells with their saved percentage format', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'percentage.xlsx')

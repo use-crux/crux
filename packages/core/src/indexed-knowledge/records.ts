@@ -198,10 +198,10 @@ export function indexedChunkToHit(input: {
     : undefined
 
   const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
-  let evidence: CruxChunk['evidence'] | undefined
   if (value.evidence === undefined) {
     return null
   }
+  let evidence: NonNullable<CruxChunk['evidence']>
   try {
     evidence = validateStoredEvidence(value.evidence)
   } catch {
@@ -224,7 +224,7 @@ export function indexedChunkToHit(input: {
     content: value.content,
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
-    ...(evidence ? { evidence } : {}),
+    evidence,
     ...(structuredSource ? { structuredSource } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
     ...(provenance ? { provenance } : {}),

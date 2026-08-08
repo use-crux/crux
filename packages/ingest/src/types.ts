@@ -2,7 +2,7 @@ import type { Asset, AssetRef, AudioSource, Message } from '@use-crux/core'
 import type { ApplicationOperationProducer, IngestedDocument, StoredEvidenceDocument, StoredEvidenceOrigin } from '@use-crux/core/indexing'
 import type { TranscriptionPayload } from '@use-crux/core/adapter'
 
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'xlsm' | 'unknown'
 
 /** Explicit source coordinates retained by derived ingest parts. */
 export type IngestSourceLocation =
