@@ -3,12 +3,14 @@
 package anydocsupervisor
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -22,6 +24,10 @@ type Stager struct{ root string }
 type StagedSource struct {
 	HostPath string
 	dir      string
+	size     int64
+	hash     []byte
+	dev      uint64
+	ino      uint64
 	once     sync.Once
 	cleanup  error
 }
@@ -99,8 +105,16 @@ func (s *Stager) Stage(input []byte, limit int64) (*StagedSource, error) {
 	if err == nil {
 		err = syncDirectory(dir)
 	}
+	sum := hash.Sum(nil)
 	if err == nil {
-		err = verifyStagedSource(staged.HostPath, written, hash.Sum(nil), limit)
+		var identity stagedSourceIdentity
+		identity, err = inspectStagedSource(staged.HostPath, written, sum, limit)
+		if err == nil {
+			staged.size = identity.size
+			staged.hash = append([]byte(nil), identity.hash...)
+			staged.dev = identity.dev
+			staged.ino = identity.ino
+		}
 	}
 	if err != nil {
 		_ = staged.Cleanup()
@@ -109,21 +123,122 @@ func (s *Stager) Stage(input []byte, limit int64) (*StagedSource, error) {
 	return staged, nil
 }
 
+type stagedSourceIdentity struct {
+	size     int64
+	hash     []byte
+	dev, ino uint64
+	uid, gid uint32
+	mode     os.FileMode
+}
+
 func verifyStagedSource(path string, size int64, want []byte, limit int64) error {
+	_, err := inspectStagedSource(path, size, want, limit)
+	return err
+}
+
+func inspectStagedSource(path string, size int64, want []byte, limit int64) (stagedSourceIdentity, error) {
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return err
+		return stagedSourceIdentity{}, err
 	}
-	file := os.NewFile(uintptr(fd), path)
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() != size || info.Size() > limit || info.Mode().Perm() != 0400 {
-		return errors.New("invalid staged source")
+	defer unix.Close(fd)
+	return inspectStagedSourceFD(fd, size, want, limit)
+}
+
+func inspectStagedSourceFD(fd int, size int64, want []byte, limit int64) (stagedSourceIdentity, error) {
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return stagedSourceIdentity{}, err
+	}
+	mode := os.FileMode(stat.Mode & 0777)
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG || int64(stat.Size) != size || int64(stat.Size) > limit || mode != 0400 {
+		return stagedSourceIdentity{}, errors.New("invalid staged source")
+	}
+	if _, err := unix.Seek(fd, 0, io.SeekStart); err != nil {
+		return stagedSourceIdentity{}, err
 	}
 	hash := sha256.New()
-	read, err := io.Copy(hash, io.LimitReader(file, limit+1))
-	if err != nil || read != size || !sameBytes(hash.Sum(nil), want) {
+	buf := make([]byte, 64<<10)
+	var read int64
+	for {
+		n, err := unix.Read(fd, buf)
+		if n > 0 {
+			if read+int64(n) > limit {
+				return stagedSourceIdentity{}, errors.New("invalid staged source")
+			}
+			_, _ = hash.Write(buf[:n])
+			read += int64(n)
+		}
+		if err != nil {
+			return stagedSourceIdentity{}, err
+		}
+		if n == 0 {
+			break
+		}
+	}
+	sum := hash.Sum(nil)
+	if read != size || !sameBytes(sum, want) {
+		return stagedSourceIdentity{}, errors.New("invalid staged source")
+	}
+	return stagedSourceIdentity{
+		size: size,
+		hash: append([]byte(nil), sum...),
+		dev:  uint64(stat.Dev),
+		ino:  stat.Ino,
+		uid:  stat.Uid,
+		gid:  stat.Gid,
+		mode: mode,
+	}, nil
+}
+
+// GrantAccess transfers ownership of the exact staged source inode to the
+// verified DynamicUser while retaining mode 0400. The host parent directory is
+// intentionally left untouched (root-owned 0700). All mutation happens on an
+// O_NOFOLLOW-opened descriptor with immediate pre/post inode identity checks.
+func (s *StagedSource) GrantAccess(uid uint32) error {
+	if s == nil || uid == 0 || s.size < 0 || len(s.hash) != sha256.Size || s.dev == 0 && s.ino == 0 {
+		return errors.New("invalid staged source grant")
+	}
+	if filepath.Base(s.HostPath) != "source" || filepath.Dir(s.HostPath) != s.dir {
+		return errors.New("unsafe staged source grant")
+	}
+	parentInfo, err := os.Lstat(s.dir)
+	if err != nil || parentInfo.Mode()&os.ModeSymlink != 0 || !parentInfo.IsDir() || parentInfo.Mode().Perm() != 0700 {
+		return errors.New("unsafe staged source parent")
+	}
+	parentStat, ok := parentInfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("unsafe staged source parent")
+	}
+
+	fd, err := unix.Open(s.HostPath, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
 		return errors.New("invalid staged source")
+	}
+	defer unix.Close(fd)
+
+	before, err := inspectStagedSourceFD(fd, s.size, s.hash, s.size)
+	if err != nil || before.dev != s.dev || before.ino != s.ino {
+		return errors.New("invalid staged source")
+	}
+	if err := unix.Fchown(fd, int(uid), int(uid)); err != nil {
+		return err
+	}
+	if err := unix.Fchmod(fd, 0400); err != nil {
+		return err
+	}
+	after, err := inspectStagedSourceFD(fd, s.size, s.hash, s.size)
+	if err != nil || after.dev != s.dev || after.ino != s.ino || after.uid != uid || after.mode != 0400 {
+		return errors.New("invalid staged source grant")
+	}
+
+	parentAfter, err := os.Lstat(s.dir)
+	if err != nil || parentAfter.Mode().Perm() != 0700 || !parentAfter.IsDir() {
+		return errors.New("unsafe staged source parent")
+	}
+	parentAfterStat, ok := parentAfter.Sys().(*syscall.Stat_t)
+	if !ok || parentAfterStat.Uid != parentStat.Uid || parentAfterStat.Gid != parentStat.Gid || parentAfterStat.Ino != parentStat.Ino {
+		return errors.New("unsafe staged source parent")
 	}
 	return nil
 }
@@ -172,4 +287,34 @@ func sameBytes(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// grantVerifiedSourceAccess re-checks the live unit report for a non-zero
+// DynamicUser, proves the unit's read-only bind still names this staged host
+// path, then transfers ownership of that exact inode to the worker UID.
+func grantVerifiedSourceAccess(ctx context.Context, unit Unit, staged *StagedSource) error {
+	if unit == nil || staged == nil {
+		return errors.New("authorization unavailable")
+	}
+	report, err := unit.Report(ctx)
+	if err != nil || !report.DynamicUser || report.UID == 0 || !report.PrivateUsers || report.ProtectProc != "invisible" || report.ProcSubset != "pid" {
+		return errors.New("authorization unavailable")
+	}
+	if !bindMatchesStagedSource(report.BindReadOnlyPaths, staged.HostPath) {
+		return errors.New("staged source bind mismatch")
+	}
+	return staged.GrantAccess(uint32(report.UID))
+}
+
+func bindMatchesStagedSource(binds []string, hostPath string) bool {
+	if !validAbsolutePath(hostPath) {
+		return false
+	}
+	want := hostPath + ":" + stagedSourceTarget
+	for _, bind := range binds {
+		if bind == want {
+			return true
+		}
+	}
+	return false
 }

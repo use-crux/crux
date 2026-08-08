@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -588,12 +589,123 @@ func TestStagerRejectsTamperingAndUnsafeRoots(t *testing.T) {
 		t.Fatal("symlink stage root accepted")
 	}
 }
+
+// TestStagedSourceGrantsExactDynamicUserAccess locks the ownership contract the
+// systemd DynamicUser needs: after containment verification, only the exact
+// staged inode may be handed to the verified worker UID at mode 0400 while the
+// host parent directory stays private (0700) and foreign/swapped inodes are refused.
+func TestStagedSourceGrantsExactDynamicUserAccess(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	stager := NewStager(root)
+	const payload = "grant-source-bytes"
+	staged, err := stager.Stage([]byte(payload), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = staged.Cleanup() })
+
+	parentBefore, err := os.Lstat(filepath.Dir(staged.HostPath))
+	if err != nil || !parentBefore.IsDir() || parentBefore.Mode().Perm() != 0700 {
+		t.Fatalf("parent before grant = %#v, %v", parentBefore, err)
+	}
+	parentOwnerBefore := fileOwner(t, parentBefore)
+	fileBefore, err := os.Lstat(staged.HostPath)
+	if err != nil || fileBefore.Mode().Perm() != 0400 || !fileBefore.Mode().IsRegular() {
+		t.Fatalf("staged source before grant = %#v, %v", fileBefore, err)
+	}
+	identityBefore := fileIdentity(t, fileBefore)
+
+	uid := uint32(os.Getuid())
+	if uid == 0 {
+		uid = 65534
+	}
+	if err := staged.GrantAccess(uid); err != nil {
+		t.Fatalf("grant verified worker access: %v", err)
+	}
+
+	fileAfter, err := os.Lstat(staged.HostPath)
+	if err != nil || fileAfter.Mode().Perm() != 0400 || !fileAfter.Mode().IsRegular() {
+		t.Fatalf("staged source after grant = %#v, %v", fileAfter, err)
+	}
+	identityAfter := fileIdentity(t, fileAfter)
+	if identityAfter.dev != identityBefore.dev || identityAfter.ino != identityBefore.ino || identityAfter.size != identityBefore.size {
+		t.Fatalf("grant mutated inode identity: before=%#v after=%#v", identityBefore, identityAfter)
+	}
+	if got := fileOwner(t, fileAfter); got.uid != uid {
+		t.Fatalf("staged source uid = %d, want verified DynamicUser %d", got.uid, uid)
+	}
+
+	parentAfter, err := os.Lstat(filepath.Dir(staged.HostPath))
+	if err != nil || parentAfter.Mode().Perm() != 0700 || !parentAfter.IsDir() {
+		t.Fatalf("parent after grant = %#v, %v", parentAfter, err)
+	}
+	if got := fileOwner(t, parentAfter); got != parentOwnerBefore {
+		t.Fatalf("parent ownership changed: before=%#v after=%#v", parentOwnerBefore, got)
+	}
+
+	if err := staged.GrantAccess(0); err == nil {
+		t.Fatal("uid 0 grant accepted")
+	}
+
+	// Symlink substitution at the staged path must fail closed (O_NOFOLLOW).
+	swapped := t.TempDir() + "/swapped"
+	if err := os.WriteFile(swapped, []byte(payload), 0400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(staged.HostPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(swapped, staged.HostPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := staged.GrantAccess(uid); err == nil {
+		t.Fatal("symlink-substituted staged source accepted")
+	}
+
+	// Exact-path foreign bind must not authorize a grant for this staged inode.
+	foreign := &fakeUnit{rep: SandboxReport{
+		MainPID: 42, UID: uint64(uid), DynamicUser: true, PrivateUsers: true,
+		ProtectProc: "invisible", ProcSubset: "pid",
+		BindReadOnlyPaths: []string{"/run/foreign:" + stagedSourceTarget},
+	}}
+	if err := grantVerifiedSourceAccess(context.Background(), foreign, staged); err == nil {
+		t.Fatal("foreign-unit bind path accepted for staged source grant")
+	}
+}
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
 	var x *SupervisorError
 	if !errors.As(e, &x) || x.Code != c {
 		t.Fatalf("%v", e)
 	}
+}
+
+type fileOwnerIDs struct{ uid, gid uint32 }
+
+func fileOwner(t *testing.T, info os.FileInfo) fileOwnerIDs {
+	t.Helper()
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatalf("missing stat identity for %s", info.Name())
+	}
+	return fileOwnerIDs{uid: stat.Uid, gid: stat.Gid}
+}
+
+type fileIdent struct {
+	dev, ino uint64
+	size     int64
+}
+
+func fileIdentity(t *testing.T, info os.FileInfo) fileIdent {
+	t.Helper()
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatalf("missing stat identity for %s", info.Name())
+	}
+	return fileIdent{dev: uint64(stat.Dev), ino: stat.Ino, size: info.Size()}
 }
 
 type fakeBackend struct {

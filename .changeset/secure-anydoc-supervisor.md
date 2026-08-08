@@ -24,6 +24,11 @@ to its private runtime directory, and gate the real systemd sandbox against
 network, filesystem, privilege, task, memory, CPU, timeout, crash, abort, and
 descendant-escape probes.
 
+After unit, cgroup, and DynamicUser verification, transfer ownership of the
+exact staged source inode to that worker UID at mode 0400 so the read-only
+bind is readable without weakening parent directory privacy, hash or identity
+revalidation, or containment.
+
 Bind the selected closed document format and every source, result, expansion,
 asset, diagnostic, memory, CPU, wall-time, and process ceiling into the
 one-shot worker capability. Return parser failures as strict typed outcomes

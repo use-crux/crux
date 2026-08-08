@@ -615,6 +615,14 @@ func (s *Supervisor) start(ctx context.Context, input []byte, format Format, lau
 			return nil, closed(ErrContainmentUnavailable)
 		}
 	}
+	// After full unit/cgroup/runtime verification and DynamicUser preparation,
+	// hand the exact staged source inode to the verified worker UID at 0400.
+	if e = grantVerifiedSourceAccess(ctx, unit, staged); e != nil {
+		write.Close()
+		_ = staged.Cleanup()
+		_, _, _, _ = cleanup(unit)
+		return nil, closedWith(ErrContainmentUnavailable, e)
+	}
 	var n [16]byte
 	if _, e = rand.Read(n[:]); e != nil {
 		write.Close()
