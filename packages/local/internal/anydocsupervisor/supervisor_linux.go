@@ -245,6 +245,7 @@ type ServiceSpec struct {
 	KillMode, ProtectSystem                                                                         string
 	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                         bool
 	NodeSHA256                                                                                      string
+	Node                                                                                            assets.AttestedNode
 }
 
 func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, error) {
@@ -267,7 +268,7 @@ func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, err
 		return ServiceSpec{}, closed(ErrContainmentUnavailable)
 	}
 	runner := filepath.Join(runtime, "runner.mjs")
-	return ServiceSpec{Command: []string{node.Path(), runner}, NodeSHA256: node.SHA256(), Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	return ServiceSpec{Command: []string{node.Path(), runner}, NodeSHA256: node.SHA256(), Node: node, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 // NewInstalledServiceSpec binds containment to a runtime minted by assets,
@@ -315,6 +316,9 @@ type resultReceiver interface {
 type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
 type verifiedServiceSpec interface {
 	VerifiedServiceSpec(ServiceSpec) ServiceSpec
+}
+type attestedNodeVerifier interface {
+	VerifyAttestedNode(context.Context, assets.AttestedNode) error
 }
 type PipeFactory func() (*os.File, *os.File, error)
 type Supervisor struct {
@@ -561,6 +565,11 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	r, e := u.Report(ctx)
 	if e != nil {
 		return false
+	}
+	if verifier, ok := u.(attestedNodeVerifier); ok {
+		if err := verifier.VerifyAttestedNode(ctx, s.Node); err != nil {
+			return false
+		}
 	}
 	return r.MainPID > 0 && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 }

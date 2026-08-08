@@ -5,6 +5,7 @@ package anydocsupervisor
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -13,9 +14,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/godbus/dbus/v5"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"golang.org/x/sys/unix"
 )
 
@@ -314,6 +317,47 @@ type systemdUnit struct {
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
+
+// VerifyAttestedNode checks the kernel's executable reference after systemd has
+// started the unit and before any capability frame is written.
+func (u *systemdUnit) VerifyAttestedNode(ctx context.Context, want assets.AttestedNode) error {
+	if want.Path() == "" || ctx.Err() != nil {
+		return errors.New("missing Node attestation")
+	}
+	p, err := u.bus.UnitProperties(ctx, u.name)
+	if err != nil {
+		return err
+	}
+	pid := intValue(p, "MainPID")
+	if pid <= 0 {
+		return errors.New("missing worker pid")
+	}
+	path, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return err
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil || path != want.Path() {
+		return errors.New("worker executable swapped")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || uint64(stat.Dev) != want.Dev() || stat.Ino != want.Inode() {
+		return errors.New("worker executable identity mismatch")
+	}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(bytes)
+	if hex.EncodeToString(sum[:]) != want.SHA256() {
+		return errors.New("worker executable hash mismatch")
+	}
+	return nil
+}
 
 func (u *systemdUnit) waitActive(ctx context.Context) error {
 	for {

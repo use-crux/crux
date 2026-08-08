@@ -100,7 +100,7 @@ type anydocManifest struct {
 // InstallAnydocRuntime atomically materializes only the embedded, manifest-listed
 // files. Existing trees are accepted only after every file is re-attested.
 func InstallAnydocRuntime(source embed.FS) (InstalledAnydocRuntime, error) {
-	if runtime.GOARCH != "amd64" {
+	if runtime.GOARCH != "amd64" || !gnuPlatformProbe() {
 		return InstalledAnydocRuntime{}, errors.New("Anydoc containment unavailable on this platform")
 	}
 	manifestBytes, err := source.ReadFile("embed/anydoc-runtime/manifest.json")
@@ -180,6 +180,28 @@ func InstallAnydocRuntime(source embed.FS) (InstalledAnydocRuntime, error) {
 		}
 	}
 	return InstalledAnydocRuntime{root: root, runner: filepath.Join(root, "runner.mjs"), digest: digest}, nil
+}
+
+var gnuPlatformProbe = trustedGNUPlatform
+
+func trustedGNUPlatform() bool {
+	// The pinned addon is x86_64 glibc. These are fixed host paths, not PATH
+	// lookups; both must be root-owned, non-writable regular ELF files.
+	for _, path := range []string{"/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/libc.so.6"} {
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o022 != 0 {
+			return false
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 {
+			return false
+		}
+		bytes, err := os.ReadFile(path)
+		if err != nil || len(bytes) < 20 || string(bytes[:4]) != "\x7fELF" || bytes[4] != 2 || bytes[5] != 1 {
+			return false
+		}
+	}
+	return true
 }
 
 func validPackages(packages map[string]struct {

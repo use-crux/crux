@@ -42,3 +42,12 @@ func TestResolveAnydocNodeRejectsGroupWritableExecutable(t *testing.T) {
 		t.Fatal("group-writable node accepted")
 	}
 }
+
+func TestInstallAnydocRuntimeRejectsNonGNUPlatform(t *testing.T) {
+	old := gnuPlatformProbe
+	gnuPlatformProbe = func() bool { return false }
+	t.Cleanup(func() { gnuPlatformProbe = old })
+	if _, err := InstallAnydocRuntime(embeddedAnydocRuntime); err == nil {
+		t.Fatal("unsupported libc accepted")
+	}
+}
