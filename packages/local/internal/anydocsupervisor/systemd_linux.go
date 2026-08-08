@@ -21,6 +21,8 @@ import (
 
 const systemdService = "org.freedesktop.systemd1"
 
+var blockedNodeEnvironment = []string{"NODE_OPTIONS", "NODE_PATH", "NAPI_RS_NATIVE_LIBRARY_PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"}
+
 // DBusProperty is the deliberately small subset of a systemd transient-unit
 // request that this package is permitted to make.
 type DBusProperty struct {
@@ -206,7 +208,10 @@ func (b *systemdBackend) listen(spec ServiceSpec, prefix string) (string, *net.U
 }
 
 func validBackendSpec(spec ServiceSpec) bool {
-	if len(spec.Command) != 1 || spec.Command[0] != "/usr/lib/crux/anydoc-runner" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 1 || len(spec.BindReadOnlyPaths) != 1 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+	if len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1]) || spec.NodeSHA256 == "" || !same(spec.Environment, []string{"LANG=C", "PATH=/usr/bin:/bin"}) || len(spec.ReadOnlyPaths) != 1 || len(spec.BindReadOnlyPaths) != 1 || len(spec.ReadWritePaths) != 1 || !same(spec.RestrictAddressFamilies, []string{"AF_UNIX"}) {
+		return false
+	}
+	if spec.Command[1] != filepath.Join(spec.ReadOnlyPaths[0], "runner.mjs") {
 		return false
 	}
 	paths := append(append([]string{}, spec.ReadOnlyPaths...), spec.ReadWritePaths...)
@@ -256,6 +261,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"Type", "exec"},
 		{"ExecStart", []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}},
 		{"Environment", spec.Environment},
+		{"UnsetEnvironment", blockedNodeEnvironment},
 		{"CPUAccounting", spec.CPUAccounting},
 		{"CPUQuotaPerSecUSec", uint64(spec.CPUQuotaPercent * 10_000)},
 		{"CPUQuotaPeriodUSec", uint64(spec.CPUQuotaPeriodUSec)},

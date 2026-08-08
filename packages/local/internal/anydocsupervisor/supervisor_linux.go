@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/assets"
 )
 
 const (
@@ -242,6 +244,7 @@ type ServiceSpec struct {
 	RuntimeMax                                                                                      time.Duration
 	KillMode, ProtectSystem                                                                         string
 	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                         bool
+	NodeSHA256                                                                                      string
 }
 
 func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, error) {
@@ -259,7 +262,21 @@ func NewServiceSpec(hostSource, runtime, tmp string, l Limits) (ServiceSpec, err
 		}
 	}
 	l = l.Clamp()
-	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+	node, err := assets.ResolveAnydocNode()
+	if err != nil {
+		return ServiceSpec{}, closed(ErrContainmentUnavailable)
+	}
+	runner := filepath.Join(runtime, "runner.mjs")
+	return ServiceSpec{Command: []string{node.Path(), runner}, NodeSHA256: node.SHA256(), Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{runtime}, BindReadOnlyPaths: []string{hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+}
+
+// NewInstalledServiceSpec binds containment to a runtime minted by assets,
+// rather than accepting a caller-controlled runner path.
+func NewInstalledServiceSpec(hostSource string, runtime assets.InstalledAnydocRuntime, tmp string, l Limits) (ServiceSpec, error) {
+	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") || runtime.Digest() == "" {
+		return ServiceSpec{}, closed(ErrContainmentUnavailable)
+	}
+	return NewServiceSpec(hostSource, runtime.Root(), tmp, l)
 }
 
 type SandboxReport struct {
@@ -385,6 +402,15 @@ func (s *Supervisor) Start(ctx context.Context, input []byte, runtime, tmp strin
 	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, "docx", sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{})}
 	go r.monitor()
 	return r, nil
+}
+
+// StartInstalled is the production containment entry point. It only accepts an
+// attested runtime and never derives its executable from an arbitrary string.
+func (s *Supervisor) StartInstalled(ctx context.Context, input []byte, runtime assets.InstalledAnydocRuntime, tmp string, l Limits) (*Run, error) {
+	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") {
+		return nil, closed(ErrContainmentUnavailable)
+	}
+	return s.Start(ctx, input, runtime.Root(), tmp, l)
 }
 func (r *Run) Authorize() error {
 	if r == nil {

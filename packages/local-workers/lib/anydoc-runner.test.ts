@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const source = await readFile(fileURLToPath(new URL('../bin/anydoc-runner.ts', import.meta.url)), 'utf8')
@@ -34,6 +35,29 @@ describe('anydoc runner trust boundary', () => {
     expect(canonicalDigest({ ...request, limits: { ...request.limits, resultBytes: 2049 } })).not.toBe(digest)
     expect(source).toContain('(value as Request).requestDigest === requestDigest(value as Request)')
     expect(source).toContain("'crux-anydoc-job-digest-v1\\0'")
+  })
+
+  it('ships a self-contained, integrity-described native runtime tree', async () => {
+    const runtime = resolve(fileURLToPath(new URL('../dist/anydoc-runtime/', import.meta.url)))
+    const manifest = JSON.parse(await readFile(resolve(runtime, 'manifest.json'), 'utf8'))
+    expect(manifest.platform).toBe('linux-x64-gnu')
+    expect(manifest.packages['@firecrawl/anydoc'].version).toBe('0.1.7')
+    expect(manifest.packages['@firecrawl/anydoc-linux-x64-gnu'].version).toBe('0.1.7')
+    expect(manifest.files.some((file: { path: string }) => file.path === 'runner.mjs')).toBe(true)
+    expect(manifest.files.some((file: { path: string }) => file.path.endsWith('.node'))).toBe(true)
+    for (const file of manifest.files) {
+      expect(file.path.startsWith('/') || file.path.includes('..')).toBe(false)
+      const info = await stat(resolve(runtime, file.path))
+      expect(info.isFile()).toBe(true)
+      expect(info.size).toBe(file.size)
+      expect(createHash('sha256').update(await readFile(resolve(runtime, file.path))).digest('hex')).toBe(file.sha256)
+    }
+  })
+
+  it('loads the staged native addon only when the packaged runtime is complete', async () => {
+    const runtime = resolve(fileURLToPath(new URL('../dist/anydoc-runtime/', import.meta.url)))
+    const module = await import(new URL(`file://${resolve(runtime, 'node_modules/@firecrawl/anydoc/index.js')}`).href)
+    expect(typeof module.toDocument).toBe('function')
   })
 })
 

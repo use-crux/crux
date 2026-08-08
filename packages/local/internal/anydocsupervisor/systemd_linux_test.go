@@ -67,6 +67,7 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		"ProtectHome":             true,
 		"ReadWritePaths":          []string{tmp},
 		"Environment":             []string{"LANG=C", "PATH=/usr/bin:/bin"},
+		"UnsetEnvironment":        blockedNodeEnvironment,
 		"CPUQuotaPeriodUSec":      uint64(CPUPeriodUSec),
 	}
 	for name, value := range want {
@@ -78,7 +79,7 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		t.Fatal("invalid D-Bus FD property")
 	}
 	start, ok := got["ExecStart"].([]execStart)
-	if !ok || len(start) != 1 || start[0].Path != "/usr/lib/crux/anydoc-runner" || len(start[0].Args) != 3 || start[0].Args[0] != start[0].Path || start[0].Args[1] != got["ReadOnlyPaths"].([]string)[1] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[2] {
+	if !ok || len(start) != 1 || start[0].Path != spec.Command[0] || len(start[0].Args) != 4 || start[0].Args[0] != start[0].Path || start[0].Args[1] != spec.Command[1] || start[0].Args[2] != got["ReadOnlyPaths"].([]string)[1] || start[0].Args[3] != got["ReadOnlyPaths"].([]string)[2] {
 		t.Fatalf("unsafe ExecStart %#v", got["ExecStart"])
 	}
 	paths := got["ReadOnlyPaths"].([]string)

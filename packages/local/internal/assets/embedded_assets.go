@@ -30,6 +30,9 @@ var embeddedRuntimeWorker []byte
 //go:embed embed/anydoc-runner.mjs
 var embeddedAnydocRunner []byte
 
+//go:embed embed/anydoc-runtime
+var embeddedAnydocRuntime embed.FS
+
 //go:embed ui-embed/*
 var embeddedUI embed.FS
 
@@ -51,6 +54,11 @@ func ExtractEmbeddedRuntimeWorker() (string, error) {
 // ExtractEmbeddedAnydocRunner extracts the capability-gated Anydoc runner.
 func ExtractEmbeddedAnydocRunner() (string, error) {
 	return ExtractEmbedded("anydoc-runner", embeddedAnydocRunner)
+}
+
+// ExtractEmbeddedAnydocRuntime extracts and verifies the complete native runtime.
+func ExtractEmbeddedAnydocRuntime() (InstalledAnydocRuntime, error) {
+	return InstallAnydocRuntime(embeddedAnydocRuntime)
 }
 
 // EmbeddedSourceResolverScript returns the embedded source resolver worker.
