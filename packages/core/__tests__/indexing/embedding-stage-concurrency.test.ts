@@ -3,6 +3,11 @@ import { embedding, type NormalizedEmbeddingInput } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
+
+function documents(input: Parameters<typeof schema2TextDocument>[0][]) {
+  return input.map(schema2TextDocument)
+}
 
 describe('indexer embedding-stage cache concurrency', () => {
   it('keeps two identical concurrent runs valid when both compute the same misses', async () => {
@@ -28,10 +33,10 @@ describe('indexer embedding-stage cache concurrency', () => {
       },
     }
     const docs = cachedDenseIndexer(records, embed, vectors)
-    const input = [
+    const input = documents([
       { namespace: 'kb', sourceId: 'source-z', content: 'z' },
       { namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' },
-    ]
+    ])
 
     const results = await Promise.all([docs.indexDocuments(input), docs.indexDocuments(input)])
 
@@ -61,8 +66,8 @@ describe('indexer embedding-stage cache concurrency', () => {
     const docs = cachedDenseIndexer(records, embed)
 
     await Promise.all([
-      docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' }]),
-      docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-z', content: 'z' }]),
+      docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' }])),
+      docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-z', content: 'z' }])),
     ])
 
     expect(embed).toHaveBeenCalledTimes(2)
@@ -92,7 +97,7 @@ describe('indexer embedding-stage cache concurrency', () => {
       return inputs.map((input) => denseVector(textOf(input)))
     })
     const docs = cachedDenseIndexer(records, embed)
-    const input = [{ namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' }])
 
     await docs.indexDocuments(input)
     delayProvider = true

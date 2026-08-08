@@ -3,6 +3,11 @@ import { embedding } from '../../src/embedding'
 import { indexer, indexingPipeline, transform } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
+
+function documents(input: Parameters<typeof schema2TextDocument>[0][]) {
+  return input.map(schema2TextDocument)
+}
 
 describe('indexer embedding-stage cache', () => {
   it('reuses dense vectors while still completing each indexing generation', async () => {
@@ -25,7 +30,7 @@ describe('indexer embedding-stage cache', () => {
       dense,
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const first = await docs.indexDocuments(input)
     const [firstGeneration] = (await records.list('indexer:docs:namespace:kb:source:source-a:')).entries
@@ -58,7 +63,7 @@ describe('indexer embedding-stage cache', () => {
       dense,
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const first = await docs.indexDocuments(input)
     const second = await docs.indexDocuments(input)
@@ -96,14 +101,14 @@ describe('indexer embedding-stage cache', () => {
       cache: true,
     })
 
-    await docs.indexDocuments([
+    await docs.indexDocuments(documents([
       { namespace: 'kb', sourceId: 'source-a', content: 'alpha' },
       { namespace: 'kb', sourceId: 'source-b', content: 'beta' },
-    ])
-    const second = await docs.indexDocuments([
+    ]))
+    const second = await docs.indexDocuments(documents([
       { namespace: 'kb', sourceId: 'source-a', content: 'alpha changed' },
       { namespace: 'kb', sourceId: 'source-b', content: 'beta' },
-    ])
+    ]))
 
     expect(embed).toHaveBeenCalledTimes(2)
     expect(embed).toHaveBeenNthCalledWith(1, [
@@ -137,7 +142,7 @@ describe('indexer embedding-stage cache', () => {
       }),
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const initial = await docs.indexDocuments(input)
     const refreshed = await docs.indexDocuments(input, { cache: 'refresh' })
@@ -171,7 +176,7 @@ describe('indexer embedding-stage cache', () => {
       }),
       cache: false,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const first = await docs.indexDocuments(input)
     const second = await docs.indexDocuments(input)
@@ -199,7 +204,7 @@ describe('indexer embedding-stage cache', () => {
       }),
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const dryRun = await docs.indexDocuments(input, { dryRun: true })
     const realRun = await docs.indexDocuments(input)
@@ -220,7 +225,7 @@ describe('indexer embedding-stage cache', () => {
       }),
     })
 
-    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }], { dryRun: true })
+    await docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]), { dryRun: true })
 
     expect((await records.list('indexer:docs:namespace:kb:pipeline-cache:')).entries).toEqual([])
   })

@@ -1,56 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding as makeEmbedding } from '../../src/embedding'
 import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../src/indexing'
-import { createStoredEvidence } from '../../src/indexing/stored-evidence'
 import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { JsonObject, RecordPage, RecordStore } from '../../src/storage'
-import type { CruxChunk, CruxDocument, StoredEvidenceDocument, StoredEvidenceOrigin } from '../../src/indexing'
-import { sha256Hex } from '../../src/content/sha256'
 import { textOf } from '../embedding/text-input'
-
-const producer = { kind: 'parser' as const, name: 'text' as const, version: 'test', adapterVersion: '2' }
-
-function documentEvidence(content: string): StoredEvidenceDocument {
-  return {
-    documentSha256: sha256Hex(new TextEncoder().encode(content)),
-    producer,
-    normalizationVersion: 'crux:ingested-document:2',
-  }
-}
-
-function schema2Document(input: Omit<CruxDocument, 'parts' | 'evidence'> & { readonly content: string }): CruxDocument {
-  const evidence = documentEvidence(input.content)
-  const origin: StoredEvidenceOrigin = {
-    coordinate: { kind: 'document', documentSha256: evidence.documentSha256 },
-    producer,
-    blockIds: ['text:source'],
-  }
-  return {
-    ...input,
-    evidence,
-    parts: [{ id: 'text:source', kind: 'text', content: input.content, evidence: origin }],
-  }
-}
-
-function schema2Chunk(input: Omit<CruxChunk, 'evidence'>): CruxChunk {
-  const document = documentEvidence(input.content)
-  const origin: StoredEvidenceOrigin = {
-    coordinate: { kind: 'document', documentSha256: document.documentSha256 },
-    producer,
-    blockIds: [`chunk:${input.chunkId}`],
-  }
-  return {
-    ...input,
-    evidence: createStoredEvidence({
-      document,
-      origin,
-      chunkId: input.chunkId,
-      normalizedContent: input.content,
-      chunkerVersion: 'test:2',
-    }),
-  }
-}
+import { schema2TextChunk, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 describe('indexer', () => {
   it('uses indexingPipeline() document transforms before structured default chunking', async () => {
@@ -171,7 +126,7 @@ describe('indexer', () => {
     })
 
     await indexer.indexDocuments([
-      schema2Document({
+      schema2TextDocument({
         namespace: 'kb',
         sourceId: 'doc-parent',
         title: 'Parent Doc',
@@ -249,11 +204,11 @@ describe('indexer', () => {
       }),
     })
 
-    await indexer.indexDocuments([schema2Document({ namespace: 'kb', sourceId: 'doc-gen', content: 'First version' })])
+    await indexer.indexDocuments([schema2TextDocument({ namespace: 'kb', sourceId: 'doc-gen', content: 'First version' })])
     shouldFail = true
 
     await expect(
-      indexer.indexDocuments([schema2Document({ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' })]),
+      indexer.indexDocuments([schema2TextDocument({ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' })]),
     ).rejects.toThrow('pipeline failed')
 
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, search, dense })
@@ -425,7 +380,7 @@ describe('indexer', () => {
     })
 
     await indexer.indexDocuments([
-      schema2Document({
+      schema2TextDocument({
         namespace: 'kb',
         sourceId: 'doc-1',
         content: 'first version',
@@ -441,7 +396,7 @@ describe('indexer', () => {
 
     await indexer.indexDocuments(
       [
-        schema2Document({
+        schema2TextDocument({
           namespace: 'kb',
           sourceId: 'doc-1',
           content: 'updated version with more text',
@@ -477,7 +432,7 @@ describe('indexer', () => {
     })
 
     async function* documents() {
-      yield schema2Document({
+      yield schema2TextDocument({
         namespace: 'kb' as const,
         sourceId: 'doc-async',
         content: 'hello from async iterable',
@@ -564,7 +519,7 @@ describe('indexer', () => {
     })
 
     const result = await indexer.indexChunks([
-      schema2Chunk({
+      schema2TextChunk({
         namespace: 'kb',
         sourceId: 'doc-1',
         chunkId: 'a',
@@ -620,7 +575,7 @@ describe('indexer', () => {
     })
 
     await indexer.indexChunks([
-      schema2Chunk({
+      schema2TextChunk({
         namespace: 'kb',
         sourceId: 'doc-1',
         chunkId: 'a',

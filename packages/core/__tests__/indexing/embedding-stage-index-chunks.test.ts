@@ -3,16 +3,17 @@ import { embedding } from '../../src/embedding'
 import { indexer, type CruxChunk } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const chunks: CruxChunk[] = [
-  {
+  schema2TextChunk({
     namespace: 'kb',
     sourceId: 'source-a',
     chunkId: 'chunk-a',
     ordinal: 0,
     content: 'hello',
     metadata: {},
-  },
+  }),
 ]
 
 describe('indexChunks embedding-stage cache', () => {

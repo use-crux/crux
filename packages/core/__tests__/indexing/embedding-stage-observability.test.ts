@@ -8,9 +8,14 @@ import {
   setObservabilityTransport,
 } from '../../src/observability'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 const privateContent = 'private chunk text 7f64f'
 const privateVersion = 'private-model-revision-93e2'
+
+function documents(input: Parameters<typeof schema2TextDocument>[0][]) {
+  return input.map(schema2TextDocument)
+}
 
 describe('embedding-stage observability', () => {
   afterEach(() => {
@@ -22,7 +27,7 @@ describe('embedding-stage observability', () => {
     setObservabilityTransport(transport)
     const docs = setup()
 
-    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: privateContent }])
+    await docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: privateContent }]))
     await observe.flush()
 
     const stageStart = transport.records.find(
@@ -56,7 +61,7 @@ describe('embedding-stage observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const docs = setup()
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: privateContent }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: privateContent }])
     await docs.indexDocuments(input)
     await observe.flush()
     transport.clear()
@@ -101,9 +106,20 @@ describe('embedding-stage observability', () => {
       id: 'media', namespace: 'kb', records, search: inMemorySearchStore(), dense,
     })
 
+    const mediaDocument = schema2TextDocument({ namespace: 'kb', sourceId: 'rex', content: 'A dog' })
     await docs.indexDocuments([{
-      namespace: 'kb', sourceId: 'rex', content: 'A dog',
-      asset: { type: 'data', data: new Uint8Array([91, 92, 93]), mediaType: 'image/png' },
+      ...mediaDocument,
+      parts: [
+        ...mediaDocument.parts,
+        {
+          id: 'image:rex',
+          kind: 'media',
+          modality: 'image',
+          caption: 'A dog',
+          asset: { type: 'data', data: new Uint8Array([91, 92, 93]), mediaType: 'image/png' },
+          evidence: mediaDocument.parts[0]!.evidence,
+        },
+      ],
     }])
     await observe.flush()
 

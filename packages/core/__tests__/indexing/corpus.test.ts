@@ -3,6 +3,11 @@ import { embedding } from '../../src/embedding'
 import { corpus, indexer, indexingPipeline, transform } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
+
+function document(input: Parameters<typeof schema2TextDocument>[0]) {
+  return schema2TextDocument(input)
+}
 
 describe('corpus', () => {
   function setup() {
@@ -39,13 +44,13 @@ describe('corpus', () => {
     const { docs } = setup()
 
     const result = await docs.sync([
-      {
+      document({
         namespace: 'kb',
         sourceId: 'intro',
         title: 'Intro',
         content: 'Hello corpus',
         metadata: { section: 'start' },
-      },
+      }),
     ])
 
     expect(result).toMatchObject({
@@ -96,7 +101,7 @@ describe('corpus', () => {
     })
     const docs = corpus({ id: 'docs', namespace: 'kb', records, search, indexer: docsIndexer })
 
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
 
     expect(await docs.getSource('intro')).toMatchObject({ sourceId: 'intro', status: 'indexed' })
   })
@@ -124,7 +129,7 @@ describe('corpus', () => {
     })
     const docs = corpus({ id: 'docs', namespace: 'kb', records, search, indexer: docsIndexer })
 
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: '  Hello pipeline  ' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: '  Hello pipeline  ' })])
 
     const source = await docs.getSource('intro')
     expect(source?.stages).toEqual(
@@ -151,13 +156,13 @@ describe('corpus', () => {
 
     it('skips unchanged sources and reindexes changed sources', async () => {
     const { docs } = setup()
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
 
-    const unchanged = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    const unchanged = await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
     expect(unchanged.unchanged).toBe(1)
     expect(unchanged.sources[0]).toMatchObject({ sourceId: 'intro', action: 'unchanged' })
 
-    const changed = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Updated corpus' }])
+    const changed = await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Updated corpus' })])
     expect(changed.changed).toBe(1)
     expect(changed.sources[0]).toMatchObject({ sourceId: 'intro', action: 'changed', reason: 'contentChanged' })
   })
@@ -175,17 +180,17 @@ describe('corpus', () => {
       hash: { excludeMetadata: ['mtimeMs'] },
     })
 
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello', metadata: { mtimeMs: 1 } }])
-    const result = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello', metadata: { mtimeMs: 2 } }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello', metadata: { mtimeMs: 1 } })])
+    const result = await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello', metadata: { mtimeMs: 2 } })])
 
     expect(result.unchanged).toBe(1)
   })
 
     it('skips changed existing sources in append-only mode', async () => {
     const { docs } = setup()
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
 
-    const result = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Updated corpus' }], {
+    const result = await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Updated corpus' })], {
       mode: 'appendOnly',
     })
 
@@ -196,14 +201,14 @@ describe('corpus', () => {
 
     it('requires a complete source set before deleting stale sources', async () => {
     const { docs } = setup()
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
 
     await expect(docs.sync([], { stale: 'delete' })).rejects.toThrow(/sourceSet: 'complete'/)
   })
 
     it('deletes stale sources only for complete source sets', async () => {
     const { docs, records } = setup()
-    await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
+    await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })])
 
     const result = await docs.sync([], { stale: 'delete', sourceSet: 'complete' })
 
@@ -217,7 +222,7 @@ describe('corpus', () => {
     it('dry-runs a full sync simulation without writing chunks or ledger records', async () => {
     const { docs, records, embed } = setup()
 
-    const result = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }], {
+    const result = await docs.sync([document({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })], {
       dryRun: true,
     })
 
@@ -254,7 +259,7 @@ describe('corpus', () => {
 
     const result = await docs.sync([
       { namespace: 'kb', sourceId: 'bad', content: 'Bad' },
-      { namespace: 'kb', sourceId: 'good', content: 'Good' },
+      document({ namespace: 'kb', sourceId: 'good', content: 'Good' }),
     ])
 
     expect(result.failed).toBe(1)
@@ -276,12 +281,11 @@ describe('corpus', () => {
       },
       {
         ok: true,
-        document: {
+        document: document({
           namespace: 'kb',
           sourceId: 'good',
           content: 'Good source',
-          parts: [{ id: 'text:1', kind: 'text', content: 'Good source' }],
-        },
+        }),
       },
     ])
 
