@@ -8,9 +8,14 @@ import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
+import { normalizeIngestedDocument } from '@use-crux/core/indexing'
 import { parseCsvRows } from './csv'
+import { parseCsvDocument } from './csv'
+import { parseDocxDocument } from './docx'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
+import { parsePdfDocument } from './pdf'
+import { parseXlsxDocument } from './xlsx'
 import { imageParser } from './visual-image'
 import { audioParser } from './audio'
 import { videoParser } from './video'
@@ -57,6 +62,17 @@ export async function parseDocument(input: {
 
   return await parseObservation.withContext(async () => {
     try {
+      const schema2 = await parseBuiltInSchema2Document(input)
+      if (schema2) {
+        const document = normalizeIngestedDocument(schema2, {
+          namespace: input.namespace,
+          sourceId: input.sourceId,
+          ...(input.source ? { source: input.source } : {}),
+          ...(input.title ? { title: input.title } : {}),
+        })
+        parseObservation.end({ partCount: document.parts?.length ?? 0, warningCount: schema2.diagnostics.length })
+        return document as IngestDocument
+      }
       const parsed = await parser.parse(
         {
           bytes: input.bytes,
@@ -105,6 +121,31 @@ export async function parseDocument(input: {
       throw parsedError
     }
   })
+}
+
+async function parseBuiltInSchema2Document(input: Parameters<typeof parseDocument>[0]) {
+  if (input.options?.parsers?.some((parser) => parser.formats.includes(input.format))) {
+    return undefined
+  }
+  const mediaType = input.contentType?.split(';', 1)[0]
+  if (input.format === 'csv') {
+    return parseCsvDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+  }
+  if (input.format === 'docx') {
+    return parseDocxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+  }
+  if (input.format === 'xlsx') {
+    return parseXlsxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) })
+  }
+  if (input.format === 'pdf') {
+    return parsePdfDocument({
+      bytes: input.bytes,
+      ...(mediaType ? { mediaType } : {}),
+      media: input.options?.media,
+      ...(input.options?.mediaProducer ? { mediaProducer: input.options.mediaProducer } : {}),
+    })
+  }
+  return undefined
 }
 
 export function resolveParser(format: IngestFormat, options?: ParserOptions): IngestParser {

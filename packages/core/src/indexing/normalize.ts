@@ -64,6 +64,7 @@ export function normalizeChunk(chunk: CruxChunk, namespace: string): CruxChunk {
     ...(source ? { source } : {}),
     ...(chunk.parent ? { parent: chunk.parent } : {}),
     ...(chunk.provenance ? { provenance: chunk.provenance } : {}),
+    ...(chunk.evidence ? { evidence: chunk.evidence } : {}),
   }
 }
 

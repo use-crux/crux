@@ -58,6 +58,7 @@ export async function normalizeMediaDocument(
     ...(document.content !== undefined ? { content: document.content } : {}),
     ...(document.title !== undefined ? { title: document.title } : {}),
     ...(document.metadata !== undefined ? { metadata: document.metadata } : {}),
+    ...(document.evidence !== undefined ? { evidence: document.evidence } : {}),
     ...(normalizedParts.length > 0 ? { parts: normalizedParts } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   }

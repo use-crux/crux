@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseCsvDocument } from '../src/csv'
+import { parseDocument } from '../src/parsers'
 
 type Assert<T extends true> = T
 type ParseCsvDocumentInputHasNoText = Assert<'text' extends keyof Parameters<typeof parseCsvDocument>[0] ? false : true>
@@ -41,6 +42,25 @@ it('derives CSV facts from the hashed source bytes', () => {
   expect(parseCsvDocument({ bytes }).blocks).toMatchObject([
     { kind: 'table', columns: ['Plan', 'Price'] },
   ])
+})
+
+it('uses schema-2 CSV normalization on the production parseDocument path', async () => {
+  const document = await parseDocument({
+    namespace: 'pricing',
+    sourceId: 'plans.csv',
+    bytes: new TextEncoder().encode('Plan,Price\nPro,20'),
+    format: 'csv',
+  })
+
+  expect(document).toMatchObject({
+    evidence: {
+      producer: { kind: 'parser', name: 'csv-parse' },
+      normalizationVersion: 'crux:ingested-document:2',
+    },
+    parts: [expect.objectContaining({
+      evidence: expect.objectContaining({ coordinate: { kind: 'logical-table', rowStart: 1, rowEnd: 2 } }),
+    })],
+  })
 })
 
 function csvFacts(document: ReturnType<typeof parseCsvDocument>) {

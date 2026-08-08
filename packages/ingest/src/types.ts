@@ -245,4 +245,6 @@ export interface ParseResult {
 export interface ParserOptions {
   readonly parsers?: readonly IngestParser[]
   readonly media?: Readonly<IngestMediaOperations>
+  /** Required before media.describe output can become schema-2 retrievable evidence. */
+  readonly mediaProducer?: import('@use-crux/core/indexing').ApplicationOperationProducer
 }

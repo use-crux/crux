@@ -93,6 +93,7 @@ export type {
   FindingHit,
   RetrieverHit,
   RetrieverSource,
+  RetrievedStructuredSource,
   RetrieverMode,
   RetrieverTools,
 } from './types'

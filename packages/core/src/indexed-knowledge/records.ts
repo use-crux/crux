@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { CruxChunk, CruxParentChunk } from '../indexing/types'
+import type { CruxChunk, CruxParentChunk, SpreadsheetProvenance } from '../indexing/types'
 import { validateStoredEvidence } from '../indexing/stored-evidence'
 import type { ExactFilter, JsonObject, SearchLegMatch, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
@@ -212,6 +212,9 @@ export function indexedChunkToHit(input: {
   }
   const matches = input.matches?.map((match) => ({ ...match }))
   const provenance = matches ? { matches } : undefined
+  const structuredSource = isRecord(value.provenance) && Array.isArray(value.provenance.spreadsheets)
+    ? { spreadsheets: value.provenance.spreadsheets as readonly SpreadsheetProvenance[] }
+    : undefined
 
   return {
     namespace: value.namespace,
@@ -221,6 +224,7 @@ export function indexedChunkToHit(input: {
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
     ...(evidence ? { evidence } : {}),
+    ...(structuredSource ? { structuredSource } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
     ...(provenance ? { provenance } : {}),
   }

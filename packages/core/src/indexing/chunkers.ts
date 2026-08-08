@@ -90,14 +90,14 @@ function chunkDocumentStructuredUnits(
     }
     if (part.kind === 'json') {
       units.push({
-        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part), part.evidence),
         headingPath: [], headingInstanceIds: [], kind: 'narrative',
       })
       continue
     }
     if (part.kind === 'sheet') {
       units.push({
-        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part), part.evidence),
         headingPath: [], headingInstanceIds: [], kind: 'narrative',
       })
       continue
@@ -115,6 +115,7 @@ function chunkDocumentStructuredUnits(
           slice.content,
           units.length,
           provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+          part.evidence,
         ),
         headingPath: [],
         headingInstanceIds: [],
@@ -151,7 +152,7 @@ export function chunkDocumentFlat(
       continue
     }
     if (part.kind === 'json' || part.kind === 'sheet') {
-      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
+      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part), part.evidence))
       continue
     }
     for (const slice of splitDocumentSlices(part.content, normalized)) {
@@ -160,6 +161,7 @@ export function chunkDocumentFlat(
         slice.content,
         chunks.length,
         provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+        part.evidence,
       ))
     }
   }
@@ -567,15 +569,17 @@ export function chunkDocumentParentChild(
         ? provenance
         : provenanceForChildSlice(document, currentParentContent, provenance, slice)
       const childSource = sourceFactsWithLocations(document.source, childProvenance?.sourceLocations ?? [])
+      const chunkId = createStableId('chunk', {
+        sourceId: document.sourceId,
+        parentId,
+        ordinal: children.length,
+        content: slice.content,
+      })
+      const sourceEvidence = currentParentChunks.length === 1 ? currentParentChunks[0]?.evidence : undefined
       children.push({
         namespace: document.namespace,
         sourceId: document.sourceId,
-        chunkId: createStableId('chunk', {
-          sourceId: document.sourceId,
-          parentId,
-          ordinal: children.length,
-          content: slice.content,
-        }),
+        chunkId,
         ordinal: children.length,
         content: slice.content,
         metadata: document.metadata ?? {},
@@ -585,6 +589,9 @@ export function chunkDocumentParentChild(
           ...(document.title ? { title: document.title } : {}),
         },
         ...(childProvenance ? { provenance: childProvenance } : {}),
+        ...(document.evidence && sourceEvidence
+          ? { evidence: createStoredEvidence({ document: document.evidence, origin: { coordinate: sourceEvidence.coordinate, blockIds: sourceEvidence.blockIds }, chunkId, normalizedContent: slice.content, chunkerVersion: 'parent-child:2' }) }
+          : {}),
       })
     })
     currentParentContent = ''

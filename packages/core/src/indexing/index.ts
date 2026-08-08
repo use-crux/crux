@@ -25,7 +25,7 @@ export {
   serializeStoredEvidence,
   validateStoredEvidence,
 } from './stored-evidence'
-export { normalizeXlsxDocument } from './normalize-ingested-document'
+export { normalizeIngestedDocument, normalizeXlsxDocument } from './normalize-ingested-document'
 export type {
   ApplicationOperationProducer,
   DocumentAsset,

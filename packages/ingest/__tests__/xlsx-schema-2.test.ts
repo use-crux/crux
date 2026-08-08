@@ -111,7 +111,7 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
   const hits = await retriever({ id: 'finance', namespace: 'finance', records, search, dense }).retrieve('Pro')
   expect(hits[0]).toMatchObject({ source: { id: 'revenue.xlsx' } })
   const retrieved = hits.find((hit) => hit.kind !== 'finding' && hit.content.includes('Pro'))
-  const retrievedSpreadsheet = retrieved?.kind === 'finding' ? undefined : retrieved?.provenance?.spreadsheets?.[0]
+  const retrievedSpreadsheet = retrieved?.kind === 'finding' ? undefined : retrieved?.structuredSource?.spreadsheets[0]
   expect(retrievedSpreadsheet).toMatchObject({ sheet: 'Revenue', index: 0, range: 'B2:D6', sheetBlockId: ingested.blocks[0]?.id })
   expect(retrievedSpreadsheet?.cells).toEqual(expect.arrayContaining([
     expect.objectContaining({
@@ -122,7 +122,7 @@ it('preserves exact XLSX provenance through normalization, structured indexing, 
 
   const mergeHit = (await retriever({ id: 'finance', namespace: 'finance', records, search, dense }).retrieve('Annual'))
     .find((hit) => hit.kind !== 'finding' && hit.content.includes('Annual plan'))
-  const retrievedMerge = mergeHit?.kind === 'finding' ? undefined : mergeHit?.provenance?.spreadsheets?.[0]
+  const retrievedMerge = mergeHit?.kind === 'finding' ? undefined : mergeHit?.structuredSource?.spreadsheets[0]
   expect(retrievedMerge?.cells).toEqual(expect.arrayContaining([
     expect.objectContaining({
       id: ingested.blocks[0]?.kind === 'sheet' ? ingested.blocks[0].blocks[0]?.rows[2]?.[0]?.id : undefined,

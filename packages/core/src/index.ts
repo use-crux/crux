@@ -1006,6 +1006,7 @@ export {
   corpus,
   indexer,
   IngestedDocumentContractError,
+  normalizeIngestedDocument,
   normalizeXlsxDocument,
   StoredEvidenceContractError,
   createStoredEvidence,
