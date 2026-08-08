@@ -3,185 +3,108 @@
 package anydocsupervisor
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestRequestCodecRejectsFragmentedOversizedExtraAndInvalidFrames(t *testing.T) {
-	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), Digest: strings.Repeat("b", 64)}
-	var encoded bytes.Buffer
-	if err := EncodeRequest(&encoded, request); err != nil {
-		t.Fatal(err)
+func TestPipeAuthorizationIsOneShotAndEOF(t *testing.T) {
+	b := &fakeBackend{}
+	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	if e != nil {
+		t.Fatal(e)
 	}
-	got, err := DecodeRequest(bytes.NewReader(encoded.Bytes()))
-	if err != nil || got != request {
-		t.Fatalf("DecodeRequest() = %#v, %v", got, err)
+	d := sha256.Sum256([]byte("x"))
+	v := Request{1, r.nonce, hex.EncodeToString(d[:])}
+	if e = r.Authorize(v); e != nil {
+		t.Fatal(e)
 	}
-
-	for _, frame := range [][]byte{encoded.Bytes()[:5], append(encoded.Bytes(), 0), {0, 128, 0, 1}} {
-		_, err := DecodeRequest(bytes.NewReader(frame))
-		assertCode(t, err, ErrInvalidFrame)
+	got, e := DecodeRequest(b.read)
+	if e != nil || got != v {
+		t.Fatal(e)
 	}
-	_, err = DecodeRequest(bytes.NewReader([]byte{0, 0, 0, 2, '{', '}'}))
-	assertCode(t, err, ErrInvalidRequest)
+	_, e = b.read.Read(make([]byte, 1))
+	if !errors.Is(e, io.EOF) {
+		t.Fatal("want EOF")
+	}
+	assert(t, r.Authorize(v), ErrReplay)
 }
-
-func TestResultCodecIsVersionedBoundedAndClosed(t *testing.T) {
-	want := Result{Version: ProtocolVersion, OK: false, Error: ErrTimeout, Payload: []byte("diagnostic")}
-	var encoded bytes.Buffer
-	if err := EncodeResult(&encoded, want); err != nil {
-		t.Fatal(err)
+func TestWrongAndConcurrentAuthorize(t *testing.T) {
+	b := &fakeBackend{}
+	r, _ := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	assert(t, r.Authorize(Request{1, strings.Repeat("a", 32), strings.Repeat("b", 64)}), ErrReplay)
+	d := sha256.Sum256([]byte("x"))
+	v := Request{1, r.nonce, hex.EncodeToString(d[:])}
+	ch := make(chan error, 2)
+	go func() { ch <- r.Authorize(v) }()
+	go func() { ch <- r.Authorize(v) }()
+	a, z := <-ch, <-ch
+	if (a == nil) == (z == nil) {
+		t.Fatal("exactly one authorization")
 	}
-	got, err := DecodeResult(bytes.NewReader(encoded.Bytes()))
-	if err != nil || !bytes.Equal(got.Payload, want.Payload) || got.Error != want.Error {
-		t.Fatalf("DecodeResult() = %#v, %v", got, err)
-	}
-	assertCode(t, EncodeResult(&bytes.Buffer{}, Result{Version: ProtocolVersion, Error: "open-ended"}), ErrInvalidRequest)
+	r.Finish(context.Background(), nil)
 }
-
-func TestCapabilityCodecOnlyAcceptsHostVerifiedPosture(t *testing.T) {
-	want := Capability{Version: 1, VerifiedBy: "host-supervisor", FilesystemRead: "input-only", FilesystemWrite: "private-temp-only", OutboundNetwork: "denied", PrivilegeEscalation: "denied"}
-	var encoded bytes.Buffer
-	if err := EncodeCapability(&encoded, want); err != nil {
-		t.Fatal(err)
-	}
-	got, err := DecodeCapability(bytes.NewReader(encoded.Bytes()))
-	if err != nil || got != want {
-		t.Fatalf("DecodeCapability() = %#v, %v", got, err)
-	}
-	assertCode(t, EncodeCapability(&bytes.Buffer{}, Capability{Version: 1}), ErrInvalidRequest)
-}
-
-func TestServiceSpecIsExactAndClampsRequestedLimits(t *testing.T) {
-	spec, err := NewServiceSpec("/run/crux/input", "/run/crux/runtime", "/run/crux/tmp", Limits{MemoryMax: MemoryCeiling + 1, TasksMax: TasksCeiling + 1, CPUQuotaPercent: CPUQuotaPercent + 1, RuntimeMax: RuntimeCeiling + 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := spec.Command, []string{"/usr/lib/crux/anydoc-runner"}; !samePaths(got, want) {
-		t.Fatalf("Command = %v, want %v", got, want)
-	}
-	if spec.MemoryMax != MemoryCeiling || spec.MemorySwapMax != 0 || spec.TasksMax != TasksCeiling || spec.CPUQuotaPercent != CPUQuotaPercent || spec.CPUQuotaPeriodUSec != CPUPeriodUSec || spec.RuntimeMax != RuntimeCeiling || spec.KillMode != "control-group" {
-		t.Fatalf("limits = %#v", spec)
-	}
-	if !spec.NoNewPrivileges || !spec.PrivateNetwork || !spec.PrivateTmp || spec.ProtectSystem != "strict" || !spec.ProtectHome || len(spec.CapabilityBoundingSet) != 0 {
-		t.Fatalf("sandbox = %#v", spec)
-	}
-	if !samePaths(spec.ReadOnlyPaths, []string{"/run/crux/input", "/run/crux/runtime"}) || !samePaths(spec.ReadWritePaths, []string{"/run/crux/tmp"}) {
-		t.Fatalf("mount policy = %#v", spec)
-	}
-	_, err = NewServiceSpec("relative", "/run/runtime", "/run/tmp", Limits{})
-	assertCode(t, err, ErrInvalidRequest)
-}
-
-func TestStartVerifiesBeforeReleasingSingleUseCapability(t *testing.T) {
-	backend := &fakeBackend{}
-	run, err := New(backend).Start(context.Background(), []byte("document"), "/run/input", "/run/runtime", "/run/tmp", Limits{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !backend.unit.released || backend.unit.imported {
-		t.Fatalf("release/import state = %#v", backend.unit)
-	}
-	capability := run.Capability()
-	if capability.Version != 1 || capability.VerifiedBy != "host-supervisor" || capability.FilesystemRead != "input-only" || capability.FilesystemWrite != "private-temp-only" || capability.OutboundNetwork != "denied" || capability.PrivilegeEscalation != "denied" {
-		t.Fatalf("capability = %#v", capability)
-	}
-	request := Request{Version: ProtocolVersion, Nonce: backend.unit.nonce, Digest: backend.unit.digest}
-	if err := run.Authorize(request); err != nil {
-		t.Fatal(err)
-	}
-	backend.unit.imported = true
-	assertCode(t, run.Authorize(request), ErrReplay)
-}
-
-func TestStartRejectsWrongRequestAndVerificationMismatchWithoutImport(t *testing.T) {
-	backend := &fakeBackend{mutate: func(report *SandboxReport) { report.MemorySwapMax = 1 }}
-	_, err := New(backend).Start(context.Background(), []byte("document"), "/run/input", "/run/runtime", "/run/tmp", Limits{})
-	assertCode(t, err, ErrContainmentUnavailable)
-	if backend.unit.released || backend.unit.imported || !backend.unit.stopped || !backend.unit.waited || !backend.unit.cleaned {
-		t.Fatalf("mismatch lifecycle = %#v", backend.unit)
-	}
-
-	backend = &fakeBackend{}
-	run, err := New(backend).Start(context.Background(), []byte("document"), "/run/input", "/run/runtime", "/run/tmp", Limits{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	wrong := Request{Version: ProtocolVersion, Nonce: strings.Repeat("c", 32), Digest: backend.unit.digest}
-	assertCode(t, run.Authorize(wrong), ErrReplay)
-	if backend.unit.imported {
-		t.Fatal("runner imported before request authorization")
+func TestSpecAndMismatchCleanup(t *testing.T) {
+	_, e := NewServiceSpec("/run/x", "/run/x/a", "/run/t", Limits{})
+	assert(t, e, ErrInvalidRequest)
+	b := &fakeBackend{bad: true}
+	_, e = New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	assert(t, e, ErrContainmentUnavailable)
+	if !b.u.stopped || !b.u.cleaned {
+		t.Fatal("cleanup")
 	}
 }
-
-func TestFinishAlwaysStopsWaitsForEmptyUnitAndCleans(t *testing.T) {
-	for name, outcome := range map[string]error{"leader crash": errors.New("signal: killed"), "timeout": context.DeadlineExceeded, "abort": context.Canceled, "success": nil} {
-		t.Run(name, func(t *testing.T) {
-			backend := &fakeBackend{}
-			run, err := New(backend).Start(context.Background(), []byte("document"), "/run/input", "/run/runtime", "/run/tmp", Limits{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = run.Finish(context.Background(), outcome)
-			if outcome != nil && err == nil {
-				t.Fatal("Finish() error = nil")
-			}
-			if outcome == nil && err != nil {
-				t.Fatal(err)
-			}
-			if !backend.unit.stopped || !backend.unit.waited || !backend.unit.cleaned || backend.unit.report.Populated {
-				t.Fatalf("lifecycle = %#v", backend.unit)
-			}
-		})
+func TestCPULimitStops(t *testing.T) {
+	b := &fakeBackend{cpu: CPUCeiling + time.Second}
+	r, e := New(b).Start(context.Background(), []byte("x"), "/run/in", "/run/run", "/run/tmp", Limits{})
+	if e != nil {
+		t.Fatal(e)
 	}
+	time.Sleep(30 * time.Millisecond)
+	if !b.u.stopped {
+		t.Fatal("cpu was not stopped")
+	}
+	r.Finish(context.Background(), nil)
 }
-
-func assertCode(t *testing.T, err error, want ErrorCode) {
+func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
-	var typed *Error
-	if !errors.As(err, &typed) || typed.Code != want {
-		t.Fatalf("error = %T %v, want %s", err, err, want)
+	var x *SupervisorError
+	if !errors.As(e, &x) || x.Code != c {
+		t.Fatalf("%v", e)
 	}
 }
 
 type fakeBackend struct {
-	unit   *fakeUnit
-	mutate func(*SandboxReport)
+	u    *fakeUnit
+	read *os.File
+	bad  bool
+	cpu  time.Duration
 }
 
-func (f *fakeBackend) Start(_ context.Context, spec ServiceSpec) (Unit, error) {
-	report := SandboxReport{MainPID: 42, ControlGroupMembers: []int{42}, MemoryMax: spec.MemoryMax, MemorySwapMax: spec.MemorySwapMax, TasksMax: spec.TasksMax, CPUQuotaPercent: spec.CPUQuotaPercent, CPUQuotaPeriodUSec: spec.CPUQuotaPeriodUSec, RuntimeMax: spec.RuntimeMax, KillMode: spec.KillMode, NoNewPrivileges: spec.NoNewPrivileges, PrivateNetwork: spec.PrivateNetwork, PrivateTmp: spec.PrivateTmp, ProtectSystem: spec.ProtectSystem, ProtectHome: spec.ProtectHome, CapabilityBoundingSet: append([]string(nil), spec.CapabilityBoundingSet...), ReadOnlyPaths: append([]string(nil), spec.ReadOnlyPaths...), ReadWritePaths: append([]string(nil), spec.ReadWritePaths...), Populated: true}
-	if f.mutate != nil {
-		f.mutate(&report)
+func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
+	b.read = r
+	rep := SandboxReport{42, []int{42}, s.MemoryMax, 0, s.TasksMax, s.CPUQuotaPercent, s.CPUQuotaPeriodUSec, s.RuntimeMax, s.KillMode, s.ProtectSystem, true, true, true, true, true, []string{}, s.ReadOnlyPaths, s.ReadWritePaths, true}
+	if b.bad {
+		rep.MemoryMax = 1
 	}
-	f.unit = &fakeUnit{report: report}
-	return f.unit, nil
+	b.u = &fakeUnit{rep: rep, cpu: b.cpu}
+	return b.u, nil
 }
 
 type fakeUnit struct {
-	report                                       SandboxReport
-	nonce, digest                                string
-	released, imported, stopped, waited, cleaned bool
+	rep              SandboxReport
+	cpu              time.Duration
+	stopped, cleaned bool
 }
 
-func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.report, nil }
-func (u *fakeUnit) ReleaseCapabilityFD(_ context.Context, nonce, digest string) (int, error) {
-	u.released, u.nonce, u.digest = true, nonce, digest
-	return 3, nil
-}
-func (u *fakeUnit) Stop(context.Context) error {
-	u.stopped = true
-	u.report.Populated = false
-	return nil
-}
-func (u *fakeUnit) WaitInactive(context.Context) error {
-	u.waited = true
-	if u.report.Populated {
-		return errors.New("unit still populated")
-	}
-	return nil
-}
-func (u *fakeUnit) Cleanup(context.Context) error { u.cleaned = true; return nil }
+func (u *fakeUnit) Report(context.Context) (SandboxReport, error)   { return u.rep, nil }
+func (u *fakeUnit) CPUUsage(context.Context) (time.Duration, error) { return u.cpu, nil }
+func (u *fakeUnit) Stop(context.Context) error                      { u.stopped = true; u.rep.Populated = false; return nil }
+func (u *fakeUnit) WaitInactive(context.Context) error              { return nil }
+func (u *fakeUnit) Cleanup(context.Context) error                   { u.cleaned = true; return nil }

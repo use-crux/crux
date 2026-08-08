@@ -1,10 +1,9 @@
 //go:build linux
 
-// Package anydocsupervisor owns the fail-closed Linux containment boundary for
-// a future Anydoc runner. It intentionally has no parser or D-Bus dependency.
 package anydocsupervisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -12,10 +11,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"os"
 	"path/filepath"
-	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,6 +26,7 @@ const (
 	CPUQuotaPercent = 100
 	CPUPeriodUSec   = 1_000_000
 	RuntimeCeiling  = 30 * time.Second
+	CPUCeiling      = 20 * time.Second
 )
 
 type ErrorCode string
@@ -41,24 +41,16 @@ const (
 	ErrAborted                ErrorCode = "aborted"
 )
 
-type Error struct {
-	Code    ErrorCode
-	Message string
-}
+type SupervisorError struct{ Code ErrorCode }
 
-func (e *Error) Error() string { return string(e.Code) + ": " + e.Message }
-func fail(code ErrorCode, format string, args ...any) error {
-	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
-}
+func (e *SupervisorError) Error() string { return string(e.Code) }
+func closed(code ErrorCode) error        { return &SupervisorError{Code: code} }
 
 type Request struct {
 	Version int    `json:"version"`
 	Nonce   string `json:"nonce"`
 	Digest  string `json:"digest"`
 }
-
-// Result is the bounded, versioned worker response envelope. It deliberately
-// admits only the supervisor's closed failure vocabulary.
 type Result struct {
 	Version int       `json:"version"`
 	OK      bool      `json:"ok"`
@@ -66,147 +58,111 @@ type Result struct {
 	Payload []byte    `json:"payload,omitempty"`
 }
 
-// EncodeRequest writes one bounded, length-prefixed request frame.
-func EncodeRequest(w io.Writer, request Request) error {
-	if err := validateRequest(request); err != nil {
-		return err
-	}
-	payload, err := json.Marshal(request)
-	if err != nil {
-		return fail(ErrInvalidRequest, "encode request")
-	}
-	if len(payload) > MaxFrameBytes {
-		return fail(ErrInvalidFrame, "frame exceeds %d bytes", MaxFrameBytes)
-	}
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
-		return err
-	}
-	_, err = w.Write(payload)
-	return err
+func validRequest(v Request) bool {
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.Digest) == 64 && hexOK(v.Nonce) && hexOK(v.Digest)
 }
-
-// DecodeRequest consumes exactly one frame. Trailing bytes are forbidden so a
-// caller cannot accidentally treat multiple requests as one authorization.
+func hexOK(s string) bool { _, e := hex.DecodeString(s); return e == nil }
+func writeFull(w io.Writer, p []byte) error {
+	for len(p) > 0 {
+		n, e := w.Write(p)
+		if e != nil {
+			return e
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		p = p[n:]
+	}
+	return nil
+}
+func writeFrame(w io.Writer, value any) error {
+	p, e := json.Marshal(value)
+	if e != nil || len(p) == 0 || len(p) > MaxFrameBytes {
+		return closed(ErrInvalidFrame)
+	}
+	var h [4]byte
+	binary.BigEndian.PutUint32(h[:], uint32(len(p)))
+	if e = writeFull(w, h[:]); e != nil {
+		return e
+	}
+	return writeFull(w, p)
+}
+func readFrame(r io.Reader, dst any) error {
+	var h [4]byte
+	if _, e := io.ReadFull(r, h[:]); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	n := binary.BigEndian.Uint32(h[:])
+	if n == 0 || n > MaxFrameBytes {
+		return closed(ErrInvalidFrame)
+	}
+	p := make([]byte, n)
+	if _, e := io.ReadFull(r, p); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	d := json.NewDecoder(bytes.NewReader(p))
+	d.DisallowUnknownFields()
+	if e := d.Decode(dst); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return closed(ErrInvalidFrame)
+	}
+	return nil
+}
+func EncodeRequest(w io.Writer, v Request) error {
+	if !validRequest(v) {
+		return closed(ErrInvalidRequest)
+	}
+	e := writeFrame(w, v)
+	if e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	return nil
+}
 func DecodeRequest(r io.Reader) (Request, error) {
-	var header [4]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		return Request{}, fail(ErrInvalidFrame, "read header: %v", err)
+	var v Request
+	e := readFrame(r, &v)
+	if e != nil {
+		return v, e
 	}
-	size := binary.BigEndian.Uint32(header[:])
-	if size == 0 || size > MaxFrameBytes {
-		return Request{}, fail(ErrInvalidFrame, "invalid frame length %d", size)
+	if !validRequest(v) {
+		return v, closed(ErrInvalidRequest)
 	}
-	payload := make([]byte, size)
-	if _, err := io.ReadFull(r, payload); err != nil {
-		return Request{}, fail(ErrInvalidFrame, "truncated frame: %v", err)
-	}
-	var request Request
-	if err := json.Unmarshal(payload, &request); err != nil {
-		return Request{}, fail(ErrInvalidFrame, "invalid json")
-	}
-	var extra [1]byte
-	if n, err := r.Read(extra[:]); n != 0 || (err != nil && !errors.Is(err, io.EOF)) {
-		return Request{}, fail(ErrInvalidFrame, "extra data after frame")
-	}
-	if err := validateRequest(request); err != nil {
-		return Request{}, err
-	}
-	return request, nil
+	return v, nil
 }
-
-func validateRequest(request Request) error {
-	if request.Version != ProtocolVersion {
-		return fail(ErrInvalidRequest, "unsupported version %d", request.Version)
+func EncodeResult(w io.Writer, v Result) error {
+	if v.Version != ProtocolVersion || (v.OK && v.Error != "") || (!v.OK && !known(v.Error)) {
+		return closed(ErrInvalidRequest)
 	}
-	if len(request.Nonce) != 32 || !isHex(request.Nonce) {
-		return fail(ErrInvalidRequest, "nonce must be 16-byte hex")
-	}
-	if len(request.Digest) != 64 || !isHex(request.Digest) {
-		return fail(ErrInvalidRequest, "digest must be sha-256 hex")
+	if e := writeFrame(w, v); e != nil {
+		return closed(ErrInvalidFrame)
 	}
 	return nil
 }
-
-func EncodeResult(w io.Writer, result Result) error {
-	if err := validateResult(result); err != nil {
-		return err
-	}
-	payload, err := json.Marshal(result)
-	if err != nil {
-		return fail(ErrInvalidFrame, "encode result")
-	}
-	if len(payload) == 0 || len(payload) > MaxFrameBytes {
-		return fail(ErrInvalidFrame, "invalid result frame length")
-	}
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
-		return err
-	}
-	_, err = w.Write(payload)
-	return err
-}
-
 func DecodeResult(r io.Reader) (Result, error) {
-	var header [4]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		return Result{}, fail(ErrInvalidFrame, "read result header: %v", err)
+	var v Result
+	e := readFrame(r, &v)
+	if e != nil {
+		return v, e
 	}
-	size := binary.BigEndian.Uint32(header[:])
-	if size == 0 || size > MaxFrameBytes {
-		return Result{}, fail(ErrInvalidFrame, "invalid result frame length %d", size)
+	if v.Version != ProtocolVersion || (v.OK && v.Error != "") || (!v.OK && !known(v.Error)) {
+		return v, closed(ErrInvalidRequest)
 	}
-	payload := make([]byte, size)
-	if _, err := io.ReadFull(r, payload); err != nil {
-		return Result{}, fail(ErrInvalidFrame, "truncated result frame: %v", err)
-	}
-	var extra [1]byte
-	if n, err := r.Read(extra[:]); n != 0 || (err != nil && !errors.Is(err, io.EOF)) {
-		return Result{}, fail(ErrInvalidFrame, "extra data after result frame")
-	}
-	var result Result
-	if err := json.Unmarshal(payload, &result); err != nil {
-		return Result{}, fail(ErrInvalidFrame, "invalid result json")
-	}
-	if err := validateResult(result); err != nil {
-		return Result{}, err
-	}
-	return result, nil
+	return v, nil
 }
-
-func validateResult(result Result) error {
-	if result.Version != ProtocolVersion {
-		return fail(ErrInvalidRequest, "unsupported version %d", result.Version)
-	}
-	if len(result.Payload) > MaxFrameBytes {
-		return fail(ErrInvalidFrame, "result exceeds %d bytes", MaxFrameBytes)
-	}
-	if result.OK && result.Error != "" {
-		return fail(ErrInvalidRequest, "successful result has an error")
-	}
-	if !result.OK && !closedCode(result.Error) {
-		return fail(ErrInvalidRequest, "unknown result error %q", result.Error)
-	}
-	return nil
-}
-
-func closedCode(code ErrorCode) bool {
-	switch code {
+func known(c ErrorCode) bool {
+	switch c {
 	case ErrContainmentUnavailable, ErrInvalidFrame, ErrInvalidRequest, ErrReplay, ErrWorkerCrash, ErrTimeout, ErrAborted:
 		return true
 	}
 	return false
 }
 
-func isHex(value string) bool { _, err := hex.DecodeString(value); return err == nil }
-
 type Limits struct {
-	MemoryMax       int64
-	TasksMax        int
-	CPUQuotaPercent int
-	RuntimeMax      time.Duration
+	MemoryMax                 int64
+	TasksMax, CPUQuotaPercent int
+	RuntimeMax                time.Duration
 }
 
 func (l Limits) Clamp() Limits {
@@ -226,231 +182,199 @@ func (l Limits) Clamp() Limits {
 }
 
 type ServiceSpec struct {
-	Command                                                  []string
-	Environment                                              []string
-	InputDirectory, RuntimeDirectory, TempDirectory          string
-	MemoryMax, MemorySwapMax                                 int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec            int
-	RuntimeMax                                               time.Duration
-	KillMode                                                 string
-	NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
-	ProtectSystem                                            string
-	CapabilityBoundingSet                                    []string
-	ReadOnlyPaths, ReadWritePaths                            []string
+	Command, Environment, ReadOnlyPaths, ReadWritePaths                     []string
+	MemoryMax, MemorySwapMax                                                int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
+	RuntimeMax                                                              time.Duration
+	KillMode, ProtectSystem                                                 string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
 }
 
-func NewServiceSpec(input, runtime, temporary string, requested Limits) (ServiceSpec, error) {
-	for _, path := range []string{input, runtime, temporary} {
-		if !filepath.IsAbs(path) {
-			return ServiceSpec{}, fail(ErrInvalidRequest, "sandbox path must be absolute")
+func NewServiceSpec(input, runtime, tmp string, l Limits) (ServiceSpec, error) {
+	paths := []string{input, runtime, tmp}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
+			return ServiceSpec{}, closed(ErrInvalidRequest)
 		}
 	}
-	limits := requested.Clamp()
-	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, InputDirectory: input, RuntimeDirectory: runtime, TempDirectory: temporary, MemoryMax: limits.MemoryMax, MemorySwapMax: 0, TasksMax: limits.TasksMax, CPUQuotaPercent: limits.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: limits.RuntimeMax, KillMode: "control-group", NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectSystem: "strict", ProtectHome: true, CapabilityBoundingSet: []string{}, ReadOnlyPaths: []string{input, runtime}, ReadWritePaths: []string{temporary}}, nil
+	for i, p := range paths {
+		for j, q := range paths {
+			if i != j && (p == q || len(p) < len(q) && q[:len(p)+1] == p+"/") {
+				return ServiceSpec{}, closed(ErrInvalidRequest)
+			}
+		}
+	}
+	l = l.Clamp()
+	return ServiceSpec{Command: []string{"/usr/lib/crux/anydoc-runner"}, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, ReadOnlyPaths: []string{input, runtime}, ReadWritePaths: []string{tmp}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
 }
 
 type SandboxReport struct {
-	MainPID                                                  int
-	ControlGroupMembers                                      []int
-	MemoryMax, MemorySwapMax                                 int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec            int
-	RuntimeMax                                               time.Duration
-	KillMode                                                 string
-	NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
-	ProtectSystem                                            string
-	CapabilityBoundingSet                                    []string
-	ReadOnlyPaths, ReadWritePaths                            []string
-	Populated                                                bool
+	MainPID                                                                 int
+	ControlGroupMembers                                                     []int
+	MemoryMax, MemorySwapMax                                                int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                           int
+	RuntimeMax                                                              time.Duration
+	KillMode, ProtectSystem                                                 string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome bool
+	CapabilityBoundingSet, ReadOnlyPaths, ReadWritePaths                    []string
+	Populated                                                               bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
-	ReleaseCapabilityFD(context.Context, string, string) (int, error)
+	CPUUsage(context.Context) (time.Duration, error)
 	Stop(context.Context) error
 	WaitInactive(context.Context) error
 	Cleanup(context.Context) error
 }
 type Backend interface {
-	Start(context.Context, ServiceSpec) (Unit, error)
+	Start(context.Context, ServiceSpec, *os.File) (Unit, error)
+}
+type PipeFactory func() (*os.File, *os.File, error)
+type Supervisor struct {
+	backend Backend
+	pipe    PipeFactory
+	now     func() time.Time
 }
 
-type Capability struct {
-	Version                                                               int
-	VerifiedBy                                                            string
-	FilesystemRead, FilesystemWrite, OutboundNetwork, PrivilegeEscalation string
-}
-
-type capabilityWire struct {
-	Version             int    `json:"version"`
-	VerifiedBy          string `json:"verifiedBy"`
-	FilesystemRead      string `json:"filesystemRead"`
-	FilesystemWrite     string `json:"filesystemWrite"`
-	OutboundNetwork     string `json:"outboundNetwork"`
-	PrivilegeEscalation string `json:"privilegeEscalation"`
-}
-
-func EncodeCapability(w io.Writer, capability Capability) error {
-	if !validCapability(capability) {
-		return fail(ErrInvalidRequest, "invalid containment capability")
-	}
-	payload, err := json.Marshal(capabilityWire{capability.Version, capability.VerifiedBy, capability.FilesystemRead, capability.FilesystemWrite, capability.OutboundNetwork, capability.PrivilegeEscalation})
-	if err != nil {
-		return fail(ErrInvalidFrame, "encode capability")
-	}
-	if len(payload) == 0 || len(payload) > MaxFrameBytes {
-		return fail(ErrInvalidFrame, "invalid capability frame length")
-	}
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
-		return err
-	}
-	_, err = w.Write(payload)
-	return err
-}
-
-func DecodeCapability(r io.Reader) (Capability, error) {
-	var header [4]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		return Capability{}, fail(ErrInvalidFrame, "read capability header: %v", err)
-	}
-	size := binary.BigEndian.Uint32(header[:])
-	if size == 0 || size > MaxFrameBytes {
-		return Capability{}, fail(ErrInvalidFrame, "invalid capability frame length %d", size)
-	}
-	payload := make([]byte, size)
-	if _, err := io.ReadFull(r, payload); err != nil {
-		return Capability{}, fail(ErrInvalidFrame, "truncated capability frame: %v", err)
-	}
-	var extra [1]byte
-	if n, err := r.Read(extra[:]); n != 0 || (err != nil && !errors.Is(err, io.EOF)) {
-		return Capability{}, fail(ErrInvalidFrame, "extra data after capability frame")
-	}
-	var wire capabilityWire
-	if err := json.Unmarshal(payload, &wire); err != nil {
-		return Capability{}, fail(ErrInvalidFrame, "invalid capability json")
-	}
-	capability := Capability{wire.Version, wire.VerifiedBy, wire.FilesystemRead, wire.FilesystemWrite, wire.OutboundNetwork, wire.PrivilegeEscalation}
-	if !validCapability(capability) {
-		return Capability{}, fail(ErrInvalidRequest, "invalid containment capability")
-	}
-	return capability, nil
-}
-
-func validCapability(capability Capability) bool {
-	return capability.Version == ProtocolVersion && capability.VerifiedBy == "host-supervisor" && capability.FilesystemRead == "input-only" && capability.FilesystemWrite == "private-temp-only" && capability.OutboundNetwork == "denied" && capability.PrivilegeEscalation == "denied"
-}
+func New(b Backend) *Supervisor { return &Supervisor{backend: b, pipe: os.Pipe, now: time.Now} }
 
 type Run struct {
 	unit          Unit
+	write         *os.File
 	nonce, digest string
-	capability    Capability
+	mu            sync.Mutex
+	stopOnce      sync.Once
 	done          bool
+	stop          chan struct{}
 }
-type Supervisor struct{ backend Backend }
 
-func New(backend Backend) *Supervisor { return &Supervisor{backend: backend} }
-
-func (s *Supervisor) Start(ctx context.Context, input []byte, inputDirectory, runtimeDirectory, tempDirectory string, requested Limits) (*Run, error) {
+func (s *Supervisor) Start(ctx context.Context, input []byte, a, b, c string, l Limits) (*Run, error) {
 	if s == nil || s.backend == nil {
-		return nil, fail(ErrContainmentUnavailable, "supervisor backend unavailable")
+		return nil, closed(ErrContainmentUnavailable)
 	}
-	spec, err := NewServiceSpec(inputDirectory, runtimeDirectory, tempDirectory, requested)
-	if err != nil {
-		return nil, err
+	spec, e := NewServiceSpec(a, b, c, l)
+	if e != nil {
+		return nil, e
 	}
-	unit, err := s.backend.Start(ctx, spec)
-	if err != nil {
-		return nil, fail(ErrContainmentUnavailable, "start transient unit: %v", err)
+	read, write, e := s.pipe()
+	if e != nil {
+		return nil, closed(ErrContainmentUnavailable)
 	}
-	if err := verify(ctx, unit, spec); err != nil {
-		_ = closeUnit(ctx, unit)
-		return nil, err
+	unit, e := s.backend.Start(ctx, spec, read)
+	if e != nil {
+		read.Close()
+		write.Close()
+		return nil, closed(ErrContainmentUnavailable)
 	}
-	nonce, err := newNonce()
-	if err != nil {
-		_ = closeUnit(ctx, unit)
-		return nil, fail(ErrContainmentUnavailable, "nonce generation failed")
+	if !verify(ctx, unit, spec) {
+		write.Close()
+		cleanup(unit)
+		return nil, closed(ErrContainmentUnavailable)
 	}
-	digest := sha256.Sum256(input)
-	run := &Run{unit: unit, nonce: nonce, digest: hex.EncodeToString(digest[:]), capability: Capability{Version: 1, VerifiedBy: "host-supervisor", FilesystemRead: "input-only", FilesystemWrite: "private-temp-only", OutboundNetwork: "denied", PrivilegeEscalation: "denied"}}
-	if _, err := unit.ReleaseCapabilityFD(ctx, run.nonce, run.digest); err != nil {
-		_ = closeUnit(ctx, unit)
-		return nil, fail(ErrContainmentUnavailable, "release capability: %v", err)
+	var n [16]byte
+	if _, e = rand.Read(n[:]); e != nil {
+		write.Close()
+		cleanup(unit)
+		return nil, closed(ErrContainmentUnavailable)
 	}
-	return run, nil
+	d := sha256.Sum256(input)
+	r := &Run{unit: unit, write: write, nonce: hex.EncodeToString(n[:]), digest: hex.EncodeToString(d[:]), stop: make(chan struct{})}
+	go r.monitor()
+	return r, nil
 }
-func (r *Run) Capability() Capability { return r.capability }
-func (r *Run) Authorize(request Request) error {
+func (r *Run) Authorize(v Request) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r == nil || r.done {
-		return fail(ErrReplay, "run is closed")
+		return closed(ErrReplay)
 	}
-	if err := validateRequest(request); err != nil {
-		return err
+	if !validRequest(v) {
+		return closed(ErrInvalidRequest)
 	}
-	if request.Nonce != r.nonce || request.Digest != r.digest {
-		return fail(ErrReplay, "request does not match capability")
-	}
-	r.done = true
-	return nil
-}
-func (r *Run) Finish(ctx context.Context, outcome error) error {
-	if r == nil {
-		return nil
+	if v.Nonce != r.nonce || v.Digest != r.digest {
+		return closed(ErrReplay)
 	}
 	r.done = true
-	if err := closeUnit(ctx, r.unit); err != nil {
-		return err
-	}
-	if errors.Is(outcome, context.DeadlineExceeded) {
-		return fail(ErrTimeout, "worker exceeded runtime limit")
-	}
-	if errors.Is(outcome, context.Canceled) {
-		return fail(ErrAborted, "run aborted")
-	}
-	if outcome != nil {
-		return fail(ErrWorkerCrash, "worker terminated: %v", outcome)
+	e := EncodeRequest(r.write, v)
+	closeErr := r.write.Close()
+	if e != nil || closeErr != nil {
+		return closed(ErrContainmentUnavailable)
 	}
 	return nil
 }
-func newNonce() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
+func (r *Run) Finish(_ context.Context, out error) error {
+	r.mu.Lock()
+	if !r.done {
+		r.done = true
+		r.write.Close()
 	}
-	return hex.EncodeToString(value[:]), nil
+	r.stopOnce.Do(func() { close(r.stop) })
+	r.mu.Unlock()
+	cleanup(r.unit)
+	if errors.Is(out, context.DeadlineExceeded) {
+		return closed(ErrTimeout)
+	}
+	if errors.Is(out, context.Canceled) {
+		return closed(ErrAborted)
+	}
+	if out != nil {
+		return closed(ErrWorkerCrash)
+	}
+	return nil
 }
-func closeUnit(ctx context.Context, unit Unit) error {
+func (r *Run) monitor() {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.stop:
+			return
+		case <-tick.C:
+			u, e := r.unit.CPUUsage(context.Background())
+			if e == nil && u > CPUCeiling {
+				r.Finish(context.Background(), context.DeadlineExceeded)
+				return
+			}
+		}
+	}
+}
+func cleanup(unit Unit) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	if unit == nil {
-		return nil
+		return
 	}
-	var joined error
-	if err := unit.Stop(ctx); err != nil {
-		joined = errors.Join(joined, err)
-	}
-	if err := unit.WaitInactive(ctx); err != nil {
-		joined = errors.Join(joined, err)
-	}
-	if err := unit.Cleanup(ctx); err != nil {
-		joined = errors.Join(joined, err)
-	}
-	return joined
+	_ = unit.Stop(ctx)
+	_ = unit.WaitInactive(ctx)
+	_, _ = unit.Report(ctx)
+	_ = unit.Cleanup(ctx)
 }
-func verify(ctx context.Context, unit Unit, spec ServiceSpec) error {
-	report, err := unit.Report(ctx)
-	if err != nil {
-		return fail(ErrContainmentUnavailable, "inspect transient unit: %v", err)
+func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
+	if u == nil {
+		return false
 	}
-	if report.MainPID <= 0 || !contains(report.ControlGroupMembers, report.MainPID) || report.MemoryMax != spec.MemoryMax || report.MemorySwapMax != 0 || report.TasksMax != spec.TasksMax || report.CPUQuotaPercent != spec.CPUQuotaPercent || report.CPUQuotaPeriodUSec != spec.CPUQuotaPeriodUSec || report.RuntimeMax != spec.RuntimeMax || report.KillMode != "control-group" || !report.NoNewPrivileges || !report.PrivateNetwork || !report.PrivateTmp || report.ProtectSystem != "strict" || !report.ProtectHome || len(report.CapabilityBoundingSet) != 0 || !samePaths(report.ReadOnlyPaths, spec.ReadOnlyPaths) || !samePaths(report.ReadWritePaths, spec.ReadWritePaths) {
-		return fail(ErrContainmentUnavailable, "transient unit verification failed")
+	r, e := u.Report(ctx)
+	if e != nil {
+		return false
 	}
-	return nil
+	return r.MainPID > 0 && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && len(r.CapabilityBoundingSet) == 0 && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths)
 }
-func contains(values []int, target int) bool {
-	for _, value := range values {
-		if value == target {
+func contains(a []int, x int) bool {
+	for _, v := range a {
+		if v == x {
 			return true
 		}
 	}
 	return false
 }
-func samePaths(a, b []string) bool { return strings.Join(a, "\x00") == strings.Join(b, "\x00") }
+func same(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
