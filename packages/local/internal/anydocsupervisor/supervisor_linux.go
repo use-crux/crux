@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	ProtocolVersion = 1
-	MaxFrameBytes   = 8 << 20
-	MemoryCeiling   = 512 << 20
-	TasksCeiling    = 64
+	OutcomeSuccess  ErrorCode = "success"
+	ProtocolVersion           = 1
+	MaxFrameBytes             = 8 << 20
+	MemoryCeiling             = 512 << 20
+	TasksCeiling              = 64
 	// This caps aggregate cgroup CPU at 18 seconds during RuntimeCeiling.
 	CPUQuotaPercent = 60
 	CPUPeriodUSec   = 1_000_000
@@ -527,8 +528,8 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		if r.staged == nil || r.staged.Cleanup() != nil {
 			result = closed(ErrContainmentUnavailable)
 		}
-		r.terminal = TerminalReport{Sandbox: report, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
 		r.mu.Lock()
+		r.terminal = TerminalReport{Sandbox: cloneSandboxReport(report), CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
 		r.result = result
 		r.mu.Unlock()
 		close(r.finished)
@@ -544,14 +545,24 @@ func (r *Run) TerminalReport() TerminalReport {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.terminal
+	return TerminalReport{Sandbox: cloneSandboxReport(r.terminal.Sandbox), CPU: r.terminal.CPU, Wall: r.terminal.Wall, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
+}
+func cloneSandboxReport(in SandboxReport) SandboxReport {
+	out := in
+	if in.MemoryEvents != nil {
+		out.MemoryEvents = make(map[string]int64, len(in.MemoryEvents))
+		for k, v := range in.MemoryEvents {
+			out.MemoryEvents[k] = v
+		}
+	}
+	return out
 }
 func errorCode(err error) ErrorCode {
 	var e *SupervisorError
 	if errors.As(err, &e) {
 		return e.Code
 	}
-	return ""
+	return OutcomeSuccess
 }
 func outcomeCode(out error) error {
 	if errors.Is(out, errCPUAccounting) {
@@ -597,18 +608,18 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, bool) {
 		return SandboxReport{}, 0, false
 	}
 	ok := true
-	if unit.Stop(ctx) != nil {
-		ok = false
-	}
-	if unit.WaitInactive(ctx) != nil {
-		ok = false
-	}
 	report, err := unit.Report(ctx)
-	if err != nil || report.Populated {
+	if err != nil {
 		ok = false
 	}
 	cpu, cpuErr := unit.CPUUsage(ctx)
 	if cpuErr != nil {
+		ok = false
+	}
+	if unit.Stop(ctx) != nil {
+		ok = false
+	}
+	if unit.WaitInactive(ctx) != nil {
 		ok = false
 	}
 	if unit.Cleanup(ctx) != nil {

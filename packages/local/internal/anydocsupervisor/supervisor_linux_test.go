@@ -135,6 +135,26 @@ func TestCPUQuotaBoundsRuntimeBudgetAndUsageFailureFailsClosed(t *testing.T) {
 	assert(t, r.Finish(context.Background(), nil), ErrContainmentUnavailable)
 }
 
+func TestTerminalReportCopiesConcurrentAccounting(t *testing.T) {
+	r := &Run{}
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 1_000; i++ {
+			r.mu.Lock()
+			r.terminal = TerminalReport{Sandbox: SandboxReport{MemoryEvents: map[string]int64{"oom": int64(i)}}}
+			r.mu.Unlock()
+		}
+		close(done)
+	}()
+	for i := 0; i < 1_000; i++ {
+		report := r.TerminalReport()
+		if report.Sandbox.MemoryEvents != nil {
+			report.Sandbox.MemoryEvents["caller"] = 1
+		}
+	}
+	<-done
+}
+
 func newTestSupervisor(t *testing.T, backend Backend) *Supervisor {
 	t.Helper()
 	return NewWithStager(backend, NewStager(t.TempDir()))

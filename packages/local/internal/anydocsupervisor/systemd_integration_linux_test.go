@@ -84,8 +84,8 @@ func assertIntegrationCleanup(t *testing.T, root, stagingRoot, privateTemp strin
 		t.Fatal("missing completed unit")
 	}
 	report := run.TerminalReport()
-	if !report.Cleaned || report.Sandbox.Populated {
-		t.Fatal("transient unit cgroup remained populated")
+	if !report.Cleaned {
+		t.Fatal("transient unit did not become inactive and clean up")
 	}
 	entries, err := os.ReadDir(stagingRoot)
 	if err != nil {
