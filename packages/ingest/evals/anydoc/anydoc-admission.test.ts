@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import { admitAnydocDocument } from '../../private/anydoc-admission.mjs'
+import { extractAnydocNativeFacts } from '../../private/anydoc-native-facts.mjs'
 
 const bytes = new TextEncoder().encode('source')
 
@@ -52,6 +53,19 @@ describe('private Anydoc admission projection', () => {
     expect(core.blocks).toHaveLength(0)
     expect(admitted.native.facts.some((fact) => fact.kind === 'heading')).toBe(true)
     expect(admitted.core.blocks.length).toBeGreaterThan(0)
+    expect(extractAnydocNativeFacts(raw, bytes, admitted.core.producer).filter((fact) => fact.kind === 'heading')).toEqual([
+      { kind: 'heading', level: 1, text: 'Release Notes', factPath: 'blocks/1' },
+    ])
+  })
+
+  it('keeps native evidence stable when the Core projection is mutated', async () => {
+    const raw = JSON.parse(await readFile(new URL('./fixtures/anydoc-0.1.7-raw-document.json', import.meta.url), 'utf8'))
+    delete raw.$comment
+    const nativeBefore = structuredClone(extractAnydocNativeFacts(raw, bytes, { kind: 'parser', name: 'anydoc', version: '0.1.7', adapterVersion: '2-admission' }))
+    const admitted = admitAnydocDocument(raw, bytes, 'docx')
+    admitted.core.blocks[0].text = 'projector regression'
+    expect(extractAnydocNativeFacts(raw, bytes, admitted.core.producer)).toEqual(nativeBefore)
+    expect(nativeBefore).not.toEqual(expect.arrayContaining([expect.objectContaining({ text: 'projector regression' })]))
   })
 
   it('retains link, note, and image relationships without embedding asset bytes in native facts', async () => {

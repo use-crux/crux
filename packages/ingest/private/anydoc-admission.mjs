@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { extractAnydocNativeFacts } from './anydoc-native-facts.mjs'
+
+export { extractAnydocNativeFacts } from './anydoc-native-facts.mjs'
 
 const PRODUCER = Object.freeze({ kind: 'parser', name: 'anydoc', version: '0.1.7', adapterVersion: '2-admission' })
 const BLOCK_KINDS = new Set(['heading', 'paragraph', 'codeBlock', 'rule', 'blockQuote', 'list', 'table'])
@@ -49,40 +52,6 @@ export function admitAnydocDocument(document, bytes, sourceFormat, limits = {}) 
     facts,
   }
   return { native, core, relationships }
-}
-
-export function extractAnydocNativeFacts(document, bytes, producer = PRODUCER) {
-  const hash = sha256(bytes)
-  const coordinate = { kind: 'document', documentSha256: hash }
-  const facts = []
-  const add = (factPath, value) => facts.push({ ...value, factPath })
-  const provenance = (path, at = coordinate) => add(path, { kind: 'provenance', path, coordinate: at, producer })
-  const flattened = (blocks) => blocks.flatMap((block) => flattenText(block))
-  const visit = (block, path, depth) => {
-    provenance(path)
-    if (block.kind === 'heading') add(path, { kind: 'heading', level: block.level, text: inlineText(block.content) })
-    if (block.kind === 'paragraph' || block.kind === 'heading') visitLinks(block.content, path, add)
-    if (block.kind === 'list') {
-      add(path, { kind: 'list', ordered: block.list.marker !== 'bullet', depth, text: flattened(block.list.items.flatMap((item) => item.blocks)) })
-      block.list.items.forEach((item, itemIndex) => item.blocks.forEach((child, childIndex) => visit(child, `${path}/items/${itemIndex + 1}/blocks/${childIndex + 1}`, depth + (child.kind === 'list' ? 1 : 0))))
-    }
-    if (block.kind === 'table') add(path, { kind: 'table', columns: block.table.headerRows > 0 ? block.table.grid[0]?.map(cellText) ?? [] : [], rows: block.table.grid.map((row) => row.map(cellText)) })
-    if (block.kind === 'blockQuote') block.blocks.forEach((child, index) => visit(child, `${path}/blocks/${index + 1}`, depth))
-  }
-  add('document', { kind: 'ordered-text', text: flattened(document.blocks) })
-  add('document', { kind: 'notes', text: document.notes.flatMap((note) => flattened(note.blocks)) })
-  add('document', { kind: 'asset-count', count: document.assets.length })
-  add('document', { kind: 'coordinate-kinds', kinds: document.assets.length ? ['document', 'package-part'] : ['document'] })
-  add('document', { kind: 'no-parser-downgrade' })
-  provenance('document')
-  document.blocks.forEach((block, index) => visit(block, `blocks/${index + 1}`, 1))
-  document.notes.forEach((note, noteIndex) => note.blocks.forEach((block, index) => {
-    const path = `notes/${noteIndex + 1}/blocks/${index + 1}`
-    add(path, { kind: 'notes', text: flattenText(block) })
-    provenance(path)
-  }))
-  document.assets.forEach((asset, index) => provenance(`assets/${index + 1}`, { kind: 'package-part', part: asset.originPart }))
-  return facts
 }
 
 function validateDocument(value, state) {
@@ -229,7 +198,6 @@ function projectBlocks(blocks, path, coordinate, id) {
 
 function projectInlines(inlines, coordinate) { return inlines.flatMap((inline) => inline.kind === 'text' ? [{ kind: 'text', text: inline.text, coordinate, producer: PRODUCER }] : inline.kind === 'link' ? [{ kind: 'link', text: inlineText(inline.content), target: inline.target.value, coordinate, producer: PRODUCER }] : inline.kind === 'lineBreak' ? [{ kind: 'text', text: '\n', coordinate, producer: PRODUCER }] : [{ kind: 'text', text: inline.kind === 'image' ? `[image:${inline.alt}]` : inline.kind === 'anchor' ? `[anchor:${inline.anchor}]` : `[note:${inline.noteId}]`, coordinate, producer: PRODUCER }]) }
 function collectRelationships(document) { const values = []; const walkInlines = (inlines, path) => inlines.forEach((inline, index) => { const at = `${path}/inline:${index + 1}`; if (inline.kind === 'link') { values.push({ path: at, kind: inline.kind, target: inline.target }); walkInlines(inline.content, at) } else if (!['text'].includes(inline.kind)) values.push({ path: at, kind: inline.kind, ...(inline.source ? { source: inline.source } : {}), ...(inline.anchor ? { anchor: inline.anchor } : {}), ...(inline.noteId ? { noteId: inline.noteId } : {}) }) }); const walk = (blocks, path) => blocks.forEach((block, index) => { const at = `${path}/${index + 1}`; if (block.content) walkInlines(block.content, at); if (block.blocks) walk(block.blocks, at); if (block.list) block.list.items.forEach((item, itemIndex) => walk(item.blocks, `${at}/item:${itemIndex + 1}`)); if (block.table) block.table.grid.forEach((row, rowIndex) => row.forEach((slot, columnIndex) => { if (slot.kind === 'origin') walk(slot.cell.blocks, `${at}/cell:${rowIndex + 1}:${columnIndex + 1}`) })) }); walk(document.blocks, 'blocks'); document.notes.forEach((note, index) => walk(note.blocks, `notes/${index + 1}`)); return { notes: document.notes.map(({ id, kind }) => ({ id, kind })), inlines: values } }
-function visitLinks(inlines, path, add) { inlines.forEach((inline, index) => { if (inline.kind === 'link') { add(`${path}/inlines/${index + 1}`, { kind: 'link', text: inlineText(inline.content), target: inline.target.value }); visitLinks(inline.content, `${path}/inlines/${index + 1}`, add) } }) }
 function inlineText(items) { return items.map((item) => item.kind === 'text' ? item.text : item.kind === 'link' ? inlineText(item.content) : item.kind === 'lineBreak' ? '\n' : '').join('') }
 function flattenText(block) { if (block.kind === 'codeBlock') return block.text ? [block.text] : []; if (block.kind === 'heading' || block.kind === 'paragraph') { const text = inlineText(block.content); return text ? [text] : [] } if (block.kind === 'list') return block.list.items.flatMap((item) => item.blocks.flatMap(flattenText)); if (block.kind === 'table') return block.table.grid.flatMap((row) => row.map(cellText)); if (block.kind === 'blockQuote') return block.blocks.flatMap(flattenText); return [] }
 function cellText(slot) { return slot.kind === 'origin' ? slot.cell.blocks.flatMap(flattenText).join('') : '' }

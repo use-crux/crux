@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer'
 
-export type RawResultLimits = { expandedBytes: number; resultBytes: number; assetCount: number; assetBytes: number }
+export type RawResultLimits = { sourceBytes: number; expandedBytes: number; resultBytes: number; assetCount: number; assetBytes: number }
 export type RawAsset = { id: number; mediaType: string; originPart: string; data: Buffer }
 export type RawDocument = Record<string, unknown> & { blocks: unknown[]; notes: unknown[]; assets: RawAsset[] }
 type Admission = { native: unknown; core: unknown }
 
-type Preflight = { document: RawDocument; assets: RawAsset[]; assetBytes: number; maxTraversalFrames: number }
+type Preflight = { document: RawDocument; assets: RawAsset[]; assetBytes: number; projectionBytesUpperBound: number; maxTraversalFrames: number }
 type Failure = { error: 'invalid-result' | 'expanded-too-large' }
 
 export function preflightRawDocument(payload: unknown, limits: RawResultLimits): Preflight | Failure {
@@ -63,7 +63,23 @@ export function preflightRawDocument(payload: unknown, limits: RawResultLimits):
     current = next.value
   }
 
-  return { document: payload as RawDocument, assets, assetBytes, maxTraversalFrames }
+  const projectionBytesUpperBound = saturatedAdd(saturatedMultiply(jsonUpperBound, 256), saturatedMultiply(nodes, 4096))
+  const expandedUpperBound = saturatedAdd(saturatedAdd(limits.sourceBytes, assetBytes), projectionBytesUpperBound)
+  const encodedAssetBytes = assets.reduce((total, asset) => saturatedAdd(total, base64Bytes(asset.data.byteLength)), 0)
+  if (expandedUpperBound > limits.expandedBytes || saturatedAdd(projectionBytesUpperBound, encodedAssetBytes) > limits.resultBytes) return { error: 'expanded-too-large' }
+
+  return { document: payload as RawDocument, assets, assetBytes, projectionBytesUpperBound, maxTraversalFrames }
+}
+
+export function preflightAndProjectRawDocument<Admission>(
+  payload: unknown,
+  limits: RawResultLimits,
+  project: (document: RawDocument) => Admission,
+): (Preflight & { admission: Admission }) | Failure {
+  const preflight = preflightRawDocument(payload, limits)
+  if ('error' in preflight) return preflight
+
+  return { ...preflight, admission: project(preflight.document) }
 }
 
 export function encodeAdmissionResult(

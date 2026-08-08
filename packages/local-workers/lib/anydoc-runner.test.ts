@@ -54,8 +54,8 @@ describe('anydoc runner trust boundary', () => {
 
   it('bounds the native graph before serializing or projecting it', () => {
     const conversion = source.indexOf('await anydoc.toDocument')
-    const preflight = source.indexOf('preflightRawDocument(payload, request.limits)')
-    const projection = source.indexOf('admitAnydocDocument(preflight.document')
+    const preflight = source.indexOf('preflightAndProjectRawDocument(')
+    const projection = source.indexOf('admitAnydocDocument(document')
     const serialization = source.indexOf('JSON.stringify({ native: admission.native, core: admission.core })')
     expect(conversion).toBeGreaterThan(-1)
     expect(preflight).toBeGreaterThan(conversion)

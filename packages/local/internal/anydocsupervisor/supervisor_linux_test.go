@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,6 +47,20 @@ func TestPrepareLocalHostBuildsOpaqueLaunchDependencyWithoutRouting(t *testing.T
 	launch, err := PrepareLocalHost()
 	if err != nil {
 		t.Fatal(err)
+	}
+	request := validTestRequest(FormatDOCX)
+	payload := validAdmissionPayloadWithAsset(request, "AQID")
+	accounting, err := recomputePayloadAccounting(request, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeStart := bytes.Index(payload, []byte(`"native":`)) + len(`"native":`)
+	coreMarker := bytes.Index(payload, []byte(`,"core":`))
+	coreStart := coreMarker + len(`,"core":`)
+	assetsMarker := bytes.LastIndex(payload, []byte(`,"assets":[{"id":1`))
+	exactRawBytes := int64(coreMarker - nativeStart + assetsMarker - coreStart + len(`{"native":,"core":}`))
+	if accounting.RawBytes != exactRawBytes {
+		t.Fatalf("raw accounting = %d, want exact wire bytes %d", accounting.RawBytes, exactRawBytes)
 	}
 	t.Cleanup(func() {
 		_ = filepath.Walk(launch.runtimeRoot, func(path string, info os.FileInfo, err error) error {
@@ -109,7 +124,7 @@ func TestResultFramesRejectOversizedAndInvalidAccounting(t *testing.T) {
 
 func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 	request := validTestRequest(FormatDOCX)
-	payload := []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[{"id":"asset:1","mediaType":"image/png","sha256":"039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81","byteLength":3,"coordinate":{},"producer":{}}],"diagnostics":[]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQID"}],"diagnostics":[]}`)
+	payload := validAdmissionPayloadWithAsset(request, "AQID")
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -133,17 +148,39 @@ func TestSuccessfulResultRecomputesBoundedWireAccounting(t *testing.T) {
 
 func TestAdmissionResultRejectsUnknownProjectionShapesAndAssetMutation(t *testing.T) {
 	request := validTestRequest(FormatDOCX)
-	unknownNative := bytes.Replace(validAdmissionPayload(), []byte(`"facts":[]`), []byte(`"facts":[],"unknown":true`), 1)
+	unknownNative := bytes.Replace(validAdmissionPayload(request), []byte(`"facts":`), []byte(`"unknown":true,"facts":`), 1)
 	if _, err := recomputePayloadAccounting(request, unknownNative); err == nil {
 		t.Fatal("unknown native fact envelope field accepted")
 	}
-	unknownCore := bytes.Replace(validAdmissionPayload(), []byte(`"diagnostics":[]},"assets"`), []byte(`"diagnostics":[],"unknown":true},"assets"`), 1)
+	unknownCore := bytes.Replace(validAdmissionPayload(request), []byte(`"diagnostics":[]},"assets"`), []byte(`"diagnostics":[],"unknown":true},"assets"`), 1)
 	if _, err := recomputePayloadAccounting(request, unknownCore); err == nil {
 		t.Fatal("unknown Core projection field accepted")
 	}
-	assetMutation := []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[{"id":"asset:1","mediaType":"image/png","sha256":"039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81","byteLength":3,"coordinate":{},"producer":{}}],"diagnostics":[]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"AQIE"}],"diagnostics":[]}`)
+	assetMutation := validAdmissionPayloadWithAsset(request, "AQIE")
 	if _, err := recomputePayloadAccounting(request, assetMutation); err == nil {
 		t.Fatal("asset bytes independent of the Core digest accepted")
+	}
+}
+
+func TestAdmissionResultStrictlyBindsNestedEvidence(t *testing.T) {
+	request := validTestRequest(FormatDOCX)
+	valid := validAdmissionPayloadWithBlock(request)
+	if _, err := recomputePayloadAccounting(request, valid); err != nil {
+		t.Fatalf("valid bound block rejected: %v", err)
+	}
+	mutations := map[string][]byte{
+		"unknown nested fact": bytes.Replace(valid, []byte(`"kind":"heading"`), []byte(`"kind":"heading","unknown":true`), 1),
+		"source hash":         bytes.Replace(valid, []byte(request.SourceSHA256), []byte(strings.Repeat("d", 64)), 1),
+		"producer":            bytes.Replace(valid, []byte(`"version":"0.1.7"`), []byte(`"version":"0.1.6"`), 1),
+		"coordinate":          bytes.Replace(valid, []byte(`"documentSha256":"`+request.SourceSHA256+`"`), []byte(`"documentSha256":"`+strings.Repeat("d", 64)+`"`), 2),
+		"block fact path":     bytes.Replace(valid, []byte(`:document/block:1"`), []byte(`:document/block:2"`), 1),
+	}
+	for name, payload := range mutations {
+		t.Run(name, func(t *testing.T) {
+			if _, err := recomputePayloadAccounting(request, payload); err == nil {
+				t.Fatal("mutated nested evidence accepted")
+			}
+		})
 	}
 }
 
@@ -175,7 +212,7 @@ func validTestRequest(format Format) Request {
 }
 
 func validWireResult(request Request) Result {
-	payload := validAdmissionPayload()
+	payload := validAdmissionPayload(request)
 	accounting, err := recomputePayloadAccounting(request, payload)
 	if err != nil {
 		panic(err)
@@ -205,7 +242,7 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 		if request.Format != FormatODT {
 			t.Fatalf("result expected format = %q", request.Format)
 		}
-		payload := validAdmissionPayload()
+		payload := validAdmissionPayload(request)
 		accounting, err := recomputePayloadAccounting(request, payload)
 		return Result{Request: request, OK: true, Payload: payload, Accounting: &accounting}, err
 	}}
@@ -225,8 +262,34 @@ func TestSelectedFormatIsBoundThroughAuthorizationAndResult(t *testing.T) {
 	}
 }
 
-func validAdmissionPayload() []byte {
-	return []byte(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{},"observed":{},"facts":[]},"core":{"schemaVersion":2,"source":{},"producer":{},"metadata":{},"blocks":[],"assets":[],"diagnostics":[]},"assets":[],"diagnostics":[]}`)
+func validAdmissionPayload(request Request) []byte {
+	producer := `{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}`
+	coordinate := fmt.Sprintf(`{"kind":"document","documentSha256":%q}`, request.SourceSHA256)
+	facts := fmt.Sprintf(`[{"kind":"ordered-text","text":[],"factPath":"document"},{"kind":"notes","text":[],"factPath":"document"},{"kind":"asset-count","count":0,"factPath":"document"},{"kind":"coordinate-kinds","kinds":["document"],"factPath":"document"},{"kind":"no-parser-downgrade","factPath":"document"},{"kind":"provenance","path":"document","coordinate":%s,"producer":%s,"factPath":"document"}]`, coordinate, producer)
+	return []byte(fmt.Sprintf(`{"kind":"anydoc-admission-v2","native":{"kind":"anydoc-native-v2","source":{"documentSha256":%q,"format":%q},"observed":{"blockCount":0,"noteCount":0,"assets":[]},"facts":%s},"core":{"schemaVersion":2,"source":{"documentSha256":%q,"mediaType":%q,"format":%q},"producer":%s,"metadata":{"anydocRelationships":"{\"notes\":[],\"inlines\":[]}"},"blocks":[],"assets":[],"diagnostics":[]},"assets":[],"diagnostics":[]}`, request.SourceSHA256, request.Format, facts, request.SourceSHA256, formatMediaType(request.Format), request.Format, producer))
+}
+
+func validAdmissionPayloadWithAsset(request Request, data string) []byte {
+	payload := string(validAdmissionPayload(request))
+	payload = strings.Replace(payload, `"assets":[]},"facts"`, `"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","byteLength":3}]},"facts"`, 1)
+	payload = strings.Replace(payload, `"asset-count","count":0`, `"asset-count","count":1`, 1)
+	payload = strings.Replace(payload, `"kinds":["document"]`, `"kinds":["document","package-part"]`, 1)
+	payload = strings.Replace(payload, `"facts":[`, `"facts":[{"kind":"provenance","path":"assets/1","coordinate":{"kind":"package-part","part":"word/media/a.png"},"producer":{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"},"factPath":"assets/1"},`, 1)
+	projected := fmt.Sprintf(`{"id":"anydoc:%s:asset:1","mediaType":"image/png","sha256":"039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81","byteLength":3,"coordinate":{"kind":"package-part","part":"word/media/a.png"},"producer":{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}}`, request.SourceSHA256)
+	payload = strings.Replace(payload, `"assets":[],"diagnostics":[]},"assets":[]`, `"assets":[`+projected+`],"diagnostics":[]},"assets":[{"id":1,"mediaType":"image/png","originPart":"word/media/a.png","data":"`+data+`"}]`, 1)
+	return []byte(payload)
+}
+
+func validAdmissionPayloadWithBlock(request Request) []byte {
+	payload := string(validAdmissionPayload(request))
+	producer := `{"kind":"parser","name":"anydoc","version":"0.1.7","adapterVersion":"2-admission"}`
+	coordinate := fmt.Sprintf(`{"kind":"document","documentSha256":%q}`, request.SourceSHA256)
+	facts := fmt.Sprintf(`{"kind":"heading","level":1,"text":"Title","factPath":"blocks/1"},{"kind":"provenance","path":"blocks/1","coordinate":%s,"producer":%s,"factPath":"blocks/1"},`, coordinate, producer)
+	payload = strings.Replace(payload, `"blockCount":0`, `"blockCount":1`, 1)
+	payload = strings.Replace(payload, `"facts":[`, `"facts":[`+facts, 1)
+	block := fmt.Sprintf(`{"id":"anydoc:%s:1:document/block:1","kind":"text","coordinate":%s,"headingPath":[],"producer":%s,"role":"heading","text":"Title","inlines":[{"kind":"text","text":"Title","coordinate":%s,"producer":%s}],"level":1}`, request.SourceSHA256, coordinate, producer, coordinate, producer)
+	payload = strings.Replace(payload, `"blocks":[]`, `"blocks":[`+block+`]`, 1)
+	return []byte(payload)
 }
 
 func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {

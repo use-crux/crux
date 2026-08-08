@@ -3,7 +3,7 @@ import { open } from 'node:fs/promises'
 import { Socket } from 'node:net'
 import type { Format as NativeFormat } from '@firecrawl/anydoc'
 import { admitAnydocDocument, AnydocAdmissionError } from '../../ingest/private/anydoc-admission.mjs'
-import { encodeAdmissionResult, preflightRawDocument } from '../lib/anydoc-raw-result'
+import { encodeAdmissionResult, preflightAndProjectRawDocument } from '../lib/anydoc-raw-result'
 
 const protocolVersion = 2
 const maxSourceBytes = 32 << 20
@@ -51,14 +51,19 @@ async function main(): Promise<void> {
   } catch (error) {
     return fail(parserError(error), request)
   }
-  const preflight = preflightRawDocument(payload, request.limits)
-  if ('error' in preflight) return fail(preflight.error, request)
-  let admission
+  let projected
   try {
-    admission = admitAnydocDocument(preflight.document, bytes, request.format, request.limits)
+    projected = preflightAndProjectRawDocument(
+      payload,
+      request.limits,
+      (document) => admitAnydocDocument(document, bytes, request.format, request.limits),
+    )
   } catch (error) {
     return fail(error instanceof AnydocAdmissionError ? error.code : 'invalid-result', request)
   }
+  if ('error' in projected) return fail(projected.error, request)
+  const { admission } = projected
+  const preflight = projected
   const projection = Buffer.from(JSON.stringify({ native: admission.native, core: admission.core }))
   const expandedBytes = bytes.byteLength + projection.byteLength + preflight.assetBytes
   if (expandedBytes > request.limits.expandedBytes) return fail('expanded-too-large', request)

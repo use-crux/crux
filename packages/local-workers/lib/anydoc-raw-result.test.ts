@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeAdmissionResult, preflightRawDocument, type RawAsset } from './anydoc-raw-result'
+import { encodeAdmissionResult, preflightAndProjectRawDocument, preflightRawDocument, type RawAsset } from './anydoc-raw-result'
 
 describe('bounded Anydoc raw result', () => {
   it('rejects a five MiB asset before base64 or payload serialization', () => {
@@ -15,9 +15,17 @@ describe('bounded Anydoc raw result', () => {
   })
 
   it('walks a wide document with auxiliary memory bounded by depth', () => {
-    const document = { blocks: [Array.from({ length: 50_000 }, () => null)], notes: [], assets: [] }
-    const result = preflightRawDocument(document, { expandedBytes: 8 << 20, resultBytes: 8 << 20, assetCount: 128, assetBytes: 64 << 20 })
+    const document = { blocks: [Array.from({ length: 1_000 }, () => null)], notes: [], assets: [] }
+    const result = preflightRawDocument(document, { sourceBytes: 1, expandedBytes: 8 << 20, resultBytes: 8 << 20, assetCount: 128, assetBytes: 64 << 20 })
     expect(result).not.toHaveProperty('error')
     if ('maxTraversalFrames' in result) expect(result.maxTraversalFrames).toBeLessThanOrEqual(3)
+  })
+
+  it('rejects projection amplification under request limits before invoking the projector', () => {
+    const project = vi.fn(() => ({ native: {}, core: {} }))
+    const document = { blocks: [{ kind: 'paragraph', content: [{ kind: 'text', text: 'x'.repeat(1024) }] }], notes: [], assets: [] }
+    const result = preflightAndProjectRawDocument(document, { sourceBytes: 1, expandedBytes: 2048, resultBytes: 2048, assetCount: 4, assetBytes: 1024 }, project)
+    expect(result).toEqual({ error: 'expanded-too-large' })
+    expect(project).not.toHaveBeenCalled()
   })
 })
