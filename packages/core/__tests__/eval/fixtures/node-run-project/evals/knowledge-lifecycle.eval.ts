@@ -1,6 +1,11 @@
 import { z } from "zod";
+import { sha256Hex } from "../../../../../src/content/sha256";
 import { evaluate } from "../../../../../src/eval";
-import { indexingPipeline, type CruxChunk } from "../../../../../src/indexing";
+import {
+  createStoredEvidence,
+  indexingPipeline,
+  type CruxChunk,
+} from "../../../../../src/indexing";
 import {
   assertions,
   communities,
@@ -138,22 +143,43 @@ const lifecycleModel = {
 } satisfies KnowledgeModel & { readonly strategyFingerprint: string };
 
 function chunks(namespace: string): readonly CruxChunk[] {
-  return [
-    {
-      namespace,
-      sourceId: "lifecycle-source",
-      chunkId: "first",
-      ordinal: 0,
-      content: "Lifecycle knowledge begins here.",
-      metadata: {},
-    },
-    {
-      namespace,
-      sourceId: "lifecycle-source",
-      chunkId: "second",
-      ordinal: 1,
-      content: "Lifecycle knowledge continues here.",
-      metadata: {},
-    },
+  const sourceId = "lifecycle-source";
+  const contents = [
+    "Lifecycle knowledge begins here.",
+    "Lifecycle knowledge continues here.",
   ];
+  const documentSha256 = sha256Hex(new TextEncoder().encode(contents.join("\n")));
+  const producer = {
+    kind: "parser" as const,
+    name: "text" as const,
+    version: "test:knowledge-lifecycle-parser:2",
+    adapterVersion: "test:knowledge-lifecycle-adapter:2",
+  };
+
+  return contents.map((content, ordinal) => {
+    const chunkId = ordinal === 0 ? "first" : "second";
+    return {
+      namespace,
+      sourceId,
+      chunkId,
+      ordinal,
+      content,
+      metadata: {},
+      evidence: createStoredEvidence({
+        document: {
+          documentSha256,
+          producer,
+          normalizationVersion: "test:knowledge-lifecycle-normalization:2",
+        },
+        origin: {
+          coordinate: { kind: "document", documentSha256 },
+          producer,
+          blockIds: [`text:${sourceId}:${chunkId}`],
+        },
+        chunkId,
+        normalizedContent: content,
+        chunkerVersion: "test:knowledge-lifecycle-chunker:2",
+      }),
+    };
+  });
 }
