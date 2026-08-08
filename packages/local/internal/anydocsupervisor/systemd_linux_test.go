@@ -66,7 +66,7 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 		"RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}},
 		"PrivateTmp":              true,
 		"ProtectSystem":           "strict",
-		"ProtectHome":             true,
+		"ProtectHome":             "yes",
 		"ReadWritePaths":          []string{tmp},
 		"Environment":             []string{"LANG=C", "PATH=/usr/bin:/bin"},
 		"UnsetEnvironment":        blockedNodeEnvironment,
@@ -88,7 +88,8 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 	if len(paths) != 2 || !strings.HasPrefix(paths[0], tmp+"/.a-") || !strings.HasPrefix(paths[1], tmp+"/.r-") {
 		t.Fatalf("socket bind paths %#v", paths)
 	}
-	if !same(got["BindReadOnlyPaths"].([]string), []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) {
+	binds, ok := bindReadOnlyPathsValue(got["BindReadOnlyPaths"])
+	if !ok || !same(binds, []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) {
 		t.Fatalf("source bind mapping %#v", got["BindReadOnlyPaths"])
 	}
 }
@@ -142,6 +143,29 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 	fs.files[cgroupFile("/crux.slice/test", "cpu.max")] = []byte("max 1000000\n")
 	if _, err := unit.Report(context.Background()); err == nil {
 		t.Fatal("unbounded CPU was accepted")
+	}
+}
+
+func TestSystemdReportRejectsMalformedBindAndProtectHomeProperties(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{name: "legacy bind string array", key: "BindReadOnlyPaths", value: []string{"/source:/target"}},
+		{name: "bind ignores missing", key: "BindReadOnlyPaths", value: []any{[]any{"/source", "/target", true, uint64(0)}}},
+		{name: "bind mount flags", key: "BindReadOnlyPaths", value: []any{[]any{"/source", "/target", false, uint64(1)}}},
+		{name: "boolean protect home", key: "ProtectHome", value: true},
+		{name: "non-enforcing protect home", key: "ProtectHome", value: "read-only"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			bus.values[test.key] = test.value
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}}
+			if _, err := unit.Report(context.Background()); err == nil {
+				t.Fatal("malformed sandbox property accepted")
+			}
+		})
 	}
 }
 
@@ -481,6 +505,36 @@ func TestSystemdPropertyWireTypesRoundTrip(t *testing.T) {
 	if dbus.SignatureOf(props["RestrictAddressFamilies"]).String() != "(bas)" {
 		t.Fatalf("RAF signature %s", dbus.SignatureOf(props["RestrictAddressFamilies"]))
 	}
+	if dbus.SignatureOf(props["BindReadOnlyPaths"]).String() != "a(ssbt)" {
+		t.Fatalf("BindReadOnlyPaths signature %s", dbus.SignatureOf(props["BindReadOnlyPaths"]))
+	}
+	if dbus.SignatureOf(props["ProtectHome"]).String() != "s" || props["ProtectHome"] != "yes" {
+		t.Fatalf("ProtectHome wire value %#v", props["ProtectHome"])
+	}
+	wantBinds := []string{"/run/runtime:" + runtimeTarget, "/run/input:" + stagedSourceTarget}
+	if binds, ok := bindReadOnlyPathsValue(props["BindReadOnlyPaths"]); !ok || !same(binds, wantBinds) {
+		t.Fatalf("BindReadOnlyPaths did not decode: %#v", props["BindReadOnlyPaths"])
+	}
+	type systemdBindTuple struct {
+		Source        string
+		Destination   string
+		IgnoreMissing bool
+		MountFlags    uint64
+	}
+	concrete := []systemdBindTuple{{Source: "/a", Destination: "/b", IgnoreMissing: false, MountFlags: 0}}
+	if binds, ok := bindReadOnlyPathsValue(concrete); !ok || !same(binds, []string{"/a:/b"}) {
+		t.Fatalf("concrete tuples did not decode: %#v", concrete)
+	}
+	for _, malformed := range []any{
+		[]any{[]any{"/a", "/b", true, uint64(0)}},
+		[]any{[]any{"/a", "/b", false, uint64(1)}},
+		[]any{[]any{"/a", "/b", false}},
+		[]any{[]any{"/a", "/b", false, int(0)}},
+	} {
+		if _, ok := bindReadOnlyPathsValue(malformed); ok {
+			t.Fatalf("malformed bind tuple accepted: %#v", malformed)
+		}
+	}
 	raw := []any{true, []string{"AF_UNIX"}}
 	allow, families, ok := restrictAddressFamiliesValue(raw)
 	if !ok || !allow || !same(families, []string{"AF_UNIX"}) {
@@ -502,7 +556,7 @@ type fakeSystemBus struct {
 }
 
 func newFakeSystemBus() *fakeSystemBus {
-	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": true, "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []string{"/run/anydoc/input/source:" + stagedSourceTarget}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
+	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []bindReadOnlyPath{{Source: "/run/anydoc/input/source", Destination: stagedSourceTarget}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
 func (b *fakeSystemBus) SupportsUnixFDs() bool { return b.fdOK }
 func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props []DBusProperty) error {

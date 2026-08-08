@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -320,6 +321,23 @@ type restrictAddressFamilies struct {
 	Families []string
 }
 
+// bindReadOnlyPath matches systemd's a(ssbt) BindReadOnlyPaths wire contract.
+type bindReadOnlyPath struct {
+	Source        string
+	Destination   string
+	IgnoreMissing bool
+	MountFlags    uint64
+}
+
+func bindReadOnlyPathProperties(paths []string) []bindReadOnlyPath {
+	result := make([]bindReadOnlyPath, 0, len(paths))
+	for _, path := range paths {
+		parts := strings.SplitN(path, ":", 2)
+		result = append(result, bindReadOnlyPath{Source: parts[0], Destination: parts[1]})
+	}
+	return result
+}
+
 func systemdProperties(spec ServiceSpec) []DBusProperty {
 	sockets := []string{}
 	if len(spec.ReadOnlyPaths) >= 2 {
@@ -354,10 +372,10 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"RestrictAddressFamilies", restrictAddressFamilies{Allow: true, Families: spec.RestrictAddressFamilies}},
 		{"PrivateTmp", spec.PrivateTmp},
 		{"ProtectSystem", spec.ProtectSystem},
-		{"ProtectHome", spec.ProtectHome},
+		{"ProtectHome", "yes"},
 		{"ReadOnlyPaths", spec.ReadOnlyPaths},
 		{"InaccessiblePaths", spec.InaccessiblePaths},
-		{"BindReadOnlyPaths", spec.BindReadOnlyPaths},
+		{"BindReadOnlyPaths", bindReadOnlyPathProperties(spec.BindReadOnlyPaths)},
 		{"ReadWritePaths", spec.ReadWritePaths},
 	}
 }
@@ -560,7 +578,9 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		return SandboxReport{}, err
 	}
 	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
-	if !ok || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
+	binds, bindsOK := bindReadOnlyPathsValue(p["BindReadOnlyPaths"])
+	protectHome, protectHomeOK := p["ProtectHome"].(string)
+	if !ok || !bindsOK || !protectHomeOK || protectHome != "yes" || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, errors.New("invalid sandbox properties")
 	}
 	pid := intValue(p, "MainPID")
@@ -575,7 +595,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
 		}
 	}
-	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: boolValue(p, "ProtectHome"), CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: stringsValue(p, "BindReadOnlyPaths"), ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
+	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
 	if report.MainPID > 0 && report.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
 		u.snapshotMu.Lock()
 		u.snapshot = cloneSandboxReport(report)
@@ -1066,6 +1086,45 @@ func stringValue(p map[string]any, key string) string    { v, _ := p[key].(strin
 func boolValue(p map[string]any, key string) bool        { v, _ := p[key].(bool); return v }
 func stringsValue(p map[string]any, key string) []string { v, _ := p[key].([]string); return v }
 func uint64ValueOK(p map[string]any, key string) bool    { _, ok := p[key].(uint64); return ok }
+func bindReadOnlyPathsValue(value any) ([]string, bool) {
+	items := reflect.ValueOf(value)
+	if !items.IsValid() || (items.Kind() != reflect.Slice && items.Kind() != reflect.Array) {
+		return nil, false
+	}
+	result := make([]string, 0, items.Len())
+	for i := 0; i < items.Len(); i++ {
+		tuple := items.Index(i)
+		if tuple.Kind() == reflect.Interface {
+			tuple = tuple.Elem()
+		}
+		if !tuple.IsValid() || (tuple.Kind() != reflect.Struct && tuple.Kind() != reflect.Slice && tuple.Kind() != reflect.Array) {
+			return nil, false
+		}
+		if (tuple.Kind() == reflect.Struct && tuple.NumField() != 4) || (tuple.Kind() != reflect.Struct && tuple.Len() != 4) {
+			return nil, false
+		}
+		fields := [4]reflect.Value{}
+		for j := range fields {
+			if tuple.Kind() == reflect.Struct {
+				fields[j] = tuple.Field(j)
+			} else {
+				fields[j] = tuple.Index(j)
+			}
+			if fields[j].Kind() == reflect.Interface {
+				fields[j] = fields[j].Elem()
+			}
+		}
+		if fields[0].Kind() != reflect.String || fields[1].Kind() != reflect.String || fields[2].Kind() != reflect.Bool || fields[3].Type() != reflect.TypeOf(uint64(0)) || fields[2].Bool() || fields[3].Uint() != 0 {
+			return nil, false
+		}
+		source, destination := fields[0].String(), fields[1].String()
+		if !validAbsolutePath(source) || !validAbsolutePath(destination) {
+			return nil, false
+		}
+		result = append(result, source+":"+destination)
+	}
+	return result, true
+}
 func restrictAddressFamiliesValue(value any) (bool, []string, bool) {
 	switch v := value.(type) {
 	case restrictAddressFamilies:
