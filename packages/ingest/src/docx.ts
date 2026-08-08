@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { validateIngestedDocument } from '@use-crux/core/indexing'
 import { load as loadHtml } from 'cheerio'
 import mammoth from 'mammoth'
-import type { IngestedDocument, ParserIdentity, SourceCoordinate, TableCell, TextBlock } from '@use-crux/core/indexing'
+import type { IngestedDocument, ListBlock, ListItem, ParserIdentity, SourceCoordinate, TableCell, TextBlock } from '@use-crux/core/indexing'
 
 const MAMMOTH_PRODUCER: ParserIdentity = {
   kind: 'parser',
@@ -71,10 +71,9 @@ function mammothBlocks(html: string, documentSha256: string, coordinate: SourceC
   let blockNumber = 0
 
   $('body')
-    .find('h1,h2,h3,h4,h5,h6,p,li,pre,code,table')
+    .children()
     .each((_, element) => {
       const tag = element.tagName.toLowerCase()
-      const id = docxId(documentSha256, `block:${++blockNumber}`)
 
       if (/^h[1-6]$/.test(tag)) {
         const level = Number(tag.slice(1))
@@ -84,27 +83,32 @@ function mammothBlocks(html: string, documentSha256: string, coordinate: SourceC
         }
         headingPath.splice(level - 1)
         headingPath[level - 1] = text
-        blocks.push(textBlock({ id, coordinate, headingPath, role: 'heading', text, level }))
+        blocks.push(textBlock({ id: nextBlockId(), coordinate, headingPath, role: 'heading', text, level }))
         return
       }
 
       if (tag === 'table') {
-        const rows = tableRows($, element)
-        if (!rows.length) {
+        const table = tableFacts($, element)
+        if (!table.rows.length) {
           return
         }
+        const id = nextBlockId()
         blocks.push({
           id,
           kind: 'table',
           coordinate,
           headingPath: headingPath.filter(Boolean),
           producer: MAMMOTH_PRODUCER,
-          columns: rows[0] ?? [],
-          headerRows: 1,
-          rows: rows.map((row, rowIndex) =>
-            row.map((value, columnIndex) => tableCell({ id, coordinate, value, row: rowIndex + 1, column: columnIndex + 1 })),
-          ),
+          columns: table.columns,
+          headerRows: table.headerRows,
+          rows: table.rows.map((row) => row.map((cell) => tableCell({ id, coordinate, ...cell }))),
         })
+        return
+      }
+
+      if (tag === 'ol' || tag === 'ul') {
+        const id = nextBlockId()
+        blocks.push(listBlock($, element, id, coordinate, headingPath))
         return
       }
 
@@ -112,29 +116,8 @@ function mammothBlocks(html: string, documentSha256: string, coordinate: SourceC
       if (!text) {
         return
       }
-      if (tag === 'li') {
-        const itemId = `${id}:item:1`
-        blocks.push({
-          id,
-          kind: 'list',
-          coordinate,
-          headingPath: headingPath.filter(Boolean),
-          producer: MAMMOTH_PRODUCER,
-          ordered: $(element).parent().is('ol'),
-          items: [
-            {
-              id: itemId,
-              coordinate,
-              producer: MAMMOTH_PRODUCER,
-              blocks: [textBlock({ id: `${itemId}:text:1`, coordinate, headingPath, role: 'paragraph', text })],
-            },
-          ],
-        })
-        return
-      }
-
       blocks.push(textBlock({
-        id,
+        id: nextBlockId(),
         coordinate,
         headingPath,
         role: tag === 'pre' || tag === 'code' ? 'code' : 'paragraph',
@@ -150,24 +133,134 @@ function mammothBlocks(html: string, documentSha256: string, coordinate: SourceC
   }
 
   return blocks
+
+  function nextBlockId(): string {
+    blockNumber += 1
+    return docxId(documentSha256, `block:${blockNumber}`)
+  }
 }
 
-function tableRows($: ReturnType<typeof loadHtml>, element: Parameters<ReturnType<typeof loadHtml>>[0]): string[][] {
-  const rows: string[][] = []
+function listBlock(
+  $: ReturnType<typeof loadHtml>,
+  element: Parameters<ReturnType<typeof loadHtml>>[0],
+  id: string,
+  coordinate: SourceCoordinate,
+  headingPath: readonly string[],
+): ListBlock {
+  const items: ListItem[] = []
+
   $(element)
-    .find('tr')
-    .each((_, row) => {
-      const cells: string[] = []
-      $(row)
-        .find('th,td')
-        .each((__, cell) => {
-          cells.push(normalizedText($(cell).text()))
-        })
-      if (cells.length) {
-        rows.push(cells)
+    .children('li')
+    .each((itemIndex, item) => {
+      const itemId = `${id}:item:${itemIndex + 1}`
+      const blocks: (TextBlock | ListBlock)[] = []
+      const textContainer = $(item).clone()
+      textContainer.children('ol,ul').remove()
+      const text = normalizedText(textContainer.text())
+      if (text) {
+        blocks.push(textBlock({ id: `${itemId}:text:1`, coordinate, headingPath, role: 'paragraph', text }))
       }
+      $(item)
+        .children('ol,ul')
+        .each((nestedIndex, nested) => {
+          blocks.push(listBlock($, nested, `${itemId}:list:${nestedIndex + 1}`, coordinate, headingPath))
+        })
+      items.push({ id: itemId, coordinate, producer: MAMMOTH_PRODUCER, blocks })
     })
-  return rows
+
+  return {
+    id,
+    kind: 'list',
+    coordinate,
+    headingPath: headingPath.filter(Boolean),
+    producer: MAMMOTH_PRODUCER,
+    ordered: $(element).is('ol'),
+    items,
+  }
+}
+
+function tableFacts(
+  $: ReturnType<typeof loadHtml>,
+  element: Parameters<ReturnType<typeof loadHtml>>[0],
+): { readonly columns: readonly string[]; readonly headerRows: number; readonly rows: readonly (readonly TableCellFact[])[] } {
+  const sourceRows: { readonly cells: readonly TableCellFact[]; readonly allHeaders: boolean }[] = []
+  const activeRowSpans = new Map<number, number>()
+
+  $(element)
+    .children('thead,tbody,tfoot')
+    .each((_, row) => {
+      $(row)
+        .children('tr')
+        .each((__, nestedRow) => {
+          sourceRows.push(readTableRow($, nestedRow, activeRowSpans, sourceRows.length + 1))
+        })
+    })
+  $(element)
+    .children('tr')
+    .each((_, row) => {
+      sourceRows.push(readTableRow($, row, activeRowSpans, sourceRows.length + 1))
+    })
+
+  const headerRows = sourceRows.findIndex((row) => !row.allHeaders)
+  const establishedHeaderRows = headerRows === -1 ? sourceRows.length : headerRows
+  return {
+    columns: establishedHeaderRows > 0 ? sourceRows[0]?.cells.map((cell) => cell.value) ?? [] : [],
+    headerRows: establishedHeaderRows,
+    rows: sourceRows.map((row) => row.cells),
+  }
+}
+
+interface TableCellFact {
+  readonly value: string
+  readonly row: number
+  readonly column: number
+  readonly rowSpan: number
+  readonly columnSpan: number
+}
+
+function readTableRow(
+  $: ReturnType<typeof loadHtml>,
+  element: Parameters<ReturnType<typeof loadHtml>>[0],
+  activeRowSpans: Map<number, number>,
+  row: number,
+): { readonly cells: readonly TableCellFact[]; readonly allHeaders: boolean } {
+  const cells: TableCellFact[] = []
+  let column = 1
+
+  $(element)
+    .children('th,td')
+    .each((_, cell) => {
+      while (activeRowSpans.has(column)) {
+        column += 1
+      }
+      const columnSpan = span($(cell).attr('colspan'))
+      const rowSpan = span($(cell).attr('rowspan'))
+      cells.push({ value: normalizedText($(cell).text()), row: 0, column, rowSpan, columnSpan })
+      if (rowSpan > 1) {
+        for (let offset = 0; offset < columnSpan; offset += 1) {
+          activeRowSpans.set(column + offset, rowSpan)
+        }
+      }
+      column += columnSpan
+    })
+
+  for (const [activeColumn, remaining] of activeRowSpans) {
+    if (remaining === 1) {
+      activeRowSpans.delete(activeColumn)
+    } else {
+      activeRowSpans.set(activeColumn, remaining - 1)
+    }
+  }
+
+  return {
+    cells: cells.map((cell) => ({ ...cell, row })),
+    allHeaders: cells.length > 0 && $(element).children('th').length === cells.length,
+  }
+}
+
+function span(value: string | undefined): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1
 }
 
 function tableCell(input: {
@@ -176,6 +269,8 @@ function tableCell(input: {
   readonly value: string
   readonly row: number
   readonly column: number
+  readonly rowSpan: number
+  readonly columnSpan: number
 }): TableCell {
   const id = `${input.id}:row:${input.row}:column:${input.column}`
   return {
@@ -184,8 +279,8 @@ function tableCell(input: {
     producer: MAMMOTH_PRODUCER,
     row: input.row,
     column: input.column,
-    rowSpan: 1,
-    columnSpan: 1,
+    rowSpan: input.rowSpan,
+    columnSpan: input.columnSpan,
     blocks: [textBlock({ id: `${id}:text`, coordinate: input.coordinate, headingPath: [], role: 'paragraph', text: input.value })],
   }
 }

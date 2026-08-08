@@ -18,11 +18,7 @@ it('maps Mammoth DOCX text and table facts into ordered schema-2 blocks', async 
   expect(document.blocks.map(docxFact)).toEqual([
     ['text', 'heading', ['Release Notes'], 'Release Notes', 1],
     ['text', 'paragraph', ['Release Notes'], 'Ship structured ingestion', undefined],
-    ['table', ['Release Notes'], ['Plan', 'Status'], 1, [['Plan', 'Status'], ['Parser', 'Ready']]],
-    ['text', 'paragraph', ['Release Notes'], 'Plan', undefined],
-    ['text', 'paragraph', ['Release Notes'], 'Status', undefined],
-    ['text', 'paragraph', ['Release Notes'], 'Parser', undefined],
-    ['text', 'paragraph', ['Release Notes'], 'Ready', undefined],
+    ['table', ['Release Notes'], [], 0, [['Plan', 'Status'], ['Parser', 'Ready']]],
   ])
   expect(document.blocks.slice(0, 3).map((block) => block.id)).toEqual([
     expect.stringMatching(/^docx:[0-9a-f]{64}:parser:mammoth:1\.12\.0:2:block:1$/),
@@ -33,6 +29,50 @@ it('maps Mammoth DOCX text and table facts into ordered schema-2 blocks', async 
     /^docx:[0-9a-f]{64}:parser:mammoth:1\.12\.0:2:block:3:row:2:column:2$/,
   )
   expect(document.blocks.every((block) => block.coordinate.kind === 'document')).toBe(true)
+})
+
+it('keeps nested lists and table-cell text within their structural parent', () => {
+  const document = adaptMammothDocxResult({
+    bytes: new TextEncoder().encode('nested structure'),
+    html: '<p>Before</p><ol><li>First<ul><li>Nested</li></ul></li><li>Second</li></ol><table><tr><td>Cell</td></tr></table><p>After</p>',
+  })
+
+  expect(document.blocks.map((block) => block.kind)).toEqual(['text', 'list', 'table', 'text'])
+  const list = document.blocks[1]
+  if (!list || list.kind !== 'list') {
+    throw new Error('Expected a top-level list.')
+  }
+  expect(list.items.map((item) => item.blocks.map(listFact))).toEqual([
+    [
+      ['text', 'First'],
+      ['list', false, [[['text', 'Nested']]]],
+    ],
+    [['text', 'Second']],
+  ])
+})
+
+it('retains Mammoth table spans and only declares headers established by HTML', () => {
+  const document = adaptMammothDocxResult({
+    bytes: new TextEncoder().encode('merged table'),
+    html: '<table><tr><td rowspan="2">A</td><td colspan="2">B</td></tr><tr><td>C</td><td>D</td></tr></table><table><tr><th>Name</th><th>Value</th></tr><tr><td>Crux</td><td>Ready</td></tr></table>',
+  })
+  const [headerless, headed] = document.blocks
+  if (!headerless || headerless.kind !== 'table' || !headed || headed.kind !== 'table') {
+    throw new Error('Expected two tables.')
+  }
+
+  expect({ columns: headerless.columns, headerRows: headerless.headerRows, rows: headerless.rows.map((row) => row.map(tableFact)) }).toEqual({
+    columns: [],
+    headerRows: 0,
+    rows: [
+      [[1, 1, 2, 1, 'A'], [1, 2, 1, 2, 'B']],
+      [[2, 2, 1, 1, 'C'], [2, 3, 1, 1, 'D']],
+    ],
+  })
+  expect({ columns: headed.columns, headerRows: headed.headerRows }).toEqual({
+    columns: ['Name', 'Value'],
+    headerRows: 1,
+  })
 })
 
 it('preserves Mammoth warnings as truthful document-level partial-extraction diagnostics', () => {
@@ -66,6 +106,20 @@ function docxFact(block: Awaited<ReturnType<typeof parseDocxDocument>>['blocks']
 function cellText(cell: { readonly blocks: readonly { readonly kind: string; readonly text?: string }[] }): string | undefined {
   const block = cell.blocks[0]
   return block?.kind === 'text' ? block.text : undefined
+}
+
+function listFact(block: { readonly kind: string; readonly text?: string; readonly ordered?: boolean; readonly items?: readonly { readonly blocks: readonly unknown[] }[] }): unknown {
+  if (block.kind === 'text') {
+    return ['text', block.text]
+  }
+  if (block.kind === 'list') {
+    return ['list', block.ordered, block.items?.map((item) => item.blocks.map((nested) => listFact(nested as Parameters<typeof listFact>[0])))]
+  }
+  return block.kind
+}
+
+function tableFact(cell: { readonly row: number; readonly column: number; readonly rowSpan: number; readonly columnSpan: number; readonly blocks: readonly { readonly kind: string; readonly text?: string }[] }): unknown {
+  return [cell.row, cell.column, cell.rowSpan, cell.columnSpan, cellText(cell)]
 }
 
 async function makeDocx(): Promise<Buffer> {
