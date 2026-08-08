@@ -8,7 +8,7 @@ import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
-import { normalizeIngestedDocument } from '@use-crux/core/indexing'
+import { normalizeIngestedDocument, validateIngestedDocument } from '@use-crux/core/indexing'
 import { parseCsvRows } from './csv'
 import { parseCsvDocument } from './csv'
 import { parseDocxDocument } from './docx'
@@ -19,6 +19,7 @@ import { parseXlsxDocument } from './xlsx'
 import { imageParser } from './visual-image'
 import { audioParser } from './audio'
 import { videoParser } from './video'
+import { adaptBuiltInParseResult, IngestEvidenceRequiredError } from './parse-result-schema-2'
 import type {
   IngestDocument,
   IngestError,
@@ -62,7 +63,7 @@ export async function parseDocument(input: {
 
   return await parseObservation.withContext(async () => {
     try {
-      const schema2 = await parseBuiltInSchema2Document(input)
+      const schema2 = await parseSchema2Document(input, parser, warnings)
       if (schema2) {
         const document = normalizeIngestedDocument(schema2, {
           namespace: input.namespace,
@@ -123,9 +124,20 @@ export async function parseDocument(input: {
   })
 }
 
-async function parseBuiltInSchema2Document(input: Parameters<typeof parseDocument>[0]) {
-  if (input.options?.parsers?.some((parser) => parser.formats.includes(input.format))) {
-    return undefined
+async function parseSchema2Document(
+  input: Parameters<typeof parseDocument>[0],
+  parser: IngestParser,
+  warnings: IngestWarning[],
+) {
+  const custom = input.options?.parsers?.some((candidate) => candidate === parser)
+  if (custom) {
+    if (!parser.schema2) {
+      throw new IngestEvidenceRequiredError(parser.name)
+    }
+    return validateIngestedDocument(await parser.schema2.parse(
+      parseInput(input),
+      { media: input.options?.media, warn: (warning) => warnings.push(warning) },
+    ))
   }
   const mediaType = input.contentType?.split(';', 1)[0]
   if (input.format === 'csv') {
@@ -145,7 +157,30 @@ async function parseBuiltInSchema2Document(input: Parameters<typeof parseDocumen
       ...(input.options?.mediaProducer ? { mediaProducer: input.options.mediaProducer } : {}),
     })
   }
-  return undefined
+  const parsed = await parser.parse(parseInput(input), { media: input.options?.media, warn: (warning) => warnings.push(warning) })
+  warnings.push(...(parsed.warnings ?? []))
+  return adaptBuiltInParseResult({
+    bytes: input.bytes,
+    format: input.format,
+    result: parsed,
+    ...(input.contentType ? { mediaType: input.contentType.split(';', 1)[0] } : {}),
+    options: input.options,
+  })
+}
+
+function parseInput(input: Parameters<typeof parseDocument>[0]): ParseInput {
+  const text = isTextLike(input.format) ? new TextDecoder('utf-8').decode(input.bytes) : undefined
+  return {
+    bytes: input.bytes,
+    ...(input.asset ? { asset: input.asset } : {}),
+    ...(text !== undefined ? { text } : {}),
+    format: input.format,
+    sourceId: input.sourceId,
+    source: input.source,
+    namespace: input.namespace,
+    title: input.title,
+    metadata: input.metadata,
+  }
 }
 
 export function resolveParser(format: IngestFormat, options?: ParserOptions): IngestParser {

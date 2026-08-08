@@ -25,6 +25,8 @@ function coordinateLabel(coordinate: SourceCoordinate): string {
       return coordinate.range
     case 'logical-table':
       return String(coordinate.rowStart)
+    case 'time':
+      return String(coordinate.start)
     default: {
       const exhaustive: never = coordinate
       return exhaustive
@@ -102,6 +104,10 @@ function parserNameLabel(name: ParserIdentity['name']): string {
     case 'pdfjs-dist':
     case 'exceljs':
     case 'csv-parse':
+    case 'text':
+    case 'markdown':
+    case 'html':
+    case 'json':
       return name
     default: {
       const exhaustive: never = name
@@ -159,7 +165,9 @@ void inlineLabel(
     ? document.blocks[0].inlines[0]!
     : { kind: 'text', text: '', coordinate: { kind: 'page', page: 1 }, producer: document.producer },
 )
-void parserNameLabel(document.producer.name)
+if (document.producer.kind === 'parser') {
+  void parserNameLabel(document.producer.name)
+}
 void formatLabel(document.source.format)
 
 // @ts-expect-error Host-owned application operations require a version.

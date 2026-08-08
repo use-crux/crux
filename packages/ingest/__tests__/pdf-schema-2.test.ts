@@ -98,7 +98,7 @@ it('retains fallback and empty physical pages with only a page coordinate and ty
     },
   })
 
-  expect(document.producer.name).toBe('pdfjs-dist')
+  expect(document.producer).toMatchObject({ kind: 'parser', name: 'pdfjs-dist' })
   expect(document.blocks.map((block) => block.coordinate)).toEqual([{ kind: 'page', page: 1 }, { kind: 'page', page: 2 }])
   expect(document.diagnostics).toEqual([
     { code: 'parser-downgrade', severity: 'warning', trigger: 'invalid-result', from: 'pdf-inspector', to: 'pdfjs-dist', producer: document.producer },
@@ -125,7 +125,7 @@ it('uses the installed inspector for real PDF page and layout facts', async () =
     bytes: await readFile(join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')),
   })
 
-  expect(document.producer.name).toBe('pdf-inspector')
+  expect(document.producer).toMatchObject({ kind: 'parser', name: 'pdf-inspector' })
   expect(document.blocks).toHaveLength(8)
   expect(document.blocks.map((block) => block.coordinate)).toEqual(
     Array.from({ length: 8 }, (_, index) => ({ kind: 'page', page: index + 1 })),

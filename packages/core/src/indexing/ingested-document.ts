@@ -35,7 +35,7 @@ export type Scalar = string | number | boolean
 
 export interface ParserIdentity {
   readonly kind: 'parser'
-  readonly name: 'anydoc' | 'mammoth' | 'pdf-inspector' | 'pdfjs-dist' | 'exceljs' | 'csv-parse'
+  readonly name: 'anydoc' | 'mammoth' | 'pdf-inspector' | 'pdfjs-dist' | 'exceljs' | 'csv-parse' | 'text' | 'markdown' | 'html' | 'json'
   readonly version: string
   readonly adapterVersion: string
 }
@@ -43,7 +43,7 @@ export interface ParserIdentity {
 /** Host-owned derived content, never attributed to a parser. */
 export interface ApplicationOperationProducer {
   readonly kind: 'application-operation'
-  readonly operation: 'media.describe'
+  readonly operation: 'media.describe' | 'media.transcribe'
   readonly identity: string
   readonly version: string
 }
@@ -64,6 +64,7 @@ export type SourceCoordinate =
   | { readonly kind: 'slide'; readonly slide: number; readonly block?: number }
   | { readonly kind: 'sheet-range'; readonly sheet: string; readonly range: string }
   | { readonly kind: 'logical-table'; readonly rowStart: number; readonly rowEnd: number }
+  | { readonly kind: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
 
 export interface DocumentSource {
   readonly documentSha256: string
@@ -188,7 +189,7 @@ export type IngestDiagnostic =
 export interface IngestedDocument {
   readonly schemaVersion: 2
   readonly source: DocumentSource
-  readonly producer: ParserIdentity
+  readonly producer: DocumentProducer
   readonly metadata: Readonly<Record<string, Scalar>>
   readonly blocks: readonly DocumentBlock[]
   readonly assets: readonly DocumentAsset[]
@@ -247,6 +248,10 @@ const PARSERS = new Set<ParserIdentity['name']>([
   'pdfjs-dist',
   'exceljs',
   'csv-parse',
+  'text',
+  'markdown',
+  'html',
+  'json',
 ])
 
 /** Validates, detaches, and deeply freezes an exact schema-2 document. */
@@ -264,7 +269,7 @@ export function validateIngestedDocument(value: unknown): IngestedDocument {
   const document = freeze({
     schemaVersion: literal(record.schemaVersion, 2, '$.schemaVersion'),
     source: parsedSource,
-    producer: parser(record.producer, '$.producer'),
+    producer: producer(record.producer, '$.producer'),
     metadata: metadata(record.metadata, '$.metadata'),
     blocks: array(record.blocks, '$.blocks', block),
     assets: array(record.assets, '$.assets', asset),
@@ -361,9 +366,13 @@ function producer(value: unknown, path: string): DocumentProducer {
   }
   if (kind === 'application-operation') {
     exact(record, path, ['kind', 'operation', 'identity', 'version'])
+    const operation = string(record.operation, `${path}.operation`)
+    if (operation !== 'media.describe' && operation !== 'media.transcribe') {
+      fail(`${path}.operation`, 'must be media.describe or media.transcribe')
+    }
     return freeze({
       kind: 'application-operation',
-      operation: literal(record.operation, 'media.describe', `${path}.operation`),
+      operation,
       identity: nonEmpty(record.identity, `${path}.identity`),
       version: nonEmpty(record.version, `${path}.version`),
     })
@@ -434,6 +443,15 @@ function coordinate(value: unknown, path: string): SourceCoordinate {
       fail(path, 'logical-table rowEnd must be at least rowStart')
     }
     return freeze({ kind, rowStart, rowEnd })
+  }
+  if (kind === 'time') {
+    exact(record, path, ['kind', 'unit', 'start', 'end'])
+    const start = nonNegativeKey(record, 'start', path)
+    const end = nonNegativeKey(record, 'end', path)
+    if (record.unit !== 'seconds' || end < start) {
+      fail(path, 'time must be an ordered seconds interval')
+    }
+    return freeze({ kind, unit: 'seconds', start, end })
   }
   fail(`${path}.kind`, 'must be a supported coordinate kind')
 }

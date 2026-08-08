@@ -44,10 +44,20 @@ export class StoredEvidenceContractError extends Error {
   }
 }
 
+/** Raised when derived content has no single truthful schema-2 evidence origin. */
+export class StoredEvidenceRequiredError extends Error {
+  readonly code = 'STORED_EVIDENCE_REQUIRED' as const
+
+  constructor(message = 'Stored evidence is required before an indexed chunk can be persisted.') {
+    super(message)
+    this.name = 'StoredEvidenceRequiredError'
+  }
+}
+
 type RecordValue = Record<string, unknown>
 
 const SHA256 = /^[0-9a-f]{64}$/u
-const PARSERS = new Set(['anydoc', 'mammoth', 'pdf-inspector', 'pdfjs-dist', 'exceljs', 'csv-parse'])
+const PARSERS = new Set(['anydoc', 'mammoth', 'pdf-inspector', 'pdfjs-dist', 'exceljs', 'csv-parse', 'text', 'markdown', 'html', 'json'])
 
 /** Validate, detach, and freeze exact schema-2 stored evidence. */
 export function validateStoredEvidence(value: unknown): StoredEvidence {
@@ -151,12 +161,12 @@ function producer(value: unknown, path: string): DocumentProducer {
   }
   if (record.kind === 'application-operation') {
     exact(record, path, ['kind', 'operation', 'identity', 'version'])
-    if (record.operation !== 'media.describe') {
-      fail(`${path}.operation`, 'must be media.describe')
+    if (record.operation !== 'media.describe' && record.operation !== 'media.transcribe') {
+      fail(`${path}.operation`, 'must be media.describe or media.transcribe')
     }
     return freeze({
       kind: 'application-operation',
-      operation: 'media.describe',
+      operation: record.operation,
       identity: nonEmpty(record.identity, `${path}.identity`),
       version: nonEmpty(record.version, `${path}.version`),
     })
@@ -220,6 +230,15 @@ function sourceCoordinate(value: unknown, path: string): SourceCoordinate {
       fail(path, 'rowEnd must be at least rowStart')
     }
     return freeze({ kind: 'logical-table', rowStart, rowEnd })
+  }
+  if (record.kind === 'time') {
+    exact(record, path, ['kind', 'unit', 'start', 'end'])
+    const start = nonNegative(record.start, `${path}.start`)
+    const end = nonNegative(record.end, `${path}.end`)
+    if (record.unit !== 'seconds' || end < start) {
+      fail(path, 'must be an ordered seconds interval')
+    }
+    return freeze({ kind: 'time', unit: 'seconds', start, end })
   }
   fail(`${path}.kind`, 'must be a supported coordinate kind')
 }

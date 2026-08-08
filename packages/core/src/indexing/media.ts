@@ -145,6 +145,7 @@ function normalizedMediaPart(part: MediaPart, input: NormalizedEmbeddingInput): 
     ...(part.caption !== undefined ? { caption: part.caption } : {}),
     ...(part.metadata !== undefined ? { metadata: part.metadata } : {}),
     ...(part.sourceLocation !== undefined ? { sourceLocation: part.sourceLocation } : {}),
+    ...(part.evidence !== undefined ? { evidence: part.evidence } : {}),
   }
 }
 

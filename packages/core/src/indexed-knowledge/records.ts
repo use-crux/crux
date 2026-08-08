@@ -9,7 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk, SpreadsheetProvenance } from '../indexing/types'
-import { validateStoredEvidence } from '../indexing/stored-evidence'
+import { StoredEvidenceRequiredError, validateStoredEvidence } from '../indexing/stored-evidence'
 import type { ExactFilter, JsonObject, SearchLegMatch, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
@@ -71,7 +71,7 @@ export function createIndexedChunkRecord(input: {
   readonly now: number
 }): IndexedChunkRecord {
   if (!input.chunk.evidence) {
-    throw new Error('Stored evidence is required before an indexed chunk can be persisted.')
+    throw new StoredEvidenceRequiredError()
   }
   const evidence = validateStoredEvidence(input.chunk.evidence)
   if (evidence.chunkId !== input.chunk.chunkId || evidence.normalizedContent !== input.chunk.content) {

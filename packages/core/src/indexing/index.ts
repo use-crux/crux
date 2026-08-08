@@ -20,6 +20,7 @@ export { corpus } from './define-corpus'
 export { IngestedDocumentContractError, validateIngestedDocument } from './ingested-document'
 export {
   StoredEvidenceContractError,
+  StoredEvidenceRequiredError,
   createStoredEvidence,
   deserializeStoredEvidence,
   serializeStoredEvidence,
