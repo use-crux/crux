@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { DocumentBlock, DocumentProducer, IngestedDocument, ListBlock, SourceCoordinate, TableBlock, TextBlock } from '@use-crux/core/indexing'
+import type { DocumentBlock, DocumentProducer, IngestedDocument, ListBlock, ListItem, SourceCoordinate, TableBlock, TextBlock } from '@use-crux/core/indexing'
 
 export type AssertionRole = 'required' | 'informational'
 
@@ -8,7 +8,7 @@ export type EvaluationOutcome =
   | { readonly kind: 'failure'; readonly error: string }
   | { readonly kind: 'missing'; readonly reason?: string }
 
-export type StructuralAssertion =
+type StructuralFactAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'ordered-text'; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'heading'; readonly level: number; readonly text: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'list'; readonly ordered: boolean; readonly depth: number; readonly text: readonly string[] }
@@ -18,7 +18,6 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-note'; readonly slide: number; readonly text: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'asset-count'; readonly count: number }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'coordinate-kinds'; readonly kinds: readonly SourceCoordinate['kind'][] }
-  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'provenance'; readonly for: string; readonly path: string; readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-order'; readonly slides: readonly number[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-boundary'; readonly slide: number; readonly text: readonly string[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'sheet-order'; readonly sheets: readonly string[] }
@@ -32,6 +31,10 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'metadata'; readonly key: string; readonly value: string | number | boolean }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'parser-downgrade'; readonly from: string; readonly to: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'no-parser-downgrade' }
+
+export type StructuralAssertion =
+  | (StructuralFactAssertion & { readonly factPath: string })
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'provenance'; readonly for: string; readonly path: string; readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer }
 
 export interface ExpectedFactManifest {
   readonly fixtureId: string
@@ -78,7 +81,8 @@ export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: 
   for (const assertion of expected.assertions) {
     const matches = actual.facts.filter((fact) => fact.assertionId === assertion.id)
     const native = matches[0]
-    results.push(result(assertion.id, assertion.role, matches.length === 1 && native !== undefined && equal(nativeFactValue(native), withoutIdentity(assertion)), withoutIdentity(assertion), native))
+    const expectedPath = assertion.kind === 'provenance' ? assertion.path : assertion.factPath
+    results.push(result(assertion.id, assertion.role, matches.length === 1 && native !== undefined && native.factPath === expectedPath && equal(nativeFactValue(native), withoutIdentity(assertion)), { factPath: expectedPath, value: withoutIdentity(assertion) }, native))
   }
   return completedResult(expected.fixtureId, actual.outcome, results, actual.facts.length > 0)
 }
@@ -124,38 +128,108 @@ function outcomeResult(expected: EvaluationOutcome, actual: EvaluationOutcome): 
 }
 
 function assertFact(assertion: StructuralAssertion, document: IngestedDocument): AssertionResult {
+  if (assertion.kind === 'provenance') {
+    return provenanceResult(assertion, document)
+  }
+
+  const target = resolveFactPath(document, assertion.factPath)
   switch (assertion.kind) {
-    case 'ordered-text': return compare(assertion, orderedText(document), assertion.text)
-    case 'heading': return compare(assertion, headings(document).some((heading) => heading.level === assertion.level && heading.text === assertion.text), true)
-    case 'list': return compare(assertion, lists(document).some((list) => list.ordered === assertion.ordered && list.depth === assertion.depth && equal(list.text, assertion.text)), true)
-    case 'table': return compare(assertion, tables(document).some((table) => equal(table.columns, assertion.columns) && equal(table.rows, assertion.rows)), true)
-    case 'link': return compare(assertion, links(document).some((link) => link.text === assertion.text && link.target === assertion.target), true)
-    case 'notes': return compare(assertion, noteText(document), assertion.text)
-    case 'slide-note': return compare(assertion, document.blocks.filter(isSlide).find((slide) => slide.slide === assertion.slide)?.notes.map((note) => note.text), [assertion.text])
-    case 'asset-count': return compare(assertion, document.assets.length, assertion.count)
-    case 'coordinate-kinds': return compare(assertion, coordinateKinds(document), assertion.kinds)
-    case 'provenance': return provenanceResult(assertion, document)
-    case 'slide-order': return compare(assertion, document.blocks.filter(isSlide).map((slide) => slide.slide), assertion.slides)
-    case 'slide-boundary': return compare(assertion, slideText(document, assertion.slide), assertion.text)
-    case 'sheet-order': return compare(assertion, document.blocks.filter(isSheet).sort((a, b) => a.index - b.index).map((sheet) => sheet.sheet), assertion.sheets)
-    case 'sheet-range': return compare(assertion, document.blocks.filter(isSheet).find((sheet) => sheet.sheet === assertion.sheet)?.range, assertion.range)
-    case 'cell': return cellResult(assertion, document)
-    case 'csv-matrix': return compare(assertion, csvMatrix(document), assertion.matrix)
-    case 'logical-row-bounds': return logicalBoundsResult(assertion, document)
-    case 'page-order': return compare(assertion, document.blocks.filter(isPage).map((page) => page.page), assertion.pages)
-    case 'page-block': return compare(assertion, pageBlockText(document, assertion.page, assertion.block), assertion.text)
-    case 'page-content-hash': return compare(assertion, pageContentHash(document, assertion.page), assertion.sha256)
-    case 'metadata': return compare(assertion, document.metadata[assertion.key], assertion.value)
-    case 'parser-downgrade': return compare(assertion, document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade' && diagnostic.from === assertion.from && diagnostic.to === assertion.to), true)
-    case 'no-parser-downgrade': return compare(assertion, document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade'), false)
+    case 'ordered-text': return compare(assertion, target === document ? orderedText(document) : undefined, assertion.text)
+    case 'heading': return compare(assertion, isTargetKind(target, 'text') && target.role === 'heading' && target.level === assertion.level && target.text === assertion.text, true)
+    case 'list': return compare(assertion, isTargetKind(target, 'list') && listDepth(assertion.factPath) === assertion.depth && target.ordered === assertion.ordered && equal(textBlocks(target.items.flatMap((item) => item.blocks)).map((block) => block.text), assertion.text), true)
+    case 'table': return compare(assertion, isTargetKind(target, 'table') ? tableValue(target) : undefined, { columns: assertion.columns, rows: assertion.rows })
+    case 'link': return compare(assertion, isTargetKind(target, 'text') && target.inlines.some((inline) => inline.kind === 'link' && inline.text === assertion.text && inline.target === assertion.target), true)
+    case 'notes': return compare(assertion, isTargetKind(target, 'text') ? [target.text] : target === document ? noteText(document) : undefined, assertion.text)
+    case 'slide-note': return compare(assertion, isTargetKind(target, 'text') && target.role === 'note' ? target.text : undefined, assertion.text)
+    case 'asset-count': return compare(assertion, target === document || (target && 'byteLength' in target) ? document.assets.length : undefined, assertion.count)
+    case 'coordinate-kinds': return compare(assertion, target === document ? coordinateKinds(document) : undefined, assertion.kinds)
+    case 'slide-order': return compare(assertion, target === document ? document.blocks.filter(isSlide).map((slide) => slide.slide) : undefined, assertion.slides)
+    case 'slide-boundary': return compare(assertion, isTargetKind(target, 'slide') && target.slide === assertion.slide ? textBlocks(target.blocks).map((block) => block.text) : undefined, assertion.text)
+    case 'sheet-order': return compare(assertion, target === document ? document.blocks.filter(isSheet).sort((a, b) => a.index - b.index).map((sheet) => sheet.sheet) : undefined, assertion.sheets)
+    case 'sheet-range': return compare(assertion, isTargetKind(target, 'sheet') && target.sheet === assertion.sheet ? target.range : undefined, assertion.range)
+    case 'cell': return cellTargetResult(assertion, target)
+    case 'csv-matrix': return compare(assertion, isTargetKind(target, 'table') ? tableValue(target).rows : undefined, assertion.matrix)
+    case 'logical-row-bounds': return logicalTargetBoundsResult(assertion, target)
+    case 'page-order': return compare(assertion, target === document ? document.blocks.filter(isPage).map((page) => page.page) : undefined, assertion.pages)
+    case 'page-block': return compare(assertion, isTargetKind(target, 'text') && target.coordinate.kind === 'page-block' && target.coordinate.page === assertion.page && target.coordinate.block === assertion.block ? target.text : undefined, assertion.text)
+    case 'page-content-hash': return compare(assertion, isTargetKind(target, 'page') && target.page === assertion.page ? createHash('sha256').update(JSON.stringify(target.blocks)).digest('hex') : undefined, assertion.sha256)
+    case 'metadata': return compare(assertion, target === document ? document.metadata[assertion.key] : undefined, assertion.value)
+    case 'parser-downgrade': return compare(assertion, target === document && document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade' && diagnostic.from === assertion.from && diagnostic.to === assertion.to), true)
+    case 'no-parser-downgrade': return compare(assertion, target === document && document.diagnostics.some((diagnostic) => diagnostic.code === 'parser-downgrade'), false)
   }
 }
 
-function cellResult(assertion: Extract<StructuralAssertion, { kind: 'cell' }>, document: IngestedDocument): AssertionResult {
-  const cell = document.blocks.filter(isSheet).find((sheet) => sheet.sheet === assertion.sheet)?.blocks.flatMap((table) => table.rows.flat()).find((candidate) => coordinateAddress(candidate.coordinate) === assertion.address)
-  const actual = cell && { displayedValue: cell.displayedValue ?? '', ...(cell.formula ? { formula: cell.formula } : {}), ...(cell.mergeRange ? { mergeRange: cell.mergeRange } : {}) }
+type FactTarget = IngestedDocument | DocumentBlock | TextBlock | ListBlock | TableBlock | TableBlock['rows'][number][number] | IngestedDocument['assets'][number]
+
+function isTargetKind<Kind extends DocumentBlock['kind']>(target: FactTarget | undefined, kind: Kind): target is Extract<DocumentBlock, { kind: Kind }> {
+  return target !== undefined && 'kind' in target && target.kind === kind
+}
+
+function resolveFactPath(document: IngestedDocument, path: string): FactTarget | undefined {
+  if (path === 'document') {
+    return document
+  }
+  if (/^assets\/\d+$/.test(path)) {
+    return document.assets[Number(path.slice('assets/'.length)) - 1]
+  }
+
+  const segments = path.split('/')
+  if (segments[0] !== 'blocks') {
+    return undefined
+  }
+  let target: FactTarget | undefined = document.blocks[Number(segments[1]) - 1]
+  for (let index = 2; target && index < segments.length; index += 2) {
+    const collection = segments[index]
+    const ordinal = Number(segments[index + 1]) - 1
+    if (collection === 'blocks' && 'blocks' in target) {
+      target = target.blocks[ordinal]
+    } else if (collection === 'notes' && isTargetKind(target, 'slide')) {
+      target = target.notes[ordinal]
+    } else if (collection === 'items' && isTargetKind(target, 'list')) {
+      const item: ListItem | undefined = target.items[ordinal]
+      const blockCollection = segments[index + 2]
+      const blockOrdinal = Number(segments[index + 3]) - 1
+      if (blockCollection !== 'blocks') {
+        return undefined
+      }
+      target = item?.blocks[blockOrdinal]
+      index += 2
+    } else if (collection === 'rows' && isTargetKind(target, 'table')) {
+      const cellCollection = segments[index + 2]
+      const cellOrdinal = Number(segments[index + 3]) - 1
+      if (cellCollection !== 'cells') {
+        return undefined
+      }
+      target = target.rows[ordinal]?.[cellOrdinal]
+      index += 2
+    } else {
+      return undefined
+    }
+  }
+  return target
+}
+
+function tableValue(table: TableBlock): { readonly columns: readonly string[]; readonly rows: readonly (readonly string[])[] } {
+  return { columns: table.columns, rows: table.rows.map((row) => row.map((cell) => cell.displayedValue ?? textBlocks(cell.blocks).map((block) => block.text).join(''))) }
+}
+
+function listDepth(path: string): number {
+  return path.split('/').filter((segment) => segment === 'items').length + 1
+}
+
+function cellTargetResult(assertion: Extract<StructuralAssertion, { kind: 'cell' }>, target: FactTarget | undefined): AssertionResult {
+  const cell = target && 'row' in target && 'column' in target ? target : undefined
+  const actual = cell && coordinateAddress(cell.coordinate) === assertion.address && cell.coordinate.kind === 'sheet-range' && cell.coordinate.sheet === assertion.sheet
+    ? { displayedValue: cell.displayedValue ?? '', ...(cell.formula ? { formula: cell.formula } : {}), ...(cell.mergeRange ? { mergeRange: cell.mergeRange } : {}) }
+    : undefined
   const expected = { displayedValue: assertion.displayedValue, ...(assertion.formula ? { formula: assertion.formula } : {}), ...(assertion.mergeRange ? { mergeRange: assertion.mergeRange } : {}) }
   return result(assertion.id, assertion.role, equal(actual, expected), expected, actual)
+}
+
+function logicalTargetBoundsResult(assertion: Extract<StructuralAssertion, { kind: 'logical-row-bounds' }>, target: FactTarget | undefined): AssertionResult {
+  const coordinate = isTargetKind(target, 'table') ? target.coordinate : undefined
+  const actual = coordinate?.kind === 'logical-table' ? { start: coordinate.rowStart, end: coordinate.rowEnd } : undefined
+  return result(assertion.id, assertion.role, equal(actual, { start: assertion.start, end: assertion.end }), { start: assertion.start, end: assertion.end }, actual)
 }
 
 function provenanceResult(assertion: Extract<StructuralAssertion, { kind: 'provenance' }>, document: IngestedDocument): AssertionResult {
@@ -166,42 +240,15 @@ function provenanceResult(assertion: Extract<StructuralAssertion, { kind: 'prove
 
 /** Stable projection paths make provenance assertions independent of generated schema IDs. */
 function coreProvenance(document: IngestedDocument, path: string): { readonly coordinate: SourceCoordinate; readonly producer: DocumentProducer } | undefined {
-  const asset = /^assets\/(\d+)$/.exec(path)
-  if (asset) {
-    const value = document.assets[Number(asset[1]) - 1]
-    return value && { coordinate: value.coordinate, producer: value.producer }
+  const target = resolveFactPath(document, path)
+  if (target === document) {
+    return { coordinate: { kind: 'document', documentSha256: document.source.documentSha256 }, producer: document.producer }
   }
-  const segments = path.split('/')
-  if (segments[0] !== 'blocks') return undefined
-  let block: DocumentBlock | TextBlock | ListBlock | TableBlock | undefined = document.blocks[Number(segments[1]) - 1]
-  for (let index = 2; block && index < segments.length; index += 2) {
-    const collection = segments[index]
-    const ordinal = Number(segments[index + 1]) - 1
-    if (collection === 'notes' && block.kind === 'slide') block = block.notes[ordinal]
-    else if (collection === 'blocks' && (block.kind === 'page' || block.kind === 'slide' || block.kind === 'sheet')) block = block.blocks[ordinal]
-    else if (collection === 'rows' && block.kind === 'table') {
-      const cellSegment = segments[index + 2]
-      const cellOrdinal = Number(segments[index + 3]) - 1
-      if (cellSegment !== 'cells') return undefined
-      const cell = block.rows[ordinal]?.[cellOrdinal]
-      return cell && { coordinate: cell.coordinate, producer: cell.producer }
-    } else return undefined
-  }
-  return block && { coordinate: block.coordinate, producer: block.producer }
-}
-
-function logicalBoundsResult(assertion: Extract<StructuralAssertion, { kind: 'logical-row-bounds' }>, document: IngestedDocument): AssertionResult {
-  const coordinate = document.blocks.find((block) => block.kind === 'table')?.coordinate
-  const actual = coordinate?.kind === 'logical-table' ? { start: coordinate.rowStart, end: coordinate.rowEnd } : undefined
-  return result(assertion.id, assertion.role, equal(actual, { start: assertion.start, end: assertion.end }), { start: assertion.start, end: assertion.end }, actual)
+  return target && 'coordinate' in target ? { coordinate: target.coordinate, producer: target.producer } : undefined
 }
 
 function orderedText(document: IngestedDocument): readonly string[] {
   return textBlocks(document.blocks).map((block) => block.text)
-}
-
-function headings(document: IngestedDocument): readonly { readonly level: number | undefined; readonly text: string }[] {
-  return textBlocks(document.blocks).filter((block) => block.role === 'heading').map((block) => ({ level: block.level, text: block.text }))
 }
 
 function noteText(document: IngestedDocument): readonly string[] {
@@ -211,37 +258,10 @@ function noteText(document: IngestedDocument): readonly string[] {
   ]
 }
 
-function lists(document: IngestedDocument): readonly { readonly ordered: boolean; readonly depth: number; readonly text: readonly string[] }[] {
-  return listBlocks(document.blocks).map(({ list, depth }) => ({ ordered: list.ordered, depth, text: textBlocks(list.items.flatMap((item) => item.blocks)).map((block) => block.text) }))
-}
-
-function tables(document: IngestedDocument): readonly { readonly columns: readonly string[]; readonly rows: readonly (readonly string[])[] }[] {
-  return tableBlocks(document.blocks).map((table) => ({ columns: table.columns, rows: table.rows.map((row) => row.map((cell) => cell.displayedValue ?? textBlocks(cell.blocks).map((block) => block.text).join(''))) }))
-}
-
-function links(document: IngestedDocument): readonly { readonly text: string; readonly target: string }[] {
-  return textBlocks(document.blocks).flatMap((block) => block.inlines.filter((inline) => inline.kind === 'link').map((inline) => ({ text: inline.text, target: inline.target })))
-}
-
-function csvMatrix(document: IngestedDocument): readonly (readonly string[])[] | undefined {
-  const table = document.blocks.find((block) => block.kind === 'table')
-  return table ? table.rows.map((row) => row.map((cell) => cell.displayedValue ?? textBlocks(cell.blocks).map((block) => block.text).join(''))) : undefined
-}
-
-function pageBlockText(document: IngestedDocument, page: number, block: number): string | undefined {
-  const candidate = document.blocks.filter(isPage).find((item) => item.page === page)?.blocks[block - 1]
-  return candidate?.kind === 'text' ? candidate.text : undefined
-}
-
 /** Hashes the complete normalized block payload, including exact block coordinates and explicit empty pages. */
 export function pageContentHash(document: IngestedDocument, page: number): string | undefined {
   const value = document.blocks.filter(isPage).find((item) => item.page === page)
   return value ? createHash('sha256').update(JSON.stringify(value.blocks)).digest('hex') : undefined
-}
-
-function slideText(document: IngestedDocument, slide: number): readonly string[] | undefined {
-  const candidate = document.blocks.filter(isSlide).find((item) => item.slide === slide)
-  return candidate ? textBlocks(candidate.blocks).map((block) => block.text) : undefined
 }
 
 function coordinateKinds(document: IngestedDocument): readonly SourceCoordinate['kind'][] {
@@ -273,19 +293,6 @@ function textBlocks(blocks: readonly (DocumentBlock | TextBlock | ListBlock | Ta
   })
 }
 
-function tableBlocks(blocks: readonly DocumentBlock[]): TableBlock[] {
-  return blocks.flatMap((block) => block.kind === 'table' ? [block] : block.kind === 'page' || block.kind === 'slide' || block.kind === 'sheet' ? tableBlocks(block.blocks as DocumentBlock[]) : [])
-}
-
-function listBlocks(blocks: readonly (DocumentBlock | TextBlock | ListBlock | TableBlock)[], depth = 1): { list: ListBlock; depth: number }[] {
-  return blocks.flatMap((block) => {
-    if (block.kind === 'list') return [{ list: block, depth }, ...block.items.flatMap((item) => listBlocks(item.blocks, depth + 1))]
-    if (block.kind === 'table') return block.rows.flatMap((row) => row.flatMap((cell) => listBlocks(cell.blocks, depth)))
-    if (block.kind === 'page' || block.kind === 'slide' || block.kind === 'sheet') return listBlocks(block.blocks as DocumentBlock[], depth)
-    return []
-  })
-}
-
 function isSlide(block: DocumentBlock): block is Extract<DocumentBlock, { kind: 'slide' }> { return block.kind === 'slide' }
 function isSheet(block: DocumentBlock): block is Extract<DocumentBlock, { kind: 'sheet' }> { return block.kind === 'sheet' }
 function isPage(block: DocumentBlock): block is Extract<DocumentBlock, { kind: 'page' }> { return block.kind === 'page' }
@@ -304,9 +311,16 @@ function canonical(value: unknown): unknown {
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonical(item)]))
   return value
 }
-function withoutIdentity(assertion: StructuralAssertion): WithoutIdentity<StructuralAssertion> { const { id: _id, role: _role, ...fact } = assertion; return fact as WithoutIdentity<StructuralAssertion> }
+function withoutIdentity(assertion: StructuralAssertion): WithoutIdentity<StructuralAssertion> {
+  const { id: _id, role: _role, ...fact } = assertion
+  if ('factPath' in fact) {
+    const { factPath: _path, ...value } = fact
+    return value as WithoutIdentity<StructuralAssertion>
+  }
+  return fact as WithoutIdentity<StructuralAssertion>
+}
 function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { assertionId: _id, factPath: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
-type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role'> : never
+type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role' | 'factPath'> : never
 
 const MAX_EVIDENCE_DEPTH = 3
 const MAX_EVIDENCE_ITEMS = 20
