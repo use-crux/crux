@@ -53,5 +53,5 @@ function sampleNode(): ObservabilityRunDetailNode {
         targetSignalId: "order.submitted",
       },
     },
-  } as ObservabilityRunDetailNode;
+  } as unknown as ObservabilityRunDetailNode;
 }
