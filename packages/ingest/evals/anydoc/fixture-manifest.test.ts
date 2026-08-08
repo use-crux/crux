@@ -174,7 +174,7 @@ it('rejects a use case without its complete required-fact contract', () => {
   const fixture = validFixture({ requiredFacts: ['logical-matrix'] })
 
   expect(validateFixtureManifest([fixture])).toEqual([
-    'fixture "csv-control-v1" use case "csv-table" requires facts "logical-matrix, columns, row-bounds, deterministic-diagnostics".',
+    'fixture "csv-control-v1" use case "csv-table" requires facts "logical-matrix, columns, row-bounds, coordinates, deterministic-diagnostics".',
   ])
 })
 
@@ -197,7 +197,7 @@ function validFixture(overrides: Partial<AnydocFixtureManifest> = {}): AnydocFix
     declaredFormat: 'csv',
     actualFormat: 'csv',
     useCase: 'csv-table',
-    requiredFacts: ['logical-matrix', 'columns', 'row-bounds', 'deterministic-diagnostics'],
+    requiredFacts: ['logical-matrix', 'columns', 'row-bounds', 'coordinates', 'deterministic-diagnostics'],
     parserApplicability: { candidates: ['csv-parse'], controls: ['csv-parse'] },
     expectedOutcome: { kind: 'success' },
     tags: ['control'],

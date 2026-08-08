@@ -155,7 +155,7 @@ const REQUIRED_FACTS: Readonly<Record<FixtureUseCase, readonly RequiredFact[]>> 
     'formulas-and-merges',
     'coordinates',
   ],
-  'csv-table': ['logical-matrix', 'columns', 'row-bounds', 'deterministic-diagnostics'],
+  'csv-table': ['logical-matrix', 'columns', 'row-bounds', 'coordinates', 'deterministic-diagnostics'],
   'pdf-page': [
     'page-count-and-order',
     'page-content',

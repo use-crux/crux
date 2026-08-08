@@ -171,10 +171,23 @@ function coreProvenance(document: IngestedDocument, path: string): { readonly co
     const value = document.assets[Number(asset[1]) - 1]
     return value && { coordinate: value.coordinate, producer: value.producer }
   }
-  const block = /^blocks\/(\d+)$/.exec(path)
-  if (!block) return undefined
-  const value = document.blocks[Number(block[1]) - 1]
-  return value && { coordinate: value.coordinate, producer: value.producer }
+  const segments = path.split('/')
+  if (segments[0] !== 'blocks') return undefined
+  let block: DocumentBlock | TextBlock | ListBlock | TableBlock | undefined = document.blocks[Number(segments[1]) - 1]
+  for (let index = 2; block && index < segments.length; index += 2) {
+    const collection = segments[index]
+    const ordinal = Number(segments[index + 1]) - 1
+    if (collection === 'notes' && block.kind === 'slide') block = block.notes[ordinal]
+    else if (collection === 'blocks' && (block.kind === 'page' || block.kind === 'slide' || block.kind === 'sheet')) block = block.blocks[ordinal]
+    else if (collection === 'rows' && block.kind === 'table') {
+      const cellSegment = segments[index + 2]
+      const cellOrdinal = Number(segments[index + 3]) - 1
+      if (cellSegment !== 'cells') return undefined
+      const cell = block.rows[ordinal]?.[cellOrdinal]
+      return cell && { coordinate: cell.coordinate, producer: cell.producer }
+    } else return undefined
+  }
+  return block && { coordinate: block.coordinate, producer: block.producer }
 }
 
 function logicalBoundsResult(assertion: Extract<StructuralAssertion, { kind: 'logical-row-bounds' }>, document: IngestedDocument): AssertionResult {

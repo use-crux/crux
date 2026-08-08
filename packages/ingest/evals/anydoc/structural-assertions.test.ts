@@ -220,3 +220,13 @@ it('rejects a fixture required fact with no corresponding required assertion kin
 
   expect(validateExpectedFacts(manifests)).toContain('fixture "csv-control-v1" required fact "page-content" has no required structural assertion.')
 })
+
+it('requires fact-scoped provenance and canonical page content hashes for coordinate and content coverage', () => {
+  const csv = expectedFactsByFixture['csv-control-v1']!
+  const pdf = expectedFactsByFixture['pdf-control-v1']!
+  const withoutProvenance = { ...expectedFactsByFixture, 'csv-control-v1': { ...csv, assertions: csv.assertions.filter((assertion) => assertion.kind !== 'provenance') } }
+  const withoutPageHashes = { ...expectedFactsByFixture, 'pdf-control-v1': { ...pdf, assertions: pdf.assertions.filter((assertion) => assertion.kind !== 'page-content-hash') } }
+
+  expect(validateExpectedFacts(fixtureManifests, withoutProvenance)).toContain('fixture "csv-control-v1" required fact "coordinates" has no required structural assertion.')
+  expect(validateExpectedFacts(fixtureManifests, withoutPageHashes)).toContain('fixture "pdf-control-v1" required fact "page-content" has no required structural assertion.')
+})

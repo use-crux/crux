@@ -1,7 +1,13 @@
 import type { AnydocFixtureManifest, RequiredFact } from './fixture-manifest'
 import type { ExpectedFactManifest, StructuralAssertion } from './structural-assertions'
+import type { ParserIdentity, SourceCoordinate } from '@use-crux/core/indexing'
 
-function proseAssertions(options: { readonly notes?: readonly string[]; readonly assetCount?: number } = {}): readonly StructuralAssertion[] {
+const anydocProducer: ParserIdentity = { kind: 'parser', name: 'anydoc', version: 'eval', adapterVersion: '2' }
+const csvProducer: ParserIdentity = { kind: 'parser', name: 'csv-parse', version: '6.2.1', adapterVersion: '2' }
+const excelProducer: ParserIdentity = { kind: 'parser', name: 'exceljs', version: '4.4.0', adapterVersion: '2' }
+const pdfProducer: ParserIdentity = { kind: 'parser', name: 'pdf-inspector', version: '1.12.0', adapterVersion: '2' }
+
+function proseAssertions(options: { readonly notes?: readonly string[]; readonly assetCount?: number; readonly hash: string } ): readonly StructuralAssertion[] {
   return [
   { id: 'prose-text', role: 'required', kind: 'ordered-text', text: ['Release Notes', 'Structured ingestion reference.', 'First', 'Nested', 'Plan', 'Status', 'Pro', 'Ready'] },
   { id: 'prose-heading', role: 'required', kind: 'heading', level: 1, text: 'Release Notes' },
@@ -12,14 +18,15 @@ function proseAssertions(options: { readonly notes?: readonly string[]; readonly
   { id: 'prose-notes', role: 'required', kind: 'notes', text: options.notes ?? [] },
   { id: 'prose-assets', role: 'required', kind: 'asset-count', count: options.assetCount ?? 0 },
   { id: 'prose-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['document'] },
+  provenance('prose-root-provenance', 'blocks/1', { kind: 'document', documentSha256: options.hash }, anydocProducer),
   ]
 }
 
 const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind'][]>> = {
-  'all-text-in-order': ['ordered-text'], assets: ['asset-count'], columns: ['table'], coordinates: ['coordinate-kinds', 'cell', 'logical-row-bounds', 'page-block'],
+  'all-text-in-order': ['ordered-text'], assets: ['asset-count'], columns: ['table'], coordinates: ['provenance'],
   'deterministic-diagnostics': ['no-parser-downgrade', 'parser-downgrade'], 'formulas-and-merges': ['cell'], 'heading-levels': ['heading'],
   'link-targets': ['link'], 'list-nesting': ['list'], 'logical-matrix': ['csv-matrix'], 'notes-and-assets': ['notes', 'asset-count'],
-  'occupied-ranges': ['sheet-range'], 'page-block-coordinates': ['page-block'], 'page-content': ['page-block'], 'page-count-and-order': ['page-order'],
+  'occupied-ranges': ['sheet-range'], 'page-block-coordinates': ['provenance'], 'page-content': ['page-content-hash'], 'page-count-and-order': ['page-order'],
   'page-metadata': ['metadata'], 'row-bounds': ['logical-row-bounds'], 'sheet-identity-and-order': ['sheet-order'],
   'slide-boundaries': ['slide-boundary'], 'slide-identity-and-order': ['slide-order'], 'slide-note-ownership': ['slide-note'], 'table-grid': ['table'],
 }
@@ -30,16 +37,18 @@ const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind
  */
 export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifest>> = {
   'docx-structure-v1': success('docx-structure-v1', [
-    ...proseAssertions({ notes: ['Crux footnote evidence.'], assetCount: 1 }),
+    ...proseAssertions({ hash: '5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd', notes: ['Crux footnote evidence.'], assetCount: 1 }),
   ]),
-  'doc-legacy-v1': success('doc-legacy-v1', proseAssertions()),
+  'doc-legacy-v1': success('doc-legacy-v1', proseAssertions({ hash: '43d7f00b1bd7d0784b20245176327690137891a6e65577ca0f2e2dbb3ab9b1c1' })),
   'docm-macro-v1': missing('docm-macro-v1'),
-  'rtf-prose-v1': success('rtf-prose-v1', proseAssertions()),
-  'odt-prose-v1': success('odt-prose-v1', proseAssertions()),
-  'epub-prose-v1': success('epub-prose-v1', proseAssertions()),
+  'rtf-prose-v1': success('rtf-prose-v1', proseAssertions({ hash: '1be57882b7e295a39e752d865ae228315d804c165d8eead8e6f6e0b2ca9596d3' })),
+  'odt-prose-v1': success('odt-prose-v1', proseAssertions({ hash: '96446747eee321ec556b3cb3633d24158014c455d0e0a05bb1a6e24b0a19482b' })),
+  'epub-prose-v1': success('epub-prose-v1', proseAssertions({ hash: '2a53090553242888578e45e11472ff6010ef508afc9c2edce4003a35ffda7fab' })),
   'pptx-structure-v1': success('pptx-structure-v1', [
     { id: 'slides', role: 'required', kind: 'slide-order', slides: [1, 2] },
     { id: 'slide-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['slide'] },
+    provenance('slide-1-provenance', 'blocks/1', { kind: 'slide', slide: 1 }, anydocProducer),
+    provenance('slide-1-note-provenance', 'blocks/1/notes/1', { kind: 'slide', slide: 1 }, anydocProducer),
     { id: 'slide-1-boundary', role: 'required', kind: 'slide-boundary', slide: 1, text: ['Slide One', 'Plan', 'Status', 'Pro', 'Ready'] },
     { id: 'slide-2-boundary', role: 'required', kind: 'slide-boundary', slide: 2, text: ['Slide Two'] },
     { id: 'slide-text', role: 'required', kind: 'ordered-text', text: ['Slide One', 'Plan', 'Status', 'Pro', 'Ready', 'Slide Two'] },
@@ -56,6 +65,8 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
     { id: 'csv-row-bounds', role: 'required', kind: 'logical-row-bounds', start: 1, end: 3 },
     { id: 'csv-table', role: 'required', kind: 'table', columns: ['Plan', 'Price', 'Notes'], rows: [['Plan', 'Price', 'Notes'], ['Pro', '20', 'best, value'], ['Free', '', '']] },
     { id: 'csv-diagnostics', role: 'required', kind: 'no-parser-downgrade' },
+    provenance('csv-table-provenance', 'blocks/1', { kind: 'logical-table', rowStart: 1, rowEnd: 3 }, csvProducer),
+    provenance('csv-first-cell-provenance', 'blocks/1/rows/1/cells/1', { kind: 'logical-table', rowStart: 1, rowEnd: 1 }, csvProducer),
   ]),
   'xlsx-control-v1': success('xlsx-control-v1', [
     { id: 'xlsx-sheets', role: 'required', kind: 'sheet-order', sheets: ['Pricing'] },
@@ -66,10 +77,14 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
     { id: 'xlsx-b1', role: 'required', kind: 'cell', sheet: 'Pricing', address: 'B1', displayedValue: 'Price' },
     { id: 'xlsx-a2', role: 'required', kind: 'cell', sheet: 'Pricing', address: 'A2', displayedValue: 'Pro' },
     { id: 'xlsx-b2', role: 'required', kind: 'cell', sheet: 'Pricing', address: 'B2', displayedValue: '20' },
+    provenance('xlsx-sheet-provenance', 'blocks/1', { kind: 'sheet-range', sheet: 'Pricing', range: 'A1:B2' }, excelProducer),
+    provenance('xlsx-cell-provenance', 'blocks/1/blocks/1/rows/1/cells/1', { kind: 'sheet-range', sheet: 'Pricing', range: 'A1' }, excelProducer),
   ]),
   'pdf-control-v1': success('pdf-control-v1', [
     { id: 'pdf-pages', role: 'required', kind: 'page-order', pages: [1, 2, 3, 4, 5, 6, 7, 8] },
     { id: 'pdf-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['page', 'page-block'] },
+    provenance('pdf-page-1-provenance', 'blocks/1', { kind: 'page', page: 1 }, pdfProducer),
+    provenance('pdf-page-1-block-1-provenance', 'blocks/1/blocks/1', { kind: 'page-block', page: 1, block: 1, start: 0, end: 29 }, pdfProducer),
     { id: 'pdf-title', role: 'required', kind: 'metadata', key: 'title', value: 'Firecrawl Documentation - API Reference' },
     { id: 'pdf-first-block', role: 'required', kind: 'page-block', page: 1, block: 1, text: '# Firecrawl API Documentation' },
     { id: 'pdf-page-1-content', role: 'required', kind: 'page-content-hash', page: 1, sha256: '7a024ee44003f09f5bce3202a4b0e34fd2317d71b9c7ab71328fa30c9783201c' },
@@ -89,7 +104,7 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
   'mislabeled-v1': failure('mislabeled-v1', 'invalid-result'),
   'expansion-heavy-v1': failure('expansion-heavy-v1', 'expanded-too-large'),
   'external-link-v1': {
-    fixtureId: 'external-link-v1', expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' }, assertions: proseAssertions(),
+    fixtureId: 'external-link-v1', expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' }, assertions: proseAssertions({ hash: 'edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574' }),
   },
   'timeout-v1': missing('timeout-v1'),
   'memory-limit-v1': missing('memory-limit-v1'),
@@ -104,10 +119,10 @@ export function expectedFactsForFixture(fixture: AnydocFixtureManifest): Expecte
   return facts
 }
 
-export function validateExpectedFacts(manifests: readonly AnydocFixtureManifest[]): string[] {
+export function validateExpectedFacts(manifests: readonly AnydocFixtureManifest[], expectedFacts: Readonly<Record<string, ExpectedFactManifest>> = expectedFactsByFixture): string[] {
   const errors: string[] = []
   for (const fixture of manifests) {
-    const expected = expectedFactsByFixture[fixture.id]
+    const expected = expectedFacts[fixture.id]
     if (!expected) {
       errors.push(`fixture "${fixture.id}" has no expected structural facts.`)
       continue
@@ -148,11 +163,17 @@ function spreadsheet(fixtureId: string, hasMerge: boolean): ExpectedFactManifest
     { id: 'pricing-c4', role: 'required', kind: 'cell', sheet: 'Pricing', address: 'C4', displayedValue: '' },
     { id: 'regions-a1', role: 'required', kind: 'cell', sheet: 'Regions', address: 'A1', displayedValue: 'Region' },
     { id: 'regions-a2', role: 'required', kind: 'cell', sheet: 'Regions', address: 'A2', displayedValue: 'EU' },
+    provenance('workbook-sheet-provenance', 'blocks/1', { kind: 'sheet-range', sheet: 'Pricing', range: 'A1:C4' }, anydocProducer),
+    provenance('workbook-cell-provenance', 'blocks/1/blocks/1/rows/1/cells/1', { kind: 'sheet-range', sheet: 'Pricing', range: 'A1' }, anydocProducer),
     ...(hasMerge ? [
       { id: 'pricing-merge', role: 'required' as const, kind: 'cell' as const, sheet: 'Pricing', address: 'A4', displayedValue: 'Merged total', mergeRange: 'A4:B4' },
       { id: 'pricing-merge-follower', role: 'required' as const, kind: 'cell' as const, sheet: 'Pricing', address: 'B4', displayedValue: '', mergeRange: 'A4:B4' },
     ] : []),
   ])
+}
+
+function provenance(id: string, path: string, coordinate: SourceCoordinate, producer: ParserIdentity): StructuralAssertion {
+  return { id, role: 'required', kind: 'provenance', path, coordinate, producer }
 }
 
 function success(fixtureId: string, assertions: readonly StructuralAssertion[]): ExpectedFactManifest {
