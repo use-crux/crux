@@ -10,7 +10,7 @@ import type {
   TableCell,
   TextBlock,
 } from './ingested-document'
-import type { CruxDocument, CruxIngestPart, CruxSourceFacts, SpreadsheetCellProvenance, SpreadsheetProvenance } from './types'
+import type { CruxDocument, CruxIngestPart, CruxSourceFacts, CruxSourceLocation, SpreadsheetCellProvenance, SpreadsheetProvenance } from './types'
 
 const NORMALIZATION_VERSION = 'crux:ingested-document:2'
 
@@ -78,14 +78,29 @@ function normalizeBlock(block: DocumentBlock, ancestors: readonly string[], shee
 }
 
 function textPart(block: TextBlock, blockIds: readonly string[]): CruxIngestPart {
+  const location = sourceLocation(block.coordinate)
   return {
     id: block.id,
     kind: 'text',
     content: block.text,
     role: block.role,
     headingPath: [...block.headingPath],
+    ...(location ? { sourceLocation: location } : {}),
     evidence: { coordinate: block.coordinate, producer: block.producer, blockIds },
   }
+}
+
+function sourceLocation(coordinate: SourceCoordinate): CruxSourceLocation | undefined {
+  if (coordinate.kind === 'page') {
+    return { type: 'page', pageNumber: coordinate.page }
+  }
+  if (coordinate.kind === 'page-block') {
+    return { type: 'page', pageNumber: coordinate.page }
+  }
+  if (coordinate.kind === 'time') {
+    return { type: 'time', unit: 'seconds', start: coordinate.start, end: coordinate.end }
+  }
+  return undefined
 }
 
 function listPart(block: ListBlock, blockIds: readonly string[]): CruxIngestPart {

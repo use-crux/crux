@@ -30,7 +30,9 @@ export function adaptBuiltInParseResult(input: {
 }): IngestedDocument {
   const documentSha256 = sha256(input.bytes)
   const fallback = input.format === 'unknown' ? BUILTIN_PRODUCERS.txt : BUILTIN_PRODUCERS[input.format as keyof typeof BUILTIN_PRODUCERS]
-  const producer = fallback ?? mediaProducer(input.format, input.options)
+  const producer = fallback ?? (input.format === 'video'
+    ? videoProducer(input.result.parts, input.options)
+    : mediaProducer(input.format, input.options))
   const blocks: DocumentBlock[] = input.result.parts.flatMap((part, index) => blockForPart(part, index + 1, documentSha256, producerForPart(part, producer, input.options)))
   const producers = blocks.map((block) => block.producer)
   const documentProducer = producers.find((candidate) => candidate.kind === 'parser') ?? producer
@@ -122,6 +124,11 @@ function producerForPart(part: IngestPart, fallback: DocumentProducer, options: 
   return part.id.startsWith('video:visual:')
     ? mediaProducer('image', options)
     : mediaProducer('audio', options)
+}
+
+function videoProducer(parts: readonly IngestPart[], options: ParserOptions | undefined): ApplicationOperationProducer {
+  const visual = parts.find((part) => part.id.startsWith('video:visual:'))
+  return visual ? mediaProducer('image', options) : mediaProducer('audio', options)
 }
 
 function scalarMetadata(metadata: Record<string, unknown> | undefined): Record<string, string | number | boolean> {
