@@ -1,17 +1,19 @@
 import type { AnydocFixtureManifest, RequiredFact } from './fixture-manifest'
 import type { ExpectedFactManifest, StructuralAssertion } from './structural-assertions'
 
-const proseAssertions: readonly StructuralAssertion[] = [
+function proseAssertions(options: { readonly notes?: readonly string[]; readonly assetCount?: number } = {}): readonly StructuralAssertion[] {
+  return [
   { id: 'prose-text', role: 'required', kind: 'ordered-text', text: ['Release Notes', 'Structured ingestion reference.', 'First', 'Nested', 'Plan', 'Status', 'Pro', 'Ready'] },
   { id: 'prose-heading', role: 'required', kind: 'heading', level: 1, text: 'Release Notes' },
   { id: 'prose-list', role: 'required', kind: 'list', ordered: false, depth: 1, text: ['First', 'Nested'] },
   { id: 'prose-nested-list', role: 'required', kind: 'list', ordered: false, depth: 2, text: ['Nested'] },
   { id: 'prose-table', role: 'required', kind: 'table', columns: ['Plan', 'Status'], rows: [['Plan', 'Status'], ['Pro', 'Ready']] },
   { id: 'prose-link', role: 'required', kind: 'link', text: 'reference', target: 'https://cruxjs.dev' },
-  { id: 'prose-notes', role: 'required', kind: 'notes', text: [] },
-  { id: 'prose-assets', role: 'required', kind: 'asset-count', count: 0 },
+  { id: 'prose-notes', role: 'required', kind: 'notes', text: options.notes ?? [] },
+  { id: 'prose-assets', role: 'required', kind: 'asset-count', count: options.assetCount ?? 0 },
   { id: 'prose-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['document'] },
-]
+  ]
+}
 
 const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind'][]>> = {
   'all-text-in-order': ['ordered-text'], assets: ['asset-count'], columns: ['table'], coordinates: ['coordinate-kinds', 'cell', 'logical-row-bounds', 'page-block'],
@@ -19,7 +21,7 @@ const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind
   'link-targets': ['link'], 'list-nesting': ['list'], 'logical-matrix': ['csv-matrix'], 'notes-and-assets': ['notes', 'asset-count'],
   'occupied-ranges': ['sheet-range'], 'page-block-coordinates': ['page-block'], 'page-content': ['page-block'], 'page-count-and-order': ['page-order'],
   'page-metadata': ['metadata'], 'row-bounds': ['logical-row-bounds'], 'sheet-identity-and-order': ['sheet-order'],
-  'slide-boundaries': ['slide-boundary'], 'slide-identity-and-order': ['slide-order'], 'slide-note-ownership': ['notes'], 'table-grid': ['table'],
+  'slide-boundaries': ['slide-boundary'], 'slide-identity-and-order': ['slide-order'], 'slide-note-ownership': ['slide-note'], 'table-grid': ['table'],
 }
 
 /**
@@ -28,15 +30,13 @@ const COVERAGE: Readonly<Record<RequiredFact, readonly StructuralAssertion['kind
  */
 export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifest>> = {
   'docx-structure-v1': success('docx-structure-v1', [
-    ...proseAssertions,
-    { id: 'docx-note', role: 'required', kind: 'notes', text: ['Crux footnote evidence.'] },
-    { id: 'docx-assets', role: 'required', kind: 'asset-count', count: 1 },
+    ...proseAssertions({ notes: ['Crux footnote evidence.'], assetCount: 1 }),
   ]),
-  'doc-legacy-v1': success('doc-legacy-v1', proseAssertions),
+  'doc-legacy-v1': success('doc-legacy-v1', proseAssertions()),
   'docm-macro-v1': missing('docm-macro-v1'),
-  'rtf-prose-v1': success('rtf-prose-v1', proseAssertions),
-  'odt-prose-v1': success('odt-prose-v1', proseAssertions),
-  'epub-prose-v1': success('epub-prose-v1', proseAssertions),
+  'rtf-prose-v1': success('rtf-prose-v1', proseAssertions()),
+  'odt-prose-v1': success('odt-prose-v1', proseAssertions()),
+  'epub-prose-v1': success('epub-prose-v1', proseAssertions()),
   'pptx-structure-v1': success('pptx-structure-v1', [
     { id: 'slides', role: 'required', kind: 'slide-order', slides: [1, 2] },
     { id: 'slide-coordinates', role: 'required', kind: 'coordinate-kinds', kinds: ['slide'] },
@@ -44,7 +44,8 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
     { id: 'slide-2-boundary', role: 'required', kind: 'slide-boundary', slide: 2, text: ['Slide Two'] },
     { id: 'slide-text', role: 'required', kind: 'ordered-text', text: ['Slide One', 'Plan', 'Status', 'Pro', 'Ready', 'Slide Two'] },
     { id: 'slide-table', role: 'required', kind: 'table', columns: ['Plan', 'Status'], rows: [['Plan', 'Status'], ['Pro', 'Ready']] },
-    { id: 'slide-notes', role: 'required', kind: 'notes', text: ['Owner note for slide one.', 'Owner note for slide two.'] },
+    { id: 'slide-1-note', role: 'required', kind: 'slide-note', slide: 1, text: 'Owner note for slide one.' },
+    { id: 'slide-2-note', role: 'required', kind: 'slide-note', slide: 2, text: 'Owner note for slide two.' },
     { id: 'slide-assets', role: 'required', kind: 'asset-count', count: 1 },
   ]),
   'ppt-legacy-v1': missing('ppt-legacy-v1'),
@@ -80,7 +81,7 @@ export const expectedFactsByFixture: Readonly<Record<string, ExpectedFactManifes
   'mislabeled-v1': failure('mislabeled-v1', 'invalid-result'),
   'expansion-heavy-v1': failure('expansion-heavy-v1', 'expanded-too-large'),
   'external-link-v1': {
-    fixtureId: 'external-link-v1', expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' }, assertions: proseAssertions,
+    fixtureId: 'external-link-v1', expectedOutcome: { kind: 'success', diagnostic: 'external-resource-blocked' }, assertions: proseAssertions(),
   },
   'timeout-v1': missing('timeout-v1'),
   'memory-limit-v1': missing('memory-limit-v1'),

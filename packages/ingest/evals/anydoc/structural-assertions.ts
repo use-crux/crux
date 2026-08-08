@@ -14,6 +14,7 @@ export type StructuralAssertion =
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'table'; readonly columns: readonly string[]; readonly rows: readonly (readonly string[])[] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'link'; readonly text: string; readonly target: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'notes'; readonly text: readonly string[] }
+  | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-note'; readonly slide: number; readonly text: string }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'asset-count'; readonly count: number }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'coordinate-kinds'; readonly kinds: readonly SourceCoordinate['kind'][] }
   | { readonly id: string; readonly role: AssertionRole; readonly kind: 'slide-order'; readonly slides: readonly number[] }
@@ -51,7 +52,12 @@ export interface StructuralAssertionResult {
 }
 
 /** Parser-adapter facts are typed but intentionally independent from Core's document model. */
-export type ParserNativeFact = WithoutIdentity<StructuralAssertion>
+export type ParserNativeFact = WithoutIdentity<StructuralAssertion> & {
+  /** Exactly one native fact must identify each expected assertion. */
+  readonly assertionId: string
+  /** Parser-owned structural location, retained for duplicate-kind disambiguation. */
+  readonly path: string
+}
 
 export interface ParserNativeFacts {
   readonly outcome: EvaluationOutcome
@@ -60,10 +66,16 @@ export interface ParserNativeFacts {
 
 /** Assert a parser's native typed fact surface before its Core projection exists. */
 export function assertParserNativeFacts(expected: ExpectedFactManifest, actual: ParserNativeFacts): StructuralAssertionResult {
-  const results = [outcomeResult(expected.expectedOutcome, actual.outcome)]
+  const expectedIds = expected.assertions.map((assertion) => assertion.id)
+  const uniqueIds = new Set(actual.facts.map((fact) => fact.assertionId))
+  const completeIdSet = uniqueIds.size === actual.facts.length
+    && actual.facts.length === expectedIds.length
+    && expectedIds.every((id) => uniqueIds.has(id))
+  const results = [outcomeResult(expected.expectedOutcome, actual.outcome), result('native-fact-ids', 'required', completeIdSet, expectedIds, actual.facts.map((fact) => ({ assertionId: fact.assertionId, path: fact.path })))]
   for (const assertion of expected.assertions) {
-    const native = actual.facts.find((fact) => fact.kind === assertion.kind)
-    results.push(result(assertion.id, assertion.role, native !== undefined && equal(native, withoutIdentity(assertion)), withoutIdentity(assertion), native))
+    const matches = actual.facts.filter((fact) => fact.assertionId === assertion.id)
+    const native = matches[0]
+    results.push(result(assertion.id, assertion.role, matches.length === 1 && native !== undefined && equal(nativeFactValue(native), withoutIdentity(assertion)), withoutIdentity(assertion), native))
   }
   return completedResult(expected.fixtureId, actual.outcome, results, actual.facts.length > 0)
 }
@@ -92,7 +104,7 @@ function assertStructuralFacts(expected: ExpectedFactManifest, document: Ingeste
 export function compareProjectionFacts(native: StructuralAssertionResult, core: StructuralAssertionResult): readonly { readonly id: string; readonly role: AssertionRole }[] {
   const coreById = new Map(core.assertions.map((assertion) => [assertion.id, assertion]))
   return native.assertions
-    .filter((assertion) => assertion.id !== 'outcome' && assertion.passed && !coreById.get(assertion.id)?.passed)
+    .filter((assertion) => assertion.id !== 'outcome' && assertion.id !== 'native-fact-ids' && assertion.passed && !coreById.get(assertion.id)?.passed)
     .map((assertion) => ({ id: assertion.id, role: assertion.role }))
 }
 
@@ -116,6 +128,7 @@ function assertFact(assertion: StructuralAssertion, document: IngestedDocument):
     case 'table': return compare(assertion, tables(document).some((table) => equal(table.columns, assertion.columns) && equal(table.rows, assertion.rows)), true)
     case 'link': return compare(assertion, links(document).some((link) => link.text === assertion.text && link.target === assertion.target), true)
     case 'notes': return compare(assertion, noteText(document), assertion.text)
+    case 'slide-note': return compare(assertion, document.blocks.filter(isSlide).find((slide) => slide.slide === assertion.slide)?.notes.map((note) => note.text), [assertion.text])
     case 'asset-count': return compare(assertion, document.assets.length, assertion.count)
     case 'coordinate-kinds': return compare(assertion, coordinateKinds(document), assertion.kinds)
     case 'slide-order': return compare(assertion, document.blocks.filter(isSlide).map((slide) => slide.slide), assertion.slides)
@@ -242,7 +255,8 @@ function compare(assertion: StructuralAssertion, actual: unknown, expected: unkn
 function failed(id: string, role: AssertionRole, expected: unknown, actual: unknown): AssertionResult { return result(id, role, false, expected, actual) }
 function result(id: string, role: AssertionRole, passed: boolean, expected: unknown, actual: unknown): AssertionResult { return { id, role, passed, expected: bounded(expected), actual: bounded(actual) } }
 function equal(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right) }
-function withoutIdentity(assertion: StructuralAssertion): ParserNativeFact { const { id: _id, role: _role, ...fact } = assertion; return fact as ParserNativeFact }
+function withoutIdentity(assertion: StructuralAssertion): WithoutIdentity<StructuralAssertion> { const { id: _id, role: _role, ...fact } = assertion; return fact as WithoutIdentity<StructuralAssertion> }
+function nativeFactValue(fact: ParserNativeFact): WithoutIdentity<StructuralAssertion> { const { assertionId: _id, path: _path, ...value } = fact; return value as WithoutIdentity<StructuralAssertion> }
 type WithoutIdentity<T> = T extends unknown ? Omit<T, 'id' | 'role'> : never
 
 const MAX_EVIDENCE_DEPTH = 3
