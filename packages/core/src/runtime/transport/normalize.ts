@@ -14,6 +14,7 @@ import {
 } from "./lifecycle-errors";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
 import { scopeProviderSignalsForEnvelope } from "./publication-scope";
+import { emitTransportEnvelopeObservability } from "./envelope-observability";
 import {
   appendTransportFacts,
   createTransportLineageAccumulator,
@@ -177,6 +178,7 @@ export async function normalizeClaimedTransportEnvelope(
     return { kind: "lost-lease" };
   }
 
+  emitTransportEnvelopeObservability(completed, "normalized");
   return Object.freeze({ kind: "normalized", record: completed });
 }
 

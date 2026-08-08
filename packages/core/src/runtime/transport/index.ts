@@ -106,3 +106,19 @@ export {
   projectTransportEnvelope,
   type RuntimeTransportEnvelopeProjection,
 } from "./projection";
+export {
+  MAX_TRANSPORT_BINDING_HEALTH,
+  projectTransportBindingHealth,
+  transportBindingHealth,
+  type ProjectTransportBindingHealthOptions,
+  type RuntimeTransportBindingHealth,
+  type RuntimeTransportBindingHealthOutcomes,
+  type RuntimeTransportBindingHealthSnapshot,
+  type RuntimeTransportHealthCoverage,
+  type RuntimeTransportKind,
+  type TransportBindingHealthOptions,
+} from "./binding-health";
+export {
+  emitTransportEnvelopeObservability,
+  type TransportEnvelopeObservabilityAttributes,
+} from "./envelope-observability";
