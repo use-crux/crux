@@ -515,6 +515,10 @@ func TestSystemdPropertyWireTypesRoundTrip(t *testing.T) {
 	if binds, ok := bindReadOnlyPathsValue(props["BindReadOnlyPaths"]); !ok || !same(binds, wantBinds) {
 		t.Fatalf("BindReadOnlyPaths did not decode: %#v", props["BindReadOnlyPaths"])
 	}
+	generic := []any{[]any{"/a", "/b", false, uint64(0)}}
+	if binds, ok := bindReadOnlyPathsValue(generic); !ok || !same(binds, []string{"/a:/b"}) {
+		t.Fatalf("generic tuples did not decode: %#v", generic)
+	}
 	type systemdBindTuple struct {
 		Source        string
 		Destination   string
@@ -556,7 +560,7 @@ type fakeSystemBus struct {
 }
 
 func newFakeSystemBus() *fakeSystemBus {
-	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []bindReadOnlyPath{{Source: "/run/anydoc/input/source", Destination: stagedSourceTarget}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
+	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []any{[]any{"/run/anydoc/input/source", stagedSourceTarget, false, uint64(0)}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
 func (b *fakeSystemBus) SupportsUnixFDs() bool { return b.fdOK }
 func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props []DBusProperty) error {
