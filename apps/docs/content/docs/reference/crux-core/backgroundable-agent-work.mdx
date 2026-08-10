@@ -64,15 +64,19 @@ Its exact input is:
 
 ```ts
 interface WorkToolInput {
-  readonly action: "list" | "status" | "result" | "cancel" | "detach";
+  readonly action: "list" | "status" | "result" | "cancel" | "detach" | "send";
   readonly id?: string;
   readonly timeout?: string;
+  readonly message?: string;
 }
 ```
 
-`status`, `result`, `cancel`, and `detach` require `id`. `timeout` is a Crux
-duration string used by `result`. This Tool is not exported for application
-code; it is an automatic capability for the parent model.
+`status`, `result`, `cancel`, `detach`, and `send` require `id`. `timeout` is a
+Crux duration string used by `result`. `send` requires a non-empty `message`
+string and is available only for Agent children retained by this owner. The
+schema remains stable for a backgroundable run; status remains ephemeral.
+This Tool is not exported for application code; it is an automatic capability
+for the parent model.
 
 ## `list` and `status`
 
@@ -133,6 +137,26 @@ Queued Work can be cancelled before it runs. Running Work first enters
 `cancel-requested` and cancellation remains cooperative. A failure unrelated to
 that request stays `failed`, and normal completion may win the race. Requests
 against already terminal Work are not accepted.
+
+## `send`
+
+`send` accepts ordered supervisor guidance for a non-terminal Agent child:
+
+```ts
+interface SendReceipt {
+  readonly workId: string;
+  readonly id: string;
+  readonly cursor: string;
+  readonly acceptedAt: string;
+  readonly outcome: "accepted";
+}
+```
+
+Acceptance is immediate and idempotent for the same model tool-call identity.
+Raw message content is not stored in command identity records—only a payload
+digest. Delivery happens only at the child's next semantic provider-step
+boundary; the active provider call, tools, and guardrails are never mutated.
+Terminal or non-Agent targets reject.
 
 ## `detach`
 

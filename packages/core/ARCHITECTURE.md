@@ -69,6 +69,34 @@ of mutating an active provider call. The child executor receives its own Agent
 definition, declared input, selected model, and child cancellation signal—no
 parent prompt, history, tools, or control authority.
 
+## Agent Work handles and safe-boundary steering
+
+Agent children share the process-local Work kernel. An `AgentWorkHandle`
+extends the canonical `WorkHandle` surface with Agent-only `send()`. Flow and
+task handles remain ordinary `WorkHandle` values and never expose `send` at the
+type level.
+
+Programmatic process-local acceptance uses `createAgentWorkHost({ executor })`
+and `spawn(agent, input)`. Backgroundable children retain the same Agent handle
+shape for steering and occurrence identity. Neither path claims cross-request
+durability: process exit loses the registry, mailboxes, and results.
+
+Agent-as-Tool occurrence identity is derived from owner execution, turn/step,
+normalized tool-call id, and binding key. Exact replay reconnects the existing
+child Work; reused identity with conflicting input rejects without allocating
+another child.
+
+`send()` accepts canonical string or multimodal message content and returns an
+idempotent acceptance receipt. Command identity records store only command id
+and payload digest—never raw content. Accepted steering is ordered and claimed
+only at the next semantic provider-step boundary through `projectStepMessages`,
+appended as user messages with `agent-steering` provenance. Delivery never
+mutates an in-flight provider call, expands child tools, or weakens guardrails.
+
+The automatic model-facing `work` Tool includes `send` for Agent children only.
+Its schema stays stable while status remains ephemeral. Cancellation,
+detachment, terminal-state, and invalid-target behavior remain explicit.
+
 Core owns the wrapper, binding, owner retention, kernel lifecycle, automatic
 control, and safe projection. Provider packages changed tests only; there is no
 provider-specific behavior.
