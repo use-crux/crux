@@ -61,3 +61,6 @@ Classify unavailable result receipt and result-socket I/O as containment
 failures; reserve fixed `accounting-refresh` result-validation diagnostics for
 authenticated, decoded results whose accounting refresh fails, including when
 terminal accounting cleanup also fails.
+
+Classify systemd stop fallback failures with fixed cleanup diagnostics without
+exposing unit names, D-Bus bodies, or cgroup paths.
