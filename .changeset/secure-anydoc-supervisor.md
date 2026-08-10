@@ -46,3 +46,9 @@ Map packaged runner stage failures to fixed allowlisted exit codes
 (authorization, request/source validation, native load, conversion, result
 delivery, acknowledgement) so CI diagnostics can name the failed stage without
 leaking paths, nonces, or document content.
+
+Keep the fully verified sandbox snapshot immutable after verify: later
+PID/runtime-attested Reports stay live for peer authorization only, and
+RefreshAccounting updates only accounting fields on that verified base for the
+exact retained cgroup so mutated properties cannot become the ENOENT reuse
+fallback.

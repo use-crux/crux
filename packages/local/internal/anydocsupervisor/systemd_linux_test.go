@@ -358,6 +358,86 @@ func TestCleanupRejectsMalformedPresentAccountingAfterRefresh(t *testing.T) {
 	}
 }
 
+// After MarkSnapshotVerified, a later Report may still be PID/runtime-attested
+// while a required sandbox property has been mutated. That live report must
+// not replace the fully verified snapshot (snapshotOK is sticky) and therefore
+// must not become the reusable ENOENT accounting fallback.
+func TestVerifiedSnapshotNotReplacedByLaterUnverifiedReport(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-snapshot-immutable.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !first.PrivateNetwork {
+		t.Fatal("fixture must start with PrivateNetwork=true")
+	}
+	unit.MarkSnapshotVerified()
+
+	// Mutate a required sandbox property. Report still succeeds with MainPID and
+	// matching runtime digest (PID/runtime attestation only).
+	bus.values["PrivateNetwork"] = false
+	live, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live.PrivateNetwork {
+		t.Fatal("live Report did not observe PrivateNetwork mutation")
+	}
+
+	cached, _, ok := unit.LastVerifiedSnapshot()
+	if !ok {
+		t.Fatal("verified snapshot became unavailable after later Report")
+	}
+	if !cached.PrivateNetwork {
+		t.Fatal("later unverified Report replaced the verified snapshot base")
+	}
+
+	// Accounting refresh must keep the verified sandbox identity and only
+	// update accounting fields for the same cgroup.
+	fs.files[cgroupFile("/crux.slice/test", "memory.current")] = []byte("4096\n")
+	fs.files[cgroupFile("/crux.slice/test", "memory.peak")] = []byte("8192\n")
+	fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec 42\nnr_periods 2\nnr_throttled 1\nthrottled_usec 5\n")
+	if _, err := unit.RefreshAccounting(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cached, cachedCPU, ok := unit.LastVerifiedSnapshot()
+	if !ok || cachedCPU != 42*time.Microsecond {
+		t.Fatalf("refresh lost verified snapshot: ok=%v cpu=%s", ok, cachedCPU)
+	}
+	if !cached.PrivateNetwork || cached.MemoryPeak != 8192 {
+		t.Fatalf("refresh must keep verified identity and update accounting only: %#v", cached)
+	}
+
+	for path := range fs.files {
+		if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+			delete(fs.files, path)
+		}
+	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+
+	report, cpu, termination, reason := cleanup(unit)
+	if reason != "" {
+		t.Fatalf("cleanup reason = %q, want success via verified base", reason)
+	}
+	if !termination.Absent || cpu != 42*time.Microsecond {
+		t.Fatalf("cleanup termination/cpu = %#v %s", termination, cpu)
+	}
+	if !report.PrivateNetwork {
+		t.Fatal("ENOENT fallback reused a merely PID/runtime-attested mutated report")
+	}
+	if report.MemoryPeak != 8192 {
+		t.Fatalf("ENOENT fallback lost refreshed accounting: peak=%d", report.MemoryPeak)
+	}
+}
+
 func TestMountedRuntimeAttestationRejectsTreeTamperingAndProcErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".complete"), nil, 0o444); err != nil {

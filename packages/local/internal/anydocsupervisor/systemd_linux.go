@@ -611,10 +611,15 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
+	// Candidate snapshots are only PID/runtime-attested. After verify() marks
+	// the fully verified base, leave that base immutable for ENOENT reuse;
+	// callers still receive this live report for peer authorization.
 	if report.MainPID > 0 && report.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
 		u.snapshotMu.Lock()
-		u.snapshot = cloneSandboxReport(report)
-		u.snapshotSeen = true
+		if !u.snapshotOK {
+			u.snapshot = cloneSandboxReport(report)
+			u.snapshotSeen = true
+		}
 		u.snapshotMu.Unlock()
 	}
 	return report, nil
@@ -909,10 +914,13 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 		u.snapshotMu.Unlock()
 		return 0, errors.New("accounting snapshot is not verified")
 	}
-	// Persist a deep-cloned verified snapshot so cleanup can reuse
-	// memory.peak / memory.events / CPU / pids evidence after the live
-	// cgroup disappears, without sharing map/slice ownership with the
-	// temporary capture buffers.
+	// Only the last fully verify(...) base is refreshable, and only for the
+	// exact retained cgroup identity. Sandbox property fields stay frozen;
+	// accounting counters/maps may advance for ENOENT cleanup reuse.
+	if u.snapshot.ControlGroup != cgroup {
+		u.snapshotMu.Unlock()
+		return 0, errors.New("accounting snapshot identity mismatch")
+	}
 	next := cloneSandboxReport(u.snapshot)
 	next.MemoryCurrent = memoryCurrent
 	next.MemoryPeak = memoryPeak
