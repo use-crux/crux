@@ -1638,41 +1638,27 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 	}
 }
 
-func TestTerminalStatusClassifiesOnlyExactUnitGoneErrors(t *testing.T) {
+func TestTerminalStatusPreservesSanitizedOperationClassification(t *testing.T) {
 	private := "/private/dbus-body-secret"
 	for _, test := range []struct {
-		name         string
-		err          error
-		gone         bool
-		unrecognized bool
+		name  string
+		err   error
+		class terminalStatusDBusClass
 	}{
-		{name: "NoSuchUnit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, gone: true},
-		{name: "UnknownObject", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, gone: true},
-		{name: "NoSuchUnit pointer", err: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, gone: true},
-		{name: "UnknownObject pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, gone: true},
-		{name: "wrapped NoSuchUnit", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}), gone: true},
-		{name: "wrapped UnknownObject", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}), gone: true},
+		{name: "NoSuchUnit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, class: terminalStatusDBusGone},
+		{name: "UnknownObject", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, class: terminalStatusDBusGone},
+		{name: "wrapped NoSuchUnit", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}), class: terminalStatusDBusGone},
 		{name: "arbitrary", err: errors.New("terminal unavailable")},
-		{name: "access denied", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, unrecognized: true},
-		{name: "other D-Bus pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{private}}, unrecognized: true},
-		{name: "wrapped other D-Bus", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{private}}), unrecognized: true},
+		{name: "access denied", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, class: terminalStatusDBusUnrecognized},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
 			bus.propErr = test.err
 			u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus}
 			_, err := u.TerminalStatus(context.Background())
-			var gone *terminalStatusGoneError
-			got := errors.As(err, &gone)
-			if got != test.gone {
-				t.Fatalf("TerminalStatus() gone classification = %t, want %t (err %T: %v)", got, test.gone, err, err)
-			}
-			var unrecognized *terminalStatusUnrecognizedDBusError
-			if got := errors.As(err, &unrecognized); got != test.unrecognized {
-				t.Fatalf("TerminalStatus() unrecognized D-Bus classification = %t, want %t (err %T: %v)", got, test.unrecognized, err, err)
-			}
-			if test.unrecognized && (err.Error() != "unit status D-Bus error" || strings.Contains(err.Error(), private) || strings.Contains(err.Error(), "InvalidArgs") || strings.Contains(err.Error(), "AccessDenied")) {
-				t.Fatalf("TerminalStatus() exposed D-Bus detail: %q", err)
+			var operation *terminalStatusOperationError
+			if !errors.As(err, &operation) || operation.stage != terminalStatusUnitProperties || operation.dbusClass != test.class {
+				t.Fatalf("TerminalStatus() = %T %v, want unit-properties operation class %v", err, err, test.class)
 			}
 			var source *dbus.Error
 			if errors.As(err, &source) {
@@ -1691,38 +1677,35 @@ func TestTerminalStatusUnavailableStagesAreSafeAndValidateAlreadyGone(t *testing
 	termination := TerminationEvidence{ControlGroup: "/safe", Empty: true}
 
 	for _, test := range []struct {
-		name         string
-		err          error
-		values       map[string]any
-		wantReason   string
-		gone         bool
-		unrecognized bool
+		name       string
+		err        error
+		values     map[string]any
+		wantReason string
 	}{
 		{
 			name:       "GetUnit generic error",
 			err:        newTerminalStatusOperationError(terminalStatusGetUnit, errors.New(private)),
-			wantReason: "already-gone-terminal-get-unit",
+			wantReason: "already-gone-terminal-get-unit-unavailable",
 		},
 		{
 			name:       "Unit GetAll generic error",
 			err:        newTerminalStatusOperationError(terminalStatusUnitProperties, errors.New(private)),
-			wantReason: "already-gone-terminal-unit-properties",
+			wantReason: "already-gone-terminal-unit-properties-unavailable",
 		},
 		{
 			name:       "Service GetAll generic error",
 			err:        newTerminalStatusOperationError(terminalStatusServiceProperties, errors.New(private)),
-			wantReason: "already-gone-terminal-service-properties",
+			wantReason: "already-gone-terminal-service-properties-unavailable",
 		},
 		{
-			name: "GetUnit exact gone value",
-			err:  newTerminalStatusOperationError(terminalStatusGetUnit, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}),
-			gone: true,
+			name:       "GetUnit exact gone value",
+			err:        newTerminalStatusOperationError(terminalStatusGetUnit, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}),
+			wantReason: "already-gone-terminal-get-unit-gone",
 		},
 		{
-			name:         "GetUnit unrecognized D-Bus wrapped",
-			err:          newTerminalStatusOperationError(terminalStatusGetUnit, fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}})),
-			wantReason:   "already-gone-terminal-unrecognized-dbus",
-			unrecognized: true,
+			name:       "GetUnit unrecognized D-Bus wrapped",
+			err:        newTerminalStatusOperationError(terminalStatusGetUnit, fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}})),
+			wantReason: "already-gone-terminal-get-unit-unrecognized",
 		},
 		{
 			name:       "decode invalid",
@@ -1744,13 +1727,14 @@ func TestTerminalStatusUnavailableStagesAreSafeAndValidateAlreadyGone(t *testing
 			u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus}
 			_, err := u.TerminalStatus(context.Background())
 
-			var gone *terminalStatusGoneError
-			if got := errors.As(err, &gone); got != test.gone {
-				t.Fatalf("gone classification = %t, want %t (err %T: %v)", got, test.gone, err, err)
-			}
-			var unrecognized *terminalStatusUnrecognizedDBusError
-			if got := errors.As(err, &unrecognized); got != test.unrecognized {
-				t.Fatalf("unrecognized D-Bus classification = %t, want %t (err %T: %v)", got, test.unrecognized, err, err)
+			if test.err != nil {
+				var operation *terminalStatusOperationError
+				if !errors.As(err, &operation) {
+					t.Fatalf("TerminalStatus() = %T %v, want operation error", err, err)
+				}
+				if input, ok := test.err.(*terminalStatusOperationError); ok && operation != input {
+					t.Fatal("TerminalStatus() replaced the sanitized operation error")
+				}
 			}
 
 			reason := validateAlreadyGone("/safe", termination, nil, TerminalStatus{}, err, carried)
@@ -1875,6 +1859,76 @@ func TestDBusUnitPropertiesStagesEveryOperation(t *testing.T) {
 				t.Fatalf("dbusUnitProperties() leaked operation detail: %q", err)
 			}
 		})
+	}
+}
+
+func TestTerminalStatusOperationErrorsReachCleanupViaDBusUnitProperties(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		calls []*dbus.Call
+		want  string
+	}{
+		{
+			name:  "GetUnit",
+			calls: []*dbus.Call{{Err: errors.New("private GetUnit failure")}},
+			want:  "already-gone-terminal-get-unit-unavailable",
+		},
+		{
+			name: "Unit GetAll",
+			calls: []*dbus.Call{
+				{Body: []any{dbus.ObjectPath("/private/unit/path")}},
+				{Err: errors.New("private Unit GetAll failure")},
+			},
+			want: "already-gone-terminal-unit-properties-unavailable",
+		},
+		{
+			name: "Service GetAll exact gone",
+			calls: []*dbus.Call{
+				{Body: []any{dbus.ObjectPath("/private/unit/path")}},
+				{Body: []any{map[string]dbus.Variant{}}},
+				{Err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{"/private/dbus-body-secret"}}},
+			},
+			want: "already-gone-terminal-service-properties-gone",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			u, base := prepareAlreadyGoneCleanup(t, nil)
+			bus := &dbusHelperSystemBus{fakeSystemBus: base}
+			postStopProperties := 0
+			bus.unitProperties = func(ctx context.Context, name string) (map[string]any, error) {
+				if !base.stopped {
+					return base.UnitProperties(ctx, name)
+				}
+				postStopProperties++
+				if postStopProperties == 1 {
+					// StopUnit's exact missing-unit proof remains strict and carried.
+					return base.UnitProperties(ctx, name)
+				}
+				object := &fakeDBusObject{calls: append([]*dbus.Call(nil), test.calls...)}
+				return dbusUnitProperties(ctx, object, func(dbus.ObjectPath) dbus.BusObject {
+					return object
+				}, name)
+			}
+			u.bus = bus
+
+			_, _, termination, reason := cleanup(u)
+			if termination != (TerminationEvidence{ControlGroup: "/crux.slice/test", Absent: true}) {
+				t.Fatalf("cleanup termination = %#v, want exact absent evidence", termination)
+			}
+			if reason != test.want {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+		})
+	}
+}
+
+func TestGodbusSystemBusWithoutConnectionKeepsGetUnitOperation(t *testing.T) {
+	bus := &godbusSystemBus{}
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus}
+	_, err := u.TerminalStatus(context.Background())
+	var operation *terminalStatusOperationError
+	if !errors.As(err, &operation) || operation.stage != terminalStatusGetUnit || operation.dbusClass != terminalStatusDBusGeneric {
+		t.Fatalf("TerminalStatus() = %T %v, want sanitized get-unit operation error", err, err)
 	}
 }
 

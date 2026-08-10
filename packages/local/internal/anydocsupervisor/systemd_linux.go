@@ -1306,17 +1306,10 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
 		var operation *terminalStatusOperationError
-		if !errors.As(err, &operation) {
-			operation = newTerminalStatusOperationError(terminalStatusUnitProperties, err)
+		if errors.As(err, &operation) {
+			return TerminalStatus{}, operation
 		}
-		switch operation.dbusClass {
-		case terminalStatusDBusGone:
-			return TerminalStatus{}, &terminalStatusGoneError{stage: operation.stage}
-		case terminalStatusDBusUnrecognized:
-			return TerminalStatus{}, &terminalStatusUnrecognizedDBusError{stage: operation.stage}
-		default:
-			return TerminalStatus{}, &terminalStatusUnavailableError{stage: operation.stage}
-		}
+		return TerminalStatus{}, newTerminalStatusOperationError(terminalStatusUnitProperties, err)
 	}
 	status, ok := terminalStatusFromProps(p)
 	if !ok {
