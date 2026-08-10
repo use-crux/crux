@@ -380,7 +380,7 @@ func TestCleanupReportGoneRequiresStrictTerminalEvidence(t *testing.T) {
 	}{
 		{name: "carried proof with typed gone status accepts", statusErr: &terminalStatusGoneError{}},
 		{name: "carried proof with generic status error rejects", statusErr: errors.New("terminal unavailable"), want: "already-gone-terminal-unavailable"},
-		{name: "carried proof with unrecognized D-Bus status rejects", statusErr: &terminalStatusUnrecognizedDBusError{}, want: "already-gone-terminal-dbus-unrecognized"},
+		{name: "carried proof with unrecognized D-Bus status rejects", statusErr: &terminalStatusUnrecognizedDBusError{}, want: "already-gone-terminal-unrecognized-dbus"},
 		{name: "failed terminal rejects", status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
 		{name: "inactive success with nonzero main status rejects", status: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
 	} {
@@ -1556,9 +1556,9 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 		{name: "NoSuchUnit", statusErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}},
 		{name: "UnknownObject", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}},
 		{name: "arbitrary", statusErr: errors.New("terminal unavailable"), wantReason: "already-gone-terminal-unavailable"},
-		{name: "access denied", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-dbus-unrecognized"},
-		{name: "access denied pointer", statusErr: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-dbus-unrecognized"},
-		{name: "wrapped access denied", statusErr: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), wantReason: "already-gone-terminal-dbus-unrecognized"},
+		{name: "access denied", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-unrecognized-dbus"},
+		{name: "access denied pointer", statusErr: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-unrecognized-dbus"},
+		{name: "wrapped access denied", statusErr: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), wantReason: "already-gone-terminal-unrecognized-dbus"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			u, bus := prepareAlreadyGoneCleanup(t, nil)
