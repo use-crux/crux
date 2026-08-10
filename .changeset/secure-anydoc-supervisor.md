@@ -68,3 +68,6 @@ exposing unit names, D-Bus bodies, or cgroup paths.
 
 Classify already-gone cleanup rejection using fixed, allowlisted termination
 and terminal-proof diagnostics without exposing systemd or cgroup details.
+
+Require already-gone termination evidence to name the exact pinned cgroup
+before it can clear cleanup.

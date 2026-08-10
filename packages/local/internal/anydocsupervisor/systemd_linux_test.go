@@ -1329,6 +1329,25 @@ func TestCleanupRejectsAlreadyGoneWhenNonzeroExecMainStatus(t *testing.T) {
 	}
 }
 
+func TestCleanupRejectsAlreadyGoneWhenTerminationCgroupMismatchesPinnedCgroup(t *testing.T) {
+	success := TerminalStatus{State: "inactive", ServiceResult: "success"}
+	unit := &fakeUnit{
+		rep:     SandboxReport{ControlGroup: "/pinned"},
+		stopErr: &alreadyGoneError{proof: success},
+		terminalStatus: func(context.Context) (TerminalStatus, error) {
+			return success, nil
+		},
+		termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: "/other", Absent: true}, nil
+		},
+	}
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "already-gone-termination-mismatch" {
+		t.Fatalf("expected already-gone-termination-mismatch, got %q", reason)
+	}
+}
+
 func TestCleanupRejectsAlreadyGoneWhenTerminationUnproved(t *testing.T) {
 	// Cgroup still populated: Absent/Empty termination evidence is unproved.
 	bus := newFakeSystemBus()

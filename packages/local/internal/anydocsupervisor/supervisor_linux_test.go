@@ -997,7 +997,7 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got := validateAlreadyGone(test.termination, test.terminationErr, test.status, test.statusErr, test.alreadyGone)
+			got := validateAlreadyGone("/safe", test.termination, test.terminationErr, test.status, test.statusErr, test.alreadyGone)
 			if got != test.want {
 				t.Fatalf("validateAlreadyGone() = %q, want %q", got, test.want)
 			}
@@ -1091,6 +1091,8 @@ type fakeUnit struct {
 	receive          func(context.Context, Request) (Result, error)
 	cleanupErr       error
 	stopErr          error
+	termination      func(context.Context, string) (TerminationEvidence, error)
+	terminalStatus   func(context.Context) (TerminalStatus, error)
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -1116,10 +1118,16 @@ func (u *fakeUnit) Stop(context.Context) error {
 	return u.stopErr
 }
 func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
-func (u *fakeUnit) TerminalStatus(context.Context) (TerminalStatus, error) {
+func (u *fakeUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
+	if u.terminalStatus != nil {
+		return u.terminalStatus(ctx)
+	}
 	return TerminalStatus{State: "inactive"}, nil
 }
-func (u *fakeUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
+func (u *fakeUnit) TerminationEvidence(ctx context.Context, cgroup string) (TerminationEvidence, error) {
+	if u.termination != nil {
+		return u.termination(ctx, cgroup)
+	}
 	if cgroup != "/fake" {
 		return TerminationEvidence{}, errors.New("unexpected cgroup")
 	}

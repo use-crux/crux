@@ -1127,7 +1127,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	if reason == "alreadyGone" {
 		// Absent cgroup alone is insufficient: require pinned Absent/Empty
 		// plus carried successful inactive terminal evidence.
-		reason = validateAlreadyGone(termination, terminationErr, status, statusErr, alreadyGone)
+		reason = validateAlreadyGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 	}
 	if usedCachedAccounting && !termination.Absent {
 		if reason == "" {
@@ -1148,9 +1148,12 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 // ServiceResult success, ExecMainStatus 0). failed/oom-kill/exit-code/nonzero
 // must not clear the cleanup failure. Returns "" on accept, or a fixed safe
 // diagnostic reason that does not expose cgroup or systemd details.
-func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, alreadyGone *alreadyGoneError) string {
+func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, alreadyGone *alreadyGoneError) string {
 	if terminationErr != nil || termination.ControlGroup == "" {
 		return "already-gone-termination-unavailable"
+	}
+	if termination.ControlGroup != expectedCgroup {
+		return "already-gone-termination-mismatch"
 	}
 	if !termination.Absent && !termination.Empty {
 		return "already-gone-termination-mismatch"
