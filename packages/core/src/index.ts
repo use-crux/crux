@@ -411,7 +411,7 @@ export type {
   FlowSignalSpec,
   NoPayloadSignal,
 } from "./flow";
-export { createWorkHost, getWork, spawn } from "./work";
+export { createAgentWorkHost, createWorkHost, getWork, spawn } from "./work";
 export {
   getSession,
   session,
@@ -485,17 +485,22 @@ export type {
   TranscriptionCapability,
 } from "./generation-model";
 export type {
+  AgentSteeringContent,
+  AgentWorkHandle,
   CancelOptions,
   CancelReceipt,
   DetachReceipt,
   ExecutionStats,
   SpawnWorkOptions,
+  CreateAgentWorkHostOptions,
   CreateWorkHostOptions,
   WorkEvent,
   WorkHandle,
   WorkProgress,
   WorkStatus,
   WorkStreamOptions,
+  WorkSteeringCursor,
+  WorkSteeringReceipt,
   WorkHost,
 } from "./work";
 export {

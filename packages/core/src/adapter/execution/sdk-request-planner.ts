@@ -6,6 +6,7 @@
  */
 
 import type { z } from "zod";
+import type { Message } from "../../generation/messages";
 import type { InputBudget } from "../../request/budget/input-budget";
 import { RequestCompositionError } from "../../request/errors";
 import { sealRequest } from "../../request/planner/seal";
@@ -66,6 +67,9 @@ interface SdkRequestPlannerOptions<TModel, TRawResponse, TRawStream> {
   readonly rearm: (resolved: ResolvedPrompt) => Promise<void>;
   readonly configuredActiveTools?: readonly string[];
   readonly stepBoundary?: ManagedGenerationStepBoundary;
+  readonly projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
   readonly onSealed?: (receipt: RequestReceipt) => void;
 }
 
@@ -118,6 +122,7 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
         prompt: options.prompt,
         resolveOptions: options.resolveOptions(),
       })),
+      ...((await options.projectStepMessages?.()) ?? []),
     ];
     const resources = createPreparationResources({
       entries: options.prompt.contexts,

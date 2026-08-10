@@ -62,6 +62,7 @@ import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
 import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { createInternalWorkOwnerPort } from "../work/internal/owner-retained-work";
+import { createProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
 import { projectBackgroundWorkStatusContext } from "../agent/background-work-status-context";
 
 export type {
@@ -153,6 +154,9 @@ export function adapter<
     const baseDialect = coreStepDialect(spec, client);
     const execution = createAdapterExecution(baseDialect);
     const workKernel = createProcessLocalWorkKernel();
+    const agentWork = createProcessLocalAgentWorkController({
+      kernel: workKernel,
+    });
     const foregroundWork = createForegroundChildWorkPort(workKernel);
 
     // ── generate() ──────────────────────────────────────────────
@@ -324,6 +328,7 @@ export function adapter<
       const toolsWithWorkControl = bindWorkControlTool(
         mergedTools,
         backgroundWork,
+        agentWork,
       );
       const backgroundBoundTools = bindBackgroundAgentTools(
         toolsWithWorkControl,
@@ -332,12 +337,16 @@ export function adapter<
           model,
           work: backgroundWork,
           foregroundWork,
+          agentWork,
+          ownerId: agent.id,
         },
       );
       const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
         executor,
         model,
         work: foregroundWork,
+        agentWork,
+        ownerId: agent.id,
       });
       const promptWithTools: AnyPrompt =
         Object.keys(boundTools).length > 0
@@ -374,6 +383,7 @@ export function adapter<
         },
         projectStepSystemContext: () =>
           projectBackgroundWorkStatusContext(backgroundWork),
+        projectStepMessages: options.projectStepMessages,
       });
 
       return {

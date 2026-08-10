@@ -97,10 +97,11 @@ it("adds one bounded owner-scoped work control Tool for backgroundable children"
             properties: {
               action: {
                 type: "string",
-                enum: ["list", "status", "result", "cancel", "detach"],
+                enum: ["list", "status", "result", "cancel", "detach", "send"],
               },
               id: { type: "string" },
               timeout: { type: "string" },
+              message: { type: "string" },
             },
             required: ["action"],
           });

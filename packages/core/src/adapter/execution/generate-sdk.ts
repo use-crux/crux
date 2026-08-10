@@ -367,6 +367,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
     configuredActiveTools: args.activeTools,
     stepBoundary: args[managedGenerationStepBoundary],
+    projectStepMessages: args.projectStepMessages,
     inputBudget: args.inputBudget,
     prepareStep: args.prepareStep,
     requestInput: args.input ?? {},

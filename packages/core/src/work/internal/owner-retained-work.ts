@@ -57,6 +57,20 @@ export interface InternalWorkOwnerPort {
     options?: InternalWorkOwnerSpawnOptions,
   ): Promise<InternalRetainedWorkReference<TOutput>>;
 
+  /**
+   * Retain an already accepted process-local handle in this owner's inbox.
+   *
+   * @remarks Used when Agent Work acceptance already ran through the shared
+   * kernel and the owner only needs visibility for model-facing control.
+   */
+  retainExisting<TOutput>(
+    handle: InternalWorkHandle<TOutput>,
+    options: {
+      readonly targetId: string;
+      readonly targetLabel: string;
+    },
+  ): InternalRetainedWorkReference<TOutput>;
+
   /** Recover a retained handle only when this port originated its reference. */
   recover<TOutput>(
     reference: InternalRetainedWorkReference<TOutput>,
@@ -100,15 +114,31 @@ export function createInternalWorkOwnerPort(
       options?: InternalWorkOwnerSpawnOptions,
     ): Promise<InternalRetainedWorkReference<TOutput>> {
       const handle = await kernel.spawn(driver, options);
+      return this.retainExisting(handle, {
+        targetId: options?.targetId ?? "",
+        targetLabel: options?.targetLabel ?? "",
+      });
+    },
+
+    retainExisting<TOutput>(
+      handle: InternalWorkHandle<TOutput>,
+      options: {
+        readonly targetId: string;
+        readonly targetLabel: string;
+      },
+    ): InternalRetainedWorkReference<TOutput> {
       const reference = new OwnerRetainedWorkReference<TOutput>(
         handle.id,
         owner,
       );
-      retainedHandles.set(handle.id, Object.freeze({
-        handle,
-        targetId: options?.targetId ?? "",
-        targetLabel: options?.targetLabel ?? "",
-      }));
+      retainedHandles.set(
+        handle.id,
+        Object.freeze({
+          handle,
+          targetId: options.targetId,
+          targetLabel: options.targetLabel,
+        }),
+      );
       return reference;
     },
 

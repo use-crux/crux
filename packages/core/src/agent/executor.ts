@@ -13,6 +13,7 @@ import type { AnyAgent } from "./agent";
 import type { AnyModel, AnyToolSet } from "../types";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { TokenUsage } from "../generation/types";
+import type { Message } from "../generation/messages";
 import type { WithOperationResultMeta } from "../observability";
 import type { InputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
@@ -91,6 +92,15 @@ export interface ExecuteOptions {
   activeTools?: readonly string[];
   /** Cooperative cancellation inherited by this Agent invocation. */
   signal?: AbortSignal;
+  /**
+   * Claim process-local Agent steering messages at each semantic provider step.
+   *
+   * @internal
+   * @remarks Delivery is ordered and never mutates tools or guardrails.
+   */
+  projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
   /** Durable completion carrier installed only by the Session Runtime target. @internal */
   [managedGenerationCheckpoint]?: ManagedGenerationCheckpoint;
   /** Session coordinator invoked only at semantic provider-call boundaries. @internal */

@@ -3,10 +3,12 @@
 export { getWork } from "./get-work";
 export { spawn } from "./spawn";
 export { createWorkHost } from "./internal/durable-host-context";
+export { createAgentWorkHost } from "./agent-host";
 export type {
   CreateWorkHostOptions,
   WorkHost,
 } from "./internal/durable-host-context";
+export type { CreateAgentWorkHostOptions } from "./agent-host";
 export type {
   CancelOptions,
   CancelReceipt,
@@ -20,6 +22,12 @@ export {
   WorkResultExpiredError,
 } from "./errors";
 export type { ExecutionStats, SpawnWorkOptions, WorkHandle } from "./handle";
+export type {
+  AgentSteeringContent,
+  AgentWorkHandle,
+  WorkSteeringCursor,
+  WorkSteeringReceipt,
+} from "./agent-handle";
 export type { WorkProgress, WorkProgressSnapshot } from "./progress";
 export type {
   WorkBlockSummary,

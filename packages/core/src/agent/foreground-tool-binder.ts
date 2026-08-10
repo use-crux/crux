@@ -9,6 +9,7 @@ import type { AnyModel, AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
 import { z } from "zod";
 import { currentInternalWorkAttachment } from "../work/internal/attached-context";
+import type { ProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
 import type { ProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { isAgent } from "./agent";
 import type { AgentExecutor } from "./executor";
@@ -57,6 +58,8 @@ interface BindForegroundAgentToolsOptions {
   readonly executor: AgentExecutor;
   readonly model: AnyModel;
   readonly work: ForegroundChildWorkPort;
+  readonly agentWork: ProcessLocalAgentWorkController;
+  readonly ownerId: string;
 }
 
 interface ForegroundToolInputBinding {
@@ -119,20 +122,34 @@ export function bindForegroundAgentTools(
           description,
           parameters: inputBinding.parameters,
           async execute(toolInput: unknown, execution: ToolExecutionOptions) {
-            const work = await options.work.spawn(
-              (signal) =>
-                observeForegroundAgentRun(value, () =>
-                  options.executor(value, {
-                    input: inputBinding.toPromptInput(toolInput),
-                    model: options.model,
-                    signal,
-                  }),
-                ),
-              execution.abortSignal
-                ? { kind: "cancellation-only", signal: execution.abortSignal }
-                : { kind: "cancellation-only" },
+            const ambient = currentInternalWorkAttachment();
+            const handle = await options.agentWork.spawnAgent(
+              value,
+              inputBinding.toPromptInput(toolInput),
+              {
+                executor: (agent, executeOptions) =>
+                  observeForegroundAgentRun(agent, () =>
+                    options.executor(agent, executeOptions),
+                  ),
+                model: options.model,
+                occurrence: Object.freeze({
+                  ownerId: options.ownerId,
+                  turnId: "",
+                  toolCallId: execution.toolCallId,
+                  bindingKey: name,
+                }),
+                targetLabel: name,
+                spawn: ambient
+                  ? { kind: "attached", attachment: ambient }
+                  : execution.abortSignal
+                    ? {
+                        kind: "cancellation-only",
+                        signal: execution.abortSignal,
+                      }
+                    : { kind: "cancellation-only" },
+              },
             );
-            return (await work.result()).output;
+            return await handle.result();
           },
         }),
       ];
