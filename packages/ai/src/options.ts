@@ -168,6 +168,14 @@ interface AIGenerateBaseOptions<
    * @defaultValue `undefined`
    */
   readonly signal?: AbortSignal;
+  /**
+   * Claim process-local Agent steering messages at each semantic provider step.
+   *
+   * @internal
+   */
+  projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
   /** User-supplied SDK call transport using this adapter's public codec params. */
   transport?: AITransport;
   /**
@@ -252,6 +260,14 @@ export type AIExecutorCallOptions = Record<string, unknown> & {
   activeTools?: readonly string[];
   timeout?: TimeoutOptions;
   signal?: AbortSignal;
+  /**
+   * Claim process-local Agent steering messages at each semantic provider step.
+   *
+   * @internal
+   */
+  projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
   validationRetry?: ValidationRetryOptions;
   constraints?: Constraint[];
   constraintMaxRetries?: number;

@@ -79,8 +79,16 @@ export function createAgentSteeringMailbox(options: {
       if (!open) {
         throw new WorkNotActiveError(options.workId);
       }
+
       const content = normalizeSteeringContent(input.content);
       const payloadHash = await hashSteeringContent(content);
+
+      // Recheck after the await so concurrent identical commandId accepts and
+      // close() during hashing cannot allocate a second cursor or cross close.
+      if (!open) {
+        throw new WorkNotActiveError(options.workId);
+      }
+
       const existing = byCommand.get(input.commandId);
       if (existing) {
         if (existing.identity.payloadHash !== payloadHash) {

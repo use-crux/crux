@@ -169,7 +169,9 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
       recordPrepareStepOutcome(prepareStepState, step.previousCall);
     }
     const prepared =
-      options.prepareStep || options.stepBoundary
+      options.prepareStep ||
+      options.stepBoundary ||
+      options.projectStepMessages
         ? (primed ?? (await prepareBoundary(step)))
         : {
             amendment: undefined,
@@ -281,7 +283,14 @@ export function createSdkRequestStepPlanner<TModel, TRawResponse, TRawStream>(
   };
   return Object.assign(planner, {
     async prime(step: ExecutorRequestStepInput<TModel>): Promise<void> {
-      if ((!options.prepareStep && !options.stepBoundary) || primed) return;
+      if (
+        (!options.prepareStep &&
+          !options.stepBoundary &&
+          !options.projectStepMessages) ||
+        primed
+      ) {
+        return;
+      }
       primed = await prepareBoundary(step);
     },
   });

@@ -98,6 +98,63 @@ describe("process-local Agent steering mailbox", () => {
     ).rejects.toBeInstanceOf(WorkNotActiveError);
   });
 
+  it("keeps concurrent identical commandId accepts idempotent", async () => {
+    const mailbox = createAgentSteeringMailbox({
+      workId: "work_concurrent",
+      now: () => new Date("2026-08-10T12:00:00.000Z"),
+    });
+
+    const [first, second] = await Promise.all([
+      mailbox.accept({
+        commandId: "same",
+        content: "shared guidance",
+      }),
+      mailbox.accept({
+        commandId: "same",
+        content: "shared guidance",
+      }),
+    ]);
+
+    expect(second).toEqual(first);
+    expect(mailbox.identities()).toHaveLength(1);
+    expect(mailbox.identities()[0]?.cursor).toBe("1");
+  });
+
+  it("rejects when close races with in-flight hashing", async () => {
+    const mailbox = createAgentSteeringMailbox({ workId: "work_close_race" });
+    const blob = new Blob(["steering-bytes"], { type: "image/png" });
+    let releaseHash!: () => void;
+    const hashGate = new Promise<void>((resolve) => {
+      releaseHash = resolve;
+    });
+    const originalArrayBuffer = blob.arrayBuffer.bind(blob);
+    Object.defineProperty(blob, "arrayBuffer", {
+      configurable: true,
+      value: async () => {
+        await hashGate;
+        return originalArrayBuffer();
+      },
+    });
+
+    const acceptPromise = mailbox.accept({
+      commandId: "during-hash",
+      content: [
+        {
+          type: "image",
+          source: blob,
+          mediaType: "image/png",
+        },
+      ],
+    });
+
+    await Promise.resolve();
+    mailbox.close();
+    releaseHash();
+
+    await expect(acceptPromise).rejects.toBeInstanceOf(WorkNotActiveError);
+    expect(mailbox.identities()).toHaveLength(0);
+  });
+
   it("hashes Blob bytes so distinct content does not collide", async () => {
     const mailbox = createAgentSteeringMailbox({ workId: "work_blob" });
     const first = await mailbox.accept({

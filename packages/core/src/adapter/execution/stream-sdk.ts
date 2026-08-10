@@ -102,6 +102,7 @@ import {
   validateThreadReplay,
 } from "./thread-history";
 import { refreshEffectJournalRetryLinks } from "../../effect/internal/journal-context";
+import { managedGenerationStepBoundary } from "../../generation-model/execution-checkpoint";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -470,6 +471,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     resolved: () => resolved,
     rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
     configuredActiveTools: args.activeTools,
+    stepBoundary: args[managedGenerationStepBoundary],
+    projectStepMessages: args.projectStepMessages,
     inputBudget: args.inputBudget,
     prepareStep: args.prepareStep,
     requestInput: args.input ?? {},
@@ -521,7 +524,11 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     },
   });
 
-  if (args.prepareStep) {
+  if (
+    args.prepareStep ||
+    args[managedGenerationStepBoundary] ||
+    args.projectStepMessages
+  ) {
     await planStep.prime({
       model: args.model,
       modelInfo,

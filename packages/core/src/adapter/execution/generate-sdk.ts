@@ -477,7 +477,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       model: modelInfo.modelId,
       media: dialect.media,
     });
-    if (args.prepareStep || args[managedGenerationStepBoundary]) {
+    if (
+      args.prepareStep ||
+      args[managedGenerationStepBoundary] ||
+      args.projectStepMessages
+    ) {
       await planStep.prime({
         model: args.model,
         modelInfo,
