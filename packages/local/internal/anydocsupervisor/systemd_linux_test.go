@@ -1715,8 +1715,8 @@ func TestCleanupReportsWaitInactiveWhenSystemdStatusCannotBeRead(t *testing.T) {
 		}
 	}
 	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
-	// After stop confirmation via inactive properties, drop terminal query so
-	// cleanup cannot retain successful inactive terminal evidence.
+	// propErrAfterStop prevents Stop from obtaining carried proof; KillUnit
+	// fallback succeeds; WaitInactive then cannot read status.
 	bus.propErrAfterStop = true
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
