@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/vercel",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Vercel lifecycle integration for Crux deferred work via waitUntil().",
   "keywords": [
     "vercel",

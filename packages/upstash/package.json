@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/upstash",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Upstash SearchStore and Redis RecordStore adapters for Crux storage.",
   "license": "Apache-2.0",
   "private": true,
