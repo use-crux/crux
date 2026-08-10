@@ -914,6 +914,60 @@ func TestSafeExecutionFailurePrefersResultValidationOverContainmentInErrorChain(
 	}
 }
 
+func TestExecutePreservesUnavailableResultValidationThroughAccountingCleanup(t *testing.T) {
+	staged, err := NewStager(t.TempDir()).Stage([]byte("test"), 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	limits := testJobLimits()
+	sourceSHA := sha256Hex([]byte("test"))
+	fs := newFakeFS()
+	delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak"))
+	r := &Run{
+		unit: &systemdUnit{
+			name: "crux-anydoc-result-unavailable.service",
+			bus:  newFakeSystemBus(),
+			fs:   fs,
+			now:  immediateClock{},
+		},
+		write:       write,
+		nonce:       "00000000000000000000000000000000",
+		digest:      requestDigest(ProtocolVersion, "00000000000000000000000000000000", "docx", sourceSHA, 4, limits),
+		sourceSHA:   sourceSHA,
+		sourceBytes: 4,
+		format:      FormatDOCX,
+		limits:      limits,
+		staged:      staged,
+		stop:        make(chan struct{}),
+		finished:    make(chan struct{}),
+		started:     time.Now(),
+	}
+
+	_, err = r.Execute(context.Background())
+	var validation *ResultValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("Execute lost ResultValidationError through cleanup: %T %v", err, err)
+	}
+	if validation.Stage != "accounting-refresh" || validation.ReasonCode != "unavailable" {
+		t.Fatalf("ResultValidationError = {stage:%q reason:%q}", validation.Stage, validation.ReasonCode)
+	}
+	if errorCode(err) != ErrContainmentUnavailable {
+		t.Fatalf("outer error = %q, want %q", errorCode(err), ErrContainmentUnavailable)
+	}
+
+	got := safeExecutionFailure(err, r.TerminalReport())
+	const want = "error=invalid-result outcome=containment-unavailable service=unknown stage=accounting-refresh reason=unavailable oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+}
+
 func sha256Hex(value []byte) string {
 	sum := sha256.Sum256(value)
 	return hex.EncodeToString(sum[:])

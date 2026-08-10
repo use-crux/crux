@@ -811,7 +811,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 	}
 	if u.resultListener == nil || u.peers == nil {
 		u.resultMu.Unlock()
-		return Result{}, errors.New("result unavailable")
+		return Result{}, closedWith(ErrInvalidResult, resultValidation("accounting-refresh", "unavailable"))
 	}
 	listener := u.resultListener
 	u.resultListener = nil
@@ -841,7 +841,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			return Result{}, errors.New("result unavailable")
+			return Result{}, closedWith(ErrInvalidResult, resultValidation("accounting-refresh", "unavailable"))
 		}
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
@@ -886,7 +886,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		_ = conn.Close()
 		select {
 		case <-ctx.Done():
-			return Result{}, errors.New("result unavailable")
+			return Result{}, ctx.Err()
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}

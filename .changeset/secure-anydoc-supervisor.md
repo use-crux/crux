@@ -56,3 +56,6 @@ fallback.
 Retain a strictly successful terminal status observed during a typed
 `StopUnit` missing-unit confirmation, so an immediately unloaded transient
 unit can complete cleanup only when the pinned cgroup is absent or empty.
+
+Preserve fixed result-validation diagnostics when unavailable result receipt
+is followed by failed terminal accounting cleanup.
