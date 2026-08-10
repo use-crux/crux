@@ -428,6 +428,60 @@ func TestReportGoneTerminalOperationErrorKeepsSafeDiagnosticStage(t *testing.T) 
 	}
 }
 
+func TestReportGoneTerminalDecodeFailureKeepsSafeDiagnosticStage(t *testing.T) {
+	pinned := SandboxReport{ControlGroup: "/crux.slice/pinned", ServiceResult: "success"}
+	newUnit := func() *terminalAccountingFakeUnit {
+		return &terminalAccountingFakeUnit{
+			fakeUnit: fakeUnit{
+				snapshot:   pinned,
+				snapshotOK: true,
+				terminalStatus: func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{}, &terminalStatusUnavailableError{stage: terminalStatusDecode}
+				},
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+				},
+			},
+			failure: accountingCaptureReportGone,
+			err:     errors.New("private report failure"),
+		}
+	}
+
+	_, _, _, reason := cleanup(newUnit())
+	if reason != "already-gone-terminal-decode-unavailable" {
+		t.Fatalf("cleanup reason = %q, want decode terminal reason", reason)
+	}
+
+	staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Close()
+
+	run := &Run{
+		unit:     newUnit(),
+		write:    write,
+		staged:   staged,
+		stop:     make(chan struct{}),
+		finished: make(chan struct{}),
+		started:  time.Now(),
+	}
+	finishErr := run.Finish(context.Background(), nil)
+	terminal := run.TerminalReport()
+	if terminal.Outcome != ErrContainmentUnavailable || terminal.Cleaned {
+		t.Fatalf("terminal report = %#v, want containment-unavailable and Cleaned false", terminal)
+	}
+
+	const want = "error=containment-unavailable outcome=containment-unavailable service=success stage=containment-cleanup reason=already-gone-terminal-decode-unavailable oom-killed=false pids-limited=false"
+	if got := safeExecutionFailure(finishErr, terminal); got != want {
+		t.Fatalf("safe diagnostic = %q, want %q", got, want)
+	}
+}
+
 func TestCleanupRejectsReportGoneSnapshotWithMismatchedPinnedCgroup(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()

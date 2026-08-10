@@ -81,6 +81,9 @@ Keep a sanitized terminal-status operation diagnosis granular when a cached
 accounting snapshot is used after the unit report is gone, even without a
 carried `StopUnit` proof; cleanup remains fail-closed.
 
+Keep sanitized terminal-status decode failures granular on that report-gone
+cleanup path, without accepting them as terminal proof.
+
 Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
 

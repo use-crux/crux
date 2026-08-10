@@ -1234,6 +1234,10 @@ func validateReportGone(expectedCgroup string, termination TerminationEvidence, 
 			return reason
 		}
 	}
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) && unavailable.stage == terminalStatusDecode {
+		return "already-gone-terminal-decode-unavailable"
+	}
 	return validateAlreadyGone(expectedCgroup, termination, terminationErr, status, statusErr, carried)
 }
 
