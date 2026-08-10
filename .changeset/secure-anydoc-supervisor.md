@@ -77,6 +77,10 @@ property lookups and classify them by their fixed stage and class for
 diagnostics only; they cannot stand in for final terminal proof, including
 when the class is exact unit-gone.
 
+Keep a sanitized terminal-status operation diagnosis granular when a cached
+accounting snapshot is used after the unit report is gone, even without a
+carried `StopUnit` proof; cleanup remains fail-closed.
+
 Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
 

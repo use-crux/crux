@@ -371,6 +371,36 @@ func TestCleanupReusesSnapshotOnlyForReportGoneWithStrictTerminalEvidence(t *tes
 	}
 }
 
+func TestReportGoneTerminalOperationErrorKeepsSafeDiagnosticStage(t *testing.T) {
+	pinned := SandboxReport{ControlGroup: "/crux.slice/pinned"}
+	unit := &terminalAccountingFakeUnit{
+		fakeUnit: fakeUnit{
+			snapshot:   pinned,
+			snapshotOK: true,
+			terminalStatus: func(context.Context) (TerminalStatus, error) {
+				return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusGeneric}
+			},
+			termination: func(context.Context, string) (TerminationEvidence, error) {
+				return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+			},
+		},
+		failure: accountingCaptureReportGone,
+		err:     errors.New("private report failure"),
+	}
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "already-gone-terminal-unit-properties-unavailable" {
+		t.Fatalf("cleanup reason = %q, want granular terminal operation reason", reason)
+	}
+
+	err := chainContainment(nil, false, "containment-cleanup", reason)
+	terminal := TerminalReport{Outcome: ErrContainmentUnavailable, PreStop: SandboxReport{ServiceResult: "success"}}
+	const want = "error=containment-unavailable outcome=containment-unavailable service=success stage=containment-cleanup reason=already-gone-terminal-unit-properties-unavailable oom-killed=false pids-limited=false"
+	if got := safeExecutionFailure(err, terminal); got != want {
+		t.Fatalf("safe diagnostic = %q, want %q", got, want)
+	}
+}
+
 func TestCleanupRejectsReportGoneSnapshotWithMismatchedPinnedCgroup(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()

@@ -1228,6 +1228,12 @@ func validateReportGone(expectedCgroup string, termination TerminationEvidence, 
 		}
 		return "already-gone-terminal-not-success"
 	}
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		if reason, ok := terminalStatusOperationReason(operation); ok {
+			return reason
+		}
+	}
 	return validateAlreadyGone(expectedCgroup, termination, terminationErr, status, statusErr, carried)
 }
 
