@@ -926,69 +926,56 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 	}
 }
 
-func TestCleanupPromotesPropertiesGoneWithVerifiedSuccessfulAbsentProof(t *testing.T) {
-	unit := &fakeUnit{
-		rep:        SandboxReport{ControlGroup: "/pinned"},
-		stopErr:    &stopFailure{reason: "unit-properties-gone"},
-		snapshot:   SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 0},
-		snapshotOK: true,
-		terminalStatus: func(context.Context) (TerminalStatus, error) {
-			return TerminalStatus{}, &terminalStatusGoneError{}
-		},
-		termination: func(context.Context, string) (TerminationEvidence, error) {
-			return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
-		},
-	}
+func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
+	const pinnedCgroup = "/private/pinned-cgroup-secret"
+	const snapshotCgroup = "/private/snapshot-cgroup-secret"
+	successfulSnapshot := SandboxReport{MainPID: 0, ControlGroup: pinnedCgroup, ServiceResult: "success", ExecMainStatus: 0}
 
-	_, _, _, reason := cleanup(unit)
-	if reason != "" {
-		t.Fatalf("cleanup reason = %q, want successful already-gone cleanup", reason)
-	}
-}
-
-func TestCleanupRejectsPropertiesGoneWithoutStrictVerifiedProof(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		snapshot SandboxReport
+		name       string
+		pinned     string
+		snapshot   SandboxReport
+		verified   bool
+		statusGone bool
+		want       string
 	}{
-		{name: "failed", snapshot: SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "exit-code", ExecMainStatus: 1}},
-		{name: "nonzero", snapshot: SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 1}},
-		{name: "live", snapshot: SandboxReport{MainPID: 42, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 0}},
-		{name: "missing cgroup", snapshot: SandboxReport{MainPID: 0, ServiceResult: "success", ExecMainStatus: 0}},
+		{name: "no verified snapshot", pinned: pinnedCgroup, want: "unit-properties-gone-no-verified-snapshot"},
+		{name: "missing snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
+		{name: "invalid snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-snapshot-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
+		{name: "mismatched snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: snapshotCgroup, ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
+		{name: "invalid pinned cgroup", pinned: "relative-pinned-secret", snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-pinned-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
+		{name: "live snapshot", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-not-success"},
+		{name: "failed snapshot", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: pinnedCgroup, ServiceResult: "exit-code", ExecMainStatus: 1}, verified: true, want: "unit-properties-gone-snapshot-not-success"},
+		{name: "nonzero status snapshot", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: pinnedCgroup, ServiceResult: "success", ExecMainStatus: 1}, verified: true, want: "unit-properties-gone-snapshot-not-success"},
+		{name: "successful promotion unchanged", pinned: pinnedCgroup, snapshot: successfulSnapshot, verified: true, statusGone: true, want: ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			unit := &fakeUnit{
-				rep:        SandboxReport{ControlGroup: "/pinned"},
+				rep:        SandboxReport{ControlGroup: test.pinned},
 				stopErr:    &stopFailure{reason: "unit-properties-gone"},
 				snapshot:   test.snapshot,
-				snapshotOK: true,
+				snapshotOK: test.verified,
 				termination: func(context.Context, string) (TerminationEvidence, error) {
-					return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
+					return TerminationEvidence{ControlGroup: test.pinned, Absent: true}, nil
 				},
+			}
+			if test.statusGone {
+				unit.terminalStatus = func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{}, &terminalStatusGoneError{}
+				}
 			}
 
 			_, _, _, reason := cleanup(unit)
-			if reason != "unit-properties-gone" {
-				t.Fatalf("cleanup reason = %q, want unit-properties-gone", reason)
+			if reason != test.want {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+			if reason != "" && !validContainmentReason(reason) {
+				t.Fatalf("cleanup reason %q is not allowlisted", reason)
+			}
+			if strings.Contains(reason, "private") || strings.Contains(reason, "secret") || strings.Contains(reason, "relative") {
+				t.Fatalf("cleanup reason leaked sensitive detail: %q", reason)
 			}
 		})
-	}
-}
-
-func TestCleanupRejectsPropertiesGoneWithMismatchedVerifiedCgroup(t *testing.T) {
-	unit := &fakeUnit{
-		rep:        SandboxReport{ControlGroup: "/pinned"},
-		stopErr:    &stopFailure{reason: "unit-properties-gone"},
-		snapshot:   SandboxReport{MainPID: 0, ControlGroup: "/other", ServiceResult: "success", ExecMainStatus: 0},
-		snapshotOK: true,
-		termination: func(context.Context, string) (TerminationEvidence, error) {
-			return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
-		},
-	}
-
-	_, _, _, reason := cleanup(unit)
-	if reason != "unit-properties-gone" {
-		t.Fatalf("cleanup reason = %q, want unit-properties-gone", reason)
 	}
 }
 

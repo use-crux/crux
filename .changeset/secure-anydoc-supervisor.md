@@ -74,4 +74,4 @@ before it can clear cleanup.
 
 Promote `unit-properties-gone` to already-gone only from a verified successful
 snapshot for that exact pinned cgroup; reject missing, mismatched, live,
-failed, or nonzero-status proofs.
+failed, or nonzero-status proofs with fixed allowlisted diagnostics.

@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-gone-snapshot-not-success", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -1096,15 +1096,11 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 				var failure *stopFailure
 				if errors.As(stopErr, &failure) {
 					if failure.reason == "unit-properties-gone" {
-						if cached {
-							if proof, ok := alreadyGoneProofFromReport(report.ControlGroup, cachedReport); ok {
-								alreadyGone = proof
-								reason = "alreadyGone"
-							} else {
-								reason = failure.reason
-							}
+						if proof, promotionReason := unitPropertiesGonePromotion(report.ControlGroup, cachedReport, cached); proof != nil {
+							alreadyGone = proof
+							reason = "alreadyGone"
 						} else {
-							reason = failure.reason
+							reason = promotionReason
 						}
 					} else {
 						reason = failure.reason

@@ -96,18 +96,25 @@ func successfulInactiveFromProps(p map[string]any) bool {
 	)
 }
 
-// alreadyGoneProofFromReport promotes only a retained verified report whose
+// unitPropertiesGonePromotion promotes only a retained verified report whose
 // cgroup exactly matches the pinned report and whose terminal fields strictly
-// prove successful termination. SandboxReport does not represent ActiveState,
-// so its proof deliberately carries no state.
-func alreadyGoneProofFromReport(pinnedCgroup string, report SandboxReport) (*alreadyGoneError, bool) {
-	if !validCgroup(pinnedCgroup) || report.ControlGroup != pinnedCgroup || report.MainPID != 0 || report.ServiceResult != "success" || report.ExecMainStatus != 0 {
-		return nil, false
+// prove successful termination. Its failure reasons are fixed because cleanup
+// diagnostics may be exposed outside the local host. SandboxReport does not
+// represent ActiveState, so its proof deliberately carries no state.
+func unitPropertiesGonePromotion(pinnedCgroup string, report SandboxReport, verified bool) (*alreadyGoneError, string) {
+	if !verified {
+		return nil, "unit-properties-gone-no-verified-snapshot"
+	}
+	if !validCgroup(pinnedCgroup) || !validCgroup(report.ControlGroup) || report.ControlGroup != pinnedCgroup {
+		return nil, "unit-properties-gone-snapshot-cgroup"
+	}
+	if report.MainPID != 0 || report.ServiceResult != "success" || report.ExecMainStatus != 0 {
+		return nil, "unit-properties-gone-snapshot-not-success"
 	}
 	return &alreadyGoneError{
 		proof:  TerminalStatus{MainPID: report.MainPID, ServiceResult: report.ServiceResult, ExecMainStatus: report.ExecMainStatus},
 		cgroup: report.ControlGroup,
-	}, true
+	}, ""
 }
 
 func containmentReason(err error) string {
