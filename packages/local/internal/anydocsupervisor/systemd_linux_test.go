@@ -201,6 +201,60 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 	}
 }
 
+func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *testing.T) {
+	newUnit := func(t *testing.T, verified bool) *systemdUnit {
+		t.Helper()
+		unit := &systemdUnit{name: "crux-anydoc-terminal-runtime.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}}
+		first, err := unit.Report(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+		if _, err := unit.Report(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if verified {
+			unit.MarkSnapshotVerified()
+		}
+		unit.procFS = missingProcRuntimeFS{}
+		return unit
+	}
+
+	t.Run("accepts disappeared proc after exit", func(t *testing.T) {
+		unit := newUnit(t, true)
+		unit.bus.(*fakeSystemBus).values["ActiveState"] = "inactive"
+
+		report, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
+		if err != nil || failure != accountingCaptureOK {
+			t.Fatalf("capture = %#v, %v, %v; want verified terminal success", report, failure, err)
+		}
+		if report.RuntimeTreeDigest != unit.spec.runtimeTreeDigest {
+			t.Fatal("terminal report did not retain the verified runtime identity")
+		}
+	})
+
+	for _, test := range []struct {
+		name    string
+		apply   func(*systemdUnit)
+		failure accountingCaptureFailure
+	}{
+		{name: "active unit", apply: func(unit *systemdUnit) { unit.bus.(*fakeSystemBus).values["ActiveState"] = "active" }, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "unverified snapshot", apply: func(unit *systemdUnit) { unit.snapshotOK = false }, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "runtime identity mutation", apply: func(unit *systemdUnit) { unit.spec.runtimeTreeDigest = strings.Repeat("b", 64) }, failure: accountingCaptureReportValidationRuntimeAttestation},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := newUnit(t, true)
+			unit.bus.(*fakeSystemBus).values["ActiveState"] = "inactive"
+			test.apply(unit)
+
+			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
+			if err == nil || failure != test.failure {
+				t.Fatalf("capture = failure %v err %v, want failure %v", failure, err, test.failure)
+			}
+		})
+	}
+}
+
 func TestReportValidationCodeAccountingMappings(t *testing.T) {
 	for _, test := range []struct {
 		code    ReportValidationCode
@@ -1474,6 +1528,14 @@ type fakeRuntimeEntry struct{ fakeRuntimeInfo }
 
 func (e fakeRuntimeEntry) Type() os.FileMode          { return e.mode.Type() }
 func (e fakeRuntimeEntry) Info() (os.FileInfo, error) { return e.fakeRuntimeInfo, nil }
+
+type missingProcRuntimeFS struct{}
+
+func (missingProcRuntimeFS) Lstat(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+func (missingProcRuntimeFS) ReadDir(string) ([]os.DirEntry, error) {
+	return nil, os.ErrNotExist
+}
+func (missingProcRuntimeFS) ReadFile(string) ([]byte, error) { return nil, os.ErrNotExist }
 
 type immediateClock struct{}
 

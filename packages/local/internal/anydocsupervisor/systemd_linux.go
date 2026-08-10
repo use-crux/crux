@@ -695,6 +695,10 @@ func (u *systemdUnit) waitActive(ctx context.Context) error {
 }
 
 func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
+	return u.report(ctx, false)
+}
+
+func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (SandboxReport, error) {
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
 		if isDbusUnitPropertiesGone(err) {
@@ -774,7 +778,12 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		}
 		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
 		if err != nil {
-			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
+			if !terminalAccounting || !u.canReuseTerminalRuntime(cgroup, stringValue(p, "ActiveState")) {
+				return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
+			}
+			u.snapshotMu.Lock()
+			runtimeDigest = u.snapshot.RuntimeTreeDigest
+			u.snapshotMu.Unlock()
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
@@ -790,6 +799,22 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		u.snapshotMu.Unlock()
 	}
 	return report, nil
+}
+
+// canReuseTerminalRuntime permits only terminal accounting to retain the
+// already verified runtime identity after the exited worker's proc entry has
+// disappeared. Live reports continue to require a fresh mount attestation.
+func (u *systemdUnit) canReuseTerminalRuntime(cgroup, state string) bool {
+	if u == nil || u.name == "" || (state != "inactive" && state != "failed") {
+		return false
+	}
+	u.reportMu.Lock()
+	pinnedCgroup := u.controlGroup
+	u.reportMu.Unlock()
+
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	return u.snapshotOK && u.snapshotSeen && validCgroup(cgroup) && cgroup == pinnedCgroup && u.snapshot.ControlGroup == cgroup && len(u.snapshot.RuntimeTreeDigest) == sha256.Size*2 && hexOK(u.snapshot.RuntimeTreeDigest) && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -1103,7 +1128,7 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 }
 
 func (u *systemdUnit) CaptureTerminalAccounting(ctx context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error) {
-	report, reportErr := u.Report(ctx)
+	report, reportErr := u.report(ctx, true)
 	if reportErr != nil {
 		return SandboxReport{}, 0, accountingCaptureFailureFor(reportErr, u.captureFailure()), reportErr
 	}

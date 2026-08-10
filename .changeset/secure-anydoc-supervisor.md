@@ -97,3 +97,9 @@ snapshot only for exact-cgroup ENOENT or report-gone, always retaining the
 exact pinned cgroup identity. Report-gone reuse also requires exact pinned
 absent-or-empty termination evidence and strict successful terminal status;
 malformed, unavailable, live, or cgroup-only evidence remains fail-closed.
+
+Permit terminal accounting to retain an already verified runtime-tree identity
+only after the worker has exited and its proc entry has disappeared. The
+exception requires the exact nonempty pinned unit, cgroup, and runtime
+identities; active, mismatched, unverified, and malformed reports continue to
+fail closed.
