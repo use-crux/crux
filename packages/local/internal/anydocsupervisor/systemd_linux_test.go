@@ -1690,8 +1690,8 @@ func TestCleanupRejectsAlreadyGoneWhenTerminationUnproved(t *testing.T) {
 	}
 }
 
-func TestCleanupRejectsAlreadyGoneWhenAbsentCgroupButNoTerminal(t *testing.T) {
-	// Absent cgroup alone is insufficient without retained inactive terminal status.
+func TestCleanupReportsWaitInactiveWhenSystemdStatusCannotBeRead(t *testing.T) {
+	// Stop cannot obtain carried terminal proof and WaitInactive cannot read status.
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
@@ -1722,8 +1722,8 @@ func TestCleanupRejectsAlreadyGoneWhenAbsentCgroupButNoTerminal(t *testing.T) {
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
 	_, _, _, reason := cleanup(u)
-	if reason != "already-gone-terminal-unavailable" {
-		t.Fatalf("expected already-gone-terminal-unavailable when terminal evidence missing, got %q", reason)
+	if reason != "wait-inactive" {
+		t.Fatalf("expected wait-inactive when systemd status cannot be read, got %q", reason)
 	}
 }
 
