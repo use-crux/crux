@@ -1027,6 +1027,10 @@ func (u *systemdUnit) CaptureTerminalAccounting(ctx context.Context) (SandboxRep
 	}
 	cpu, cpuErr := u.CPUUsage(ctx)
 	if cpuErr != nil {
+		failure := u.captureFailure()
+		if failure != accountingCaptureInvalid {
+			return SandboxReport{}, 0, failure, cpuErr
+		}
 		return SandboxReport{}, 0, accountingCaptureCPUUnavailable, cpuErr
 	}
 	return report, cpu, accountingCaptureOK, nil

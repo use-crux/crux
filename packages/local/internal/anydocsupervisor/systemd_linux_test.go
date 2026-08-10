@@ -291,6 +291,43 @@ func TestCleanupUsesVerifiedSnapshotWhenExactCgroupENOENT(t *testing.T) {
 	}
 }
 
+func TestCleanupUsesVerifiedSnapshotWhenCgroupDisappearsDuringCPUUsage(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-cpu-enoent.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unit.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+
+	fs.afterRead = func(path string) {
+		if path != cgroupFile("/crux.slice/test", "cgroup.events") || fs.reads[path] != 3 {
+			return
+		}
+		for cgroupPath := range fs.files {
+			if strings.HasPrefix(cgroupPath, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, cgroupPath)
+			}
+		}
+	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+
+	report, cpu, termination, reason := cleanup(unit)
+	if reason != "" || report.ControlGroup != "/crux.slice/test" || cpu != 11*time.Microsecond || !termination.Absent {
+		t.Fatalf("CPUUsage-ENOENT cleanup = report %#v cpu %s termination %#v reason %q", report, cpu, termination, reason)
+	}
+}
+
 func TestCleanupUsesRefreshAccountingSnapshotWhenCgroupRemoved(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
@@ -950,6 +987,7 @@ type fakeFS struct {
 	reads      map[string]int
 	failReadAt map[string]int
 	readErr    map[string]error
+	afterRead  func(string)
 }
 
 func newFakeFS() *fakeFS {
@@ -969,6 +1007,9 @@ func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	v, ok := f.files[path]
 	if !ok {
 		return nil, os.ErrNotExist
+	}
+	if f.afterRead != nil {
+		f.afterRead(path)
 	}
 	return v, nil
 }
