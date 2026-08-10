@@ -1223,7 +1223,7 @@ type fakeSystemBus struct {
 }
 
 func newFakeSystemBus() *fakeSystemBus {
-	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []any{[]any{"/run/anydoc/input/source", stagedSourceTarget, false, uint64(0)}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
+	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "Result": "success", "MainPID": uint32(42), "ExecMainStatus": uint32(0), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []any{[]any{"/run/anydoc/input/source", stagedSourceTarget, false, uint64(0)}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
 func (b *fakeSystemBus) SupportsUnixFDs() bool { return b.fdOK }
 func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props []DBusProperty) error {
@@ -1674,9 +1674,172 @@ func TestTerminalStatusClassifiesOnlyExactUnitGoneErrors(t *testing.T) {
 			if test.unrecognized && (err.Error() != "unit status D-Bus error" || strings.Contains(err.Error(), private) || strings.Contains(err.Error(), "InvalidArgs") || strings.Contains(err.Error(), "AccessDenied")) {
 				t.Fatalf("TerminalStatus() exposed D-Bus detail: %q", err)
 			}
+			var source *dbus.Error
+			if errors.As(err, &source) {
+				t.Fatalf("TerminalStatus() retained the source D-Bus error: %T", source)
+			}
 		})
 	}
 }
+
+func TestTerminalStatusUnavailableStagesAreSafeAndValidateAlreadyGone(t *testing.T) {
+	private := "/private/dbus-body-secret"
+	carried := &alreadyGoneError{
+		proof:  TerminalStatus{State: "inactive", ServiceResult: "success"},
+		cgroup: "/safe",
+	}
+	termination := TerminationEvidence{ControlGroup: "/safe", Empty: true}
+
+	for _, test := range []struct {
+		name         string
+		err          error
+		values       map[string]any
+		wantReason   string
+		gone         bool
+		unrecognized bool
+	}{
+		{
+			name:       "GetUnit generic error",
+			err:        newTerminalStatusOperationError(terminalStatusGetUnit, errors.New(private)),
+			wantReason: "already-gone-terminal-get-unit",
+		},
+		{
+			name:       "Unit GetAll generic error",
+			err:        newTerminalStatusOperationError(terminalStatusUnitProperties, errors.New(private)),
+			wantReason: "already-gone-terminal-unit-properties",
+		},
+		{
+			name:       "Service GetAll generic error",
+			err:        newTerminalStatusOperationError(terminalStatusServiceProperties, errors.New(private)),
+			wantReason: "already-gone-terminal-service-properties",
+		},
+		{
+			name: "GetUnit exact gone value",
+			err:  newTerminalStatusOperationError(terminalStatusGetUnit, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}),
+			gone: true,
+		},
+		{
+			name:         "GetUnit unrecognized D-Bus wrapped",
+			err:          newTerminalStatusOperationError(terminalStatusGetUnit, fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}})),
+			wantReason:   "already-gone-terminal-unrecognized-dbus",
+			unrecognized: true,
+		},
+		{
+			name:       "decode invalid",
+			values:     map[string]any{"ActiveState": "inactive", "Result": "success", "MainPID": private, "ExecMainStatus": uint32(0)},
+			wantReason: "already-gone-terminal-decode-unavailable",
+		},
+		{
+			name:       "decode incomplete",
+			values:     map[string]any{"ActiveState": "inactive", "Result": "success", "MainPID": uint32(0)},
+			wantReason: "already-gone-terminal-decode-unavailable",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			bus.propErr = test.err
+			if test.values != nil {
+				bus.values = test.values
+			}
+			u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus}
+			_, err := u.TerminalStatus(context.Background())
+
+			var gone *terminalStatusGoneError
+			if got := errors.As(err, &gone); got != test.gone {
+				t.Fatalf("gone classification = %t, want %t (err %T: %v)", got, test.gone, err, err)
+			}
+			var unrecognized *terminalStatusUnrecognizedDBusError
+			if got := errors.As(err, &unrecognized); got != test.unrecognized {
+				t.Fatalf("unrecognized D-Bus classification = %t, want %t (err %T: %v)", got, test.unrecognized, err, err)
+			}
+
+			reason := validateAlreadyGone("/safe", termination, nil, TerminalStatus{}, err, carried)
+			if reason != test.wantReason {
+				t.Fatalf("validateAlreadyGone() = %q, want %q", reason, test.wantReason)
+			}
+			if strings.Contains(err.Error(), private) || strings.Contains(reason, private) || strings.Contains(err.Error(), "AccessDenied") || strings.Contains(reason, "AccessDenied") {
+				t.Fatalf("terminal status result leaked private D-Bus detail: err %q, reason %q", err, reason)
+			}
+		})
+	}
+}
+
+func TestDBusUnitPropertiesStagesEveryOperation(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		calls []*dbus.Call
+		stage terminalStatusUnavailableStage
+	}{
+		{
+			name:  "GetUnit",
+			calls: []*dbus.Call{{Err: errors.New("private GetUnit failure")}},
+			stage: terminalStatusGetUnit,
+		},
+		{
+			name: "Unit GetAll",
+			calls: []*dbus.Call{
+				{Body: []any{dbus.ObjectPath("/private/unit/path")}},
+				{Err: errors.New("private Unit GetAll failure")},
+			},
+			stage: terminalStatusUnitProperties,
+		},
+		{
+			name: "Service GetAll",
+			calls: []*dbus.Call{
+				{Body: []any{dbus.ObjectPath("/private/unit/path")}},
+				{Body: []any{map[string]dbus.Variant{}}},
+				{Err: errors.New("private Service GetAll failure")},
+			},
+			stage: terminalStatusServiceProperties,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			object := &fakeDBusObject{calls: test.calls}
+			_, err := dbusUnitProperties(context.Background(), object, func(dbus.ObjectPath) dbus.BusObject {
+				return object
+			}, "crux-anydoc-test.service")
+			var unavailable *terminalStatusOperationError
+			if !errors.As(err, &unavailable) || unavailable.stage != test.stage {
+				t.Fatalf("dbusUnitProperties() error = %T %v, want stage %q", err, err, test.stage)
+			}
+			if strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "path") {
+				t.Fatalf("dbusUnitProperties() leaked operation detail: %q", err)
+			}
+		})
+	}
+}
+
+type fakeDBusObject struct {
+	calls []*dbus.Call
+}
+
+func (o *fakeDBusObject) nextCall() *dbus.Call {
+	call := o.calls[0]
+	o.calls = o.calls[1:]
+	return call
+}
+
+func (o *fakeDBusObject) Call(string, dbus.Flags, ...any) *dbus.Call { return o.nextCall() }
+func (o *fakeDBusObject) CallWithContext(context.Context, string, dbus.Flags, ...any) *dbus.Call {
+	return o.nextCall()
+}
+func (o *fakeDBusObject) Go(string, dbus.Flags, chan *dbus.Call, ...any) *dbus.Call {
+	return o.nextCall()
+}
+func (o *fakeDBusObject) GoWithContext(context.Context, string, dbus.Flags, chan *dbus.Call, ...any) *dbus.Call {
+	return o.nextCall()
+}
+func (*fakeDBusObject) AddMatchSignal(string, string, ...dbus.MatchOption) *dbus.Call {
+	return &dbus.Call{}
+}
+func (*fakeDBusObject) RemoveMatchSignal(string, string, ...dbus.MatchOption) *dbus.Call {
+	return &dbus.Call{}
+}
+func (*fakeDBusObject) GetProperty(string) (dbus.Variant, error) { return dbus.Variant{}, nil }
+func (*fakeDBusObject) StoreProperty(string, any) error          { return nil }
+func (*fakeDBusObject) SetProperty(string, any) error            { return nil }
+func (*fakeDBusObject) Destination() string                      { return systemdService }
+func (*fakeDBusObject) Path() dbus.ObjectPath                    { return "/" }
 
 func prepareAlreadyGoneCleanup(t *testing.T, terminal map[string]any) (*systemdUnit, *fakeSystemBus) {
 	t.Helper()

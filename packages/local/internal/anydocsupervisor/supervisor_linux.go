@@ -1280,6 +1280,19 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 		if errors.As(statusErr, &gone) {
 			return ""
 		}
+		var unavailable *terminalStatusUnavailableError
+		if errors.As(statusErr, &unavailable) {
+			switch unavailable.stage {
+			case terminalStatusGetUnit:
+				return "already-gone-terminal-get-unit"
+			case terminalStatusUnitProperties:
+				return "already-gone-terminal-unit-properties"
+			case terminalStatusServiceProperties:
+				return "already-gone-terminal-service-properties"
+			case terminalStatusDecode:
+				return "already-gone-terminal-decode-unavailable"
+			}
+		}
 		return "already-gone-terminal-unavailable"
 	}
 	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {

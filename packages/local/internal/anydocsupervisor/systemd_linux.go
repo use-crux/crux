@@ -44,18 +44,67 @@ type alreadyGoneError struct {
 
 func (e *alreadyGoneError) Error() string { return "unit already gone" }
 
+type terminalStatusUnavailableStage string
+
+const (
+	terminalStatusGetUnit           terminalStatusUnavailableStage = "get-unit"
+	terminalStatusUnitProperties    terminalStatusUnavailableStage = "unit-properties"
+	terminalStatusServiceProperties terminalStatusUnavailableStage = "service-properties"
+	terminalStatusDecode            terminalStatusUnavailableStage = "decode"
+)
+
+type terminalStatusDBusClass uint8
+
+const (
+	terminalStatusDBusGeneric terminalStatusDBusClass = iota
+	terminalStatusDBusGone
+	terminalStatusDBusUnrecognized
+)
+
+// terminalStatusOperationError carries only a fixed operation stage and
+// classification across the D-Bus boundary. It deliberately retains neither
+// the source error nor D-Bus details.
+type terminalStatusOperationError struct {
+	stage     terminalStatusUnavailableStage
+	dbusClass terminalStatusDBusClass
+}
+
+func (*terminalStatusOperationError) Error() string { return "unit status unavailable" }
+
+func newTerminalStatusOperationError(stage terminalStatusUnavailableStage, err error) *terminalStatusOperationError {
+	result := &terminalStatusOperationError{stage: stage, dbusClass: terminalStatusDBusGeneric}
+	if isDbusUnitPropertiesGone(err) {
+		result.dbusClass = terminalStatusDBusGone
+	} else if _, ok := dbusErrorName(err); ok {
+		result.dbusClass = terminalStatusDBusUnrecognized
+	}
+	return result
+}
+
 // terminalStatusGoneError marks the only status lookup failure for which an
 // already-gone proof can stand in: systemd has unloaded the unit.
-type terminalStatusGoneError struct{}
+type terminalStatusGoneError struct {
+	stage terminalStatusUnavailableStage
+}
 
 func (*terminalStatusGoneError) Error() string { return "unit status gone" }
 
 // terminalStatusUnrecognizedDBusError marks a D-Bus status lookup error whose
 // name is not one of the exact unit-gone allowlist entries. Its text is fixed
 // so callers cannot expose an error name or body.
-type terminalStatusUnrecognizedDBusError struct{}
+type terminalStatusUnrecognizedDBusError struct {
+	stage terminalStatusUnavailableStage
+}
 
 func (*terminalStatusUnrecognizedDBusError) Error() string { return "unit status D-Bus error" }
+
+// terminalStatusUnavailableError carries only a fixed operation stage. Its
+// error text intentionally cannot expose D-Bus or host details.
+type terminalStatusUnavailableError struct {
+	stage terminalStatusUnavailableStage
+}
+
+func (*terminalStatusUnavailableError) Error() string { return "unit status unavailable" }
 
 // stopFailure carries only a fixed diagnostic reason. It deliberately omits
 // D-Bus bodies, unit names, and cgroup paths because cleanup diagnostics may
@@ -1208,12 +1257,13 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 		// Only a successful strict terminal snapshot is sufficient evidence.
 		// UnknownObject from StopUnit never enters this branch.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
-		if propErr == nil && successfulInactiveFromProps(p) {
+		proof, proofOK := terminalStatusFromProps(p)
+		if propErr == nil && proofOK && successfulInactiveFromProps(p) {
 			u.reportMu.Lock()
 			pinnedCgroup := u.controlGroup
 			u.reportMu.Unlock()
 			if cgroup := stringValue(p, "ControlGroup"); validCgroup(pinnedCgroup) && cgroup == pinnedCgroup {
-				return &alreadyGoneError{proof: terminalStatusFromProps(p), cgroup: cgroup}
+				return &alreadyGoneError{proof: proof, cgroup: cgroup}
 			}
 		}
 	}
@@ -1256,27 +1306,60 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 
 func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
 	if u == nil || u.bus == nil || ctx.Err() != nil {
-		return TerminalStatus{}, errors.New("unit status unavailable")
+		return TerminalStatus{}, &terminalStatusUnavailableError{stage: terminalStatusGetUnit}
 	}
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
-		if isDbusUnitPropertiesGone(err) {
-			return TerminalStatus{}, &terminalStatusGoneError{}
+		var operation *terminalStatusOperationError
+		if !errors.As(err, &operation) {
+			operation = newTerminalStatusOperationError(terminalStatusUnitProperties, err)
 		}
-		if _, ok := dbusErrorName(err); ok {
-			return TerminalStatus{}, &terminalStatusUnrecognizedDBusError{}
+		switch operation.dbusClass {
+		case terminalStatusDBusGone:
+			return TerminalStatus{}, &terminalStatusGoneError{stage: operation.stage}
+		case terminalStatusDBusUnrecognized:
+			return TerminalStatus{}, &terminalStatusUnrecognizedDBusError{stage: operation.stage}
+		default:
+			return TerminalStatus{}, &terminalStatusUnavailableError{stage: operation.stage}
 		}
-		return TerminalStatus{}, errors.New("unit status unavailable")
 	}
-	return terminalStatusFromProps(p), nil
+	status, ok := terminalStatusFromProps(p)
+	if !ok {
+		return TerminalStatus{}, &terminalStatusUnavailableError{stage: terminalStatusDecode}
+	}
+	return status, nil
 }
 
-func terminalStatusFromProps(p map[string]any) TerminalStatus {
+func terminalStatusFromProps(p map[string]any) (TerminalStatus, bool) {
+	for _, key := range []string{"ActiveState", "Result"} {
+		value, exists := p[key]
+		if !exists {
+			return TerminalStatus{}, false
+		}
+		if _, ok := value.(string); !ok {
+			return TerminalStatus{}, false
+		}
+	}
+	for _, key := range []string{"MainPID", "ExecMainStatus"} {
+		value, exists := p[key]
+		if !exists || !terminalStatusInteger(value) {
+			return TerminalStatus{}, false
+		}
+	}
 	return TerminalStatus{
 		MainPID:        intValue(p, "MainPID"),
 		State:          stringValue(p, "ActiveState"),
 		ServiceResult:  stringValue(p, "Result"),
 		ExecMainStatus: intValue(p, "ExecMainStatus"),
+	}, true
+}
+
+func terminalStatusInteger(value any) bool {
+	switch value.(type) {
+	case uint32, uint64, int32, int:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1541,18 +1624,28 @@ func (b *godbusSystemBus) StartTransientUnit(ctx context.Context, name string, p
 	return b.call(ctx, "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager.StartTransientUnit", name, "fail", dbusProperties(props), []auxiliaryUnit{})
 }
 func (b *godbusSystemBus) UnitProperties(ctx context.Context, name string) (map[string]any, error) {
-	var path dbus.ObjectPath
-	if err := b.conn.Object(systemdService, "/org/freedesktop/systemd1").CallWithContext(ctx, "org.freedesktop.systemd1.Manager.GetUnit", 0, name).Store(&path); err != nil {
-		return nil, err
+	if b == nil || b.conn == nil {
+		return nil, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGeneric}
 	}
-	unit := b.conn.Object(systemdService, path)
+	manager := b.conn.Object(systemdService, "/org/freedesktop/systemd1")
+	return dbusUnitProperties(ctx, manager, func(path dbus.ObjectPath) dbus.BusObject {
+		return b.conn.Object(systemdService, path)
+	}, name)
+}
+
+func dbusUnitProperties(ctx context.Context, manager dbus.BusObject, objectForPath func(dbus.ObjectPath) dbus.BusObject, name string) (map[string]any, error) {
+	var path dbus.ObjectPath
+	if err := manager.CallWithContext(ctx, "org.freedesktop.systemd1.Manager.GetUnit", 0, name).Store(&path); err != nil {
+		return nil, newTerminalStatusOperationError(terminalStatusGetUnit, err)
+	}
+	unit := objectForPath(path)
 	values, err := dbusInterfaceProperties(ctx, unit, "org.freedesktop.systemd1.Unit")
 	if err != nil {
-		return nil, err
+		return nil, newTerminalStatusOperationError(terminalStatusUnitProperties, err)
 	}
 	service, err := dbusInterfaceProperties(ctx, unit, "org.freedesktop.systemd1.Service")
 	if err != nil {
-		return nil, err
+		return nil, newTerminalStatusOperationError(terminalStatusServiceProperties, err)
 	}
 	for key, value := range service {
 		values[key] = value
