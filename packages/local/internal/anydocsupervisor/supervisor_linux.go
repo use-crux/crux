@@ -1260,6 +1260,9 @@ func validateUnitPropertiesGone(expectedCgroup string, termination TerminationEv
 		return reason
 	}
 	if statusErr != nil {
+		if reason, ok := terminalStatusFailureReason(statusErr); ok {
+			return reason
+		}
 		return "already-gone-terminal-unavailable"
 	}
 	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
@@ -1282,33 +1285,12 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 		return "already-gone-terminal-unavailable"
 	}
 	if statusErr != nil {
-		var operation *terminalStatusOperationError
-		if errors.As(statusErr, &operation) {
-			if reason, ok := terminalStatusOperationReason(operation); ok {
-				return reason
-			}
-			return "already-gone-terminal-unavailable"
-		}
-		var unrecognizedDBus *terminalStatusUnrecognizedDBusError
-		if errors.As(statusErr, &unrecognizedDBus) {
-			return "already-gone-terminal-unrecognized-dbus"
+		if reason, ok := terminalStatusFailureReason(statusErr); ok {
+			return reason
 		}
 		var gone *terminalStatusGoneError
 		if errors.As(statusErr, &gone) {
 			return ""
-		}
-		var unavailable *terminalStatusUnavailableError
-		if errors.As(statusErr, &unavailable) {
-			switch unavailable.stage {
-			case terminalStatusGetUnit:
-				return "already-gone-terminal-get-unit"
-			case terminalStatusUnitProperties:
-				return "already-gone-terminal-unit-properties"
-			case terminalStatusServiceProperties:
-				return "already-gone-terminal-service-properties"
-			case terminalStatusDecode:
-				return "already-gone-terminal-decode-unavailable"
-			}
 		}
 		return "already-gone-terminal-unavailable"
 	}
@@ -1350,6 +1332,36 @@ func terminalStatusOperationReason(operation *terminalStatusOperationError) (str
 	default:
 		return "", false
 	}
+}
+
+// terminalStatusFailureReason maps only fixed, sanitized status errors to
+// diagnostics. Callers still decide whether any error may stand in for proof.
+func terminalStatusFailureReason(statusErr error) (string, bool) {
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		return terminalStatusOperationReason(operation)
+	}
+
+	var unrecognizedDBus *terminalStatusUnrecognizedDBusError
+	if errors.As(statusErr, &unrecognizedDBus) {
+		return "already-gone-terminal-unrecognized-dbus", true
+	}
+
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) {
+		switch unavailable.stage {
+		case terminalStatusGetUnit:
+			return "already-gone-terminal-get-unit", true
+		case terminalStatusUnitProperties:
+			return "already-gone-terminal-unit-properties", true
+		case terminalStatusServiceProperties:
+			return "already-gone-terminal-service-properties", true
+		case terminalStatusDecode:
+			return "already-gone-terminal-decode-unavailable", true
+		}
+	}
+
+	return "", false
 }
 
 func validateAlreadyGoneTermination(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {

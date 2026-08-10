@@ -539,6 +539,53 @@ func TestReportGoneTerminalOperationErrorKeepsSafeDiagnosticStage(t *testing.T) 
 	}
 }
 
+func TestUnitPropertiesGoneTerminalOperationErrorKeepsSafeDiagnosticStage(t *testing.T) {
+	pinned := "/crux.slice/pinned"
+	newUnit := func() *fakeUnit {
+		return &fakeUnit{
+			rep:        SandboxReport{ControlGroup: pinned, ServiceResult: "success"},
+			stopErr:    &stopFailure{reason: "unit-properties-gone"},
+			snapshot:   SandboxReport{ControlGroup: pinned},
+			snapshotOK: true,
+			terminalStatus: func(context.Context) (TerminalStatus, error) {
+				return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusGeneric}
+			},
+			termination: func(context.Context, string) (TerminationEvidence, error) {
+				return TerminationEvidence{ControlGroup: pinned, Absent: true}, nil
+			},
+		}
+	}
+
+	staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Close()
+
+	run := &Run{
+		unit:     newUnit(),
+		write:    write,
+		staged:   staged,
+		stop:     make(chan struct{}),
+		finished: make(chan struct{}),
+		started:  time.Now(),
+	}
+	finishErr := run.Finish(context.Background(), nil)
+	terminal := run.TerminalReport()
+	if terminal.Outcome != ErrContainmentUnavailable || terminal.Cleaned {
+		t.Fatalf("terminal report = %#v, want containment-unavailable and Cleaned false", terminal)
+	}
+
+	const want = "error=containment-unavailable outcome=containment-unavailable service=success stage=containment-cleanup reason=already-gone-terminal-unit-properties-unavailable oom-killed=false pids-limited=false"
+	if got := safeExecutionFailure(finishErr, terminal); got != want {
+		t.Fatalf("safe diagnostic = %q, want %q", got, want)
+	}
+}
+
 func TestReportGoneTerminalDecodeFailureKeepsSafeDiagnosticStage(t *testing.T) {
 	pinned := SandboxReport{ControlGroup: "/crux.slice/pinned", ServiceResult: "success"}
 	newUnit := func() *terminalAccountingFakeUnit {

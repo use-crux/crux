@@ -90,6 +90,8 @@ before it can clear cleanup.
 Promote `unit-properties-gone` to a pending already-gone validation only from
 a verified snapshot for that exact pinned cgroup. Use fresh strict post-stop
 terminal status, rather than the pre-ACK snapshot, to establish success.
+Preserve fixed sanitized terminal-status operation diagnostics on that pending
+validation path without allowing the status error to establish terminal proof.
 
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
