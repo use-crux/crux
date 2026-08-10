@@ -72,6 +72,10 @@ Classify unrecognized D-Bus terminal-status failures with a fixed allowlisted
 cleanup diagnostic, without exposing D-Bus names or bodies; preserve the
 existing generic-unavailable diagnostic for non-D-Bus terminal-status errors.
 
+Classify direct sanitized terminal-status operation failures by their fixed
+stage and class for diagnostics only; they cannot stand in for final terminal
+proof, including when the class is exact unit-gone.
+
 Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
 

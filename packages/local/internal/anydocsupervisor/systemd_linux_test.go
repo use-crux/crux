@@ -1764,6 +1764,75 @@ func TestTerminalStatusUnavailableStagesAreSafeAndValidateAlreadyGone(t *testing
 	}
 }
 
+func TestValidateAlreadyGoneTerminalOperationErrorMappingNoLeak(t *testing.T) {
+	private := "/private/dbus-body-secret"
+	carried := &alreadyGoneError{
+		proof:  TerminalStatus{State: "inactive", ServiceResult: "success"},
+		cgroup: "/safe",
+	}
+	termination := TerminationEvidence{ControlGroup: "/safe", Empty: true}
+
+	for _, test := range []struct {
+		name  string
+		stage terminalStatusUnavailableStage
+		class terminalStatusDBusClass
+		want  string
+	}{
+		{name: "get unit gone", stage: terminalStatusGetUnit, class: terminalStatusDBusGone, want: "already-gone-terminal-get-unit-gone"},
+		{name: "get unit unrecognized", stage: terminalStatusGetUnit, class: terminalStatusDBusUnrecognized, want: "already-gone-terminal-get-unit-unrecognized"},
+		{name: "get unit unavailable", stage: terminalStatusGetUnit, class: terminalStatusDBusGeneric, want: "already-gone-terminal-get-unit-unavailable"},
+		{name: "unit properties gone", stage: terminalStatusUnitProperties, class: terminalStatusDBusGone, want: "already-gone-terminal-unit-properties-gone"},
+		{name: "unit properties unrecognized", stage: terminalStatusUnitProperties, class: terminalStatusDBusUnrecognized, want: "already-gone-terminal-unit-properties-unrecognized"},
+		{name: "unit properties unavailable", stage: terminalStatusUnitProperties, class: terminalStatusDBusGeneric, want: "already-gone-terminal-unit-properties-unavailable"},
+		{name: "service properties gone", stage: terminalStatusServiceProperties, class: terminalStatusDBusGone, want: "already-gone-terminal-service-properties-gone"},
+		{name: "service properties unrecognized", stage: terminalStatusServiceProperties, class: terminalStatusDBusUnrecognized, want: "already-gone-terminal-service-properties-unrecognized"},
+		{name: "service properties unavailable", stage: terminalStatusServiceProperties, class: terminalStatusDBusGeneric, want: "already-gone-terminal-service-properties-unavailable"},
+		{name: "decode gone", stage: terminalStatusDecode, class: terminalStatusDBusGone, want: "already-gone-terminal-decode-unavailable"},
+		{name: "decode unrecognized", stage: terminalStatusDecode, class: terminalStatusDBusUnrecognized, want: "already-gone-terminal-decode-unavailable"},
+		{name: "decode unavailable", stage: terminalStatusDecode, class: terminalStatusDBusGeneric, want: "already-gone-terminal-decode-unavailable"},
+		{name: "unknown stage", stage: terminalStatusUnavailableStage("private-stage"), class: terminalStatusDBusGone, want: "already-gone-terminal-unavailable"},
+		{name: "unknown class", stage: terminalStatusGetUnit, class: terminalStatusDBusClass(99), want: "already-gone-terminal-unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := &terminalStatusOperationError{stage: test.stage, dbusClass: test.class}
+			reason := validateAlreadyGone("/safe", termination, nil, TerminalStatus{}, err, carried)
+			if reason != test.want {
+				t.Fatalf("validateAlreadyGone() = %q, want %q", reason, test.want)
+			}
+			if reason == "" || !validContainmentReason(reason) {
+				t.Fatalf("reason was accepted or not allowlisted: %q", reason)
+			}
+			if strings.Contains(err.Error(), private) || strings.Contains(reason, private) {
+				t.Fatalf("operation diagnostic leaked private detail: err %q, reason %q", err, reason)
+			}
+		})
+	}
+}
+
+func TestValidateAlreadyGoneTerminalStatusFinalErrorAcceptance(t *testing.T) {
+	carried := &alreadyGoneError{
+		proof:  TerminalStatus{State: "inactive", ServiceResult: "success"},
+		cgroup: "/safe",
+	}
+	termination := TerminationEvidence{ControlGroup: "/safe", Absent: true}
+
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "final gone accepts", err: &terminalStatusGoneError{}},
+		{name: "final unrecognized rejects", err: &terminalStatusUnrecognizedDBusError{}, want: "already-gone-terminal-unrecognized-dbus"},
+		{name: "direct operation gone rejects", err: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, want: "already-gone-terminal-get-unit-gone"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := validateAlreadyGone("/safe", termination, nil, TerminalStatus{}, test.err, carried); got != test.want {
+				t.Fatalf("validateAlreadyGone() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestDBusUnitPropertiesStagesEveryOperation(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -1942,26 +2011,33 @@ func TestTerminalStatusFromPropsAcceptsOnlyExactWireTypes(t *testing.T) {
 	}
 }
 
-func TestCleanupEmitsStagedTerminalStatusContainmentReasons(t *testing.T) {
+func TestCleanupEmitsTerminalOperationContainmentReasons(t *testing.T) {
 	private := "/private/dbus-body-secret"
 	for _, test := range []struct {
 		name   string
 		status error
-		values map[string]any
 		want   string
 	}{
-		{name: "get unit", status: newTerminalStatusOperationError(terminalStatusGetUnit, errors.New(private)), want: "already-gone-terminal-get-unit"},
-		{name: "unit properties", status: newTerminalStatusOperationError(terminalStatusUnitProperties, errors.New(private)), want: "already-gone-terminal-unit-properties"},
-		{name: "service properties", status: newTerminalStatusOperationError(terminalStatusServiceProperties, errors.New(private)), want: "already-gone-terminal-service-properties"},
-		{name: "decode unavailable", values: map[string]any{"ActiveState": "inactive", "Result": "success", "MainPID": uint32(0), "ExecMainStatus": uint32(0)}, want: "already-gone-terminal-decode-unavailable"},
+		{name: "get unit gone", status: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, want: "already-gone-terminal-get-unit-gone"},
+		{name: "unit properties unrecognized", status: &terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusUnrecognized}, want: "already-gone-terminal-unit-properties-unrecognized"},
+		{name: "service properties unavailable", status: &terminalStatusOperationError{stage: terminalStatusServiceProperties, dbusClass: terminalStatusDBusGeneric}, want: "already-gone-terminal-service-properties-unavailable"},
+		{name: "decode unavailable", status: &terminalStatusOperationError{stage: terminalStatusDecode, dbusClass: terminalStatusDBusGeneric}, want: "already-gone-terminal-decode-unavailable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			unit, bus := prepareAlreadyGoneCleanup(t, test.values)
-			bus.propErrAfterFirstStopProperties = test.status
+			unit := &fakeUnit{
+				rep:     SandboxReport{ControlGroup: "/safe"},
+				stopErr: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/safe"},
+				terminalStatus: func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{}, test.status
+				},
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return TerminationEvidence{ControlGroup: "/safe", Empty: true}, nil
+				},
+			}
 			_, _, _, reason := cleanup(unit)
 			final := chainContainment(nil, false, "containment-cleanup", reason)
 			var containment *ContainmentError
-			if !errors.As(final, &containment) || containment.ReasonCode != test.want {
+			if !errors.As(final, &containment) || containment.ReasonCode != test.want || !validContainmentReason(containment.ReasonCode) {
 				t.Fatalf("final ContainmentError = %#v, want reason %q", containment, test.want)
 			}
 			if strings.Contains(containment.Error(), private) {

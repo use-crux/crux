@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-report-dbus-fetch", "terminal-accounting-report-control-group", "terminal-accounting-report-memory", "terminal-accounting-report-cgroup-accounting", "terminal-accounting-report-swap", "terminal-accounting-report-tasks", "terminal-accounting-report-cpu", "terminal-accounting-report-sandbox-properties", "terminal-accounting-report-runtime-attestation", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-unrecognized-dbus", "already-gone-terminal-not-success", "already-gone-terminal-get-unit", "already-gone-terminal-unit-properties", "already-gone-terminal-service-properties", "already-gone-terminal-decode-unavailable", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-report-dbus-fetch", "terminal-accounting-report-control-group", "terminal-accounting-report-memory", "terminal-accounting-report-cgroup-accounting", "terminal-accounting-report-swap", "terminal-accounting-report-tasks", "terminal-accounting-report-cpu", "terminal-accounting-report-sandbox-properties", "terminal-accounting-report-runtime-attestation", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-unrecognized-dbus", "already-gone-terminal-not-success", "already-gone-terminal-get-unit", "already-gone-terminal-unit-properties", "already-gone-terminal-service-properties", "already-gone-terminal-get-unit-gone", "already-gone-terminal-get-unit-unrecognized", "already-gone-terminal-get-unit-unavailable", "already-gone-terminal-unit-properties-gone", "already-gone-terminal-unit-properties-unrecognized", "already-gone-terminal-unit-properties-unavailable", "already-gone-terminal-service-properties-gone", "already-gone-terminal-service-properties-unrecognized", "already-gone-terminal-service-properties-unavailable", "already-gone-terminal-decode-unavailable", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -1272,6 +1272,13 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 		return "already-gone-terminal-unavailable"
 	}
 	if statusErr != nil {
+		var operation *terminalStatusOperationError
+		if errors.As(statusErr, &operation) {
+			if reason, ok := terminalStatusOperationReason(operation); ok {
+				return reason
+			}
+			return "already-gone-terminal-unavailable"
+		}
 		var unrecognizedDBus *terminalStatusUnrecognizedDBusError
 		if errors.As(statusErr, &unrecognizedDBus) {
 			return "already-gone-terminal-unrecognized-dbus"
@@ -1299,6 +1306,40 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 		return "already-gone-terminal-not-success"
 	}
 	return ""
+}
+
+// terminalStatusOperationReason reports a direct sanitized operation failure
+// without treating it as terminal proof. It uses only the fixed stage and
+// class retained by terminalStatusOperationError.
+func terminalStatusOperationReason(operation *terminalStatusOperationError) (string, bool) {
+	if operation == nil {
+		return "", false
+	}
+
+	var class string
+	switch operation.dbusClass {
+	case terminalStatusDBusGone:
+		class = "gone"
+	case terminalStatusDBusUnrecognized:
+		class = "unrecognized"
+	case terminalStatusDBusGeneric:
+		class = "unavailable"
+	default:
+		return "", false
+	}
+
+	switch operation.stage {
+	case terminalStatusGetUnit:
+		return "already-gone-terminal-get-unit-" + class, true
+	case terminalStatusUnitProperties:
+		return "already-gone-terminal-unit-properties-" + class, true
+	case terminalStatusServiceProperties:
+		return "already-gone-terminal-service-properties-" + class, true
+	case terminalStatusDecode:
+		return "already-gone-terminal-decode-unavailable", true
+	default:
+		return "", false
+	}
 }
 
 func validateAlreadyGoneTermination(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {
