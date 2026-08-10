@@ -1051,8 +1051,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			reason = "accounting-evidence"
 		}
 	}
-	if unit.Stop(ctx) != nil {
-		if reason == "" {
+	if stopErr := unit.Stop(ctx); stopErr != nil {
+		if errors.Is(stopErr, errUnitAlreadyGone) {
+			reason = "alreadyGone"
+		} else if reason == "" {
 			reason = "stop-unit"
 		}
 	}
@@ -1077,6 +1079,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			reason = "termination-evidence"
 		}
 	}
+	if reason == "alreadyGone" {
+		reason = validateAlreadyGone(termination, terminationErr, status, statusErr)
+	}
 	if usedCachedAccounting && !termination.Absent {
 		if reason == "" {
 			reason = "used-cached-accounting"
@@ -1088,6 +1093,18 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	return report, cpu, termination, reason
+}
+func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+	if terminationErr != nil || termination.ControlGroup == "" || (!termination.Absent && !termination.Empty) || (termination.Absent == termination.Empty) {
+		return "stop-unit"
+	}
+	if termination.Absent {
+		return ""
+	}
+	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
+		return "stop-unit"
+	}
+	return ""
 }
 func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if u == nil {

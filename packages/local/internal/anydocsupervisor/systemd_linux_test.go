@@ -790,6 +790,8 @@ type fakeSystemBus struct {
 	properties                 []DBusProperty
 	values                     map[string]any
 	startErr, stopErr, killErr error
+	propErr                    error
+	stopDBusErrorName          string
 	reset                      bool
 	onStop                     func()
 }
@@ -809,11 +811,17 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 	return b.startErr
 }
 func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]any, error) {
+	if b.propErr != nil {
+		return nil, b.propErr
+	}
 	return b.values, nil
 }
 func (b *fakeSystemBus) StopUnit(_ context.Context, _ string) error {
 	if b.onStop != nil {
 		b.onStop()
+	}
+	if b.stopDBusErrorName != "" {
+		return dbus.Error{Name: b.stopDBusErrorName, Body: []interface{}{}}
 	}
 	return b.stopErr
 }
@@ -898,3 +906,115 @@ func propertiesByName(properties []DBusProperty) map[string]any {
 	return result
 }
 func sameProperty(a, b any) bool { return reflect.DeepEqual(a, b) }
+
+func TestStopReturnsUnitAlreadyGoneWhenDbusNoSuchUnitAndUnitUnqueryable(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.propErr = errors.New("not found")
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if !errors.Is(err, errUnitAlreadyGone) {
+		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	}
+}
+
+func TestStopReturnsUnitAlreadyGoneWhenDbusNoSuchUnitAndTerminalStatusInactive(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if !errors.Is(err, errUnitAlreadyGone) {
+		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	}
+}
+
+func TestStopFallsBackToKillWhenUnitStillActive(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "active"
+	bus.values["MainPID"] = uint32(42)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("unit should fall back to kill, not return alreadyGone")
+	}
+	if err != nil {
+		t.Fatalf("expected nil after kill succeeded, got %v", err)
+	}
+}
+
+func TestCleanupAlreadyGoneAbsentSucceeds(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := u.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.MarkSnapshotVerified()
+	bus.onStop = func() {
+		for path := range fs.files {
+			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, path)
+			}
+		}
+	}
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	_, _, _, reason := cleanup(u)
+	if reason != "" {
+		t.Fatalf("expected empty reason, got %q", reason)
+	}
+}
+
+func TestCleanupRejectsAlreadyGoneWhenCgroupPresent(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := u.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.MarkSnapshotVerified()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	_, _, _, reason := cleanup(u)
+	if reason != "stop-unit" {
+		t.Fatalf("expected stop-unit reason, got %q", reason)
+	}
+}
+
+func TestStopFallsBackToKillOnUnknownStopError(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopErr = errors.New("denied")
+	bus.killErr = errors.New("denied")
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	err := u.Stop(context.Background())
+	if err != nil {
+		t.Fatalf("expected cgroup.kill fallback to succeed, got %v", err)
+	}
+	if string(fs.writes[cgroupFile("/crux.slice/test", "cgroup.kill")]) != "1" {
+		t.Fatal("cgroup.kill fallback not used for unknown stop error")
+	}
+}

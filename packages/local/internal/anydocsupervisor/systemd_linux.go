@@ -34,6 +34,24 @@ func (e *ContainmentError) Error() string { return "containment " + e.Stage + ":
 func containment(stage string, err error) error {
 	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
 }
+type unitAlreadyGone struct{}
+
+func (unitAlreadyGone) Error() string { return "unit already gone" }
+
+var errUnitAlreadyGone = unitAlreadyGone{}
+
+var dbusNoSuchUnitErrors = map[string]bool{
+	"org.freedesktop.systemd1.NoSuchUnit": true,
+}
+
+func isDbusNoSuchUnit(err error) bool {
+	var dbusErr dbus.Error
+	if !errors.As(err, &dbusErr) {
+		return false
+	}
+	return dbusNoSuchUnitErrors[dbusErr.Name]
+}
+
 func containmentReason(err error) string {
 	if err == nil {
 		return "unknown"
@@ -45,6 +63,8 @@ func containmentReason(err error) string {
 			return "dbus-invalid-args"
 		case "org.freedesktop.DBus.Error.AccessDenied":
 			return "dbus-access-denied"
+		case "org.freedesktop.systemd1.NoSuchUnit":
+			return "dbus-no-such-unit"
 		default:
 			return "dbus-other"
 		}
@@ -967,6 +987,16 @@ func (u *systemdUnit) captureFailure() accountingCaptureFailure {
 func (u *systemdUnit) Stop(ctx context.Context) error {
 	if err := u.bus.StopUnit(ctx, u.name); err == nil {
 		return nil
+	} else if isDbusNoSuchUnit(err) {
+		p, propErr := u.bus.UnitProperties(ctx, u.name)
+		if propErr != nil {
+			return errUnitAlreadyGone
+		}
+		state := stringValue(p, "ActiveState")
+		pid := intValue(p, "MainPID")
+		if (state == "inactive" || state == "failed") && pid == 0 {
+			return errUnitAlreadyGone
+		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {
 		return nil
