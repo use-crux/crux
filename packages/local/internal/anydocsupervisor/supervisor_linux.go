@@ -766,10 +766,10 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		result := outcomeCode(out)
 		report, cpu, termination, cleaned := cleanup(r.unit)
 		if !cleaned {
-			result = closed(ErrContainmentUnavailable)
+			result = closedWith(ErrContainmentUnavailable, out)
 		}
 		if r.staged == nil || r.staged.Cleanup() != nil {
-			result = closed(ErrContainmentUnavailable)
+			result = closedWith(ErrContainmentUnavailable, out)
 		}
 		r.mu.Lock()
 		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}

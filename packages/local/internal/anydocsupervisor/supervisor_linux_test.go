@@ -778,6 +778,33 @@ func TestInspectStagedSourceFDRejectsStatDriftDuringHash(t *testing.T) {
 	}
 	t.Fatal("stat drift during hash accepted")
 }
+func TestExecutePreservesResultValidationCauseThroughCleanupFailure(t *testing.T) {
+	validation := resultValidation("request-binding", "mismatch")
+	typed := closedWith(ErrInvalidResult, validation)
+	b := &fakeBackend{
+		cleanupErr: errors.New("cleanup failed"),
+		receive: func(ctx context.Context, _ Request) (Result, error) {
+			return Result{}, typed
+		},
+	}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.Execute(context.Background())
+	var sup *SupervisorError
+	if !errors.As(err, &sup) || sup.Code != ErrContainmentUnavailable {
+		t.Fatalf("outer error = %T %v, want containmnent-unavailable", err, err)
+	}
+	var v *ResultValidationError
+	if !errors.As(err, &v) {
+		t.Fatalf("ResultValidationError cause lost through cleanup: %T %v", err, err)
+	}
+	if v.Stage != "request-binding" || v.ReasonCode != "mismatch" {
+		t.Fatalf("ResultValidationError = {stage:%q reason:%q}", v.Stage, v.ReasonCode)
+	}
+}
+
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
 	var x *SupervisorError
@@ -812,12 +839,13 @@ func fileIdentity(t *testing.T, info os.FileInfo) fileIdent {
 }
 
 type fakeBackend struct {
-	u       *fakeUnit
-	read    *os.File
-	bad     bool
-	cpu     time.Duration
-	cpuErr  bool
-	receive func(context.Context, Request) (Result, error)
+	u          *fakeUnit
+	read       *os.File
+	bad        bool
+	cpu        time.Duration
+	cpuErr     bool
+	cleanupErr error
+	receive    func(context.Context, Request) (Result, error)
 }
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
@@ -826,7 +854,7 @@ func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit,
 	if b.bad {
 		rep.MemoryMax = 1
 	}
-	b.u = &fakeUnit{rep: rep, cpu: b.cpu, cpuErr: b.cpuErr, receive: b.receive}
+	b.u = &fakeUnit{rep: rep, cpu: b.cpu, cpuErr: b.cpuErr, cleanupErr: b.cleanupErr, receive: b.receive}
 	return b.u, nil
 }
 
@@ -835,6 +863,7 @@ type fakeUnit struct {
 	cpu              time.Duration
 	cpuErr           bool
 	receive          func(context.Context, Request) (Result, error)
+	cleanupErr       error
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -873,7 +902,7 @@ func (u *fakeUnit) Cleanup(context.Context) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	u.cleaned = true
-	return nil
+	return u.cleanupErr
 }
 func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
 func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }
