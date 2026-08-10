@@ -57,5 +57,7 @@ Retain a strictly successful terminal status observed during a typed
 `StopUnit` missing-unit confirmation, so an immediately unloaded transient
 unit can complete cleanup only when the pinned cgroup is absent or empty.
 
-Preserve fixed result-validation diagnostics when unavailable result receipt
-is followed by failed terminal accounting cleanup.
+Classify unavailable result receipt and result-socket I/O as containment
+failures; reserve fixed `accounting-refresh` result-validation diagnostics for
+authenticated, decoded results whose accounting refresh fails, including when
+terminal accounting cleanup also fails.

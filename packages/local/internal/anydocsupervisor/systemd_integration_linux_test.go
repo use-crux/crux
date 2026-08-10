@@ -914,7 +914,7 @@ func TestSafeExecutionFailurePrefersResultValidationOverContainmentInErrorChain(
 	}
 }
 
-func TestExecutePreservesUnavailableResultValidationThroughAccountingCleanup(t *testing.T) {
+func TestExecutePreservesRefreshValidationThroughAccountingCleanup(t *testing.T) {
 	staged, err := NewStager(t.TempDir()).Stage([]byte("test"), 1024)
 	if err != nil {
 		t.Fatal(err)
@@ -927,15 +927,31 @@ func TestExecutePreservesUnavailableResultValidationThroughAccountingCleanup(t *
 
 	limits := testJobLimits()
 	sourceSHA := sha256Hex([]byte("test"))
+	path := t.TempDir() + "/result.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	fs := newFakeFS()
-	delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak"))
+	request := Request{Version: ProtocolVersion, Nonce: "00000000000000000000000000000000", Format: FormatDOCX, SourceSHA256: sourceSHA, SourceBytes: 4, Limits: limits}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	unit := &systemdUnit{
+		name:           "crux-anydoc-refresh-failure.service",
+		bus:            newFakeSystemBus(),
+		fs:             fs,
+		now:            immediateClock{},
+		resultListener: listener,
+		resultSocket:   path,
+		peers:          fakePeer{pid: 42},
+	}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	fs.failReadAt[cgroupFile("/crux.slice/test", "memory.peak")] = 3
 	r := &Run{
-		unit: &systemdUnit{
-			name: "crux-anydoc-result-unavailable.service",
-			bus:  newFakeSystemBus(),
-			fs:   fs,
-			now:  immediateClock{},
-		},
+		unit:        unit,
 		write:       write,
 		nonce:       "00000000000000000000000000000000",
 		digest:      requestDigest(ProtocolVersion, "00000000000000000000000000000000", "docx", sourceSHA, 4, limits),
@@ -948,6 +964,13 @@ func TestExecutePreservesUnavailableResultValidationThroughAccountingCleanup(t *
 		finished:    make(chan struct{}),
 		started:     time.Now(),
 	}
+	go func() {
+		conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+		if dialErr == nil {
+			_ = EncodeResult(conn, validWireResult(request))
+			_ = conn.Close()
+		}
+	}()
 
 	_, err = r.Execute(context.Background())
 	var validation *ResultValidationError

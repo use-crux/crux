@@ -675,6 +675,51 @@ func TestSystemdResultReportsTerminalWorkerCrash(t *testing.T) {
 	}
 }
 
+func TestSystemdResultReceiveFailuresUseContainmentErrors(t *testing.T) {
+	request := Request{}
+	for name, unit := range map[string]*systemdUnit{
+		"missing listener": {peers: fakePeer{pid: 42}},
+		"missing peers": func() *systemdUnit {
+			path := t.TempDir() + "/result.sock"
+			listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				_ = listener.Close()
+				_ = os.Remove(path)
+			})
+			return &systemdUnit{resultListener: listener, resultSocket: path}
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := unit.ReceiveResult(context.Background(), request)
+			var containmentErr *ContainmentError
+			if !errors.As(err, &containmentErr) || containmentErr.Stage != "result-receive" || containmentErr.ReasonCode != "unavailable" {
+				t.Fatalf("result error = %T %v", err, err)
+			}
+			var validationErr *ResultValidationError
+			if errors.As(err, &validationErr) {
+				t.Fatalf("result receive failure used validation error: %#v", validationErr)
+			}
+		})
+	}
+
+	path := t.TempDir() + "/result.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&systemdUnit{bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}).ReceiveResult(context.Background(), request)
+	var containmentErr *ContainmentError
+	if !errors.As(err, &containmentErr) || containmentErr.Stage != "result-receive" || containmentErr.ReasonCode != "io" {
+		t.Fatalf("accept error = %T %v", err, err)
+	}
+}
+
 func TestSystemdResultHasExactlyOneReceiver(t *testing.T) {
 	path := t.TempDir() + "/result.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
@@ -857,17 +902,23 @@ func (b *fakeSystemBus) ResetFailedUnit(_ context.Context, _ string) error {
 }
 
 type fakeFS struct {
-	files   map[string][]byte
-	writes  map[string][]byte
-	removed map[string]bool
+	files      map[string][]byte
+	writes     map[string][]byte
+	removed    map[string]bool
+	reads      map[string]int
+	failReadAt map[string]int
 }
 
 func newFakeFS() *fakeFS {
-	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("32\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}}
+	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("32\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}, reads: map[string]int{}, failReadAt: map[string]int{}}
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	if strings.HasSuffix(path, "/.complete") {
 		return []byte{}, nil
+	}
+	f.reads[path]++
+	if failAt := f.failReadAt[path]; failAt > 0 && f.reads[path] >= failAt {
+		return nil, os.ErrNotExist
 	}
 	v, ok := f.files[path]
 	if !ok {
