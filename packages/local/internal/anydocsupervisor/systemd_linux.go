@@ -656,11 +656,11 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		if isDbusUnitPropertiesGone(err) {
 			return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, errors.New("unit properties gone"))
 		}
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportUnavailable, errors.New("unit properties unavailable"))
+		return SandboxReport{}, newReportValidationError(reportValidationDBusFetch)
 	}
 	cgroup := stringValue(p, "ControlGroup")
 	if !validCgroup(cgroup) {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("invalid cgroup"))
+		return SandboxReport{}, newReportValidationError(reportValidationControlGroup)
 	}
 	u.reportMu.Lock()
 	if u.controlGroup == "" {
@@ -669,57 +669,57 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	matchedCgroup := u.controlGroup == cgroup
 	u.reportMu.Unlock()
 	if !matchedCgroup {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("control group identity changed"))
+		return SandboxReport{}, newReportValidationError(reportValidationControlGroup)
 	}
 	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
+		return SandboxReport{}, newReportValidationError(reportValidationMemory)
 	}
 	memoryCurrent, err := cgroupLimit(u.fs, cgroup, "memory.current")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryCurrent, err)
+		return SandboxReport{}, newReportValidationError(reportValidationMemory)
 	}
 	memoryPeak, err := cgroupLimit(u.fs, cgroup, "memory.peak")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryPeak, err)
+		return SandboxReport{}, newReportValidationError(reportValidationMemory)
 	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryEvents, err)
+		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
 	}
 	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureCPUStat, err)
+		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
 	}
 	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCapturePIDsEvents, err)
+		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
 	}
 	swap, err := cgroupLimit(u.fs, cgroup, "memory.swap.max")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
+		return SandboxReport{}, newReportValidationError(reportValidationSwap)
 	}
 	tasks, err := cgroupLimit(u.fs, cgroup, "pids.max")
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
+		return SandboxReport{}, newReportValidationError(reportValidationTasks)
 	}
 	quota, period, err := cpuLimit(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
+		return SandboxReport{}, newReportValidationError(reportValidationCPU)
 	}
 	members, err := cgroupPIDs(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureCgroupProcs, err)
+		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
 	}
 	populated, err := cgroupPopulated(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, terminalAccountingError(cgroupPopulatedFailure(err), err)
+		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
 	}
 	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
 	binds, bindsOK := bindReadOnlyPathsValue(p["BindReadOnlyPaths"])
 	protectHome, protectHomeOK := p["ProtectHome"].(string)
 	if !ok || !bindsOK || !protectHomeOK || protectHome != "yes" || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
-		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("invalid sandbox properties"))
+		return SandboxReport{}, newReportValidationError(reportValidationSandboxProperties)
 	}
 	pid := intValue(p, "MainPID")
 	runtimeDigest := ""
@@ -730,7 +730,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		}
 		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
 		if err != nil {
-			return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("mounted runtime attestation unavailable"))
+			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
@@ -1086,6 +1086,35 @@ func terminalAccountingError(failure accountingCaptureFailure, err error) error 
 	return &terminalAccountingCaptureError{failure: failure, err: err}
 }
 
+// ReportValidationCode is deliberately a small, fixed vocabulary. It is safe
+// to surface in cleanup diagnostics; it never carries a property value, path,
+// or underlying error text.
+type ReportValidationCode string
+
+const (
+	reportValidationDBusFetch          ReportValidationCode = "dbus-fetch"
+	reportValidationControlGroup       ReportValidationCode = "control-group"
+	reportValidationMemory             ReportValidationCode = "memory"
+	reportValidationCgroupAccounting   ReportValidationCode = "cgroup-accounting"
+	reportValidationSwap               ReportValidationCode = "swap"
+	reportValidationTasks              ReportValidationCode = "tasks"
+	reportValidationCPU                ReportValidationCode = "cpu"
+	reportValidationSandboxProperties  ReportValidationCode = "sandbox-properties"
+	reportValidationRuntimeAttestation ReportValidationCode = "runtime-attestation"
+)
+
+type ReportValidationError struct {
+	Code ReportValidationCode
+}
+
+func (e *ReportValidationError) Error() string {
+	return "report validation failed: " + string(e.Code)
+}
+
+func newReportValidationError(code ReportValidationCode) error {
+	return &ReportValidationError{Code: code}
+}
+
 func accountingCaptureFailureFor(err error, fallback accountingCaptureFailure) accountingCaptureFailure {
 	// Exact cgroup disappearance is the original verified-snapshot fallback.
 	// Preserve it even if Report reached a typed source error first.
@@ -1096,7 +1125,61 @@ func accountingCaptureFailureFor(err error, fallback accountingCaptureFailure) a
 	if errors.As(err, &captureErr) {
 		return captureErr.failure
 	}
+	var validationErr *ReportValidationError
+	if errors.As(err, &validationErr) {
+		return reportValidationCaptureFailure(validationErr.Code)
+	}
 	return fallback
+}
+
+func reportValidationCaptureFailure(code ReportValidationCode) accountingCaptureFailure {
+	switch code {
+	case reportValidationDBusFetch:
+		return accountingCaptureReportValidationDBusFetch
+	case reportValidationControlGroup:
+		return accountingCaptureReportValidationControlGroup
+	case reportValidationMemory:
+		return accountingCaptureReportValidationMemory
+	case reportValidationSwap:
+		return accountingCaptureReportValidationSwap
+	case reportValidationTasks:
+		return accountingCaptureReportValidationTasks
+	case reportValidationCPU:
+		return accountingCaptureReportValidationCPU
+	case reportValidationSandboxProperties:
+		return accountingCaptureReportValidationSandboxProperties
+	case reportValidationRuntimeAttestation:
+		return accountingCaptureReportValidationRuntimeAttestation
+	case reportValidationCgroupAccounting:
+		return accountingCaptureReportValidationCgroupAccounting
+	default:
+		return accountingCaptureReportInvalid
+	}
+}
+
+func reportValidationCodeForCaptureFailure(failure accountingCaptureFailure) (ReportValidationCode, bool) {
+	switch failure {
+	case accountingCaptureReportValidationDBusFetch:
+		return reportValidationDBusFetch, true
+	case accountingCaptureReportValidationControlGroup:
+		return reportValidationControlGroup, true
+	case accountingCaptureReportValidationMemory:
+		return reportValidationMemory, true
+	case accountingCaptureReportValidationSwap:
+		return reportValidationSwap, true
+	case accountingCaptureReportValidationTasks:
+		return reportValidationTasks, true
+	case accountingCaptureReportValidationCPU:
+		return reportValidationCPU, true
+	case accountingCaptureReportValidationSandboxProperties:
+		return reportValidationSandboxProperties, true
+	case accountingCaptureReportValidationRuntimeAttestation:
+		return reportValidationRuntimeAttestation, true
+	case accountingCaptureReportValidationCgroupAccounting:
+		return reportValidationCgroupAccounting, true
+	default:
+		return "", false
+	}
 }
 
 func (u *systemdUnit) captureFailure() accountingCaptureFailure {

@@ -147,39 +147,39 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 	}
 }
 
-func TestCaptureTerminalAccountingClassifiesFailureSources(t *testing.T) {
+func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		apply func(*fakeSystemBus, *fakeFS)
 		want  accountingCaptureFailure
 	}{
-		{name: "report unavailable", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private report failure") }, want: accountingCaptureReportUnavailable},
+		{name: "report unavailable", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private report failure") }, want: accountingCaptureReportValidationDBusFetch},
 		{name: "report gone", apply: func(bus *fakeSystemBus, _ *fakeFS) {
 			bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}
 		}, want: accountingCaptureReportGone},
-		{name: "report invalid", apply: func(bus *fakeSystemBus, fs *fakeFS) {
+		{name: "memory", apply: func(bus *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "memory.max")] = []byte("bad")
-		}, want: accountingCaptureReportInvalid},
-		{name: "memory current", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.current")) }, want: accountingCaptureMemoryCurrent},
-		{name: "memory peak", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak")) }, want: accountingCaptureMemoryPeak},
+		}, want: accountingCaptureReportValidationMemory},
+		{name: "memory current", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.current")) }, want: accountingCaptureReportValidationMemory},
+		{name: "memory peak", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak")) }, want: accountingCaptureReportValidationMemory},
 		{name: "memory events", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("max bad")
-		}, want: accountingCaptureMemoryEvents},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "cpu stat", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec bad")
-		}, want: accountingCaptureCPUStat},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "pids events", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max bad")
-		}, want: accountingCapturePIDsEvents},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "cgroup procs", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte("bad")
-		}, want: accountingCaptureCgroupProcs},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "cgroup events unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.readErr[cgroupFile("/crux.slice/test", "cgroup.events")] = errors.New("private cgroup read failure")
-		}, want: accountingCaptureCgroupEventsUnavailable},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "cgroup events malformed", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("bad")
-		}, want: accountingCaptureCgroupEventsMalformed},
+		}, want: accountingCaptureReportValidationCgroupAccounting},
 		{name: "cpu unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = 2 }, want: accountingCaptureCPUUnavailable},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -194,6 +194,69 @@ func TestCaptureTerminalAccountingClassifiesFailureSources(t *testing.T) {
 			if reason := failure.reason(); reason == "" || !validContainmentReason(reason) || strings.Contains(reason, "private") {
 				t.Fatalf("failure reason = %q, must be allowlisted and non-sensitive", reason)
 			}
+			if strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "/sys/fs/cgroup") {
+				t.Fatalf("report validation error leaked sensitive source: %v", err)
+			}
+		})
+	}
+}
+
+func TestReportValidationCodeAccountingMappings(t *testing.T) {
+	for _, test := range []struct {
+		code    ReportValidationCode
+		failure accountingCaptureFailure
+	}{
+		{code: reportValidationDBusFetch, failure: accountingCaptureReportValidationDBusFetch},
+		{code: reportValidationControlGroup, failure: accountingCaptureReportValidationControlGroup},
+		{code: reportValidationMemory, failure: accountingCaptureReportValidationMemory},
+		{code: reportValidationCgroupAccounting, failure: accountingCaptureReportValidationCgroupAccounting},
+		{code: reportValidationSwap, failure: accountingCaptureReportValidationSwap},
+		{code: reportValidationTasks, failure: accountingCaptureReportValidationTasks},
+		{code: reportValidationCPU, failure: accountingCaptureReportValidationCPU},
+		{code: reportValidationSandboxProperties, failure: accountingCaptureReportValidationSandboxProperties},
+		{code: reportValidationRuntimeAttestation, failure: accountingCaptureReportValidationRuntimeAttestation},
+	} {
+		t.Run(string(test.code), func(t *testing.T) {
+			if got := reportValidationCaptureFailure(test.code); got != test.failure {
+				t.Fatalf("capture failure = %v, want %v", got, test.failure)
+			}
+			code, ok := reportValidationCodeForCaptureFailure(test.failure)
+			if !ok || code != test.code {
+				t.Fatalf("validation code = %q, %t; want %q, true", code, ok, test.code)
+			}
+			wantReason := "terminal-accounting-report-" + string(test.code)
+			if got := test.failure.reason(); got != wantReason || !validContainmentReason(got) {
+				t.Fatalf("reason = %q, want allowlisted %q", got, wantReason)
+			}
+		})
+	}
+}
+
+func TestSystemdReportValidationErrorsDoNotLeakFakeSources(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		apply func(*fakeSystemBus, *fakeFS)
+		want  ReportValidationCode
+	}{
+		{name: "dbus", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private D-Bus value /secret") }, want: reportValidationDBusFetch},
+		{name: "cgroup", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.values["ControlGroup"] = "relative/private-secret" }, want: reportValidationControlGroup},
+		{name: "accounting", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.readErr[cgroupFile("/crux.slice/test", "memory.events")] = errors.New("/private/cgroup/accounting-secret")
+		}, want: reportValidationCgroupAccounting},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			fs := newFakeFS()
+			test.apply(bus, fs)
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			_, err := unit.Report(context.Background())
+			var validation *ReportValidationError
+			if !errors.As(err, &validation) || validation.Code != test.want {
+				t.Fatalf("Report error = %v, want validation code %q", err, test.want)
+			}
+			if strings.Contains(err.Error(), "private") || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "/") {
+				t.Fatalf("Report error leaked fake source: %v", err)
+			}
 		})
 	}
 }
@@ -206,8 +269,8 @@ func TestSystemdReportClassifiesOnlyExactUnitPropertiesGoneErrors(t *testing.T) 
 	}{
 		{name: "no such unit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, want: accountingCaptureReportGone},
 		{name: "unknown object", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, want: accountingCaptureReportGone},
-		{name: "other dbus error", err: dbus.Error{Name: "org.freedesktop.systemd1.AccessDenied"}, want: accountingCaptureReportUnavailable},
-		{name: "untyped error", err: errors.New("private unavailable"), want: accountingCaptureReportUnavailable},
+		{name: "other dbus error", err: dbus.Error{Name: "org.freedesktop.systemd1.AccessDenied"}, want: accountingCaptureReportValidationDBusFetch},
+		{name: "untyped error", err: errors.New("private unavailable"), want: accountingCaptureReportValidationDBusFetch},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
