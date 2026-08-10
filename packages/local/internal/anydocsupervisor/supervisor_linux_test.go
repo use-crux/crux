@@ -935,6 +935,7 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 		terminationErr error
 		status         TerminalStatus
 		statusErr      error
+		alreadyGone    *alreadyGoneError
 		want           string
 	}{
 		{
@@ -942,23 +943,27 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 			termination:    TerminationEvidence{ControlGroup: "/safe"},
 			terminationErr: errors.New(secret),
 			status:         success,
+			alreadyGone:    &alreadyGoneError{proof: success},
 			want:           "already-gone-termination-unavailable",
 		},
 		{
-			name:   "empty cgroup",
-			status: success,
-			want:   "already-gone-termination-unavailable",
+			name:        "empty cgroup",
+			status:      success,
+			alreadyGone: &alreadyGoneError{proof: success},
+			want:        "already-gone-termination-unavailable",
 		},
 		{
 			name:        "termination mismatch",
 			termination: TerminationEvidence{ControlGroup: "/safe"},
 			status:      success,
+			alreadyGone: &alreadyGoneError{proof: success},
 			want:        "already-gone-termination-mismatch",
 		},
 		{
 			name:        "termination not exclusive",
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true, Empty: true},
 			status:      success,
+			alreadyGone: &alreadyGoneError{proof: success},
 			want:        "already-gone-termination-not-exclusive",
 		},
 		{
@@ -966,23 +971,33 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
 			status:      success,
 			statusErr:   errors.New(secret),
+			alreadyGone: &alreadyGoneError{proof: success},
 			want:        "already-gone-terminal-unavailable",
 		},
 		{
 			name:        "terminal not success",
 			termination: TerminationEvidence{ControlGroup: "/safe", Empty: true},
 			status:      TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1},
+			alreadyGone: &alreadyGoneError{proof: success},
 			want:        "already-gone-terminal-not-success",
 		},
 		{
 			name:        "success",
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
 			status:      success,
+			alreadyGone: &alreadyGoneError{proof: success},
 			want:        "",
+		},
+		{
+			name:        "forged non-strict proof",
+			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
+			statusErr:   &terminalStatusGoneError{},
+			alreadyGone: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}},
+			want:        "already-gone-terminal-unavailable",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got := validateAlreadyGone(test.termination, test.terminationErr, test.status, test.statusErr)
+			got := validateAlreadyGone(test.termination, test.terminationErr, test.status, test.statusErr, test.alreadyGone)
 			if got != test.want {
 				t.Fatalf("validateAlreadyGone() = %q, want %q", got, test.want)
 			}

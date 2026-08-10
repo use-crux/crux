@@ -53,9 +53,10 @@ RefreshAccounting updates only accounting fields on that verified base for the
 exact retained cgroup so mutated properties cannot become the ENOENT reuse
 fallback.
 
-Retain a strictly successful terminal status observed during a typed
-`StopUnit` missing-unit confirmation, so an immediately unloaded transient
-unit can complete cleanup only when the pinned cgroup is absent or empty.
+Carry a strictly successful terminal status only on the typed
+`StopUnit` missing-unit confirmation error, so an immediately unloaded
+transient unit can complete cleanup only when the pinned cgroup is absent or
+empty.
 
 Classify unavailable result receipt and result-socket I/O as containment
 failures; reserve fixed `accounting-refresh` result-validation diagnostics for

@@ -1086,10 +1086,12 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			reason = "accounting-evidence"
 		}
 	}
+	var alreadyGone *alreadyGoneError
 	if stopErr := unit.Stop(ctx); stopErr != nil {
+		errors.As(stopErr, &alreadyGone)
 		// Never overwrite an earlier reason.
 		if reason == "" {
-			if errors.Is(stopErr, errUnitAlreadyGone) {
+			if alreadyGone != nil {
 				reason = "alreadyGone"
 			} else {
 				var failure *stopFailure
@@ -1124,8 +1126,8 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reason == "alreadyGone" {
 		// Absent cgroup alone is insufficient: require pinned Absent/Empty
-		// plus retained successful inactive terminal evidence.
-		reason = validateAlreadyGone(termination, terminationErr, status, statusErr)
+		// plus carried successful inactive terminal evidence.
+		reason = validateAlreadyGone(termination, terminationErr, status, statusErr, alreadyGone)
 	}
 	if usedCachedAccounting && !termination.Absent {
 		if reason == "" {
@@ -1142,11 +1144,11 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 
 // validateAlreadyGone accepts the intermediate alreadyGone reason only when
 // pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and strict
-// successful-inactive terminal proof is retained (MainPID 0, State inactive,
+// successful-inactive terminal proof is carried (MainPID 0, State inactive,
 // ServiceResult success, ExecMainStatus 0). failed/oom-kill/exit-code/nonzero
 // must not clear the cleanup failure. Returns "" on accept, or a fixed safe
 // diagnostic reason that does not expose cgroup or systemd details.
-func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, alreadyGone *alreadyGoneError) string {
 	if terminationErr != nil || termination.ControlGroup == "" {
 		return "already-gone-termination-unavailable"
 	}
@@ -1156,7 +1158,14 @@ func validateAlreadyGone(termination TerminationEvidence, terminationErr error, 
 	if termination.Absent && termination.Empty {
 		return "already-gone-termination-not-exclusive"
 	}
+	if alreadyGone == nil || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
+		return "already-gone-terminal-unavailable"
+	}
 	if statusErr != nil {
+		var gone *terminalStatusGoneError
+		if errors.As(statusErr, &gone) {
+			return ""
+		}
 		return "already-gone-terminal-unavailable"
 	}
 	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {

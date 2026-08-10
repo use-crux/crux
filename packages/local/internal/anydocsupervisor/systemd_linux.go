@@ -35,11 +35,17 @@ func containment(stage string, err error) error {
 	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
 }
 
-type unitAlreadyGone struct{}
+// alreadyGoneError carries the strict terminal status observed while handling
+// StopUnit's NoSuchUnit response. Cleanup revalidates it before use.
+type alreadyGoneError struct{ proof TerminalStatus }
 
-func (unitAlreadyGone) Error() string { return "unit already gone" }
+func (e *alreadyGoneError) Error() string { return "unit already gone" }
 
-var errUnitAlreadyGone = unitAlreadyGone{}
+// terminalStatusGoneError marks the only status lookup failure for which an
+// already-gone proof can stand in: systemd has unloaded the unit.
+type terminalStatusGoneError struct{}
+
+func (*terminalStatusGoneError) Error() string { return "unit status gone" }
 
 // stopFailure carries only a fixed diagnostic reason. It deliberately omits
 // D-Bus bodies, unit names, and cgroup paths because cleanup diagnostics may
@@ -484,30 +490,27 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name             string
-	bus              SystemBus
-	fs               FileSystem
-	procFS           ProcRuntimeFS
-	now              Clock
-	tmp              string
-	listener         *net.UnixListener
-	socket           string
-	resultListener   *net.UnixListener
-	resultSocket     string
-	resultMu         sync.Mutex
-	resultClaimed    bool
-	peers            PeerVerifier
-	spec             ServiceSpec
-	reportMu         sync.Mutex
-	controlGroup     string
-	terminalMu       sync.Mutex
-	terminalProof    TerminalStatus
-	hasTerminalProof bool
-	snapshotMu       sync.Mutex
-	snapshot         SandboxReport
-	snapshotCPU      time.Duration
-	snapshotSeen     bool
-	snapshotOK       bool
+	name           string
+	bus            SystemBus
+	fs             FileSystem
+	procFS         ProcRuntimeFS
+	now            Clock
+	tmp            string
+	listener       *net.UnixListener
+	socket         string
+	resultListener *net.UnixListener
+	resultSocket   string
+	resultMu       sync.Mutex
+	resultClaimed  bool
+	peers          PeerVerifier
+	spec           ServiceSpec
+	reportMu       sync.Mutex
+	controlGroup   string
+	snapshotMu     sync.Mutex
+	snapshot       SandboxReport
+	snapshotCPU    time.Duration
+	snapshotSeen   bool
+	snapshotOK     bool
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -1028,17 +1031,11 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 		return nil
 	}
 	if isDbusStopNoSuchUnit(stopErr) {
-		// Confirm via typed UnitProperties gone, or strict successful-inactive
-		// terminal proof. UnknownObject from StopUnit never enters this branch.
-		// Arbitrary UnitProperties errors are not gone.
+		// Only a successful strict terminal snapshot is sufficient evidence.
+		// UnknownObject from StopUnit never enters this branch.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
-		if propErr != nil {
-			if isDbusUnitPropertiesGone(propErr) {
-				return errUnitAlreadyGone
-			}
-		} else if successfulInactiveFromProps(p) {
-			u.recordTerminalProof(terminalStatusFromProps(p))
-			return errUnitAlreadyGone
+		if propErr == nil && successfulInactiveFromProps(p) {
+			return &alreadyGoneError{proof: terminalStatusFromProps(p)}
 		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {
@@ -1085,9 +1082,7 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
 		if isDbusUnitPropertiesGone(err) {
-			if proof, ok := u.lastTerminalProof(); ok {
-				return proof, nil
-			}
+			return TerminalStatus{}, &terminalStatusGoneError{}
 		}
 		return TerminalStatus{}, errors.New("unit status unavailable")
 	}
@@ -1101,22 +1096,6 @@ func terminalStatusFromProps(p map[string]any) TerminalStatus {
 		ServiceResult:  stringValue(p, "Result"),
 		ExecMainStatus: intValue(p, "ExecMainStatus"),
 	}
-}
-
-func (u *systemdUnit) recordTerminalProof(status TerminalStatus) {
-	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
-		return
-	}
-	u.terminalMu.Lock()
-	u.terminalProof = status
-	u.hasTerminalProof = true
-	u.terminalMu.Unlock()
-}
-
-func (u *systemdUnit) lastTerminalProof() (TerminalStatus, bool) {
-	u.terminalMu.Lock()
-	defer u.terminalMu.Unlock()
-	return u.terminalProof, u.hasTerminalProof
 }
 
 func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {

@@ -844,12 +844,13 @@ type fakeSystemBus struct {
 	propGoneConsumed      bool
 	// propGoneAfterStop confirms a successful terminal status once, then
 	// simulates systemd unloading the transient unit before cleanup can poll.
-	propGoneAfterStop   bool
-	propertiesAfterStop int
-	stopped             bool
-	stopDBusErrorName   string
-	reset               bool
-	onStop              func()
+	propGoneAfterStop              bool
+	propertiesAfterStop            int
+	valuesAfterFirstStopProperties map[string]any
+	stopped                        bool
+	stopDBusErrorName              string
+	reset                          bool
+	onStop                         func()
 }
 
 func newFakeSystemBus() *fakeSystemBus {
@@ -881,6 +882,12 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 		b.propertiesAfterStop++
 		if b.propertiesAfterStop > 1 {
 			return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+		}
+	}
+	if b.valuesAfterFirstStopProperties != nil && b.stopped {
+		b.propertiesAfterStop++
+		if b.propertiesAfterStop > 1 {
+			return b.valuesAfterFirstStopProperties, nil
 		}
 	}
 	return b.values, nil
@@ -987,14 +994,16 @@ func propertiesByName(properties []DBusProperty) map[string]any {
 }
 func sameProperty(a, b any) bool { return reflect.DeepEqual(a, b) }
 
-func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndTypedPropertiesNotFound(t *testing.T) {
+func TestStopDoesNotReturnAlreadyGoneWhenPropertiesAreGone(t *testing.T) {
 	bus := newFakeSystemBus()
 	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
 	bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
+	bus.killErr = errors.New("denied")
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if !errors.Is(err, errUnitAlreadyGone) {
-		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
+		t.Fatalf("properties-gone must not manufacture proof: %v", err)
 	}
 }
 
@@ -1072,15 +1081,17 @@ func TestCleanupUsesTypedStopFailureReason(t *testing.T) {
 	}
 }
 
-func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndPropertiesUnknownObject(t *testing.T) {
-	// UnitProperties may accept UnknownObject; StopUnit may not.
+func TestStopDoesNotReturnAlreadyGoneWhenPropertiesUnknownObject(t *testing.T) {
+	// UnitProperties may report UnknownObject, but it cannot prove success.
 	bus := newFakeSystemBus()
 	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
 	bus.propErr = dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+	bus.killErr = errors.New("denied")
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if !errors.Is(err, errUnitAlreadyGone) {
-		t.Fatalf("expected errUnitAlreadyGone from properties UnknownObject, got %v", err)
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
+		t.Fatalf("properties UnknownObject must not manufacture proof: %v", err)
 	}
 }
 
@@ -1093,8 +1104,9 @@ func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndSuccessfulInactiveProps(t *t
 	bus.values["ExecMainStatus"] = int32(0)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if !errors.Is(err, errUnitAlreadyGone) {
-		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	var alreadyGone *alreadyGoneError
+	if !errors.As(err, &alreadyGone) || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
+		t.Fatalf("expected strict already-gone proof, got %v", err)
 	}
 }
 
@@ -1111,7 +1123,8 @@ func TestStopDoesNotTreatUnknownObjectFromStopUnitAsAlreadyGone(t *testing.T) {
 	bus.values["ControlGroup"] = ""
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("UnknownObject from StopUnit must not classify as alreadyGone")
 	}
 	if err == nil {
@@ -1128,7 +1141,8 @@ func TestStopDoesNotTreatFailedStateAsAlreadyGone(t *testing.T) {
 	bus.values["ExecMainStatus"] = int32(1)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("failed/exit-code terminal must not classify as alreadyGone")
 	}
 	if err != nil {
@@ -1145,7 +1159,8 @@ func TestStopDoesNotTreatOOMKillResultAsAlreadyGone(t *testing.T) {
 	bus.values["ExecMainStatus"] = int32(0)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("oom-kill Result must not classify as alreadyGone")
 	}
 	if err != nil {
@@ -1162,7 +1177,8 @@ func TestStopDoesNotTreatNonzeroExecMainStatusAsAlreadyGone(t *testing.T) {
 	bus.values["ExecMainStatus"] = int32(76)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("nonzero ExecMainStatus must not classify as alreadyGone")
 	}
 	if err != nil {
@@ -1179,7 +1195,8 @@ func TestStopDoesNotTreatArbitraryPropertiesErrorAsAlreadyGone(t *testing.T) {
 	// Kill also fails; UnitProperties fails so cgroup.kill cannot run either.
 	bus.killErr = errors.New("denied")
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("arbitrary UnitProperties error must not classify as alreadyGone")
 	}
 	if err == nil {
@@ -1194,7 +1211,8 @@ func TestStopFallsBackToKillWhenUnitStillActive(t *testing.T) {
 	bus.values["MainPID"] = uint32(42)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
-	if errors.Is(err, errUnitAlreadyGone) {
+	var alreadyGone *alreadyGoneError
+	if errors.As(err, &alreadyGone) {
 		t.Fatal("unit should fall back to kill, not return alreadyGone")
 	}
 	if err != nil {
@@ -1254,13 +1272,14 @@ func prepareAlreadyGoneCleanup(t *testing.T, terminal map[string]any) (*systemdU
 		t.Fatal(err)
 	}
 	u.MarkSnapshotVerified()
-	// Stop confirms already-gone via one-shot typed properties-gone; terminal
-	// status then uses the supplied non-success proof and must reject.
+	// Stop carries a strict proof; the later terminal lookup must still reject
+	// the supplied contradictory status.
 	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
-	bus.propGoneOnceAfterStop = true
-	for k, v := range terminal {
-		bus.values[k] = v
-	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(0)
+	bus.valuesAfterFirstStopProperties = terminal
 	bus.onStop = func() {
 		for path := range fs.files {
 			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
