@@ -1,5 +1,29 @@
 # @use-crux/mcp
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies [02d7a23]
+- Updated dependencies [d230918]
+- Updated dependencies [7c3a5ae]
+- Updated dependencies [7c3eaba]
+- Updated dependencies [cc78bd5]
+- Updated dependencies [a0ed87c]
+- Updated dependencies [9418f19]
+- Updated dependencies [91f7885]
+- Updated dependencies [c090b22]
+- Updated dependencies [ce9c409]
+- Updated dependencies [226aa70]
+- Updated dependencies [5d33890]
+- Updated dependencies [d172b05]
+- Updated dependencies [b9672b3]
+- Updated dependencies [9f9b459]
+- Updated dependencies [8d5c9d3]
+- Updated dependencies [87c7958]
+- Updated dependencies [e13389e]
+  - @use-crux/core@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes

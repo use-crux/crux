@@ -1,5 +1,144 @@
 # @use-crux/upstash
 
+## 0.8.0
+
+### Minor Changes
+
+- a0ed87c: Add the new `@use-crux/core/knowledge` entrypoint as the canonical home for `knowledgeBase`, add `knowledgeBase` pipeline config, and add an inert fingerprinted derive slot to `indexingPipeline`.
+
+  Bind knowledge-base recipes to namespace-scoped graph readers when record storage is configured, allowing recipe steps to traverse knowledge relations and hydrate active chunk refs.
+
+  Add the `expandRelations()` retrieval recipe step: additive, visibility-safe graph expansion of retrieved hits with deterministic ordering, bounded fan-out, and per-hit graph provenance.
+
+  Export `relate()` and `knowledgeModel()` from the canonical `@use-crux/core/knowledge` entrypoint.
+
+  Add built-in `relateReferences()` and `relateEntities({ model })` relation stages for explicit references and generic entity connections.
+
+  Validate `knowledgeBase({ metadataSchema })` metadata during ingestion so invalid direct sources are skipped with aggregate diagnostics after valid sources index, while corpus-backed sources report schema failures through per-source sync outcomes.
+
+  Add `knowledgeBase().view()` for schema-typed connected knowledge views with live and pinned revisions, view-scoped retrieval, recipes, grounding, and tools.
+
+  Add `assertions()` for schema-typed, evidence-backed connected knowledge assertions with deterministic and model-backed derive modes, assertion claim caching, and generation-scoped support merging.
+
+  Add `knowledgeBase().assertions()` and `view.assertions()` lazy assertion sets, persisted assertion relations, and assertion resolution partitions for explicit supersession and conflict handling.
+
+  Compose assertion sets and assertion resolutions directly in `use`, injecting bounded deterministic context summaries for selected assertions and selected resolution partitions.
+
+  Compose knowledge bases and views directly in `use` and request representation wrappers, using default prompt-input retrieval while preserving explicit `asContext()` customization for query, limit, rendering, and tool retention.
+
+  Add `communities({ model })` for Connected Knowledge community materialization, including knowledge-base and view lifecycle surfaces for `status()`, `prepare()`, and paginated `reports()`, with graph-backed clustering, report reuse, and atomic refresh publication.
+
+  Project visible assertions into communities with deterministic evidence, entity-affinity, relation, and per-source volume weighting; assign canonical primary and report-only secondary memberships; and include assertion-aware report context, validated finding references, deduplicated counts, view filtering, and reuse identity.
+
+  Harden assertion community projection against duplicate assertions and malformed relations, preserve assertion-only leaf identity, align admissible report evidence with rendered prompts, and bound internal relation context.
+
+  Let Eval-owned in-memory knowledge bases reach terminal success and failure after community refreshes, without retaining captured refresh work or public defer signals.
+
+  Add fail-closed multimodal evidence validation for model-backed Connected Knowledge derivation and community reports, with `knowledgeModel()` modality declarations and an optional parts-based structured generation hook for hydrated media evidence.
+
+  Add `globalSearch({ model })` as a Connected Knowledge recipe producer over community reports, returning cited finding hits with knowledge receipts, freshness coverage, deterministic batching, and request-filter rejection in favor of typed views.
+
+  Integrate connected-knowledge contexts with request representation planning: view/retriever and assertion contexts keep exact required defaults, summarizable view contexts key derived artifacts by source revisions, retriever-owned tools remain sticky until explicit omission, request inspection projects redacted knowledge trace receipts, and `globalSearch()` can consult one injected admission hook before map calls.
+
+  Export `runConnectedKnowledgeConformance()` from `@use-crux/core/knowledge` so storage adapters can run the connected knowledge storage contract against their own storage bundles.
+
+  Add first-party PostgreSQL Connected Knowledge storage with JSONB records,
+  explicit idempotent setup, SearchStore dense/sparse retrieval, normalized RRF,
+  shared pool ownership, and full storage conformance coverage.
+
+  Let configured storage bundles expose a provider-neutral setup capability so
+  `crux setup --check/--apply` verifies and safely provisions PostgreSQL storage,
+  redacts adapter findings, and releases only adapter-owned resources.
+
+  Rename the Core retrieval index contract to `SearchStore`, making
+  `storage.search` and `inMemorySearchStore()` canonical, removing the pre-launch
+  retrieval index API, and adding composable dense, sparse, and lexical retrieval
+  plans with normalized RRF match details. PostgreSQL adds native full-text search
+  and server-side RRF, Upstash exposes `upstashSearchStore()`, and Convex storage
+  requires an explicit search store instead of advertising an unsupported one.
+
+  Surface SearchStore leg match evidence on hydrated indexed-knowledge retrieval
+  hits through `hit.provenance.matches`, preserving stored chunk provenance while
+  retaining dense, sparse, and lexical rank/score details for audit.
+
+  Align Eval host storage capabilities and Local retrieval telemetry with the
+  SearchStore contract: hosted Eval tasks now declare `search-store`, and devtools
+  retrieval events use `search`/`custom` modes with RRF/search-leg metadata.
+
+  Emit native Effect receipts for public knowledge-base source mutations, including `index()`, `reindex()`, `remove()`, and corpus-backed sync, while keeping derived Connected Knowledge work outside the Effect boundary.
+
+  Add Project Index discovery for Connected Knowledge definitions, relation/assertion vocabularies, model bindings, communities, and knowledge-base views.
+
+  Add Project Index lint rules for unknown `expandRelations()` relation types, Connected Knowledge recipe producer conflicts, and unknown assertion type selections; Local LSP hovers and definition navigation now surface Connected Knowledge definition metadata from the Project Index read model.
+
+- 8d5c9d3: Add linearizable single-key record mutation through native or versioned
+  compare-and-set adapters, including memory, Upstash Redis, and Convex storage.
+
+  Replace the top-level `config.persistence` setting with the standard
+  `config.storage` bundle. The legacy key now fails with targeted migration
+  guidance; move `{ records }` directly to `storage`.
+
+  Add the provider-neutral `thread({ id })` primitive with immutable canonical
+  history, stable replay identities, causal-group pagination, and durable
+  alternatives for concurrent appends. Threads support immutable user-message
+  edits, remembered branch selection, and deterministic variant navigation
+  metadata. Adapter authors can run the shared Thread conformance suite from
+  `@use-crux/core/thread/testing/vitest`.
+
+  Integrate Threads with managed Prompt and Agent execution through `use`.
+  Execution reads one exact history snapshot, publishes the rendered user turn
+  and accepted assistant/tool exchange atomically, and exposes the receipt as
+  `threadCommit`. Call-site and Prompt-level messages shadow Thread I/O without
+  merging transcripts. Bare Threads remain complete exact history, while
+  `history.recent()` and `history()` project the Thread through whole-request
+  planning. Sealed plans pin the Thread revision, managed summary artifacts use
+  revision/range identity, streams await publication before final completion,
+  and publication failures reject with `ThreadCommitError`.
+
+  Add irreversible atomic message redaction, structural causal-group removal,
+  and owner-safe whole-Thread deletion. Redaction permanently poisons replay and
+  editing while erasing Thread-owned assets; deletion rejects while any durable
+  owner remains, publishes inaccessibility before cleanup, and erases nodes,
+  append receipts, pending receipt state, and assets.
+
+  Hydrate persisted media automatically on Thread reads, emit payload-safe
+  `thread.operation` evidence for every public operation, expose structural
+  tree/group/branch/head data to the Runtime Bridge, and discover authored
+  Threads plus Prompt/Agent bindings and binding diagnostics in Project Index.
+
+  Surface duplicate active Thread ids and conflicting Thread bindings as
+  descriptor-backed Project Index lint findings, including `crux lint` and LSP
+  diagnostics, without unresolved-target false positives for valid Thread uses.
+
+  Wire the devtools helpers' `bridge` option so `enableDevtools()` and
+  `withDevtools()` connect the Runtime Bridge peer directly, and make
+  `crux lint --port` read the running dev server instead of silently
+  falling back to a one-shot index.
+
+  Evict Project Index facts for source files deleted while the local server was stopped.
+
+### Patch Changes
+
+- Updated dependencies [02d7a23]
+- Updated dependencies [d230918]
+- Updated dependencies [7c3a5ae]
+- Updated dependencies [7c3eaba]
+- Updated dependencies [cc78bd5]
+- Updated dependencies [a0ed87c]
+- Updated dependencies [9418f19]
+- Updated dependencies [91f7885]
+- Updated dependencies [c090b22]
+- Updated dependencies [ce9c409]
+- Updated dependencies [226aa70]
+- Updated dependencies [5d33890]
+- Updated dependencies [d172b05]
+- Updated dependencies [b9672b3]
+- Updated dependencies [9f9b459]
+- Updated dependencies [8d5c9d3]
+- Updated dependencies [87c7958]
+- Updated dependencies [e13389e]
+  - @use-crux/core@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes

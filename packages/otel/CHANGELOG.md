@@ -1,5 +1,593 @@
 # @use-crux/otel
 
+## 0.8.0
+
+### Minor Changes
+
+- c090b22: Add the `@use-crux/core/effect` surface for typed effects, immutable receipts,
+  individual recovery, automatic and delayed rollback, honest ambiguity
+  reconciliation, receipt-safe evidence, and canonical observability records.
+
+  Persist Effect receipts, scopes, recovery units, attempts, and envelopes through
+  a Runtime store Effects port. Restart-safe reconstruction rebuilds the exact
+  reverse recovery plan and stable recovery idempotency keys. Crash windows
+  surface prepared work for reconciliation, project interrupted running work as
+  unknown, and reject stale fenced writers so only one concurrent terminal
+  transition commits. The external Runtime worker now discovers interrupted
+  rollback scopes, acquires expiring fenced claims, and executes the exact
+  store-reconstructed plan with stable recovery idempotency keys. A replacement
+  worker can reclaim work after process loss without allowing a superseded holder
+  to settle stale writes.
+
+  Declare immutable Effect recovery targets on `createRuntimeProgram({
+effectTargets })`. Generated Next, Convex, and Cloudflare hosts bind those
+  targets. Missing or version-mismatched cold targets settle as
+  `handler_unavailable`. A recoverable Effect without a program declaration stays
+  callable and recovers through its live definition in the same process.
+  Worker recovery resolves handlers only from this immutable program table and
+  does not silently retry crash-ambiguous recovery attempts.
+
+  Ship PostgreSQL and Convex durable Effects adapters behind a shared conformance
+  matrix. Convex supports per-operation atomicity, crash fencing, and
+  reconstruction, and declares multi-operation `transact()` callbacks unsupported.
+  Bounded `effectEnvelopes` retention expires recovery envelopes while keeping
+  receipt and audit metadata. Sealed request and tool-outcome linkage attach only
+  in journaled contexts.
+
+  Discover Effect definitions in the Project Index and surface their authored
+  identity and recovery configuration in Catalog, alongside receipt, outcome,
+  recovery-link, and ambiguity evidence in Devtools Runs. Report
+  `effect.recovery_not_runtime_addressable` when an unexported recoverable Effect
+  is statically visible at a required recovery boundary under Runtime-backed
+  configuration, and
+  `effect.irreversible_in_required_boundary` when an irreversible Effect is
+  certainly called inside a required-recovery `rollbackOnError()` boundary.
+
+  Make exported Effect definitions eligible for the language server's generic
+  completion candidate pipeline while retaining kind-generic hover titles and
+  duplicate-identity diagnostics.
+
+  Make flow runs and pipeline, agent, and composition roots passive rollback
+  boundaries. Their results expose Effect scope references, and flows can
+  explicitly recover completed units through `flow.rollback()`.
+
+  Work and Session turn Effect scopes keep the admission identity through
+  execution. `work.cancel()` and ownership detach fence execution without
+  rolling back completed external Effects; recovery stays an explicit
+  `rollback()` / `recover()` / worker policy choice. Detached ownership
+  (`explicit` or `owner-ended`) preserves receipts and recovery access without
+  reparenting the Effect scope, and ambiguous outcomes remain reconcilable.
+
+  Add an internal audit-first native Effect contract so first-party domains can
+  contribute receipts, evidence, and Effect facets on their existing spans while
+  reporting unavailable or irreversible recovery honestly.
+
+  Export Effect spans through the OpenTelemetry adapter with the canonical
+  `crux.effect.run` span name.
+
+- 226aa70: Add qualified execution evidence authoring and active-scope inspection, with
+  five fixed roles, explicit supersession and conflicts, capture-safe canonical
+  graph projection, local idempotent retries, and a provider-neutral readable
+  destination query contract. Extend observability schema V5 with protected
+  evidence producer provenance, versioned durable content identity, strict
+  coverage facts, bounded delivery-conflict correlation, readable payload
+  unavailability reasons, terminal-acceptance provenance, and evidence-aware
+  transport composition.
+
+  Add a required destination-derived status for every evidence role so complete
+  authorized durable summaries remain truthful across unselected roles,
+  pagination, payload hydration, and history selection.
+  Add the exact complete active relationship count to the same role summary, and
+  add bounded positional Local subject-summary and retained-provenance navigation
+  reads used by Devtools and agent-facing Local clients.
+
+  Add durable Local evidence inspection, payload and relationship retention,
+  coverage projection, restart-safe idempotency, and explicit privacy deletion.
+  Late evidence that references explicitly deleted private state is permanently
+  rejected without restoring relationships, payloads, staging candidates, or
+  coverage.
+  Startup now backfills reconstructable approval-artifact privacy selectors and
+  converts legacy identity-only retained state into private resurrection guards,
+  so delayed approval retries fail closed without restoring retained-out data.
+
+  Discover canonical authored `evidence.record()` calls in the Project Index
+  without retaining private authored values, diagnose invalid literal evidence
+  kinds, and publish an exhaustive generated primitive evidence-coverage audit.
+
+  Add first-party native evidence bindings that reuse privacy-processed
+  observability artifacts through a package-private capability. Delivery retries
+  of one artifact relationship retain one evidence identity; separate native
+  artifact occurrences remain separate claims unless their domain defines an
+  explicit stable occurrence identity. Native Workspace, Memory, Plan, and Task
+  mutations now author exact change evidence, while capture-safe tool arguments
+  author intent for their exact tool call. Tool approval requests and valid final
+  decisions author authority evidence with explicit supersession and exact
+  attempt/resume provenance. Native producers do not infer verification or
+  recovery.
+
+  Custom Effects now contribute receipt-safe intent and change evidence
+  automatically. Recovery attempts contribute their own receipt evidence and
+  link recovery outcomes to the original receipt without exposing execution or
+  recovery state.
+
+  Project qualified evidence to dedicated closed OpenTelemetry events. Evidence
+  relationships, coverage, and coverage conflicts export only approved bounded
+  correlation fields; payloads, graph endpoints, producer identity, digests,
+  supersession, markers, and raw custom evidence kinds never enter generic OTel
+  edge, artifact, or event projections.
+
+  Add an execution-evidence Devtools view and Catalog authoring presentation over
+  the same canonical Local read model, including complete five-role status,
+  conflicts, history, late provenance, payload availability, related-subject
+  counts, and retained producer/source navigation. Document automatic versus
+  custom authoring, Local retention and privacy behavior, exact OTel allowlists,
+  and every user-visible evidence error or delivery disposition.
+
+- d172b05: Add typed process-local Signals with Standard Schema normalization, predicate
+  and recursive match identities, idempotent publication, isolated callbacks,
+  and explicit process-local acceptance receipts. Declared Flow Signal sources
+  now support typed `flow.waitFor(signal)` suspension, capability-gated durable
+  acceptance, atomic occurrence/delivery commits, restart recovery, stable
+  at-least-once delivery identity, and payload-safe idempotent replay after
+  consumer completion. Runtime adapters remain source-compatible through an
+  optional Signal-record port; durable bindings reject capability preflight when
+  that port or a durable storage declaration is absent. Flow delivery retries now
+  rotate replay/observability snapshots atomically with the retry work and outbox.
+
+  Harden durable delivery against concurrent manual resumes and predicate
+  evaluation races. Manual resume now arbitrates atomically with armed waiters
+  and timers, busy in-process wakes remain retryable, predicate waits retain one
+  durable binding with a FIFO occurrence queue, and retry snapshots preserve
+  newly observed replay fingerprints and concurrently accepted candidates.
+  Persist Signal payloads through a lossless codec that preserves negative zero
+  and returns detached, deeply frozen occurrences. Eval execution rejects
+  durable reactive dispatch before allocation while retaining process-local
+  publication. Reactive adapter conformance now requires deterministic
+  transaction-abort injection and verifies rollback across every write boundary,
+  including multiple required deliveries.
+
+  Signal-driven Flow resumes retain the same in-process Effects scope reference
+  across suspension snapshots without claiming cross-process Effects recovery.
+
+  Document the shipped surface with a progressive Signals guide, copy-pasteable
+  current-API recipes, exact Signal and Flow-wait reference pages, public JSDoc,
+  and provider-neutral architecture guidance. The documentation distinguishes
+  process-local acceptance, certified durable delivery, consumer completion,
+  and a persisted Effect scope reference from restart-safe recovery.
+
+  Require cryptographically secure occurrence identities for durable
+  publication while retaining a process-local fallback, isolate mutable
+  acceptance timestamps across receipts, records, and listeners, and trim the
+  Runtime Signal adapter contract to the occurrence and Flow-delivery surface
+  actually shipped. Add an exact adapter reference for records, payload codecs,
+  named composites, durability declarations, and required reactive conformance.
+
+  Complete the pre-launch alpha Runtime Engine queue-record migration. Use
+  `RuntimeWorkItem` for queue records and `RuntimeWorkState` for their lifecycle;
+  `WorkItem` and `WorkStatus` are removed. Adapter declaration merging targets
+  `RuntimeWorkItem` directly through `@use-crux/core/runtime`.
+
+  Add inert Runtime managed-transport declarations and pure validation for
+  provider-neutral bindings and accepted envelopes.
+
+  Add immutable `RuntimeProgram` construction with canonical manifest hashes,
+  shared Runtime target normalization, and managed-binding resolution and
+  compatibility diagnostics for generated and hand-written hosts. Agent
+  definitions are first-class immutable program targets resolved by the same
+  worker target path as Flows and tasks.
+
+  Generate a freshness-bound Runtime program and add `crux runtime worker` for
+  one configured Node/PostgreSQL execution worker with durable ownership and
+  bounded signal shutdown.
+
+  Write the generated Next.js Runtime entry to `crux/generated/next.ts` so
+  framework-facing generated source uses a conventional directory hierarchy.
+
+  Ensure an interrupted Runtime worker exits cleanly even while its configured
+  host is still loading.
+
+  Give Runtime worker ownership conflicts and shutdown timeouts distinct public
+  error codes. PostgreSQL workers now reject undersized pools, terminate when
+  their advisory-lock connection is lost, and verify that lock release succeeds.
+
+  Add the canonical public, Flow-targeted Work contract with exact input/result
+  inference, string Work IDs, result-generic handles, safe readonly lifecycle
+  snapshots, typed terminal errors, and canonical control and observability
+  types. The typed `spawn()` and `getWork()` factories accept only exported Flow
+  targets. `createWorkHost({ runtime, program })` binds generated immutable target
+  metadata to application requests and atomically accepts memory-backed Work,
+  its initial Flow snapshot, pinned normalized input and definition, result
+  obligation, and wake outbox row. Compatible idempotent retries reconnect the
+  same Work, conflicting input rejects, target namespaces remain independent,
+  and `getWork()` validates the exported target. Process-local Agent Work uses
+  the shared safe lifecycle and control types privately without promoting its
+  retained-owner registry to storage.
+
+  Execute accepted application Flow Work through the generated Runtime worker
+  and publish its canonical write-once result reference with the existing fenced
+  terminal commit. `WorkHandle.result()` now joins the exact inferred output from
+  both original and reconnected handles, duplicate wakes retain one terminal
+  result, Runtime Flow suspension preserves the pinned definition/result
+  obligation through resume, and terminal Work failures persist only safe public
+  summaries. Durable Work now supports bounded latest progress, cooperative
+  idempotent cancellation, ownership-only detachment, safe cursor-resumable event
+  streams, and restart-safe owner-scoped statistics through the existing Runtime
+  state machine, cancellation composite, durable event port, and statistics
+  ledger.
+
+  PostgreSQL Runtime storage now persists the pinned Work result obligation and
+  content-addressed terminal result, safe control metadata, and statistics ledger
+  export. Independent application hosts can reconnect
+  after worker restart and read the exact typed Flow result. Referenced payloads
+  survive retention pruning; missing payloads raise `WorkResultExpiredError`
+  without re-enqueuing or re-executing Work.
+
+  Convex Runtime storage now persists the pinned Work definition and result
+  obligation with content-addressed terminal results and safe Work control
+  metadata. Independent application
+  hosts reconnect after worker restart, duplicate wakes preserve the first result,
+  and expired payloads raise `WorkResultExpiredError` without re-executing Work.
+
+  Persist a canonical accepted-input digest across Memory, PostgreSQL, and Convex
+  snapshots. Runtime inspection and Devtools now show safe Work identity,
+  definition and Effect scope, ownership, result lineage, statistics, progress,
+  and bounded lifecycle events without exposing input or result payloads.
+
+  Add the provider-neutral `GenerationModel` contract and adapter-authoring
+  construction seam. Agents now retain their exact model type, while Sessions
+  require a bound model only when the Agent does not already carry one and reject
+  statically proven capability gaps without excluding broad preflight evidence.
+
+  Add `@use-crux/ai`'s `aiSdk(native)` binding: one argument produces a frozen
+  adapter-bound `GenerationModel` with secret-free definition identity, complete
+  capability evidence, and an opaque runtime port that constructs an
+  `AgentExecutor` through the existing AI provider runtime without global config.
+  Same-adapter routers may be bound once. `stableModel()` is removed with no
+  alias or deprecation layer; Eval identity now projects bound GenerationModel
+  values.
+
+  Sessions now preserve every accepted Agent input and handle independently while
+  claiming the longest cursor-consecutive compatible prefix into one canonical
+  activation Work. `sendMany()` retains atomic cursor order, coalesced handles
+  resolve their shared Work through `work()`, and all joined inputs reconnect to
+  the same exact terminal result or failure. A bound Session override must be
+  declared by the RuntimeProgram or fails before mutation with
+  `GENERATION_MODEL_NOT_STATIC`; missing bindings and capability preflight retain
+  their existing distinct errors.
+
+  Session turns now retain restart-safe execution checkpoints, allowing safe
+  recovery across owner Thread publication without rerunning generation. Session
+  diagnostics expose structured, payload-safe failures alongside compact status
+  and bounded lifetime turn statistics. Compatible input accepted during a model
+  step is independently resolved and enters the next real provider boundary
+  before `prepareStep`; terminal-step ingress begins a new activation through an
+  atomic lost-wake fence. Inspection reports bounded per-input claim, delivery,
+  shared Work, checkpoint, and exact Thread basis evidence without payloads.
+  Session input admission dispatches through the provider-neutral
+  `session.inputs.accept` composite so adapters can validate keyed identity,
+  append ordered ingress, reserve one canonical Work, and persist its wake in one
+  transaction.
+
+  Expose the provider-neutral Session step-boundary hook through adapter authoring.
+
+  Export a provider-neutral Session conformance factory from
+  `@use-crux/core/runtime/testing` so storage adapters can prove the same keyed
+  identity, ordered Work linkage, checkpoint replay, exact terminal result,
+  bounded inspection, and structured capability laws.
+
+  Expose the internal Session-store statistics ledger helpers for durable Runtime
+  adapters.
+
+  Expose payload-safe Session identity, state, bounded turn-to-Work lineage,
+  Thread revision, checkpoint/recovery evidence, and lifetime statistics through
+  the existing Runtime Bridge and `session.turn` observability records. The
+  embedded Devtools Catalog shows authored Session target/key evidence, while Run
+  details render the same operational projection without execution payloads.
+
+  PostgreSQL Runtime storage now persists normalized Session identity, ordered
+  ingress, activation linkage, delivery evidence, prepared execution checkpoints,
+  and bounded lifetime statistics through the same atomic Runtime composites as
+  memory. Independent hosts and workers can reconnect through one database
+  namespace, replay owner-Thread publication without duplicate receipts, and
+  retain prepared Session evidence during unreferenced-result pruning.
+
+  Convex Runtime storage now persists the same normalized Session contract in its
+  atomic component transactions. Reconstructed hosts and workers retain exact
+  results, replay checkpointed owner-Thread publication without duplicate
+  receipts, and preserve Session evidence during result pruning.
+
+  Project Index now records authored Session identity, literal key, source, and
+  resolved Agent target evidence with matching static and semantic backend
+  output.
+
+  Project Index and Local editor diagnostics now reject unproven Session
+  identity and Agent targets, ambiguous construction, non-owner Thread mutation,
+  and accidental concrete-Agent Thread tenancy with structured evidence.
+
+  Generated Runtime Programs now import exported Agent definitions and pin their
+  Project Index fingerprints through the existing Runtime target authority.
+
+  Add provider-neutral Signal provider webhook authoring through
+  `webhook({ handle })` and `signalProvider({ id, transport, signals, onEvent })`
+  on `@use-crux/core/signal/transport` and `@use-crux/core/signal/provider`. Live
+  definitions stay frozen process code; inert
+  `RuntimeManagedTransportBinding` projections never capture credentials, live
+  clients, Requests, or callbacks. Durable transport envelope acceptance is
+  idempotent by Runtime namespace plus provider/account/event identity, conflicts
+  on digest mismatch, and is safe to acknowledge only after commit. Restart-safe
+  normalization claims accepted envelopes, scopes provider `signals.publish` to
+  the accepted provider/account/event identity when an explicit idempotency key is
+  omitted so crash recovery after publication cannot create a second logical
+  delivery, runs provider `onEvent` through the existing Signal publication path,
+  completes idempotently, dead-letters after bounded retry, and returns
+  dead-lettered envelopes to accepted state on explicit replay. Memory and
+  PostgreSQL Runtime stores implement the transport port with shared conformance.
+  RuntimeProgram validation treats Signal transport targets as Signal ids rather
+  than Agent/Flow/task targets. Normalization is restart-safe through the shared transport kernel. The existing
+  Runtime worker now claims a bounded batch of accepted envelopes on each
+  maintenance tick and invokes provider `onEvent` through that kernel using
+  explicitly imported executable providers on `RuntimeProgram` (`providers`),
+  resolved by one deterministic stable provider/adapter/binding identity rule
+  shared with program validation. When those identity keys resolve to different
+  executable providers, construction and worker start reject the ambiguity rather
+  than silently choosing an order. Inert
+  `RuntimeManagedTransportBinding` declarations and the program manifest hash
+  remain secret-free: no Request, credential, client, socket, callback, or live
+  provider object is stored in bindings. Missing or mismatched provider
+  identities, and programs that declare managed transports against a store without
+  the optional transports capability, fail before worker start with Runtime
+  diagnostics. Provider-event-scoped publication
+  idempotency is preserved so crash recovery after publish cannot create a second
+  logical delivery. Hosts may still call the normalization runner directly; no
+  second worker, queue, daemon, scheduler, effect scope, or transport lifecycle is
+  introduced. Provider Signal maps use a structural member bound plus a
+  self-constraint so concrete `Signal<literal, schema>` values keep exact per-key
+  payload inference across TypeScript 5.5+, 6.0, and TypeScript-Go preview without
+  accepting non-Signal map values.
+
+  Project Index now discovers authored `signal()`, `webhook()`,
+  `signalProvider()`, and `managedTransportBinding()` declarations with
+  config-ref and Signal-target lineage, and generates one Runtime program that
+  statically imports executable providers plus inert bindings into
+  `createRuntimeProgram({ targets, generationModels, providers, transports })`.
+  Local worker loading rejects non-empty transports without matching generated
+  provider authority before worker start. Built-in diagnostics reject unstable
+  provider or binding identities and explicit live Request/client/credential/
+  socket/callback fields on inert bindings. Devtools Catalog surfaces provider
+  and transport-binding evidence without credentials or raw payloads.
+
+  Complete the Signal tooling contract with canonical provider, transport, and
+  Signal lineage across both static frontends, partial Signal identity evidence,
+  executable lint parity fixtures, and selectable Devtools lineage. Runtime
+  artifact manifests now use schema version 3 so older generated manifests fail
+  with an explicit incompatibility diagnostic, while generated imports and worker
+  transport authority remain exact under path escaping and source drift.
+
+  Close out Signal provider operations with restart-safe bounded transport
+  statistics on the shared statistics ledger (`transport` owner; exact totals and
+  first-64 structured adapter/binding attribution), bounded Signal occurrence
+  lineage on normalized envelopes with a payload-free truncation indicator,
+  privacy-safe `projectTransportEnvelope()` and `transportStatistics()` APIs, and
+  terminal envelope retention through existing Runtime maintenance
+  (`transportEnvelopes`, default `7d`). Memory and PostgreSQL persist statistics
+  and lineage with the transport port; PostgreSQL serializes namespace statistics
+  updates and reports prune `truncated` only when eligible rows remain. Document
+  the webhook path with a progressive provider guide, operator recipes, exact
+  providers/transports reference, and ARCHITECTURE internals.
+
+  Add the first managed-transport supervision vertical for polling: `polling()`
+  authoring beside `webhook()`, `signalProvider` transport union, durable binding
+  cursor checkpoints on the transport store (Memory + PostgreSQL), and single
+  Runtime worker acquisition that leases each polling binding, polls once per
+  tick, accepts events through the existing envelope kernel, and checkpoints
+  `nextCursor` only after the full batch is durably accepted. Checkpoint writes
+  are lease-fenced: `putBindingCheckpoint` requires the active binding lease
+  owner/token and returns `accepted` or `rejected`; Memory and PostgreSQL
+  atomically reject stale, incorrect, or expired fences (including when no
+  checkpoint row exists), and supervision drops the held lease when a write is
+  rejected. Optional `PollResult.more` skips `intervalMs` once after acceptance;
+  poll failures keep the previous cursor and a safe `lastErrorCode`. Managed
+  polling treats `TransportEnvelopeConflictError` as progressable only when the
+  shared envelope store still holds durable identity evidence for that event
+  (accepted/claimed/normalized/dead-letter), so a conflicting redelivery cannot
+  poison the provider cursor; other accept failures retain fail-without-checkpoint
+  semantics and no parallel dead-letter store is introduced. Competing
+  supervisors coordinate through Runtime leases; worker stop aborts in-flight
+  polls and releases binding leases. Project Index discovers `polling()` with static/native
+  parity and rejects live `poll` fields on inert bindings. Generic stream, managed SSE, and managed
+  WebSocket authoring ship below on the same lifecycle seam. Channel exclusive
+  conversation ownership remains #302.
+
+  Add managed stream transport supervision beside polling: author `stream({ open })`
+  on `@use-crux/core/signal/transport`, accept it from `signalProvider`, and let the
+  single Runtime worker own connection fibers, bounded reconnect, accept-before-
+  checkpoint cursor law, config-ref invalidation, and durable faulted/disabled
+  status on binding checkpoints. Memory and PostgreSQL implement lease-fenced
+  checkpoint fields (`configRef`, `status`) with multi-worker exclusivity.
+  Project Index discovers `stream()` with static/native parity and rejects live
+  `open` on inert bindings. Managed SSE (`sse({ open })`) and WebSocket
+  (`websocket({ open })`) ship as thin adapters over this seam below. Stream
+  envelope validation detaches immutable
+  payload and routing snapshots; digest conflicts never advance stream cursors;
+  checkpoint timestamps use a fresh clock at each write; and supervision faults
+  after consecutive top-level rejected stream fibers with
+  `TRANSPORT_STREAM_EXHAUSTED` without unhandled rejections.
+
+  Add first-party managed SSE transport authoring as a thin adapter over the
+  existing stream supervision seam: `sse({ open })` freezes a distinct
+  `kind: "sse"` definition with `lastEventId` item vocabulary, pure
+  `classifySseHttpStatus` / `sseHttpStatusErrorCode` helpers for connect failures,
+  and Runtime lowering onto the managed stream fiber (same lease, checkpoint,
+  reconnect, fault, abort, and accept-before-cursor laws). Project Index and
+  Devtools Catalog project `transportKind: "sse"`; live `open` on inert bindings
+  stays rejected. This is provider-ingress SSE only — distinct from
+  `@use-crux/react` browser `createSSETransport` / `cruxSSEHandler`.
+
+  Add first-party managed WebSocket transport authoring as a thin adapter over the
+  same stream supervision seam: `websocket({ open })` freezes a distinct
+  `kind: "websocket"` definition, pure close-code helpers, and
+  `createBoundedPushBuffer` so push sockets never silently drop (overflow closes
+  and reconnects from the durable cursor). Optional process-local
+  `acknowledge` on envelope items runs only after durable #337 accept and cursor
+  checkpoint; ack failure is observable (`TRANSPORT_ACK_FAILED` / safe provider
+  code) and transient, and never rolls back acceptance or clears the cursor.
+  Project Index and Devtools Catalog project `transportKind: "websocket"`; live
+  `open` on inert bindings stays rejected.
+
+  Document durable Agent Sessions with a progressive guide, copy-pasteable
+  recipes, exact Session and GenerationModel API reference pages, Session
+  structured error pages, AI adapter `aiSdk(native)` binding docs, Runtime program
+  `generationModels` reference, and Core architecture internals. Docs distinguish
+  durable Agent Sessions from overloaded "session" vocabulary elsewhere and
+  require PostgreSQL Runtime storage plus the Session-owned Thread RecordStore on
+  the same database.
+
+  Extend durable Sessions to first-party Flow targets with exact
+  Agent-versus-Flow conditional typing for `session()` / `getSession()`, pinned
+  Flow definition metadata, and optional GenerationModel only for Agent Sessions.
+  Flow Session activation reuses the canonical `flow.resume` Work spine, owner
+  Thread registration, and Work result handles. Durable Signal subscriptions are
+  idempotent Session-owned transitions reconstructed from storage and participate
+  in Signal publication fan-out with restart-safe per-subscription delivery
+  identities. Session-owned Flow waiters receive durable Signal delivery only when
+  a matching active Session subscription also matches the payload; non-Session
+  Flow waiters remain an independent consumer. Memory, PostgreSQL, and Convex use
+  one canonical subscription match-key codec for upsert idempotency and delivery
+  matching, including key-order-invariant match data.
+
+  Add production Session lifecycle controls on the same Thread owner registry and
+  Runtime Work spine: joinable `close()` that deactivates Signal subscriptions at
+  the barrier and drains currently represented pending-input/work/activation
+  obligations (not a full nested causal Work tree), fenced `kill()` that revokes
+  claim/checkpoint/start and closed-owner Thread commit authority, retention-safe
+  `delete()` that unregisters owners only after closed/killed tombstones, and
+  `fork()`/`clone()` that register the child owner/head pin before the Session
+  fork record. Keyed recreation after delete is rejected. Memory, PostgreSQL, and
+  Convex implement the lifecycle ports and shared conformance laws.
+
+  Complete dynamic Signal ingress for Agent Sessions on the existing Session
+  input lane, preparation journal, and one Runtime worker: durable Agent
+  `subscribe()`/`subscriptions()`, independent fan-out with
+  Session-subscription delivery identity deduplication, parked-turn activation
+  and mid-turn deferral until the next declared safe boundary, cursor-resumable
+  bounded `session.stream()` state/event records with stable expired-cursor
+  snapshots, and restart-safe owner `session.stats()` aggregates that extend the
+  shared statistics ledger with exact accepted/deduplicated/delivered/resumed/
+  dropped totals plus first-64 identity coverage linked to canonical Work stats.
+  Missing Agent targets on temporary publish dispatchers requeue
+  `session.signal-ingress` Work with outbox backoff (no terminal idempotency);
+  the program worker settles once. Boundary settlement lists pending ingress via
+  targeted `listWork({ kind, sessionId })` so unrelated Work cannot starve a
+  Session (Memory, PostgreSQL, and Convex). Concurrent worker and step-boundary
+  settlement is atomic via delivery compare-and-set (`pending → leased →
+terminal`) and idempotent `acceptInputs` for stable `inputIds` (no double
+  cursor/pending/stats; PostgreSQL uses `ON CONFLICT DO NOTHING`). Boundary
+  scans prefer pending Session deliveries and retire residual ingress Work after
+  terminal deliveries so the settle budget is not spent on already-settled rows.
+
+  Complete Session tooling, observability, and documentation on the same runtime
+  facts: Project Index static and semantic evidence for Agent/Flow Session
+  targets, Signal subscription lineage, and observed public method usage with
+  exact JS/native parity and cache-epoch migration; LSP/lint copy that accepts
+  resolved Agent or Flow targets; Devtools Catalog and `session.turn` detail for
+  targets, subscriptions, fork lineage, and bounded ingress statistics via the
+  existing Runtime Bridge read model; progressive user guides, recipes, exact API
+  reference, and Core architecture internals that distinguish shipped Session
+  behavior from future managed transport and Channel work.
+
+  Close managed-transport observability on the same durable Runtime facts:
+  `transportBindingHealth()` projects a bounded (max 64), secret-free per-binding
+  health snapshot from program identity, binding checkpoints, and the existing
+  transport statistics ledger without a second worker, registry, or metrics store.
+  Coverage markers report last-owner lease diagnostics, cursor presence/age,
+  fault/reconnect exhaustion when durable, and explicitly unavailable live
+  reconnect backoff, provider lag, and shutdown outcome. Accept/normalize emit
+  payload-free envelope lineage through the existing observability transport for
+  Devtools Run detail; Runtime status provides transport-health data when a
+  generated program is present, and Devtools renders that data in a Transports
+  tab. Progressive guides, recipes, API reference, and architecture docs cover
+  statistics and health semantics for operators, including troubleshooting
+  coverage markers, shutdown/recovery, and Convex's honest rejection of
+  managed-transport accept/checkpoint capabilities.
+
+  Add process-local Agent Work handles with Agent-only `send()` on the shared
+  Work lifecycle. `createAgentWorkHost({ executor })` and `spawn(agent, input)`
+  return `AgentWorkHandle` without claiming cross-request durability. Agent-tool
+  occurrence identity reconnects provider/adapter retries instead of double-
+  starting children, and conflicting reuse rejects. Steering accepts canonical
+  string or multimodal content, is ordered and payload-safe in identity records,
+  and delivers only at the next semantic provider-step boundary without changing
+  tools or guardrails. The automatic model-facing `work` tool gains `send` for
+  Agent children only while retaining a stable schema.
+
+- 8d5c9d3: Add linearizable single-key record mutation through native or versioned
+  compare-and-set adapters, including memory, Upstash Redis, and Convex storage.
+
+  Replace the top-level `config.persistence` setting with the standard
+  `config.storage` bundle. The legacy key now fails with targeted migration
+  guidance; move `{ records }` directly to `storage`.
+
+  Add the provider-neutral `thread({ id })` primitive with immutable canonical
+  history, stable replay identities, causal-group pagination, and durable
+  alternatives for concurrent appends. Threads support immutable user-message
+  edits, remembered branch selection, and deterministic variant navigation
+  metadata. Adapter authors can run the shared Thread conformance suite from
+  `@use-crux/core/thread/testing/vitest`.
+
+  Integrate Threads with managed Prompt and Agent execution through `use`.
+  Execution reads one exact history snapshot, publishes the rendered user turn
+  and accepted assistant/tool exchange atomically, and exposes the receipt as
+  `threadCommit`. Call-site and Prompt-level messages shadow Thread I/O without
+  merging transcripts. Bare Threads remain complete exact history, while
+  `history.recent()` and `history()` project the Thread through whole-request
+  planning. Sealed plans pin the Thread revision, managed summary artifacts use
+  revision/range identity, streams await publication before final completion,
+  and publication failures reject with `ThreadCommitError`.
+
+  Add irreversible atomic message redaction, structural causal-group removal,
+  and owner-safe whole-Thread deletion. Redaction permanently poisons replay and
+  editing while erasing Thread-owned assets; deletion rejects while any durable
+  owner remains, publishes inaccessibility before cleanup, and erases nodes,
+  append receipts, pending receipt state, and assets.
+
+  Hydrate persisted media automatically on Thread reads, emit payload-safe
+  `thread.operation` evidence for every public operation, expose structural
+  tree/group/branch/head data to the Runtime Bridge, and discover authored
+  Threads plus Prompt/Agent bindings and binding diagnostics in Project Index.
+
+  Surface duplicate active Thread ids and conflicting Thread bindings as
+  descriptor-backed Project Index lint findings, including `crux lint` and LSP
+  diagnostics, without unresolved-target false positives for valid Thread uses.
+
+  Wire the devtools helpers' `bridge` option so `enableDevtools()` and
+  `withDevtools()` connect the Runtime Bridge peer directly, and make
+  `crux lint --port` read the running dev server instead of silently
+  falling back to a one-shot index.
+
+  Evict Project Index facts for source files deleted while the local server was stopped.
+
+### Patch Changes
+
+- Updated dependencies [02d7a23]
+- Updated dependencies [d230918]
+- Updated dependencies [7c3a5ae]
+- Updated dependencies [7c3eaba]
+- Updated dependencies [cc78bd5]
+- Updated dependencies [a0ed87c]
+- Updated dependencies [9418f19]
+- Updated dependencies [91f7885]
+- Updated dependencies [c090b22]
+- Updated dependencies [ce9c409]
+- Updated dependencies [226aa70]
+- Updated dependencies [5d33890]
+- Updated dependencies [d172b05]
+- Updated dependencies [b9672b3]
+- Updated dependencies [9f9b459]
+- Updated dependencies [8d5c9d3]
+- Updated dependencies [87c7958]
+- Updated dependencies [e13389e]
+  - @use-crux/core@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes
