@@ -72,9 +72,9 @@ and terminal-proof diagnostics without exposing systemd or cgroup details.
 Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
 
-Promote `unit-properties-gone` to already-gone only from a verified successful
-snapshot for that exact pinned cgroup; reject missing, mismatched, live,
-failed, or nonzero-status proofs with fixed allowlisted diagnostics.
+Promote `unit-properties-gone` to a pending already-gone validation only from
+a verified snapshot for that exact pinned cgroup. Use fresh strict post-stop
+terminal status, rather than the pre-ACK snapshot, to establish success.
 
 Classify terminal accounting source failures with fixed allowlisted diagnostics
 while preserving exact-cgroup ENOENT precedence for the verified snapshot

@@ -96,25 +96,26 @@ func successfulInactiveFromProps(p map[string]any) bool {
 	)
 }
 
-// unitPropertiesGonePromotion promotes only a retained verified report whose
-// cgroup exactly matches the pinned report and whose terminal fields strictly
-// prove successful termination. Its failure reasons are fixed because cleanup
-// diagnostics may be exposed outside the local host. SandboxReport does not
-// represent ActiveState, so its proof deliberately carries no state.
-func unitPropertiesGonePromotion(pinnedCgroup string, report SandboxReport, verified bool) (*alreadyGoneError, string) {
+// unitPropertiesGonePending carries the sole fact a pre-ACK verified snapshot
+// can establish after UnitProperties is gone: the original pinned cgroup.
+// Cleanup must query fresh terminal status before accepting this path.
+type unitPropertiesGonePending struct {
+	cgroup string
+}
+
+// unitPropertiesGonePromotion accepts only a retained verified report whose
+// cgroup exactly matches the pinned report. A verified snapshot may still be
+// active, so it must never be converted into terminal proof. Its failure
+// reasons are fixed because cleanup diagnostics may be exposed outside the
+// local host.
+func unitPropertiesGonePromotion(pinnedCgroup string, report SandboxReport, verified bool) (*unitPropertiesGonePending, string) {
 	if !verified {
 		return nil, "unit-properties-gone-no-verified-snapshot"
 	}
 	if !validCgroup(pinnedCgroup) || !validCgroup(report.ControlGroup) || report.ControlGroup != pinnedCgroup {
 		return nil, "unit-properties-gone-snapshot-cgroup"
 	}
-	if report.MainPID != 0 || report.ServiceResult != "success" || report.ExecMainStatus != 0 {
-		return nil, "unit-properties-gone-snapshot-not-success"
-	}
-	return &alreadyGoneError{
-		proof:  TerminalStatus{MainPID: report.MainPID, ServiceResult: report.ServiceResult, ExecMainStatus: report.ExecMainStatus},
-		cgroup: report.ControlGroup,
-	}, ""
+	return &unitPropertiesGonePending{cgroup: report.ControlGroup}, ""
 }
 
 func containmentReason(err error) string {
