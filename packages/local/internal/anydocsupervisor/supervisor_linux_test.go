@@ -819,17 +819,43 @@ func TestExecuteYieldsCleanupDiagnosisWhenServiceSucceeds(t *testing.T) {
 	_, err = r.Execute(context.Background())
 	var sup *SupervisorError
 	if !errors.As(err, &sup) || sup.Code != ErrContainmentUnavailable {
-		t.Fatalf("outer error = %T %v, want containmnent-unavailable", err, err)
+		t.Fatalf("outer error = %T %v, want containment-unavailable", err, err)
 	}
-	var v *ResultValidationError
-	if !errors.As(err, &v) {
-		t.Fatalf("ResultValidationError missing after successful service + cleanup failure: %T %v", err, err)
+	var validation *ResultValidationError
+	if errors.As(err, &validation) {
+		t.Fatalf("pure cleanup must not carry ResultValidationError: %#v", validation)
 	}
-	if v.Stage != "containment-cleanup" {
-		t.Fatalf("stage = %q, want containmnent-cleanup", v.Stage)
+	var containment *ContainmentError
+	if !errors.As(err, &containment) {
+		t.Fatalf("ContainmentError missing after successful service + cleanup failure: %T %v", err, err)
 	}
-	if v.ReasonCode != "unit-cleanup" {
-		t.Fatalf("reason = %q, want unit-cleanup", v.ReasonCode)
+	if containment.Stage != "containment-cleanup" || containment.ReasonCode != "unit-cleanup" {
+		t.Fatalf("ContainmentError = {stage:%q reason:%q}", containment.Stage, containment.ReasonCode)
+	}
+	got := safeExecutionFailure(err, r.TerminalReport())
+	const want = "error=containment-unavailable outcome=containment-unavailable service=unknown stage=containment-cleanup reason=unit-cleanup oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+}
+
+func TestChainContainmentNilCarriesContainmentNotResultValidation(t *testing.T) {
+	err := chainContainment(nil, "containment-cleanup", "accounting-evidence")
+	if errorCode(err) != ErrContainmentUnavailable {
+		t.Fatalf("code = %q", errorCode(err))
+	}
+	var validation *ResultValidationError
+	if errors.As(err, &validation) {
+		t.Fatalf("nil-result cleanup used ResultValidationError carrier: %#v", validation)
+	}
+	var containment *ContainmentError
+	if !errors.As(err, &containment) || containment.Stage != "containment-cleanup" || containment.ReasonCode != "accounting-evidence" {
+		t.Fatalf("ContainmentError = %#v", containment)
+	}
+	got := safeExecutionFailure(err, TerminalReport{Outcome: ErrContainmentUnavailable, PreStop: SandboxReport{ServiceResult: "success"}})
+	const want = "error=containment-unavailable outcome=containment-unavailable service=success stage=containment-cleanup reason=accounting-evidence oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
 	}
 }
 

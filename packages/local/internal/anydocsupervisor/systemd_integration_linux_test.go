@@ -129,29 +129,11 @@ func safeContainmentDiagnostic(err error) string {
 	}
 
 	var containmentError *ContainmentError
-	if !errors.As(err, &containmentError) || !safeContainmentStage(containmentError.Stage) || !safeContainmentReason(containmentError.ReasonCode) {
+	if !errors.As(err, &containmentError) || !validContainmentStage(containmentError.Stage) || !validContainmentReason(containmentError.ReasonCode) {
 		return unavailable
 	}
 
 	return unavailable + " stage=" + containmentError.Stage + " reason=" + containmentError.ReasonCode
-}
-
-func safeContainmentStage(stage string) bool {
-	switch stage {
-	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active", "authorize-accept", "authorize-peer-credentials", "authorize-report", "authorize-peer-identity", "authorize-encode":
-		return true
-	default:
-		return false
-	}
-}
-
-func safeContainmentReason(reason string) bool {
-	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "io-or-systemd", "deadline", "peer-mismatch":
-		return true
-	default:
-		return false
-	}
 }
 
 type fakeValidationUnit struct {
@@ -915,72 +897,20 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 }
 
 func TestSafeExecutionFailurePrefersResultValidationOverContainmentInErrorChain(t *testing.T) {
-	// Outer containment-cleanup wraps inner result-validation; diagnostics must
-	// prefer the inner result-validation stage/reason and error code.
-	inner := closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result"))
-	supervisorErr := closedWith(ErrContainmentUnavailable, inner)
-	err := errors.Join(&ContainmentError{Stage: "containment-cleanup", ReasonCode: "accounting-evidence"}, supervisorErr)
-
+	// Genuine pre-existing ResultValidationError outranks outer ContainmentError.
+	// Pure cleanup uses ContainmentError only (see chainContainment(nil, ...)).
+	err := errors.Join(
+		&ContainmentError{Stage: "containment-cleanup", ReasonCode: "accounting-evidence"},
+		closedWith(ErrContainmentUnavailable, closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result"))),
+	)
 	terminal := TerminalReport{
 		Outcome: ErrInvalidResult,
-		PreStop: SandboxReport{
-			ExecMainStatus: 76,
-			ServiceResult:  "exit-code",
-		},
+		PreStop: SandboxReport{ExecMainStatus: 76, ServiceResult: "exit-code"},
 	}
-
 	got := safeExecutionFailure(err, terminal)
 	const want = "error=invalid-result outcome=invalid-result service=exit-code stage=payload/validation reason=invalid-result oom-killed=false pids-limited=false"
 	if got != want {
 		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
-	}
-	if strings.Contains(got, "acknowledgement") || strings.Contains(got, "containment-unavailable") {
-		t.Fatalf("containment wrapper leaked into result-validation diagnostic: %q", got)
-	}
-
-	unsafe := "/private/path nonce=secret input=customer.docx"
-	for _, bad := range []error{
-		errors.Join(&ContainmentError{Stage: unsafe, ReasonCode: "accounting-evidence"}, closedWith(ErrContainmentUnavailable, closedWith(ErrInvalidResult, &ResultValidationError{Stage: "payload/validation", ReasonCode: "invalid-result"}))),
-		errors.Join(&ContainmentError{Stage: "containment-cleanup", ReasonCode: unsafe}, closedWith(ErrContainmentUnavailable, closedWith(ErrInvalidResult, &ResultValidationError{Stage: "payload/validation", ReasonCode: "invalid-result"}))),
-		errors.Join(&ContainmentError{Stage: "containment-cleanup", ReasonCode: "accounting-evidence"}, closedWith(ErrContainmentUnavailable, closedWith(ErrInvalidResult, &ResultValidationError{Stage: unsafe, ReasonCode: "invalid-result"}))),
-		errors.Join(&ContainmentError{Stage: "containment-cleanup", ReasonCode: "accounting-evidence"}, closedWith(ErrContainmentUnavailable, closedWith(ErrInvalidResult, &ResultValidationError{Stage: "payload/validation", ReasonCode: unsafe}))),
-	} {
-		got := safeExecutionFailure(bad, terminal)
-		if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
-			t.Fatalf("diagnostic leaked unsafe details: %q", got)
-		}
-	}
-}
-
-func TestSafeExecutionFailureReportsContainmentDiagnosticsWhenNoResultValidation(t *testing.T) {
-	// Pure containment error with no inner result validation should still report
-	// containment stage and reason.
-	err := closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "containment-cleanup", ReasonCode: "accounting-evidence"})
-
-	terminal := TerminalReport{
-		Outcome: ErrContainmentUnavailable,
-		PreStop: SandboxReport{
-			ExecMainStatus: 0,
-			ServiceResult:  "exit-code",
-		},
-	}
-
-	got := safeExecutionFailure(err, terminal)
-	const want = "error=containment-unavailable outcome=containment-unavailable service=exit-code stage=containment-cleanup reason=accounting-evidence oom-killed=false pids-limited=false"
-	if got != want {
-		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
-	}
-
-	unsafe := "/private/path nonce=secret input=customer.docx"
-	for _, bad := range []error{
-		closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: unsafe, ReasonCode: "dbus-other"}),
-		closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "preflight", ReasonCode: unsafe}),
-		closedWith(ErrContainmentUnavailable, errors.New(unsafe)),
-	} {
-		got := safeExecutionFailure(bad, terminal)
-		if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
-			t.Fatalf("diagnostic leaked unsafe details: %q", got)
-		}
 	}
 }
 

@@ -115,7 +115,7 @@ func resultValidation(stage, reason string) error {
 
 func validResultValidationStage(stage string) bool {
 	switch stage {
-	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write", "containment-cleanup":
+	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write":
 		return true
 	}
 	return false
@@ -123,12 +123,14 @@ func validResultValidationStage(stage string) bool {
 
 func validResultValidationReason(reason string) bool {
 	switch reason {
-	case "mismatch", "invalid-frame", "invalid-result", "io", "unavailable", "accounting-evidence", "stop-unit", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "mismatch", "invalid-frame", "invalid-result", "io", "unavailable":
 		return true
 	}
 	return false
 }
 
+// validContainmentStage is the single allowlist for ContainmentError stages
+// (runtime + cleanup diagnosis). Keep in sync with every stage site.
 func validContainmentStage(stage string) bool {
 	switch stage {
 	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active", "authorize-accept", "authorize-peer-credentials", "authorize-report", "authorize-peer-identity", "authorize-encode", "containment-cleanup":
@@ -137,9 +139,11 @@ func validContainmentStage(stage string) bool {
 	return false
 }
 
+// validContainmentReason is the single allowlist for ContainmentError reasons,
+// including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io-or-systemd", "accounting-evidence":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io-or-systemd", "peer-mismatch", "accounting-evidence", "stop-unit", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -950,11 +954,20 @@ func outcomeCode(out error) error {
 	}
 	return nil
 }
+// chainContainment wraps a prior result, or synthesizes a typed ContainmentError
+// when cleanup fails after a successful service. Pure cleanup never uses
+// ResultValidationError so safeExecutionFailure cannot mis-promote it.
 func chainContainment(result error, stage, reason string) error {
 	if result != nil {
 		return closedWith(ErrContainmentUnavailable, result)
 	}
-	return closedWith(ErrContainmentUnavailable, resultValidation(stage, reason))
+	if !validContainmentStage(stage) {
+		stage = "unknown"
+	}
+	if !validContainmentReason(reason) {
+		reason = "unknown"
+	}
+	return closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: stage, ReasonCode: reason})
 }
 func (r *Run) monitor() {
 	tick := time.NewTicker(10 * time.Millisecond)
