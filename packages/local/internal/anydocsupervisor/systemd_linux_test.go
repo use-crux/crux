@@ -1279,8 +1279,8 @@ func TestCleanupRejectsAlreadyGoneWhenFailedState(t *testing.T) {
 		"ExecMainStatus": int32(1),
 	})
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit when terminal is failed, got %q", reason)
+	if reason != "already-gone-terminal-not-success" {
+		t.Fatalf("expected already-gone-terminal-not-success when terminal is failed, got %q", reason)
 	}
 }
 
@@ -1292,8 +1292,8 @@ func TestCleanupRejectsAlreadyGoneWhenOOMKillResult(t *testing.T) {
 		"ExecMainStatus": int32(0),
 	})
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit when Result is oom-kill, got %q", reason)
+	if reason != "already-gone-terminal-not-success" {
+		t.Fatalf("expected already-gone-terminal-not-success when Result is oom-kill, got %q", reason)
 	}
 }
 
@@ -1305,8 +1305,8 @@ func TestCleanupRejectsAlreadyGoneWhenNonzeroExecMainStatus(t *testing.T) {
 		"ExecMainStatus": int32(76),
 	})
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit when ExecMainStatus nonzero, got %q", reason)
+	if reason != "already-gone-terminal-not-success" {
+		t.Fatalf("expected already-gone-terminal-not-success when ExecMainStatus nonzero, got %q", reason)
 	}
 }
 
@@ -1332,8 +1332,8 @@ func TestCleanupRejectsAlreadyGoneWhenTerminationUnproved(t *testing.T) {
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit when termination unproved, got %q", reason)
+	if reason != "already-gone-termination-unavailable" {
+		t.Fatalf("expected already-gone-termination-unavailable when termination evidence is unavailable, got %q", reason)
 	}
 }
 
@@ -1369,8 +1369,8 @@ func TestCleanupRejectsAlreadyGoneWhenAbsentCgroupButNoTerminal(t *testing.T) {
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit when terminal evidence missing, got %q", reason)
+	if reason != "already-gone-terminal-unavailable" {
+		t.Fatalf("expected already-gone-terminal-unavailable when terminal evidence missing, got %q", reason)
 	}
 }
 

@@ -926,6 +926,76 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 	}
 }
 
+func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
+	success := TerminalStatus{State: "inactive", ServiceResult: "success"}
+	secret := "/private/cgroup/tenant-123: dbus details"
+	for _, test := range []struct {
+		name           string
+		termination    TerminationEvidence
+		terminationErr error
+		status         TerminalStatus
+		statusErr      error
+		want           string
+	}{
+		{
+			name:           "termination error",
+			termination:    TerminationEvidence{ControlGroup: "/safe"},
+			terminationErr: errors.New(secret),
+			status:         success,
+			want:           "already-gone-termination-unavailable",
+		},
+		{
+			name:   "empty cgroup",
+			status: success,
+			want:   "already-gone-termination-unavailable",
+		},
+		{
+			name:        "termination mismatch",
+			termination: TerminationEvidence{ControlGroup: "/safe"},
+			status:      success,
+			want:        "already-gone-termination-mismatch",
+		},
+		{
+			name:        "termination not exclusive",
+			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true, Empty: true},
+			status:      success,
+			want:        "already-gone-termination-not-exclusive",
+		},
+		{
+			name:        "terminal unavailable",
+			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
+			status:      success,
+			statusErr:   errors.New(secret),
+			want:        "already-gone-terminal-unavailable",
+		},
+		{
+			name:        "terminal not success",
+			termination: TerminationEvidence{ControlGroup: "/safe", Empty: true},
+			status:      TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1},
+			want:        "already-gone-terminal-not-success",
+		},
+		{
+			name:        "success",
+			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
+			status:      success,
+			want:        "",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := validateAlreadyGone(test.termination, test.terminationErr, test.status, test.statusErr)
+			if got != test.want {
+				t.Fatalf("validateAlreadyGone() = %q, want %q", got, test.want)
+			}
+			if strings.Contains(got, secret) {
+				t.Fatalf("reason leaked sensitive detail: %q", got)
+			}
+			if got != "" && !validContainmentReason(got) {
+				t.Fatalf("reason is not safe-cleanup allowlisted: %q", got)
+			}
+		})
+	}
+}
+
 func TestChainContainmentNilCarriesContainmentNotResultValidation(t *testing.T) {
 	err := chainContainment(nil, false, "containment-cleanup", "accounting-evidence")
 	if errorCode(err) != ErrContainmentUnavailable {

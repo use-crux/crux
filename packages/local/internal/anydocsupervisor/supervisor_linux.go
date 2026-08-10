@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -1144,19 +1144,23 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 // pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and strict
 // successful-inactive terminal proof is retained (MainPID 0, State inactive,
 // ServiceResult success, ExecMainStatus 0). failed/oom-kill/exit-code/nonzero
-// must not clear the cleanup failure. Returns "" on accept, or "stop-unit".
+// must not clear the cleanup failure. Returns "" on accept, or a fixed safe
+// diagnostic reason that does not expose cgroup or systemd details.
 func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if terminationErr != nil || termination.ControlGroup == "" {
-		return "stop-unit"
-	}
-	if termination.Absent == termination.Empty {
-		return "stop-unit"
+		return "already-gone-termination-unavailable"
 	}
 	if !termination.Absent && !termination.Empty {
-		return "stop-unit"
+		return "already-gone-termination-mismatch"
 	}
-	if statusErr != nil || !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
-		return "stop-unit"
+	if termination.Absent && termination.Empty {
+		return "already-gone-termination-not-exclusive"
+	}
+	if statusErr != nil {
+		return "already-gone-terminal-unavailable"
+	}
+	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		return "already-gone-terminal-not-success"
 	}
 	return ""
 }

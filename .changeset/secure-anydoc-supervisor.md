@@ -64,3 +64,6 @@ terminal accounting cleanup also fails.
 
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
+
+Classify already-gone cleanup rejection using fixed, allowlisted termination
+and terminal-proof diagnostics without exposing systemd or cgroup details.
