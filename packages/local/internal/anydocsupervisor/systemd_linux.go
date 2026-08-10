@@ -121,6 +121,10 @@ func isDbusStopNoSuchUnit(err error) bool {
 }
 
 func isDbusUnitPropertiesGone(err error) bool {
+	var operation *terminalStatusOperationError
+	if errors.As(err, &operation) {
+		return operation.dbusClass == terminalStatusDBusGone
+	}
 	name, ok := dbusErrorName(err)
 	if !ok {
 		return false
@@ -154,15 +158,6 @@ func dbusErrorName(err error) (string, bool) {
 // ExecMainStatus 0. failed/oom-kill/exit-code/nonzero never qualifies.
 func successfulInactiveTerminal(state string, mainPID int, serviceResult string, execMainStatus int) bool {
 	return mainPID == 0 && state == "inactive" && serviceResult == "success" && execMainStatus == 0
-}
-
-func successfulInactiveFromProps(p map[string]any) bool {
-	return successfulInactiveTerminal(
-		stringValue(p, "ActiveState"),
-		intValue(p, "MainPID"),
-		stringValue(p, "Result"),
-		intValue(p, "ExecMainStatus"),
-	)
 }
 
 // unitPropertiesGonePending carries the sole fact a pre-ACK verified snapshot
@@ -1258,7 +1253,7 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 		// UnknownObject from StopUnit never enters this branch.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
 		proof, proofOK := terminalStatusFromProps(p)
-		if propErr == nil && proofOK && successfulInactiveFromProps(p) {
+		if propErr == nil && proofOK && successfulInactiveTerminal(proof.State, proof.MainPID, proof.ServiceResult, proof.ExecMainStatus) {
 			u.reportMu.Lock()
 			pinnedCgroup := u.controlGroup
 			u.reportMu.Unlock()
@@ -1306,7 +1301,7 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 
 func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
 	if u == nil || u.bus == nil || ctx.Err() != nil {
-		return TerminalStatus{}, &terminalStatusUnavailableError{stage: terminalStatusGetUnit}
+		return TerminalStatus{}, &terminalStatusUnavailableError{}
 	}
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
@@ -1331,36 +1326,19 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 }
 
 func terminalStatusFromProps(p map[string]any) (TerminalStatus, bool) {
-	for _, key := range []string{"ActiveState", "Result"} {
-		value, exists := p[key]
-		if !exists {
-			return TerminalStatus{}, false
-		}
-		if _, ok := value.(string); !ok {
-			return TerminalStatus{}, false
-		}
-	}
-	for _, key := range []string{"MainPID", "ExecMainStatus"} {
-		value, exists := p[key]
-		if !exists || !terminalStatusInteger(value) {
-			return TerminalStatus{}, false
-		}
+	mainPID, mainPIDOK := p["MainPID"].(uint32)
+	execMainStatus, execMainStatusOK := p["ExecMainStatus"].(int32)
+	state, stateOK := p["ActiveState"].(string)
+	serviceResult, serviceResultOK := p["Result"].(string)
+	if !mainPIDOK || !execMainStatusOK || execMainStatus < 0 || !stateOK || !serviceResultOK {
+		return TerminalStatus{}, false
 	}
 	return TerminalStatus{
-		MainPID:        intValue(p, "MainPID"),
-		State:          stringValue(p, "ActiveState"),
-		ServiceResult:  stringValue(p, "Result"),
-		ExecMainStatus: intValue(p, "ExecMainStatus"),
+		MainPID:        int(mainPID),
+		State:          state,
+		ServiceResult:  serviceResult,
+		ExecMainStatus: int(execMainStatus),
 	}, true
-}
-
-func terminalStatusInteger(value any) bool {
-	switch value.(type) {
-	case uint32, uint64, int32, int:
-		return true
-	default:
-		return false
-	}
 }
 
 func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
