@@ -832,15 +832,26 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 	if fs == nil || pid <= 0 {
 		return "", errors.New("runtime filesystem unavailable")
 	}
-	root := filepath.Join("/proc", strconv.Itoa(pid), "root", strings.TrimPrefix(runtimeTarget, "/"))
+	procRoot := filepath.Join("/proc", strconv.Itoa(pid), "root")
+	procRootInfo, err := fs.Lstat(procRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", &procRuntimeDisappearedError{pid: pid}
+		}
+		return "", err
+	}
+	// /proc/<pid>/root is the kernel-owned symlink into the exact process
+	// mount namespace. Do not walk a lookalike directory supplied by a fake or
+	// malformed proc view.
+	if procRootInfo.Mode()&os.ModeSymlink == 0 {
+		return "", errors.New("unsafe proc root entry")
+	}
+	root := filepath.Join(procRoot, strings.TrimPrefix(runtimeTarget, "/"))
 	h := sha256.New()
 	var walk func(string, string, bool) error
 	walk = func(path, rel string, rootEntry bool) error {
 		info, err := fs.Lstat(path)
 		if err != nil {
-			if rootEntry && os.IsNotExist(err) {
-				return &procRuntimeDisappearedError{pid: pid}
-			}
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {

@@ -271,6 +271,47 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 	}
 }
 
+func TestMountedRuntimeDigestOnlyTreatsExactProcRootAbsenceAsDisappearance(t *testing.T) {
+	procRoot := filepath.Join("/proc", "42", "root")
+	runtimeRoot := filepath.Join(procRoot, strings.TrimPrefix(runtimeTarget, "/"))
+
+	rootGone := procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }}
+	if _, err := mountedRuntimeDigest(rootGone, 42); !runtimeProcDisappeared(err, 42) {
+		t.Fatalf("root absence = %v, want typed proc disappearance", err)
+	}
+
+	targetGone := procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+		if path == procRoot {
+			return fakeRuntimeInfo{name: "root", mode: os.ModeSymlink | 0o777}, nil
+		}
+		if path == runtimeRoot {
+			return nil, os.ErrNotExist
+		}
+		return nil, os.ErrNotExist
+	}}
+	if _, err := mountedRuntimeDigest(targetGone, 42); err == nil || runtimeProcDisappeared(err, 42) {
+		t.Fatalf("runtime target absence = %v, want non-fallback rejection", err)
+	}
+
+	malformed := procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+		if path == procRoot {
+			return fakeRuntimeInfo{name: "root", mode: os.ModeDir | 0o555}, nil
+		}
+		return nil, os.ErrNotExist
+	}}
+	if _, err := mountedRuntimeDigest(malformed, 42); err == nil || runtimeProcDisappeared(err, 42) {
+		t.Fatalf("malformed proc root = %v, want non-fallback rejection", err)
+	}
+}
+
+type procRuntimeFSFunc struct {
+	lstat func(string) (os.FileInfo, error)
+}
+
+func (f procRuntimeFSFunc) Lstat(path string) (os.FileInfo, error) { return f.lstat(path) }
+func (procRuntimeFSFunc) ReadDir(string) ([]os.DirEntry, error)    { return nil, os.ErrNotExist }
+func (procRuntimeFSFunc) ReadFile(string) ([]byte, error)          { return nil, os.ErrNotExist }
+
 func TestReportValidationCodeAccountingMappings(t *testing.T) {
 	for _, test := range []struct {
 		code    ReportValidationCode
@@ -1069,7 +1110,12 @@ func (f rootedProcFS) path(path string) string {
 	rel := strings.TrimPrefix(path, prefix)
 	return filepath.Join(f.root, strings.TrimPrefix(rel, "/"))
 }
-func (f rootedProcFS) Lstat(path string) (os.FileInfo, error)     { return os.Lstat(f.path(path)) }
+func (f rootedProcFS) Lstat(path string) (os.FileInfo, error) {
+	if path == filepath.Join("/proc", "42", "root") {
+		return fakeRuntimeInfo{name: "root", mode: os.ModeSymlink | 0o777}, nil
+	}
+	return os.Lstat(f.path(path))
+}
 func (f rootedProcFS) ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(f.path(path)) }
 func (f rootedProcFS) ReadFile(path string) ([]byte, error)       { return os.ReadFile(f.path(path)) }
 
@@ -1505,6 +1551,9 @@ func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	return v, nil
 }
 func (f *fakeFS) Lstat(path string) (os.FileInfo, error) {
+	if strings.HasSuffix(path, "/root") {
+		return fakeRuntimeInfo{name: "root", mode: os.ModeSymlink | 0o777}, nil
+	}
 	if strings.HasSuffix(path, runtimeTarget) {
 		mode := f.runtimeRootMode
 		if mode == 0 {
