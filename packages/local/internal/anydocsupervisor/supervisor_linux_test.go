@@ -926,6 +926,72 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 	}
 }
 
+func TestCleanupPromotesPropertiesGoneWithVerifiedSuccessfulAbsentProof(t *testing.T) {
+	unit := &fakeUnit{
+		rep:        SandboxReport{ControlGroup: "/pinned"},
+		stopErr:    &stopFailure{reason: "unit-properties-gone"},
+		snapshot:   SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 0},
+		snapshotOK: true,
+		terminalStatus: func(context.Context) (TerminalStatus, error) {
+			return TerminalStatus{}, &terminalStatusGoneError{}
+		},
+		termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
+		},
+	}
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "" {
+		t.Fatalf("cleanup reason = %q, want successful already-gone cleanup", reason)
+	}
+}
+
+func TestCleanupRejectsPropertiesGoneWithoutStrictVerifiedProof(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		snapshot SandboxReport
+	}{
+		{name: "failed", snapshot: SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "exit-code", ExecMainStatus: 1}},
+		{name: "nonzero", snapshot: SandboxReport{MainPID: 0, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 1}},
+		{name: "live", snapshot: SandboxReport{MainPID: 42, ControlGroup: "/pinned", ServiceResult: "success", ExecMainStatus: 0}},
+		{name: "missing cgroup", snapshot: SandboxReport{MainPID: 0, ServiceResult: "success", ExecMainStatus: 0}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &fakeUnit{
+				rep:        SandboxReport{ControlGroup: "/pinned"},
+				stopErr:    &stopFailure{reason: "unit-properties-gone"},
+				snapshot:   test.snapshot,
+				snapshotOK: true,
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
+				},
+			}
+
+			_, _, _, reason := cleanup(unit)
+			if reason != "unit-properties-gone" {
+				t.Fatalf("cleanup reason = %q, want unit-properties-gone", reason)
+			}
+		})
+	}
+}
+
+func TestCleanupRejectsPropertiesGoneWithMismatchedVerifiedCgroup(t *testing.T) {
+	unit := &fakeUnit{
+		rep:        SandboxReport{ControlGroup: "/pinned"},
+		stopErr:    &stopFailure{reason: "unit-properties-gone"},
+		snapshot:   SandboxReport{MainPID: 0, ControlGroup: "/other", ServiceResult: "success", ExecMainStatus: 0},
+		snapshotOK: true,
+		termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: "/pinned", Absent: true}, nil
+		},
+	}
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "unit-properties-gone" {
+		t.Fatalf("cleanup reason = %q, want unit-properties-gone", reason)
+	}
+}
+
 func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 	success := TerminalStatus{State: "inactive", ServiceResult: "success"}
 	secret := "/private/cgroup/tenant-123: dbus details"
@@ -943,27 +1009,27 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 			termination:    TerminationEvidence{ControlGroup: "/safe"},
 			terminationErr: errors.New(secret),
 			status:         success,
-			alreadyGone:    &alreadyGoneError{proof: success},
+			alreadyGone:    &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:           "already-gone-termination-unavailable",
 		},
 		{
 			name:        "empty cgroup",
 			status:      success,
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "already-gone-termination-unavailable",
 		},
 		{
 			name:        "termination mismatch",
 			termination: TerminationEvidence{ControlGroup: "/safe"},
 			status:      success,
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "already-gone-termination-mismatch",
 		},
 		{
 			name:        "termination not exclusive",
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true, Empty: true},
 			status:      success,
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "already-gone-termination-not-exclusive",
 		},
 		{
@@ -971,28 +1037,28 @@ func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
 			status:      success,
 			statusErr:   errors.New(secret),
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "already-gone-terminal-unavailable",
 		},
 		{
 			name:        "terminal not success",
 			termination: TerminationEvidence{ControlGroup: "/safe", Empty: true},
 			status:      TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1},
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "already-gone-terminal-not-success",
 		},
 		{
 			name:        "success",
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
 			status:      success,
-			alreadyGone: &alreadyGoneError{proof: success},
+			alreadyGone: &alreadyGoneError{proof: success, cgroup: "/safe"},
 			want:        "",
 		},
 		{
 			name:        "forged non-strict proof",
 			termination: TerminationEvidence{ControlGroup: "/safe", Absent: true},
 			statusErr:   &terminalStatusGoneError{},
-			alreadyGone: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}},
+			alreadyGone: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, cgroup: "/safe"},
 			want:        "already-gone-terminal-unavailable",
 		},
 	} {
@@ -1093,6 +1159,9 @@ type fakeUnit struct {
 	stopErr          error
 	termination      func(context.Context, string) (TerminationEvidence, error)
 	terminalStatus   func(context.Context) (TerminalStatus, error)
+	snapshot         SandboxReport
+	snapshotCPU      time.Duration
+	snapshotOK       bool
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -1138,6 +1207,10 @@ func (u *fakeUnit) Cleanup(context.Context) error {
 	defer u.mu.Unlock()
 	u.cleaned = true
 	return u.cleanupErr
+}
+func (u *fakeUnit) MarkSnapshotVerified() {}
+func (u *fakeUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
+	return u.snapshot, u.snapshotCPU, u.snapshotOK
 }
 func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
 func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }

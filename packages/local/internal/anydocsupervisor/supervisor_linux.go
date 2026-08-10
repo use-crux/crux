@@ -1055,6 +1055,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	var report SandboxReport
 	var cpu time.Duration
 	var captureErr error
+	cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
+	if snapshots, ok := unit.(verifiedAccountingSnapshot); ok {
+		cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
+	}
 	if capture, supported := unit.(terminalAccountingCapture); supported {
 		report, cpu, captureFailure, captureErr = capture.CaptureTerminalAccounting(ctx)
 	} else {
@@ -1074,11 +1078,6 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		// Snapshot fallback is only valid when the exact original cgroup
 		// path is gone (ENOENT). Malformed-but-present data and any other
 		// capture error must fail closed as accounting-evidence.
-		snapshots, hasSnapshots := unit.(verifiedAccountingSnapshot)
-		cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
-		if hasSnapshots {
-			cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
-		}
 		if cached && captureFailure == accountingCaptureExactCgroupAbsent {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
@@ -1096,7 +1095,20 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			} else {
 				var failure *stopFailure
 				if errors.As(stopErr, &failure) {
-					reason = failure.reason
+					if failure.reason == "unit-properties-gone" {
+						if cached {
+							if proof, ok := alreadyGoneProofFromReport(report.ControlGroup, cachedReport); ok {
+								alreadyGone = proof
+								reason = "alreadyGone"
+							} else {
+								reason = failure.reason
+							}
+						} else {
+							reason = failure.reason
+						}
+					} else {
+						reason = failure.reason
+					}
 				} else {
 					reason = "stop-unit"
 				}
@@ -1149,7 +1161,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 // must not clear the cleanup failure. Returns "" on accept, or a fixed safe
 // diagnostic reason that does not expose cgroup or systemd details.
 func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, alreadyGone *alreadyGoneError) string {
-	if terminationErr != nil || termination.ControlGroup == "" {
+	if !validCgroup(expectedCgroup) || terminationErr != nil || termination.ControlGroup == "" {
 		return "already-gone-termination-unavailable"
 	}
 	if termination.ControlGroup != expectedCgroup {
@@ -1161,7 +1173,7 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 	if termination.Absent && termination.Empty {
 		return "already-gone-termination-not-exclusive"
 	}
-	if alreadyGone == nil || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
+	if alreadyGone == nil || !validCgroup(alreadyGone.cgroup) || alreadyGone.cgroup != expectedCgroup || alreadyGone.proof.MainPID != 0 || alreadyGone.proof.ServiceResult != "success" || alreadyGone.proof.ExecMainStatus != 0 || (alreadyGone.proof.State != "" && alreadyGone.proof.State != "inactive") {
 		return "already-gone-terminal-unavailable"
 	}
 	if statusErr != nil {

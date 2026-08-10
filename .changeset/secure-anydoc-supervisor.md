@@ -71,3 +71,7 @@ and terminal-proof diagnostics without exposing systemd or cgroup details.
 
 Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
+
+Promote `unit-properties-gone` to already-gone only from a verified successful
+snapshot for that exact pinned cgroup; reject missing, mismatched, live,
+failed, or nonzero-status proofs.

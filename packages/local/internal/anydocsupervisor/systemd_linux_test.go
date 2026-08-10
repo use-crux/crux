@@ -1103,9 +1103,12 @@ func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndSuccessfulInactiveProps(t *t
 	bus.values["Result"] = "success"
 	bus.values["ExecMainStatus"] = int32(0)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	err := u.Stop(context.Background())
 	var alreadyGone *alreadyGoneError
-	if !errors.As(err, &alreadyGone) || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
+	if !errors.As(err, &alreadyGone) || alreadyGone.cgroup != "/crux.slice/test" || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
 		t.Fatalf("expected strict already-gone proof, got %v", err)
 	}
 }
@@ -1333,7 +1336,7 @@ func TestCleanupRejectsAlreadyGoneWhenTerminationCgroupMismatchesPinnedCgroup(t 
 	success := TerminalStatus{State: "inactive", ServiceResult: "success"}
 	unit := &fakeUnit{
 		rep:     SandboxReport{ControlGroup: "/pinned"},
-		stopErr: &alreadyGoneError{proof: success},
+		stopErr: &alreadyGoneError{proof: success, cgroup: "/pinned"},
 		terminalStatus: func(context.Context) (TerminalStatus, error) {
 			return success, nil
 		},

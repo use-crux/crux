@@ -35,9 +35,12 @@ func containment(stage string, err error) error {
 	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
 }
 
-// alreadyGoneError carries the strict terminal status observed while handling
-// StopUnit's NoSuchUnit response. Cleanup revalidates it before use.
-type alreadyGoneError struct{ proof TerminalStatus }
+// alreadyGoneError carries strict terminal proof and its pinned cgroup.
+// Cleanup revalidates both before use.
+type alreadyGoneError struct {
+	proof  TerminalStatus
+	cgroup string
+}
 
 func (e *alreadyGoneError) Error() string { return "unit already gone" }
 
@@ -91,6 +94,20 @@ func successfulInactiveFromProps(p map[string]any) bool {
 		stringValue(p, "Result"),
 		intValue(p, "ExecMainStatus"),
 	)
+}
+
+// alreadyGoneProofFromReport promotes only a retained verified report whose
+// cgroup exactly matches the pinned report and whose terminal fields strictly
+// prove successful termination. SandboxReport does not represent ActiveState,
+// so its proof deliberately carries no state.
+func alreadyGoneProofFromReport(pinnedCgroup string, report SandboxReport) (*alreadyGoneError, bool) {
+	if !validCgroup(pinnedCgroup) || report.ControlGroup != pinnedCgroup || report.MainPID != 0 || report.ServiceResult != "success" || report.ExecMainStatus != 0 {
+		return nil, false
+	}
+	return &alreadyGoneError{
+		proof:  TerminalStatus{MainPID: report.MainPID, ServiceResult: report.ServiceResult, ExecMainStatus: report.ExecMainStatus},
+		cgroup: report.ControlGroup,
+	}, true
 }
 
 func containmentReason(err error) string {
@@ -1035,7 +1052,12 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 		// UnknownObject from StopUnit never enters this branch.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
 		if propErr == nil && successfulInactiveFromProps(p) {
-			return &alreadyGoneError{proof: terminalStatusFromProps(p)}
+			u.reportMu.Lock()
+			pinnedCgroup := u.controlGroup
+			u.reportMu.Unlock()
+			if cgroup := stringValue(p, "ControlGroup"); validCgroup(pinnedCgroup) && cgroup == pinnedCgroup {
+				return &alreadyGoneError{proof: terminalStatusFromProps(p), cgroup: cgroup}
+			}
 		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {
