@@ -50,6 +50,13 @@ type terminalStatusGoneError struct{}
 
 func (*terminalStatusGoneError) Error() string { return "unit status gone" }
 
+// terminalStatusUnrecognizedDBusError marks a D-Bus status lookup error whose
+// name is not one of the exact unit-gone allowlist entries. Its text is fixed
+// so callers cannot expose an error name or body.
+type terminalStatusUnrecognizedDBusError struct{}
+
+func (*terminalStatusUnrecognizedDBusError) Error() string { return "unit status D-Bus error" }
+
 // stopFailure carries only a fixed diagnostic reason. It deliberately omits
 // D-Bus bodies, unit names, and cgroup paths because cleanup diagnostics may
 // be exposed outside the local host.
@@ -60,24 +67,37 @@ func (e *stopFailure) Error() string { return "unit stop unavailable: " + e.reas
 // UnknownObject from StopUnit must remain a failure because the unit path may
 // still exist.
 func isDbusStopNoSuchUnit(err error) bool {
-	var dbusErr dbus.Error
-	if !errors.As(err, &dbusErr) {
-		return false
-	}
-	return dbusErr.Name == "org.freedesktop.systemd1.NoSuchUnit"
+	name, ok := dbusErrorName(err)
+	return ok && name == "org.freedesktop.systemd1.NoSuchUnit"
 }
 
 func isDbusUnitPropertiesGone(err error) bool {
-	var dbusErr dbus.Error
-	if !errors.As(err, &dbusErr) {
+	name, ok := dbusErrorName(err)
+	if !ok {
 		return false
 	}
-	switch dbusErr.Name {
+	switch name {
 	case "org.freedesktop.systemd1.NoSuchUnit", "org.freedesktop.DBus.Error.UnknownObject":
 		return true
 	default:
 		return false
 	}
+}
+
+// dbusErrorName extracts only a D-Bus error name. It intentionally never
+// returns an error body, and callers must not log or return the name.
+func dbusErrorName(err error) (string, bool) {
+	var dbusErr *dbus.Error
+	if errors.As(err, &dbusErr) && dbusErr != nil {
+		return dbusErr.Name, true
+	}
+
+	var dbusValue dbus.Error
+	if errors.As(err, &dbusValue) {
+		return dbusValue.Name, true
+	}
+
+	return "", false
 }
 
 // successfulInactiveTerminal is the strict proof that an already-gone unit
@@ -1159,6 +1179,9 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 	if err != nil {
 		if isDbusUnitPropertiesGone(err) {
 			return TerminalStatus{}, &terminalStatusGoneError{}
+		}
+		if _, ok := dbusErrorName(err); ok {
+			return TerminalStatus{}, &terminalStatusUnrecognizedDBusError{}
 		}
 		return TerminalStatus{}, errors.New("unit status unavailable")
 	}

@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-dbus-unrecognized", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -1260,6 +1260,10 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 		return "already-gone-terminal-unavailable"
 	}
 	if statusErr != nil {
+		var unrecognizedDBus *terminalStatusUnrecognizedDBusError
+		if errors.As(statusErr, &unrecognizedDBus) {
+			return "already-gone-terminal-dbus-unrecognized"
+		}
 		var gone *terminalStatusGoneError
 		if errors.As(statusErr, &gone) {
 			return ""

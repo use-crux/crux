@@ -380,6 +380,7 @@ func TestCleanupReportGoneRequiresStrictTerminalEvidence(t *testing.T) {
 	}{
 		{name: "carried proof with typed gone status accepts", statusErr: &terminalStatusGoneError{}},
 		{name: "carried proof with generic status error rejects", statusErr: errors.New("terminal unavailable"), want: "already-gone-terminal-unavailable"},
+		{name: "carried proof with unrecognized D-Bus status rejects", statusErr: &terminalStatusUnrecognizedDBusError{}, want: "already-gone-terminal-dbus-unrecognized"},
 		{name: "failed terminal rejects", status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
 		{name: "inactive success with nonzero main status rejects", status: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
 	} {
@@ -403,6 +404,9 @@ func TestCleanupReportGoneRequiresStrictTerminalEvidence(t *testing.T) {
 			_, _, _, reason := cleanup(unit)
 			if reason != test.want {
 				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+			if reason != "" && !validContainmentReason(reason) {
+				t.Fatalf("cleanup reason is not allowlisted: %q", reason)
 			}
 		})
 	}
@@ -1543,6 +1547,7 @@ func TestStopFallsBackToKillWhenUnitStillActive(t *testing.T) {
 }
 
 func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
+	private := "/private/dbus-body-secret"
 	for _, test := range []struct {
 		name       string
 		statusErr  error
@@ -1551,7 +1556,9 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 		{name: "NoSuchUnit", statusErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}},
 		{name: "UnknownObject", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}},
 		{name: "arbitrary", statusErr: errors.New("terminal unavailable"), wantReason: "already-gone-terminal-unavailable"},
-		{name: "access denied", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied"}, wantReason: "already-gone-terminal-unavailable"},
+		{name: "access denied", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-dbus-unrecognized"},
+		{name: "access denied pointer", statusErr: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-dbus-unrecognized"},
+		{name: "wrapped access denied", statusErr: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), wantReason: "already-gone-terminal-dbus-unrecognized"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			u, bus := prepareAlreadyGoneCleanup(t, nil)
@@ -1560,21 +1567,31 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 			if reason != test.wantReason {
 				t.Fatalf("cleanup reason = %q, want %q", reason, test.wantReason)
 			}
+			if strings.Contains(reason, private) || strings.Contains(reason, "AccessDenied") {
+				t.Fatalf("cleanup reason leaked D-Bus detail: %q", reason)
+			}
 		})
 	}
 }
 
 func TestTerminalStatusClassifiesOnlyExactUnitGoneErrors(t *testing.T) {
+	private := "/private/dbus-body-secret"
 	for _, test := range []struct {
-		name string
-		err  error
-		gone bool
+		name         string
+		err          error
+		gone         bool
+		unrecognized bool
 	}{
 		{name: "NoSuchUnit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, gone: true},
 		{name: "UnknownObject", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, gone: true},
+		{name: "NoSuchUnit pointer", err: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, gone: true},
+		{name: "UnknownObject pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, gone: true},
+		{name: "wrapped NoSuchUnit", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}), gone: true},
+		{name: "wrapped UnknownObject", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}), gone: true},
 		{name: "arbitrary", err: errors.New("terminal unavailable")},
-		{name: "access denied", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied"}},
-		{name: "other D-Bus", err: dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs"}},
+		{name: "access denied", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, unrecognized: true},
+		{name: "other D-Bus pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{private}}, unrecognized: true},
+		{name: "wrapped other D-Bus", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{private}}), unrecognized: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -1585,6 +1602,13 @@ func TestTerminalStatusClassifiesOnlyExactUnitGoneErrors(t *testing.T) {
 			got := errors.As(err, &gone)
 			if got != test.gone {
 				t.Fatalf("TerminalStatus() gone classification = %t, want %t (err %T: %v)", got, test.gone, err, err)
+			}
+			var unrecognized *terminalStatusUnrecognizedDBusError
+			if got := errors.As(err, &unrecognized); got != test.unrecognized {
+				t.Fatalf("TerminalStatus() unrecognized D-Bus classification = %t, want %t (err %T: %v)", got, test.unrecognized, err, err)
+			}
+			if test.unrecognized && (err.Error() != "unit status D-Bus error" || strings.Contains(err.Error(), private) || strings.Contains(err.Error(), "InvalidArgs") || strings.Contains(err.Error(), "AccessDenied")) {
+				t.Fatalf("TerminalStatus() exposed D-Bus detail: %q", err)
 			}
 		})
 	}
