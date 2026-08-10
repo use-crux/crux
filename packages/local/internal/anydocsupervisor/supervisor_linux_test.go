@@ -878,6 +878,31 @@ func TestFinishNilYieldsCleanupDiagnosis(t *testing.T) {
 	}
 }
 
+func TestFinishNilWithUnitAndStagedCleanupFailuresPreservesFirstReason(t *testing.T) {
+	b := &fakeBackend{cleanupErr: errors.New("unit cleanup failed")}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.staged.Cleanup(); err != nil {
+		t.Fatalf("prepare staged cleanup failure: %v", err)
+	}
+	r.staged = &StagedSource{HostPath: "unsafe", dir: "unsafe"}
+
+	err = r.Finish(context.Background(), nil)
+	var chain *containmentCleanupChain
+	if errors.As(err, &chain) {
+		t.Fatalf("pure cleanup must not use a pre-cleanup carrier: %#v", chain)
+	}
+	var containment *ContainmentError
+	if !errors.As(err, &containment) {
+		t.Fatalf("ContainmentError missing: %T %v", err, err)
+	}
+	if containment.Stage != "containment-cleanup" || containment.ReasonCode != "unit-cleanup" {
+		t.Fatalf("ContainmentError = {stage:%q reason:%q}", containment.Stage, containment.ReasonCode)
+	}
+}
+
 func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -902,7 +927,7 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 }
 
 func TestChainContainmentNilCarriesContainmentNotResultValidation(t *testing.T) {
-	err := chainContainment(nil, "containment-cleanup", "accounting-evidence")
+	err := chainContainment(nil, false, "containment-cleanup", "accounting-evidence")
 	if errorCode(err) != ErrContainmentUnavailable {
 		t.Fatalf("code = %q", errorCode(err))
 	}

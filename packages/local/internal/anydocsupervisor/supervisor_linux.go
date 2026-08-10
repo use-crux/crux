@@ -795,14 +795,15 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.stopOnce.Do(func() { close(r.stop) })
 		r.mu.Unlock()
 		result := outcomeCode(out)
+		hadPreCleanup := result != nil
 		report, cpu, termination, cleanupReason := cleanup(r.unit)
 		unitCleaned := cleanupReason == ""
 		if !unitCleaned {
-			result = chainContainment(result, "containment-cleanup", cleanupReason)
+			result = chainContainment(result, hadPreCleanup, "containment-cleanup", cleanupReason)
 		}
 		stagedCleaned := r.staged != nil && r.staged.Cleanup() == nil
 		if !stagedCleaned {
-			result = chainContainment(result, "containment-cleanup", "staged-cleanup")
+			result = chainContainment(result, hadPreCleanup, "containment-cleanup", "staged-cleanup")
 		}
 		r.mu.Lock()
 		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: unitCleaned && stagedCleaned}
@@ -971,7 +972,7 @@ func outcomeCode(out error) error {
 
 // chainContainment preserves a prior execution failure separately from a
 // synthetic cleanup diagnosis. Pure cleanup remains a ContainmentError.
-func chainContainment(result error, stage, reason string) error {
+func chainContainment(result error, hadPreCleanup bool, stage, reason string) error {
 	cleanup := &ContainmentError{Stage: stage, ReasonCode: reason}
 	if !validContainmentStage(cleanup.Stage) {
 		cleanup.Stage = "unknown"
@@ -979,8 +980,11 @@ func chainContainment(result error, stage, reason string) error {
 	if !validContainmentReason(cleanup.ReasonCode) {
 		cleanup.ReasonCode = "unknown"
 	}
-	if result != nil {
+	if hadPreCleanup {
 		return closedWith(ErrContainmentUnavailable, &containmentCleanupChain{prior: result, cleanup: cleanup})
+	}
+	if result != nil {
+		return result
 	}
 	return closedWith(ErrContainmentUnavailable, cleanup)
 }
