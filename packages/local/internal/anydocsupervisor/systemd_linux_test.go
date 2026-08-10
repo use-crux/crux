@@ -1144,13 +1144,14 @@ type fakeSystemBus struct {
 	propGoneConsumed      bool
 	// propGoneAfterStop confirms a successful terminal status once, then
 	// simulates systemd unloading the transient unit before cleanup can poll.
-	propGoneAfterStop              bool
-	propertiesAfterStop            int
-	valuesAfterFirstStopProperties map[string]any
-	stopped                        bool
-	stopDBusErrorName              string
-	reset                          bool
-	onStop                         func()
+	propGoneAfterStop               bool
+	propertiesAfterStop             int
+	valuesAfterFirstStopProperties  map[string]any
+	propErrAfterFirstStopProperties error
+	stopped                         bool
+	stopDBusErrorName               string
+	reset                           bool
+	onStop                          func()
 }
 
 func newFakeSystemBus() *fakeSystemBus {
@@ -1186,6 +1187,12 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 		b.propertiesAfterStop++
 		if b.propertiesAfterStop > 1 {
 			return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+		}
+	}
+	if b.propErrAfterFirstStopProperties != nil && b.stopped {
+		b.propertiesAfterStop++
+		if b.propertiesAfterStop > 1 {
+			return nil, b.propErrAfterFirstStopProperties
 		}
 	}
 	if b.valuesAfterFirstStopProperties != nil && b.stopped {
@@ -1536,37 +1543,50 @@ func TestStopFallsBackToKillWhenUnitStillActive(t *testing.T) {
 }
 
 func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
-	bus := newFakeSystemBus()
-	fs := newFakeFS()
-	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
-	first, err := u.Report(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
-	if _, err := u.Report(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := u.CPUUsage(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	u.MarkSnapshotVerified()
-	bus.onStop = func() {
-		for path := range fs.files {
-			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
-				delete(fs.files, path)
+	for _, test := range []struct {
+		name       string
+		statusErr  error
+		wantReason string
+	}{
+		{name: "NoSuchUnit", statusErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}},
+		{name: "UnknownObject", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}},
+		{name: "arbitrary", statusErr: errors.New("terminal unavailable"), wantReason: "already-gone-terminal-unavailable"},
+		{name: "access denied", statusErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied"}, wantReason: "already-gone-terminal-unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			u, bus := prepareAlreadyGoneCleanup(t, nil)
+			bus.propErrAfterFirstStopProperties = test.statusErr
+			_, _, _, reason := cleanup(u)
+			if reason != test.wantReason {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.wantReason)
 			}
-		}
+		})
 	}
-	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
-	bus.values["ActiveState"] = "inactive"
-	bus.values["MainPID"] = uint32(0)
-	bus.values["Result"] = "success"
-	bus.values["ExecMainStatus"] = int32(0)
-	bus.propGoneAfterStop = true
-	_, _, _, reason := cleanup(u)
-	if reason != "" {
-		t.Fatalf("expected empty reason, got %q", reason)
+}
+
+func TestTerminalStatusClassifiesOnlyExactUnitGoneErrors(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		gone bool
+	}{
+		{name: "NoSuchUnit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, gone: true},
+		{name: "UnknownObject", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, gone: true},
+		{name: "arbitrary", err: errors.New("terminal unavailable")},
+		{name: "access denied", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied"}},
+		{name: "other D-Bus", err: dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			bus.propErr = test.err
+			u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus}
+			_, err := u.TerminalStatus(context.Background())
+			var gone *terminalStatusGoneError
+			got := errors.As(err, &gone)
+			if got != test.gone {
+				t.Fatalf("TerminalStatus() gone classification = %t, want %t (err %T: %v)", got, test.gone, err, err)
+			}
+		})
 	}
 }
 
