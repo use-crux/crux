@@ -57,6 +57,21 @@ export interface RuntimeStatusOperationResult {
   readonly work?: readonly RuntimeWorkItem[]
   readonly timers?: readonly RuntimeTimerRecord[]
   readonly outbox?: readonly RuntimeOutboxItem[]
+  /**
+   * Bounded managed-transport binding health when a generated program and
+   * transport store port are available.
+   */
+  readonly transports?: RuntimeTransportBindingHealthSnapshot
+}
+
+/** Secret-free binding health snapshot projected into Runtime status. */
+export interface RuntimeTransportBindingHealthSnapshot {
+  readonly schema: 1
+  readonly namespace: string
+  readonly observedAt: string
+  readonly bindings: readonly Record<string, unknown>[]
+  readonly totals: Record<string, unknown>
+  readonly coverage: Record<string, unknown>
 }
 
 export interface RuntimeStatusCount {

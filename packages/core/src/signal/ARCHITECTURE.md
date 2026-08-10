@@ -168,6 +168,17 @@ program bindings.
 
 `projectTransportEnvelope()` is the privacy-safe operator/Devtools view: state,
 attempts, safe failure codes, and occurrence lineage without payload bytes.
+Accept and normalize emit that projection through the existing observability
+transport (`custom.operation` with `kind: "transport.envelope"`) when sinks are
+active so Run detail can show accepted-envelope lineage without a parallel event
+map.
+
+`transportBindingHealth()` composes program declarations, durable binding
+checkpoints, and the owner-scoped transport statistics ledger into a bounded
+(max 64) restart-safe health snapshot. It never exposes raw cursors, payloads,
+credentials, lease tokens, or unbounded event identities. Facets that are not
+durable (live reconnect backoff, shutdown outcome, provider lag) are reported
+with explicit coverage rather than fabricated values.
 
 ### Polling supervision (issue #340 baseline)
 

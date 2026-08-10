@@ -420,8 +420,20 @@ messages.
 - `transportStatistics({ store, namespace })` returns bounded accepted,
   deduplicated, normalized, delivered, retried, and dead-lettered totals with
   first-64 adapter/binding attribution.
+- `transportBindingHealth({ store, namespace, program })` projects one secret-free
+  health row per managed binding from program identity, durable checkpoints, and
+  the same statistics ledger. Cursor age and last owner are available when
+  checkpointed; live reconnect backoff and shutdown outcome stay explicitly
+  unavailable when they are not durable. At most 64 bindings are returned.
+  Memory and PostgreSQL implement the transports port; Convex does not claim
+  managed-transport accept/checkpoints and rejects managed-binding workers with
+  `CAPABILITY_MISSING`.
 - `projectTransportEnvelope(record)` exposes envelope state and Signal
-  occurrence lineage without payload bytes.
+  occurrence lineage without payload bytes. Accept/normalize also emit that
+  projection on the existing observability transport for Devtools Run detail.
+- Devtools Catalog shows authored binding/adapter/config/target identity.
+  Runtime status includes a Transports tab with live binding health when a
+  generated program is present.
 - Runtime retention prunes only terminal `normalized` and `dead-letter`
   envelopes through the existing maintenance sweep (`transportEnvelopes`,
   default `7d`).

@@ -6,8 +6,10 @@ import {
   runtimeHostOnlyError,
   runtimeRequiredError,
   runtimeTargetMap,
+  transportBindingHealth,
   type ResolvedRuntimeEngine,
   type RuntimeEngineDefinition,
+  type RuntimeProgram,
   type RuntimeSetupResult,
   type RuntimeSetupPort,
   type RuntimeTargetRuntimeRef,
@@ -74,7 +76,7 @@ export async function runRuntimeOperation(
           if (!options.includeDetails) return base
           return {
             ...base,
-            ...(await statusDetails(runtime)),
+            ...(await statusDetails(runtime, options.root)),
           }
         },
       )
@@ -326,7 +328,10 @@ function isTerminalRuntimeStatus(
   )
 }
 
-async function statusDetails(runtime: ResolvedRuntimeEngine) {
+async function statusDetails(
+  runtime: ResolvedRuntimeEngine,
+  root: string,
+) {
   const work = (
     await Promise.all(
       WORK_STATUSES.map((status) =>
@@ -338,6 +343,7 @@ async function statusDetails(runtime: ResolvedRuntimeEngine) {
       ),
     )
   ).flat()
+  const transports = await loadTransportBindingHealth(root, runtime)
   return {
     work: work.sort(
       (a, b) =>
@@ -353,6 +359,45 @@ async function statusDetails(runtime: ResolvedRuntimeEngine) {
       namespace: runtime.namespace,
       limit: 200,
     }),
+    ...(transports ? { transports } : {}),
+  }
+}
+
+/**
+ * Load bounded transport binding health from the generated Runtime program.
+ *
+ * @remarks Missing program modules, missing transport ports, and empty binding
+ * lists return `undefined` rather than fabricated health rows.
+ */
+async function loadTransportBindingHealth(
+  root: string,
+  runtime: ResolvedRuntimeEngine,
+) {
+  if (!runtime.store.transports) {
+    return undefined
+  }
+
+  try {
+    const modulePath = join(root, '.crux/generated/runtime/program.ts')
+    // Match other runtime-ops imports: always pass an explicit timeout so the
+    // bound import cannot race `setTimeout(undefined)` (~1ms) and silently drop
+    // transport health from Runtime status / Devtools.
+    const loaded = (await importUserModule(modulePath, 8_000, root)) as {
+      readonly runtimeProgram?: RuntimeProgram
+      readonly default?: RuntimeProgram
+    }
+    const program = loaded.runtimeProgram ?? loaded.default
+    if (!program?.transports || program.transports.length === 0) {
+      return undefined
+    }
+
+    return await transportBindingHealth({
+      store: runtime.store,
+      namespace: runtime.namespace,
+      program,
+    })
+  } catch {
+    return undefined
   }
 }
 

@@ -22,9 +22,10 @@ import {
   RuntimeWorkDetail,
   RuntimeWorkTable,
 } from "./RuntimeTables";
+import { RuntimeTransportBindingsTable } from "./RuntimeTransportBindings";
 import type { RuntimeWorkFilters, RuntimeWorkStatus } from "../types";
 
-type RuntimeTab = "work" | "timers" | "outbox" | "dead-letter";
+type RuntimeTab = "work" | "timers" | "outbox" | "dead-letter" | "transports";
 
 const STATUSES: readonly (RuntimeWorkStatus | "all")[] = [
   "all",
@@ -51,6 +52,8 @@ export function RuntimeView() {
   const workRows = status?.work ?? [];
   const timers = status?.timers ?? [];
   const outbox = status?.outbox ?? [];
+  // Keep omitted transport health distinct from an empty bindings snapshot.
+  const transportBindings = status?.transports?.bindings;
   const deadLetters = useMemo(
     () => workRows.filter((row) => row.status === "dead-letter"),
     [workRows],
@@ -156,6 +159,13 @@ export function RuntimeView() {
           active: tab === "dead-letter",
           onClick: () => setTab("dead-letter"),
         },
+        {
+          label: "Transports",
+          count: transportBindings?.length,
+          iconName: "inbox",
+          active: tab === "transports",
+          onClick: () => setTab("transports"),
+        },
       ]}
       filterBar={
         <RuntimeFilterBar
@@ -202,6 +212,8 @@ export function RuntimeView() {
             <RuntimeTimerTable rows={timers} />
           ) : tab === "outbox" ? (
             <RuntimeOutboxTable rows={outbox} />
+          ) : tab === "transports" ? (
+            <RuntimeTransportBindingsTable rows={transportBindings} />
           ) : (
             <RuntimeWorkTable
               rows={tab === "dead-letter" ? deadLetters : filteredWork}

@@ -15,6 +15,7 @@ import {
   TransportStoreMissingError,
 } from "./lifecycle-errors";
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from "../engine/retry";
+import { emitTransportEnvelopeObservability } from "./envelope-observability";
 import {
   initialTransportStatistics,
   recordTransportStatistics,
@@ -129,6 +130,11 @@ export async function acceptTransportEnvelope(
 
     throw error;
   }
+
+  emitTransportEnvelopeObservability(
+    result.record,
+    result.kind === "accepted" ? "accepted" : "duplicate",
+  );
 
   return Object.freeze({
     kind: result.kind,

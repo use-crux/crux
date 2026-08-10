@@ -15,6 +15,7 @@ import {
   type RuntimeTransportEnvelopeRecord,
 } from "./records";
 import type { RuntimeTransportStorePort } from "./store";
+import { emitTransportEnvelopeObservability } from "./envelope-observability";
 import {
   initialTransportStatistics,
   recordTransportStatistics,
@@ -129,8 +130,10 @@ export async function failNormalizationAttempt(options: {
     return { kind: "lost-lease" };
   }
 
+  const kind = failed.state === "dead-letter" ? "dead-lettered" : "retried";
+  emitTransportEnvelopeObservability(failed, kind);
   return Object.freeze({
-    kind: failed.state === "dead-letter" ? "dead-lettered" : "retried",
+    kind,
     record: failed,
   });
 }

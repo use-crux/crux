@@ -70,8 +70,29 @@ messages are sanitized and bounded. This protects diagnostics; it does not
 make stored payload data public-safe or secret-safe automatically.
 
 No Signal API in this release promises historical subscription replay,
-consumer-completion acknowledgment, cross-process local callbacks, restart-safe
-Effect rollback, or a transport integration.
+consumer-completion acknowledgment, cross-process local callbacks, or
+restart-safe Effect rollback. Managed provider transports (webhook accept,
+polling, stream/SSE/WebSocket supervision) are covered separately under
+[Signal providers](/docs/guides/durable-execution/signals/providers) and the
+[providers and transports reference](/docs/reference/crux-core/signal/providers-and-transports).
+
+## Managed transport troubleshooting
+
+When diagnosing polling or stream bindings:
+
+| Symptom | What to check |
+| --- | --- |
+| Worker start fails with `CAPABILITY_MISSING` | The Runtime store must implement the transports port. Memory and PostgreSQL do; Convex does not claim managed-transport accept/checkpoints. Remove managed bindings or use a capable store. |
+| Binding stays idle after deploy | Confirm the binding is on `createRuntimeProgram({ providers, transports })` and one `createRuntimeWorker` owns the store/namespace. Competing workers coordinate through leases — only the lease holder acquires. |
+| Cursor does not advance | Poll/stream failures and envelope conflicts leave the durable cursor unchanged. Check `transportBindingHealth` `fault.lastErrorCode` and envelope state (`accepted` vs `dead-letter`). |
+| Health shows `reconnect` / `shutdown` as `unavailable` | Those facets are process-local and intentionally not durable. Durable status (`active` / `faulted` / `disabled`), last owner, and cursor age come from checkpoints only. |
+| Counts missing on a binding | Outcome counts use the first-64 adapter/binding statistics attribution. Overflow bindings report honest missing/other coverage rather than invented counters. |
+| Stream never reopens after fault | Terminal faults set durable `status: "faulted"`. Clear status or change secret-free `configRef` identity; automatic reconnect does not resume a faulted binding. |
+
+Operator health reads: `transportBindingHealth({ store, namespace, program })`.
+Devtools Runtime status includes a Transports tab when a generated program
+declares bindings; Run detail shows accepted-envelope lineage without payloads.
 
 Finish with [practical recipes](/docs/guides/durable-execution/signals/recipes),
-or use the [exact API reference](/docs/reference/crux-core/signal).
+[provider recipes](/docs/guides/durable-execution/signals/provider-recipes), or
+the [exact API reference](/docs/reference/crux-core/signal).
