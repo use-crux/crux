@@ -516,7 +516,8 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	case "abort":
 		// Cancellation is represented by the caller terminating the isolated job.
 	}
-	report, cpu, termination, cleaned := cleanup(unit)
+	report, cpu, termination, cleanupReason := cleanup(unit)
+	cleaned := cleanupReason == ""
 	wall := time.Since(started)
 	outcome := observedProbeOutcome(name, observation, report, cpu, wall)
 	if outcome != expectedProbeOutcome(name) {

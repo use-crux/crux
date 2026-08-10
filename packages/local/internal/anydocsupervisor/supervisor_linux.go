@@ -115,7 +115,7 @@ func resultValidation(stage, reason string) error {
 
 func validResultValidationStage(stage string) bool {
 	switch stage {
-	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write":
+	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write", "containment-cleanup":
 		return true
 	}
 	return false
@@ -123,7 +123,7 @@ func validResultValidationStage(stage string) bool {
 
 func validResultValidationReason(reason string) bool {
 	switch reason {
-	case "mismatch", "invalid-frame", "invalid-result", "io", "unavailable":
+	case "mismatch", "invalid-frame", "invalid-result", "io", "unavailable", "accounting-evidence", "stop-unit", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -764,15 +764,17 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.stopOnce.Do(func() { close(r.stop) })
 		r.mu.Unlock()
 		result := outcomeCode(out)
-		report, cpu, termination, cleaned := cleanup(r.unit)
-		if !cleaned {
-			result = closedWith(ErrContainmentUnavailable, out)
+		report, cpu, termination, cleanupReason := cleanup(r.unit)
+		unitCleaned := cleanupReason == ""
+		if !unitCleaned {
+			result = chainContainment(result, "containment-cleanup", cleanupReason)
 		}
-		if r.staged == nil || r.staged.Cleanup() != nil {
-			result = closedWith(ErrContainmentUnavailable, out)
+		stagedCleaned := r.staged != nil && r.staged.Cleanup() == nil
+		if !stagedCleaned {
+			result = chainContainment(result, "containment-cleanup", "staged-cleanup")
 		}
 		r.mu.Lock()
-		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: cleaned && r.staged != nil && r.staged.cleanup == nil}
+		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: unitCleaned && stagedCleaned}
 		r.result = result
 		r.mu.Unlock()
 		close(r.finished)
@@ -918,6 +920,12 @@ func outcomeCode(out error) error {
 	}
 	return nil
 }
+func chainContainment(result error, stage, reason string) error {
+	if result != nil {
+		return closedWith(ErrContainmentUnavailable, result)
+	}
+	return closedWith(ErrContainmentUnavailable, resultValidation(stage, reason))
+}
 func (r *Run) monitor() {
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
@@ -957,13 +965,13 @@ func (r *Run) monitor() {
 		}
 	}
 }
-func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool) {
+func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
-		return SandboxReport{}, 0, TerminationEvidence{}, false
+		return SandboxReport{}, 0, TerminationEvidence{}, "unit-cleanup"
 	}
-	ok := true
+	var reason string
 	usedCachedAccounting := false
 	captureFailure := accountingCaptureInvalid
 	var report SandboxReport
@@ -991,7 +999,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 			cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
 		}
 		if !cached || captureFailure != accountingCaptureExactCgroupAbsent {
-			ok = false
+			if reason == "" {
+				reason = "accounting-evidence"
+			}
 		}
 		if cached {
 			report, cpu = cachedReport, cachedCPU
@@ -999,14 +1009,20 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 		}
 	}
 	if unit.Stop(ctx) != nil {
-		ok = false
+		if reason == "" {
+			reason = "stop-unit"
+		}
 	}
 	if unit.WaitInactive(ctx) != nil {
-		ok = false
+		if reason == "" {
+			reason = "wait-inactive"
+		}
 	}
 	status, statusErr := unit.TerminalStatus(ctx)
 	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
-		ok = false
+		if reason == "" {
+			reason = "terminal-status"
+		}
 	} else {
 		report.MainPID = status.MainPID
 		report.ServiceResult = status.ServiceResult
@@ -1014,15 +1030,21 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, bool
 	}
 	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
 	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
-		ok = false
+		if reason == "" {
+			reason = "termination-evidence"
+		}
 	}
 	if usedCachedAccounting && !termination.Absent {
-		ok = false
+		if reason == "" {
+			reason = "used-cached-accounting"
+		}
 	}
 	if unit.Cleanup(ctx) != nil {
-		ok = false
+		if reason == "" {
+			reason = "unit-cleanup"
+		}
 	}
-	return report, cpu, termination, ok
+	return report, cpu, termination, reason
 }
 func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 	if u == nil {

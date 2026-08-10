@@ -219,13 +219,13 @@ func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
-	report, cpu, termination, cleaned := cleanup(unit)
-	if !cleaned || report.ControlGroup != "/crux.slice/test" || cpu != 11*time.Microsecond || !termination.Absent {
-		t.Fatalf("vanished-cgroup cleanup = report %#v cpu %s termination %#v cleaned %v", report, cpu, termination, cleaned)
+	report, cpu, termination, reason := cleanup(unit)
+	if reason != "" || report.ControlGroup != "/crux.slice/test" || cpu != 11*time.Microsecond || !termination.Absent {
+		t.Fatalf("vanished-cgroup cleanup = report %#v cpu %s termination %#v reason %q", report, cpu, termination, reason)
 	}
 
 	unverified := &systemdUnit{name: "crux-anydoc-unverified.service", bus: bus, fs: fs, now: immediateClock{}, controlGroup: "/crux.slice/test"}
-	if _, _, _, cleaned := cleanup(unverified); cleaned {
+	if _, _, _, reason := cleanup(unverified); reason == "" {
 		t.Fatal("vanished cgroup was accepted without an earlier verified snapshot")
 	}
 
@@ -252,7 +252,7 @@ func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
 	}
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
-	if _, _, _, cleaned := cleanup(unit); cleaned {
+	if _, _, _, reason := cleanup(unit); reason == "" {
 		t.Fatal("cached accounting masked a malformed but present cgroup")
 	}
 }

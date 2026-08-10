@@ -805,6 +805,34 @@ func TestExecutePreservesResultValidationCauseThroughCleanupFailure(t *testing.T
 	}
 }
 
+func TestExecuteYieldsCleanupDiagnosisWhenServiceSucceeds(t *testing.T) {
+	b := &fakeBackend{
+		cleanupErr: errors.New("cleanup failed"),
+		receive: func(ctx context.Context, req Request) (Result, error) {
+			return Result{Request: req, OK: true}, nil
+		},
+	}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.Execute(context.Background())
+	var sup *SupervisorError
+	if !errors.As(err, &sup) || sup.Code != ErrContainmentUnavailable {
+		t.Fatalf("outer error = %T %v, want containmnent-unavailable", err, err)
+	}
+	var v *ResultValidationError
+	if !errors.As(err, &v) {
+		t.Fatalf("ResultValidationError missing after successful service + cleanup failure: %T %v", err, err)
+	}
+	if v.Stage != "containment-cleanup" {
+		t.Fatalf("stage = %q, want containmnent-cleanup", v.Stage)
+	}
+	if v.ReasonCode != "unit-cleanup" {
+		t.Fatalf("reason = %q, want unit-cleanup", v.ReasonCode)
+	}
+}
+
 func assert(t *testing.T, e error, c ErrorCode) {
 	t.Helper()
 	var x *SupervisorError
