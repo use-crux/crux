@@ -909,13 +909,19 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 		u.snapshotMu.Unlock()
 		return 0, errors.New("accounting snapshot is not verified")
 	}
-	u.snapshot.MemoryCurrent = memoryCurrent
-	u.snapshot.MemoryPeak = memoryPeak
-	u.snapshot.MemoryEvents = memoryEvents
-	u.snapshot.CPUStats = cpuStats
-	u.snapshot.PIDsEvents = pidsEvents
-	u.snapshot.ControlGroupMembers = members
-	u.snapshot.Populated = populated
+	// Persist a deep-cloned verified snapshot so cleanup can reuse
+	// memory.peak / memory.events / CPU / pids evidence after the live
+	// cgroup disappears, without sharing map/slice ownership with the
+	// temporary capture buffers.
+	next := cloneSandboxReport(u.snapshot)
+	next.MemoryCurrent = memoryCurrent
+	next.MemoryPeak = memoryPeak
+	next.MemoryEvents = memoryEvents
+	next.CPUStats = cpuStats
+	next.PIDsEvents = pidsEvents
+	next.ControlGroupMembers = members
+	next.Populated = populated
+	u.snapshot = cloneSandboxReport(next)
 	u.snapshotCPU = usage
 	u.snapshotMu.Unlock()
 	return usage, nil

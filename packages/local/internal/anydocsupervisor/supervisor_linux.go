@@ -993,19 +993,19 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	if captureErr != nil {
+		// Snapshot fallback is only valid when the exact original cgroup
+		// path is gone (ENOENT). Malformed-but-present data and any other
+		// capture error must fail closed as accounting-evidence.
 		snapshots, hasSnapshots := unit.(verifiedAccountingSnapshot)
 		cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
 		if hasSnapshots {
 			cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
 		}
-		if !cached || captureFailure != accountingCaptureExactCgroupAbsent {
-			if reason == "" {
-				reason = "accounting-evidence"
-			}
-		}
-		if cached {
+		if cached && captureFailure == accountingCaptureExactCgroupAbsent {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
+		} else if reason == "" {
+			reason = "accounting-evidence"
 		}
 	}
 	if unit.Stop(ctx) != nil {

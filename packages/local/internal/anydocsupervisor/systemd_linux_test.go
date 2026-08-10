@@ -257,6 +257,107 @@ func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
 	}
 }
 
+func TestCleanupUsesRefreshAccountingSnapshotWhenCgroupRemoved(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-refresh-absent.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+
+	fs.files[cgroupFile("/crux.slice/test", "memory.current")] = []byte("4096\n")
+	fs.files[cgroupFile("/crux.slice/test", "memory.peak")] = []byte("8192\n")
+	fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("low 0\nhigh 0\nmax 1\noom 0\noom_kill 0\n")
+	fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec 42\nnr_periods 2\nnr_throttled 1\nthrottled_usec 5\n")
+	fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 1\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte("42\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 1\n")
+
+	usage, err := unit.RefreshAccounting(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage != 42*time.Microsecond {
+		t.Fatalf("refresh cpu = %s, want 42µs", usage)
+	}
+	cached, cachedCPU, ok := unit.LastVerifiedSnapshot()
+	if !ok || cachedCPU != 42*time.Microsecond {
+		t.Fatalf("verified snapshot missing after refresh: ok=%v cpu=%s", ok, cachedCPU)
+	}
+	if cached.MemoryPeak != 8192 || cached.MemoryCurrent != 4096 {
+		t.Fatalf("refresh snapshot memory = peak %d current %d", cached.MemoryPeak, cached.MemoryCurrent)
+	}
+	if cached.MemoryEvents["max"] != 1 || cached.CPUStats["usage_usec"] != 42 || cached.PIDsEvents["max"] != 1 {
+		t.Fatalf("refresh snapshot lost accounting maps: %#v", cached)
+	}
+
+	for path := range fs.files {
+		if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+			delete(fs.files, path)
+		}
+	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+
+	report, cpu, termination, reason := cleanup(unit)
+	if reason != "" {
+		t.Fatalf("cleanup reason = %q, want success via refresh snapshot", reason)
+	}
+	if report.ControlGroup != "/crux.slice/test" || cpu != 42*time.Microsecond || !termination.Absent {
+		t.Fatalf("refresh-absent cleanup = report %#v cpu %s termination %#v", report, cpu, termination)
+	}
+	if report.MemoryPeak != 8192 || report.MemoryEvents["max"] != 1 || report.CPUStats["usage_usec"] != 42 || report.PIDsEvents["max"] != 1 {
+		t.Fatalf("cleanup lost refresh accounting evidence: %#v", report)
+	}
+}
+
+func TestCleanupRejectsMalformedPresentAccountingAfterRefresh(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-refresh-malformed.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+	if _, err := unit.RefreshAccounting(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Malformed-but-present: cgroup still exists, but accounting files are broken.
+	// Cleanup must not reuse the verified snapshot for this class of failure.
+	delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak"))
+	fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("not-a-map\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+	fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = nil
+	bus.onStop = func() {
+		for path := range fs.files {
+			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, path)
+			}
+		}
+	}
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "accounting-evidence" {
+		t.Fatalf("cleanup reason = %q, want accounting-evidence for malformed-present data", reason)
+	}
+}
+
 func TestMountedRuntimeAttestationRejectsTreeTamperingAndProcErrors(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".complete"), nil, 0o444); err != nil {
