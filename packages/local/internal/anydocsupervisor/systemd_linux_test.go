@@ -146,6 +146,40 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 	}
 }
 
+func TestCaptureTerminalAccountingClassifiesFailureSources(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		apply func(*fakeSystemBus, *fakeFS)
+		want accountingCaptureFailure
+	}{
+		{name: "report unavailable", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private report failure") }, want: accountingCaptureReportUnavailable},
+		{name: "report invalid", apply: func(bus *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "memory.max")] = []byte("bad") }, want: accountingCaptureReportInvalid},
+		{name: "memory current", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.current")) }, want: accountingCaptureMemoryCurrent},
+		{name: "memory peak", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak")) }, want: accountingCaptureMemoryPeak},
+		{name: "memory events", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("max bad") }, want: accountingCaptureMemoryEvents},
+		{name: "cpu stat", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec bad") }, want: accountingCaptureCPUStat},
+		{name: "pids events", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max bad") }, want: accountingCapturePIDsEvents},
+		{name: "cgroup procs", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte("bad") }, want: accountingCaptureCgroupProcs},
+		{name: "cgroup events unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.readErr[cgroupFile("/crux.slice/test", "cgroup.events")] = errors.New("private cgroup read failure") }, want: accountingCaptureCgroupEventsUnavailable},
+		{name: "cgroup events malformed", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("bad") }, want: accountingCaptureCgroupEventsMalformed},
+		{name: "cpu unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = 2 }, want: accountingCaptureCPUUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			fs := newFakeFS()
+			test.apply(bus, fs)
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
+			if err == nil || failure != test.want {
+				t.Fatalf("capture = failure %v err %v, want failure %v and an error", failure, err, test.want)
+			}
+			if reason := failure.reason(); reason == "" || !validContainmentReason(reason) || strings.Contains(reason, "private") {
+				t.Fatalf("failure reason = %q, must be allowlisted and non-sensitive", reason)
+			}
+		})
+	}
+}
+
 func TestSystemdReportRejectsMalformedBindAndProtectHomeProperties(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -195,7 +229,7 @@ func TestSystemdTerminationEvidenceRequiresOriginalCgroupToBeEmptyOrAbsent(t *te
 	}
 }
 
-func TestCleanupUsesVerifiedSnapshotWhenCgroupVanishesOnExit(t *testing.T) {
+func TestCleanupUsesVerifiedSnapshotWhenExactCgroupENOENT(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
 	unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
@@ -353,8 +387,8 @@ func TestCleanupRejectsMalformedPresentAccountingAfterRefresh(t *testing.T) {
 	bus.values["Result"] = "success"
 
 	_, _, _, reason := cleanup(unit)
-	if reason != "accounting-evidence" {
-		t.Fatalf("cleanup reason = %q, want accounting-evidence for malformed-present data", reason)
+	if reason != "terminal-accounting-memory-peak" {
+		t.Fatalf("cleanup reason = %q, want terminal-accounting-memory-peak for malformed-present data", reason)
 	}
 }
 
@@ -915,10 +949,11 @@ type fakeFS struct {
 	removed    map[string]bool
 	reads      map[string]int
 	failReadAt map[string]int
+	readErr    map[string]error
 }
 
 func newFakeFS() *fakeFS {
-	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("32\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}, reads: map[string]int{}, failReadAt: map[string]int{}}
+	return &fakeFS{files: map[string][]byte{cgroupFile("/crux.slice/test", "memory.max"): []byte("536870912\n"), cgroupFile("/crux.slice/test", "memory.current"): []byte("1024\n"), cgroupFile("/crux.slice/test", "memory.peak"): []byte("2048\n"), cgroupFile("/crux.slice/test", "memory.events"): []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n"), cgroupFile("/crux.slice/test", "memory.swap.max"): []byte("0\n"), cgroupFile("/crux.slice/test", "pids.max"): []byte("32\n"), cgroupFile("/crux.slice/test", "pids.events"): []byte("max 0\n"), cgroupFile("/crux.slice/test", "cpu.max"): []byte("600000 1000000\n"), cgroupFile("/crux.slice/test", "cgroup.procs"): []byte("42\n43\n"), cgroupFile("/crux.slice/test", "cgroup.events"): []byte("populated 1\n"), cgroupFile("/crux.slice/test", "cpu.stat"): []byte("usage_usec 11\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")}, writes: map[string][]byte{}, removed: map[string]bool{}, reads: map[string]int{}, failReadAt: map[string]int{}, readErr: map[string]error{}}
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	if strings.HasSuffix(path, "/.complete") {
@@ -927,6 +962,9 @@ func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	f.reads[path]++
 	if failAt := f.failReadAt[path]; failAt > 0 && f.reads[path] >= failAt {
 		return nil, os.ErrNotExist
+	}
+	if err := f.readErr[path]; err != nil {
+		return nil, err
 	}
 	v, ok := f.files[path]
 	if !ok {

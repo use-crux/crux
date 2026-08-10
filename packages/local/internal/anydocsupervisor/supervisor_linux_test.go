@@ -926,6 +926,35 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 	}
 }
 
+func TestCleanupTerminalAccountingFailureReasons(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		failure accountingCaptureFailure
+		want string
+	}{
+		{name: "report unavailable", failure: accountingCaptureReportUnavailable, want: "terminal-accounting-report-unavailable"},
+		{name: "report invalid", failure: accountingCaptureReportInvalid, want: "terminal-accounting-report-invalid"},
+		{name: "cpu unavailable", failure: accountingCaptureCPUUnavailable, want: "terminal-accounting-cpu-unavailable"},
+		{name: "cgroup events unavailable", failure: accountingCaptureCgroupEventsUnavailable, want: "terminal-accounting-cgroup-events-unavailable"},
+		{name: "cgroup events malformed", failure: accountingCaptureCgroupEventsMalformed, want: "terminal-accounting-cgroup-events-malformed"},
+		{name: "memory current", failure: accountingCaptureMemoryCurrent, want: "terminal-accounting-memory-current"},
+		{name: "memory peak", failure: accountingCaptureMemoryPeak, want: "terminal-accounting-memory-peak"},
+		{name: "memory events", failure: accountingCaptureMemoryEvents, want: "terminal-accounting-memory-events"},
+		{name: "cpu stat", failure: accountingCaptureCPUStat, want: "terminal-accounting-cpu-stat"},
+		{name: "pids events", failure: accountingCapturePIDsEvents, want: "terminal-accounting-pids-events"},
+		{name: "cgroup procs", failure: accountingCaptureCgroupProcs, want: "terminal-accounting-cgroup-procs"},
+		{name: "untyped invalid", failure: accountingCaptureInvalid, want: "accounting-evidence"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &terminalAccountingFakeUnit{failure: test.failure, err: errors.New("/private/cgroup/secret 123")}
+			_, _, _, reason := cleanup(unit)
+			if reason != test.want || strings.Contains(reason, "secret") || !validContainmentReason(reason) {
+				t.Fatalf("cleanup reason = %q, want allowlisted non-sensitive %q", reason, test.want)
+			}
+		})
+	}
+}
+
 func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 	const pinnedCgroup = "/private/pinned-cgroup-secret"
 	const snapshotCgroup = "/private/snapshot-cgroup-secret"
@@ -1151,6 +1180,16 @@ type fakeUnit struct {
 	snapshotOK       bool
 	stopped, cleaned bool
 	mu               sync.Mutex
+}
+
+type terminalAccountingFakeUnit struct {
+	fakeUnit
+	failure accountingCaptureFailure
+	err     error
+}
+
+func (u *terminalAccountingFakeUnit) CaptureTerminalAccounting(context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error) {
+	return SandboxReport{}, 0, u.failure, u.err
 }
 
 func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, nil }

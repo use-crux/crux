@@ -618,11 +618,11 @@ func (u *systemdUnit) waitActive(ctx context.Context) error {
 func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
-		return SandboxReport{}, errors.New("unit properties unavailable")
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportUnavailable, errors.New("unit properties unavailable"))
 	}
 	cgroup := stringValue(p, "ControlGroup")
 	if !validCgroup(cgroup) {
-		return SandboxReport{}, errors.New("invalid cgroup")
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("invalid cgroup"))
 	}
 	u.reportMu.Lock()
 	if u.controlGroup == "" {
@@ -631,57 +631,57 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	matchedCgroup := u.controlGroup == cgroup
 	u.reportMu.Unlock()
 	if !matchedCgroup {
-		return SandboxReport{}, errors.New("control group identity changed")
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("control group identity changed"))
 	}
 	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
 	}
 	memoryCurrent, err := cgroupLimit(u.fs, cgroup, "memory.current")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryCurrent, err)
 	}
 	memoryPeak, err := cgroupLimit(u.fs, cgroup, "memory.peak")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryPeak, err)
 	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureMemoryEvents, err)
 	}
 	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureCPUStat, err)
 	}
 	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCapturePIDsEvents, err)
 	}
 	swap, err := cgroupLimit(u.fs, cgroup, "memory.swap.max")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
 	}
 	tasks, err := cgroupLimit(u.fs, cgroup, "pids.max")
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
 	}
 	quota, period, err := cpuLimit(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, err)
 	}
 	members, err := cgroupPIDs(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(accountingCaptureCgroupProcs, err)
 	}
 	populated, err := cgroupPopulated(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, err
+		return SandboxReport{}, terminalAccountingError(cgroupPopulatedFailure(err), err)
 	}
 	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
 	binds, bindsOK := bindReadOnlyPathsValue(p["BindReadOnlyPaths"])
 	protectHome, protectHomeOK := p["ProtectHome"].(string)
 	if !ok || !bindsOK || !protectHomeOK || protectHome != "yes" || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
-		return SandboxReport{}, errors.New("invalid sandbox properties")
+		return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("invalid sandbox properties"))
 	}
 	pid := intValue(p, "MainPID")
 	runtimeDigest := ""
@@ -692,7 +692,7 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 		}
 		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
 		if err != nil {
-			return SandboxReport{}, errors.New("mounted runtime attestation unavailable")
+			return SandboxReport{}, terminalAccountingError(accountingCaptureReportInvalid, errors.New("mounted runtime attestation unavailable"))
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
@@ -1023,13 +1023,39 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 func (u *systemdUnit) CaptureTerminalAccounting(ctx context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error) {
 	report, reportErr := u.Report(ctx)
 	if reportErr != nil {
-		return SandboxReport{}, 0, u.captureFailure(), reportErr
+		return SandboxReport{}, 0, accountingCaptureFailureFor(reportErr, u.captureFailure()), reportErr
 	}
 	cpu, cpuErr := u.CPUUsage(ctx)
 	if cpuErr != nil {
-		return SandboxReport{}, 0, u.captureFailure(), cpuErr
+		return SandboxReport{}, 0, accountingCaptureCPUUnavailable, cpuErr
 	}
 	return report, cpu, accountingCaptureOK, nil
+}
+
+type terminalAccountingCaptureError struct {
+	failure accountingCaptureFailure
+	err     error
+}
+
+func (e *terminalAccountingCaptureError) Error() string { return e.err.Error() }
+func (e *terminalAccountingCaptureError) Unwrap() error { return e.err }
+
+func terminalAccountingError(failure accountingCaptureFailure, err error) error {
+	return &terminalAccountingCaptureError{failure: failure, err: err}
+}
+
+func accountingCaptureFailureFor(err error, fallback accountingCaptureFailure) accountingCaptureFailure {
+	// Exact cgroup disappearance is the sole condition that permits reuse of a
+	// verified accounting snapshot. Preserve it even when Report reached a
+	// typed source error before the cgroup probe confirmed ENOENT.
+	if fallback == accountingCaptureExactCgroupAbsent {
+		return fallback
+	}
+	var captureErr *terminalAccountingCaptureError
+	if errors.As(err, &captureErr) {
+		return captureErr.failure
+	}
+	return fallback
 }
 
 func (u *systemdUnit) captureFailure() accountingCaptureFailure {
@@ -1222,6 +1248,14 @@ func cgroupEvents(fs FileSystem, cgroup, file string) (map[string]int64, error) 
 	}
 	return out, nil
 }
+
+type cgroupEventsUnavailableError struct{}
+
+func (cgroupEventsUnavailableError) Error() string { return "cgroup unavailable" }
+
+type cgroupEventsMalformedError struct{}
+
+func (cgroupEventsMalformedError) Error() string { return "invalid cgroup events" }
 func cgroupLimit(fs FileSystem, cgroup, file string) (int64, error) {
 	b, err := fs.ReadFile(cgroupFile(cgroup, file))
 	if err != nil {
@@ -1267,7 +1301,7 @@ func cgroupPIDs(fs FileSystem, cgroup string) ([]int, error) {
 func cgroupPopulated(fs FileSystem, cgroup string) (bool, error) {
 	b, err := fs.ReadFile(cgroupFile(cgroup, "cgroup.events"))
 	if err != nil {
-		return false, errors.New("cgroup unavailable")
+		return false, cgroupEventsUnavailableError{}
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Fields(line)
@@ -1275,7 +1309,15 @@ func cgroupPopulated(fs FileSystem, cgroup string) (bool, error) {
 			return f[1] == "1", nil
 		}
 	}
-	return false, errors.New("invalid cgroup events")
+	return false, cgroupEventsMalformedError{}
+}
+
+func cgroupPopulatedFailure(err error) accountingCaptureFailure {
+	var unavailable cgroupEventsUnavailableError
+	if errors.As(err, &unavailable) {
+		return accountingCaptureCgroupEventsUnavailable
+	}
+	return accountingCaptureCgroupEventsMalformed
 }
 
 func cgroupIsPopulated(events []byte) bool {

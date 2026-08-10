@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-gone-snapshot-not-success", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-gone-snapshot-not-success", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -565,7 +565,47 @@ const (
 	accountingCaptureOK accountingCaptureFailure = iota
 	accountingCaptureExactCgroupAbsent
 	accountingCaptureInvalid
+	accountingCaptureReportUnavailable
+	accountingCaptureReportInvalid
+	accountingCaptureCPUUnavailable
+	accountingCaptureCgroupEventsUnavailable
+	accountingCaptureCgroupEventsMalformed
+	accountingCaptureMemoryCurrent
+	accountingCaptureMemoryPeak
+	accountingCaptureMemoryEvents
+	accountingCaptureCPUStat
+	accountingCapturePIDsEvents
+	accountingCaptureCgroupProcs
 )
+
+func (f accountingCaptureFailure) reason() string {
+	switch f {
+	case accountingCaptureReportUnavailable:
+		return "terminal-accounting-report-unavailable"
+	case accountingCaptureReportInvalid:
+		return "terminal-accounting-report-invalid"
+	case accountingCaptureCPUUnavailable:
+		return "terminal-accounting-cpu-unavailable"
+	case accountingCaptureCgroupEventsUnavailable:
+		return "terminal-accounting-cgroup-events-unavailable"
+	case accountingCaptureCgroupEventsMalformed:
+		return "terminal-accounting-cgroup-events-malformed"
+	case accountingCaptureMemoryCurrent:
+		return "terminal-accounting-memory-current"
+	case accountingCaptureMemoryPeak:
+		return "terminal-accounting-memory-peak"
+	case accountingCaptureMemoryEvents:
+		return "terminal-accounting-memory-events"
+	case accountingCaptureCPUStat:
+		return "terminal-accounting-cpu-stat"
+	case accountingCapturePIDsEvents:
+		return "terminal-accounting-pids-events"
+	case accountingCaptureCgroupProcs:
+		return "terminal-accounting-cgroup-procs"
+	default:
+		return ""
+	}
+}
 
 type terminalAccountingCapture interface {
 	CaptureTerminalAccounting(context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error)
@@ -1082,7 +1122,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
 		} else if reason == "" {
-			reason = "accounting-evidence"
+			reason = captureFailure.reason()
+			if reason == "" {
+				reason = "accounting-evidence"
+			}
 		}
 	}
 	var alreadyGone *alreadyGoneError
