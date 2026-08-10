@@ -327,6 +327,87 @@ func TestCleanupRejectsReportGoneSnapshotWithMismatchedPinnedCgroup(t *testing.T
 	}
 }
 
+func TestCleanupSystemdReportGoneReusesExactVerifiedSnapshotWithStrictEvidence(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-report-gone.service", bus: bus, fs: fs, now: immediateClock{}}
+
+	first, err := unit.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unit.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+
+	bus.propGoneOnce = true
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(0)
+	bus.onStop = func() {
+		fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+		fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte{}
+	}
+
+	report, _, termination, reason := cleanup(unit)
+	if reason != "" {
+		t.Fatalf("cleanup reason = %q, want success", reason)
+	}
+	if report.ControlGroup != first.ControlGroup {
+		t.Fatalf("cleanup report cgroup = %q, want verified %q", report.ControlGroup, first.ControlGroup)
+	}
+	if termination != (TerminationEvidence{ControlGroup: first.ControlGroup, Empty: true}) {
+		t.Fatalf("termination = %#v, want exact empty evidence for %q", termination, first.ControlGroup)
+	}
+}
+
+func TestCleanupReportGoneRequiresStrictTerminalEvidence(t *testing.T) {
+	strict := TerminalStatus{State: "inactive", ServiceResult: "success"}
+	pinned := SandboxReport{ControlGroup: "/crux.slice/pinned"}
+
+	for _, test := range []struct {
+		name      string
+		status    TerminalStatus
+		statusErr error
+		want      string
+	}{
+		{name: "carried proof with typed gone status accepts", statusErr: &terminalStatusGoneError{}},
+		{name: "carried proof with generic status error rejects", statusErr: errors.New("terminal unavailable"), want: "already-gone-terminal-unavailable"},
+		{name: "failed terminal rejects", status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
+		{name: "inactive success with nonzero main status rejects", status: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &terminalAccountingFakeUnit{
+				fakeUnit: fakeUnit{
+					snapshot:   pinned,
+					snapshotOK: true,
+					stopErr:    &alreadyGoneError{proof: strict, cgroup: pinned.ControlGroup},
+					terminalStatus: func(context.Context) (TerminalStatus, error) {
+						return test.status, test.statusErr
+					},
+					termination: func(context.Context, string) (TerminationEvidence, error) {
+						return TerminationEvidence{ControlGroup: pinned.ControlGroup, Absent: true}, nil
+					},
+				},
+				failure: accountingCaptureReportGone,
+				err:     errors.New("unit properties gone"),
+			}
+
+			_, _, _, reason := cleanup(unit)
+			if reason != test.want {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+		})
+	}
+}
+
 func TestSystemdReportRejectsMalformedBindAndProtectHomeProperties(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -1054,6 +1135,7 @@ type fakeSystemBus struct {
 	values                     map[string]any
 	startErr, stopErr, killErr error
 	propErr                    error
+	propGoneOnce               bool
 	propErrAfterStop           bool
 	// propGoneOnceAfterStop returns a typed properties-gone error on the first
 	// UnitProperties call after StopUnit, then serves values again so terminal
@@ -1088,6 +1170,10 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]any, error) {
 	if b.propErr != nil {
 		return nil, b.propErr
+	}
+	if b.propGoneOnce && !b.propGoneConsumed {
+		b.propGoneConsumed = true
+		return nil, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
 	}
 	if b.propErrAfterStop && b.stopped {
 		return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
