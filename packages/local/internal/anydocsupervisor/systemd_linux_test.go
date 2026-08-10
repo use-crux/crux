@@ -1013,7 +1013,7 @@ func TestStopClassifiesFailuresWithFixedReasons(t *testing.T) {
 				bus.killErr = errors.New("kill private-unit-secret.service")
 				bus.propErr = dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{privatePath}}
 			},
-			want: "stop-dbus-other",
+			want: "unit-properties-gone",
 		},
 		{
 			name: "properties unavailable",
@@ -1022,7 +1022,7 @@ func TestStopClassifiesFailuresWithFixedReasons(t *testing.T) {
 				bus.killErr = errors.New("kill private-unit-secret.service")
 				bus.propErr = errors.New("properties " + privatePath)
 			},
-			want: "stop-dbus-other",
+			want: "unit-properties-unavailable",
 		},
 		{
 			name: "invalid cgroup",
@@ -1031,7 +1031,7 @@ func TestStopClassifiesFailuresWithFixedReasons(t *testing.T) {
 				bus.killErr = errors.New("kill private-unit-secret.service")
 				bus.values["ControlGroup"] = "relative" + privatePath
 			},
-			want: "stop-properties-invalid-cgroup",
+			want: "unit-properties-invalid-cgroup",
 		},
 		{
 			name: "cgroup kill unavailable",
@@ -1040,7 +1040,7 @@ func TestStopClassifiesFailuresWithFixedReasons(t *testing.T) {
 				bus.killErr = errors.New("kill private-unit-secret.service")
 				fs.writeErr = errors.New("write " + privatePath)
 			},
-			want: "stop-cgroup-kill-unavailable",
+			want: "cgroup-kill-unavailable",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1059,27 +1059,7 @@ func TestStopClassifiesFailuresWithFixedReasons(t *testing.T) {
 	}
 }
 
-func TestStopUnitFailureReasonsAreFixed(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		err  error
-		want string
-	}{
-		{name: "invalid", err: dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{"/private/path"}}, want: "stop-unit-dbus-invalid-args"},
-		{name: "access", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{"/private/path"}}, want: "stop-unit-dbus-access-denied"},
-		{name: "no such", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{"/private/path"}}, want: "stop-unit-dbus-no-such-unit"},
-		{name: "other dbus", err: dbus.Error{Name: "org.freedesktop.DBus.Error.Failed", Body: []any{"/private/path"}}, want: "stop-unit-dbus-other"},
-		{name: "other error", err: errors.New("private path"), want: "stop-unit-dbus-other"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := stopUnitFailureReason(test.err); got != test.want {
-				t.Fatalf("stopUnitFailureReason() = %q, want %q", got, test.want)
-			}
-		})
-	}
-}
-
-func TestCleanupUsesStopFailureReason(t *testing.T) {
+func TestCleanupUsesTypedStopFailureReason(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
 	bus.stopDBusErrorName = "org.freedesktop.DBus.Error.AccessDenied"
@@ -1087,7 +1067,7 @@ func TestCleanupUsesStopFailureReason(t *testing.T) {
 	bus.propErrAfterStop = true
 	u := &systemdUnit{name: "private-unit-secret.service", bus: bus, fs: fs, now: immediateClock{}}
 	_, _, _, reason := cleanup(u)
-	if reason != "stop-dbus-other" {
+	if reason != "unit-properties-gone" {
 		t.Fatalf("cleanup reason = %q", reason)
 	}
 }

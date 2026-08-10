@@ -143,7 +143,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "stop-unit-dbus-invalid-args", "stop-unit-dbus-access-denied", "stop-unit-dbus-no-such-unit", "stop-unit-dbus-other", "stop-dbus-other", "stop-properties-invalid-cgroup", "stop-cgroup-kill-unavailable", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false

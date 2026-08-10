@@ -839,6 +839,29 @@ func TestExecuteYieldsCleanupDiagnosisWhenServiceSucceeds(t *testing.T) {
 	}
 }
 
+func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		cpuErr     bool
+		wantReason string
+	}{
+		{name: "typed stop failure", wantReason: "unit-properties-unavailable"},
+		{name: "earlier accounting failure", cpuErr: true, wantReason: "accounting-evidence"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &fakeUnit{
+				rep:     SandboxReport{ControlGroup: "/fake"},
+				cpuErr:  test.cpuErr,
+				stopErr: &stopFailure{reason: "unit-properties-unavailable"},
+			}
+			_, _, _, reason := cleanup(unit)
+			if reason != test.wantReason {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.wantReason)
+			}
+		})
+	}
+}
+
 func TestChainContainmentNilCarriesContainmentNotResultValidation(t *testing.T) {
 	err := chainContainment(nil, "containment-cleanup", "accounting-evidence")
 	if errorCode(err) != ErrContainmentUnavailable {
@@ -918,6 +941,7 @@ type fakeUnit struct {
 	cpuErr           bool
 	receive          func(context.Context, Request) (Result, error)
 	cleanupErr       error
+	stopErr          error
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -940,7 +964,7 @@ func (u *fakeUnit) Stop(context.Context) error {
 	defer u.mu.Unlock()
 	u.stopped = true
 	u.rep.Populated = false
-	return nil
+	return u.stopErr
 }
 func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
 func (u *fakeUnit) TerminalStatus(context.Context) (TerminalStatus, error) {

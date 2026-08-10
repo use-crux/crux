@@ -48,28 +48,8 @@ type stopFailure struct{ reason string }
 
 func (e *stopFailure) Error() string { return "unit stop unavailable: " + e.reason }
 
-func stopUnitFailureReason(err error) string {
-	var dbusErr dbus.Error
-	if !errors.As(err, &dbusErr) {
-		return "stop-unit-dbus-other"
-	}
-	switch dbusErr.Name {
-	case "org.freedesktop.DBus.Error.InvalidArgs":
-		return "stop-unit-dbus-invalid-args"
-	case "org.freedesktop.DBus.Error.AccessDenied":
-		return "stop-unit-dbus-access-denied"
-	case "org.freedesktop.systemd1.NoSuchUnit":
-		return "stop-unit-dbus-no-such-unit"
-	default:
-		return "stop-unit-dbus-other"
-	}
-}
-
-// D-Bus missing-unit classification is operation-specific:
-//   - Manager.StopUnit: only org.freedesktop.systemd1.NoSuchUnit
-//   - UnitProperties follow-up: NoSuchUnit or org.freedesktop.DBus.Error.UnknownObject
-//
-// UnknownObject from StopUnit must remain a failure (unit path may still exist).
+// UnknownObject from StopUnit must remain a failure because the unit path may
+// still exist.
 func isDbusStopNoSuchUnit(err error) bool {
 	var dbusErr dbus.Error
 	if !errors.As(err, &dbusErr) {
@@ -1047,7 +1027,7 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 	if stopErr == nil {
 		return nil
 	}
-	if stopUnitFailureReason(stopErr) == "stop-unit-dbus-no-such-unit" {
+	if isDbusStopNoSuchUnit(stopErr) {
 		// Confirm via typed UnitProperties gone, or strict successful-inactive
 		// terminal proof. UnknownObject from StopUnit never enters this branch.
 		// Arbitrary UnitProperties errors are not gone.
@@ -1066,14 +1046,17 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 	}
 	p, propErr := u.bus.UnitProperties(ctx, u.name)
 	if propErr != nil {
-		return &stopFailure{reason: "stop-dbus-other"}
+		if isDbusUnitPropertiesGone(propErr) {
+			return &stopFailure{reason: "unit-properties-gone"}
+		}
+		return &stopFailure{reason: "unit-properties-unavailable"}
 	}
 	cgroup := stringValue(p, "ControlGroup")
 	if !validCgroup(cgroup) {
-		return &stopFailure{reason: "stop-properties-invalid-cgroup"}
+		return &stopFailure{reason: "unit-properties-invalid-cgroup"}
 	}
 	if err := u.fs.WriteFile(cgroupFile(cgroup, "cgroup.kill"), []byte("1")); err != nil {
-		return &stopFailure{reason: "stop-cgroup-kill-unavailable"}
+		return &stopFailure{reason: "cgroup-kill-unavailable"}
 	}
 	return nil
 }
