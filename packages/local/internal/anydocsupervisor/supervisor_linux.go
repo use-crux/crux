@@ -143,7 +143,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "stop-unit", "stop-unit-dbus-invalid-args", "stop-unit-dbus-access-denied", "stop-unit-dbus-no-such-unit", "stop-unit-dbus-other", "stop-dbus-other", "stop-properties-invalid-cgroup", "stop-cgroup-kill-unavailable", "unit-properties-gone", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -954,6 +954,7 @@ func outcomeCode(out error) error {
 	}
 	return nil
 }
+
 // chainContainment wraps a prior result, or synthesizes a typed ContainmentError
 // when cleanup fails after a successful service. Pure cleanup never uses
 // ResultValidationError so safeExecutionFailure cannot mis-promote it.
@@ -1057,7 +1058,12 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			if errors.Is(stopErr, errUnitAlreadyGone) {
 				reason = "alreadyGone"
 			} else {
-				reason = "stop-unit"
+				var failure *stopFailure
+				if errors.As(stopErr, &failure) {
+					reason = failure.reason
+				} else {
+					reason = "stop-unit"
+				}
 			}
 		}
 	}
