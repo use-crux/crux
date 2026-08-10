@@ -547,12 +547,26 @@ func (u *systemdUnit) MarkSnapshotVerified() {
 }
 
 func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
+	u.reportMu.Lock()
+	pinnedCgroup := u.controlGroup
+	u.reportMu.Unlock()
+
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	if !u.snapshotOK || !u.snapshotSeen {
+	if !u.snapshotOK || !u.snapshotSeen || !validCgroup(pinnedCgroup) || u.snapshot.ControlGroup != pinnedCgroup {
 		return SandboxReport{}, 0, false
 	}
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
+}
+
+func (u *systemdUnit) snapshotMatchesPinnedControlGroup(report SandboxReport) bool {
+	u.reportMu.Lock()
+	defer u.reportMu.Unlock()
+	return u.snapshotMatchesPinnedControlGroupLocked(report)
+}
+
+func (u *systemdUnit) snapshotMatchesPinnedControlGroupLocked(report SandboxReport) bool {
+	return validCgroup(u.controlGroup) && report.ControlGroup == u.controlGroup
 }
 
 // VerifyAttestedNode checks the kernel's executable reference after systemd has
@@ -619,6 +633,9 @@ func (u *systemdUnit) waitActive(ctx context.Context) error {
 func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
+		if isDbusUnitPropertiesGone(err) {
+			return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, errors.New("unit properties gone"))
+		}
 		return SandboxReport{}, terminalAccountingError(accountingCaptureReportUnavailable, errors.New("unit properties unavailable"))
 	}
 	cgroup := stringValue(p, "ControlGroup")
@@ -1050,9 +1067,8 @@ func terminalAccountingError(failure accountingCaptureFailure, err error) error 
 }
 
 func accountingCaptureFailureFor(err error, fallback accountingCaptureFailure) accountingCaptureFailure {
-	// Exact cgroup disappearance is the sole condition that permits reuse of a
-	// verified accounting snapshot. Preserve it even when Report reached a
-	// typed source error before the cgroup probe confirmed ENOENT.
+	// Exact cgroup disappearance is the original verified-snapshot fallback.
+	// Preserve it even if Report reached a typed source error first.
 	if fallback == accountingCaptureExactCgroupAbsent {
 		return fallback
 	}

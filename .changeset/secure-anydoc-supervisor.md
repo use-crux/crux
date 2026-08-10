@@ -50,8 +50,7 @@ leaking paths, nonces, or document content.
 Keep the fully verified sandbox snapshot immutable after verify: later
 PID/runtime-attested Reports stay live for peer authorization only, and
 RefreshAccounting updates only accounting fields on that verified base for the
-exact retained cgroup so mutated properties cannot become the ENOENT reuse
-fallback.
+exact retained cgroup so mutated properties cannot become a cleanup fallback.
 
 Carry a strictly successful terminal status only on the typed
 `StopUnit` missing-unit confirmation error, so an immediately unloaded
@@ -76,6 +75,9 @@ Promote `unit-properties-gone` to a pending already-gone validation only from
 a verified snapshot for that exact pinned cgroup. Use fresh strict post-stop
 terminal status, rather than the pre-ACK snapshot, to establish success.
 
-Classify terminal accounting source failures with fixed allowlisted diagnostics
-while preserving exact-cgroup ENOENT precedence for the verified snapshot
-fallback.
+Classify exact systemd unit-unload report failures with a fixed allowlisted
+diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
+snapshot only for exact-cgroup ENOENT or report-gone, always retaining the
+exact pinned cgroup identity. Report-gone reuse also requires exact pinned
+absent-or-empty termination evidence and strict successful terminal status;
+malformed, unavailable, live, or cgroup-only evidence remains fail-closed.

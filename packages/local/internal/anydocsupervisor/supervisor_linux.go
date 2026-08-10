@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-not-success", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -565,6 +565,7 @@ const (
 	accountingCaptureOK accountingCaptureFailure = iota
 	accountingCaptureExactCgroupAbsent
 	accountingCaptureInvalid
+	accountingCaptureReportGone
 	accountingCaptureReportUnavailable
 	accountingCaptureReportInvalid
 	accountingCaptureCPUUnavailable
@@ -580,6 +581,8 @@ const (
 
 func (f accountingCaptureFailure) reason() string {
 	switch f {
+	case accountingCaptureReportGone:
+		return "terminal-accounting-report-gone"
 	case accountingCaptureReportUnavailable:
 		return "terminal-accounting-report-unavailable"
 	case accountingCaptureReportInvalid:
@@ -1091,6 +1094,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	var reason string
 	usedCachedAccounting := false
+	reportGoneAccounting := false
 	captureFailure := accountingCaptureInvalid
 	var report SandboxReport
 	var cpu time.Duration
@@ -1115,12 +1119,13 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	if captureErr != nil {
-		// Snapshot fallback is only valid when the exact original cgroup
-		// path is gone (ENOENT). Malformed-but-present data and any other
-		// capture error must fail closed as accounting-evidence.
-		if cached && captureFailure == accountingCaptureExactCgroupAbsent {
+		// A verified snapshot may bridge only disappearance of the exact pinned
+		// cgroup (ENOENT) or systemd unloading that exact unit. All malformed or
+		// unavailable accounting remains fail-closed.
+		if cachedAccountingSnapshotMatchesUnit(unit, cachedReport, cached) && (captureFailure == accountingCaptureExactCgroupAbsent || captureFailure == accountingCaptureReportGone) {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
+			reportGoneAccounting = captureFailure == accountingCaptureReportGone
 		} else if reason == "" {
 			reason = captureFailure.reason()
 			if reason == "" {
@@ -1162,7 +1167,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	status, statusErr := unit.TerminalStatus(ctx)
 	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
-		if reason == "" {
+		if reason == "" && !reportGoneAccounting {
 			reason = "terminal-status"
 		}
 	} else {
@@ -1185,10 +1190,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			reason = validateAlreadyGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 		}
 	}
-	if usedCachedAccounting && !termination.Absent {
-		if reason == "" {
-			reason = "used-cached-accounting"
-		}
+	if reportGoneAccounting && reason == "" {
+		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
+	} else if usedCachedAccounting && !termination.Absent && reason == "" {
+		reason = "used-cached-accounting"
 	}
 	if unit.Cleanup(ctx) != nil {
 		if reason == "" {
@@ -1196,6 +1201,32 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	return report, cpu, termination, reason
+}
+
+// validateReportGone permits cached accounting only after systemd has reported
+// the unit gone. The cache establishes the pinned cgroup, not terminal state:
+// success still needs fresh strict status or an exact carried Stop proof.
+func validateReportGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, carried *alreadyGoneError) string {
+	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if statusErr == nil {
+		if successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+			return ""
+		}
+		return "already-gone-terminal-not-success"
+	}
+	return validateAlreadyGone(expectedCgroup, termination, terminationErr, status, statusErr, carried)
+}
+
+func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached bool) bool {
+	if !cached || !validCgroup(report.ControlGroup) {
+		return false
+	}
+	if systemd, ok := unit.(*systemdUnit); ok {
+		return systemd.snapshotMatchesPinnedControlGroup(report)
+	}
+	return true
 }
 
 // validateUnitPropertiesGone validates the pending UnitProperties-gone path
@@ -1225,7 +1256,7 @@ func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence,
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
-	if alreadyGone == nil || !validCgroup(alreadyGone.cgroup) || alreadyGone.cgroup != expectedCgroup || alreadyGone.proof.MainPID != 0 || alreadyGone.proof.ServiceResult != "success" || alreadyGone.proof.ExecMainStatus != 0 || (alreadyGone.proof.State != "" && alreadyGone.proof.State != "inactive") {
+	if alreadyGone == nil || !validCgroup(alreadyGone.cgroup) || alreadyGone.cgroup != expectedCgroup || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
 		return "already-gone-terminal-unavailable"
 	}
 	if statusErr != nil {

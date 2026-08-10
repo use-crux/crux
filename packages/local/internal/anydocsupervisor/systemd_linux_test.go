@@ -148,20 +148,37 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 
 func TestCaptureTerminalAccountingClassifiesFailureSources(t *testing.T) {
 	for _, test := range []struct {
-		name string
+		name  string
 		apply func(*fakeSystemBus, *fakeFS)
-		want accountingCaptureFailure
+		want  accountingCaptureFailure
 	}{
 		{name: "report unavailable", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private report failure") }, want: accountingCaptureReportUnavailable},
-		{name: "report invalid", apply: func(bus *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "memory.max")] = []byte("bad") }, want: accountingCaptureReportInvalid},
+		{name: "report gone", apply: func(bus *fakeSystemBus, _ *fakeFS) {
+			bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}
+		}, want: accountingCaptureReportGone},
+		{name: "report invalid", apply: func(bus *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "memory.max")] = []byte("bad")
+		}, want: accountingCaptureReportInvalid},
 		{name: "memory current", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.current")) }, want: accountingCaptureMemoryCurrent},
 		{name: "memory peak", apply: func(_ *fakeSystemBus, fs *fakeFS) { delete(fs.files, cgroupFile("/crux.slice/test", "memory.peak")) }, want: accountingCaptureMemoryPeak},
-		{name: "memory events", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("max bad") }, want: accountingCaptureMemoryEvents},
-		{name: "cpu stat", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec bad") }, want: accountingCaptureCPUStat},
-		{name: "pids events", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max bad") }, want: accountingCapturePIDsEvents},
-		{name: "cgroup procs", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte("bad") }, want: accountingCaptureCgroupProcs},
-		{name: "cgroup events unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.readErr[cgroupFile("/crux.slice/test", "cgroup.events")] = errors.New("private cgroup read failure") }, want: accountingCaptureCgroupEventsUnavailable},
-		{name: "cgroup events malformed", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("bad") }, want: accountingCaptureCgroupEventsMalformed},
+		{name: "memory events", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("max bad")
+		}, want: accountingCaptureMemoryEvents},
+		{name: "cpu stat", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "cpu.stat")] = []byte("usage_usec bad")
+		}, want: accountingCaptureCPUStat},
+		{name: "pids events", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max bad")
+		}, want: accountingCapturePIDsEvents},
+		{name: "cgroup procs", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte("bad")
+		}, want: accountingCaptureCgroupProcs},
+		{name: "cgroup events unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.readErr[cgroupFile("/crux.slice/test", "cgroup.events")] = errors.New("private cgroup read failure")
+		}, want: accountingCaptureCgroupEventsUnavailable},
+		{name: "cgroup events malformed", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+			fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("bad")
+		}, want: accountingCaptureCgroupEventsMalformed},
 		{name: "cpu unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = 2 }, want: accountingCaptureCPUUnavailable},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -177,6 +194,136 @@ func TestCaptureTerminalAccountingClassifiesFailureSources(t *testing.T) {
 				t.Fatalf("failure reason = %q, must be allowlisted and non-sensitive", reason)
 			}
 		})
+	}
+}
+
+func TestSystemdReportClassifiesOnlyExactUnitPropertiesGoneErrors(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want accountingCaptureFailure
+	}{
+		{name: "no such unit", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, want: accountingCaptureReportGone},
+		{name: "unknown object", err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}, want: accountingCaptureReportGone},
+		{name: "other dbus error", err: dbus.Error{Name: "org.freedesktop.systemd1.AccessDenied"}, want: accountingCaptureReportUnavailable},
+		{name: "untyped error", err: errors.New("private unavailable"), want: accountingCaptureReportUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			bus.propErr = test.err
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}}
+			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
+			if err == nil || failure != test.want {
+				t.Fatalf("capture = failure %v err %v, want failure %v and an error", failure, err, test.want)
+			}
+			if reason := failure.reason(); !validContainmentReason(reason) || strings.Contains(reason, "private") {
+				t.Fatalf("failure reason = %q, must be allowlisted and non-sensitive", reason)
+			}
+		})
+	}
+}
+
+func TestCaptureTerminalAccountingPrefersExactCgroupENOENTOverReportGone(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for path := range fs.files {
+		if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+			delete(fs.files, path)
+		}
+	}
+	bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}
+
+	_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
+	if err == nil || failure != accountingCaptureExactCgroupAbsent {
+		t.Fatalf("capture = failure %v err %v, want exact-cgroup ENOENT", failure, err)
+	}
+}
+
+func TestCleanupReusesSnapshotOnlyForReportGoneWithStrictTerminalEvidence(t *testing.T) {
+	strictTerminal := TerminalStatus{State: "inactive", ServiceResult: "success"}
+	pinned := SandboxReport{ControlGroup: "/crux.slice/pinned"}
+
+	for _, test := range []struct {
+		name        string
+		failure     accountingCaptureFailure
+		termination func(context.Context, string) (TerminationEvidence, error)
+		status      TerminalStatus
+		want        string
+	}{
+		{name: "lingering cgroup becomes empty", failure: accountingCaptureReportGone, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+		}},
+		{name: "cgroup absent", failure: accountingCaptureReportGone, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Absent: true}, nil
+		}},
+		{name: "report unavailable", failure: accountingCaptureReportUnavailable, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+		}, want: "terminal-accounting-report-unavailable"},
+		{name: "malformed report", failure: accountingCaptureReportInvalid, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+		}, want: "terminal-accounting-report-invalid"},
+		{name: "live descendants", failure: accountingCaptureReportGone, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{}, errors.New("populated private cgroup")
+		}, want: "termination-evidence"},
+		{name: "cgroup mismatch", failure: accountingCaptureReportGone, status: strictTerminal, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: "/crux.slice/other", Empty: true}, nil
+		}, want: "termination-evidence"},
+		{name: "terminal unavailable", failure: accountingCaptureReportGone, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+		}, want: "already-gone-terminal-unavailable"},
+		{name: "live terminal", failure: accountingCaptureReportGone, status: TerminalStatus{State: "active", MainPID: 42, ServiceResult: "success"}, termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned.ControlGroup, Empty: true}, nil
+		}, want: "already-gone-terminal-not-success"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &terminalAccountingFakeUnit{
+				fakeUnit: fakeUnit{
+					snapshot:       pinned,
+					snapshotCPU:    time.Microsecond,
+					snapshotOK:     true,
+					terminalStatus: func(context.Context) (TerminalStatus, error) { return test.status, nil },
+					termination:    test.termination,
+				},
+				failure: test.failure,
+				err:     errors.New("private report failure"),
+			}
+			if test.name == "terminal unavailable" {
+				unit.terminalStatus = func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{}, errors.New("private terminal status failure")
+				}
+			}
+			_, _, _, reason := cleanup(unit)
+			if reason != test.want {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+			if reason != "" && (!validContainmentReason(reason) || strings.Contains(reason, "private")) {
+				t.Fatalf("cleanup reason = %q, must be allowlisted and non-sensitive", reason)
+			}
+		})
+	}
+}
+
+func TestCleanupRejectsReportGoneSnapshotWithMismatchedPinnedCgroup(t *testing.T) {
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	unit := &systemdUnit{name: "crux-anydoc-mismatched-snapshot.service", bus: bus, fs: fs, now: immediateClock{}}
+	if _, err := unit.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	unit.MarkSnapshotVerified()
+
+	unit.snapshotMu.Lock()
+	unit.snapshot.ControlGroup = "/crux.slice/other"
+	unit.snapshotMu.Unlock()
+	bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}
+
+	_, _, _, reason := cleanup(unit)
+	if reason != "terminal-accounting-report-gone" {
+		t.Fatalf("cleanup reason = %q, want terminal-accounting-report-gone", reason)
 	}
 }
 
