@@ -778,12 +778,14 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 		}
 		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
 		if err != nil {
-			if !terminalAccounting || !u.canReuseTerminalRuntime(cgroup, stringValue(p, "ActiveState")) {
+			if !terminalAccounting || !runtimeProcDisappeared(err, pid) || !u.canReuseTerminalRuntime(cgroup, stringValue(p, "ActiveState"), pid) {
 				return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
 			}
 			u.snapshotMu.Lock()
 			runtimeDigest = u.snapshot.RuntimeTreeDigest
 			u.snapshotMu.Unlock()
+		} else if terminalAccounting && runtimeDigest != u.spec.runtimeTreeDigest {
+			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
@@ -804,7 +806,7 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 // canReuseTerminalRuntime permits only terminal accounting to retain the
 // already verified runtime identity after the exited worker's proc entry has
 // disappeared. Live reports continue to require a fresh mount attestation.
-func (u *systemdUnit) canReuseTerminalRuntime(cgroup, state string) bool {
+func (u *systemdUnit) canReuseTerminalRuntime(cgroup, state string, pid int) bool {
 	if u == nil || u.name == "" || (state != "inactive" && state != "failed") {
 		return false
 	}
@@ -814,7 +816,16 @@ func (u *systemdUnit) canReuseTerminalRuntime(cgroup, state string) bool {
 
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	return u.snapshotOK && u.snapshotSeen && validCgroup(cgroup) && cgroup == pinnedCgroup && u.snapshot.ControlGroup == cgroup && len(u.snapshot.RuntimeTreeDigest) == sha256.Size*2 && hexOK(u.snapshot.RuntimeTreeDigest) && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest
+	return u.snapshotOK && u.snapshotSeen && pid > 0 && validCgroup(cgroup) && cgroup == pinnedCgroup && u.snapshot.MainPID == pid && u.snapshot.ControlGroup == cgroup && len(u.snapshot.RuntimeTreeDigest) == sha256.Size*2 && hexOK(u.snapshot.RuntimeTreeDigest) && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest
+}
+
+type procRuntimeDisappearedError struct{ pid int }
+
+func (e *procRuntimeDisappearedError) Error() string { return "mounted runtime proc entry disappeared" }
+
+func runtimeProcDisappeared(err error, pid int) bool {
+	var gone *procRuntimeDisappearedError
+	return pid > 0 && errors.As(err, &gone) && gone.pid == pid
 }
 
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
@@ -826,7 +837,13 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 	var walk func(string, string, bool) error
 	walk = func(path, rel string, rootEntry bool) error {
 		info, err := fs.Lstat(path)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+		if err != nil {
+			if rootEntry && os.IsNotExist(err) {
+				return &procRuntimeDisappearedError{pid: pid}
+			}
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("unsafe mounted runtime entry")
 		}
 		if info.IsDir() {

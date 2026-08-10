@@ -99,7 +99,7 @@ absent-or-empty termination evidence and strict successful terminal status;
 malformed, unavailable, live, or cgroup-only evidence remains fail-closed.
 
 Permit terminal accounting to retain an already verified runtime-tree identity
-only after the worker has exited and its proc entry has disappeared. The
-exception requires the exact nonempty pinned unit, cgroup, and runtime
-identities; active, mismatched, unverified, and malformed reports continue to
-fail closed.
+only after the worker has exited and the exact pinned MainPID's root proc entry
+has disappeared. The exception requires the exact nonempty pinned unit,
+cgroup, PID, and runtime identities; active, mismatched, unverified, malformed,
+partial-disappearance, and proc read-error reports continue to fail closed.

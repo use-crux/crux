@@ -204,7 +204,8 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *testing.T) {
 	newUnit := func(t *testing.T, verified bool) *systemdUnit {
 		t.Helper()
-		unit := &systemdUnit{name: "crux-anydoc-terminal-runtime.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}}
+		fs := newFakeFS()
+		unit := &systemdUnit{name: "crux-anydoc-terminal-runtime.service", bus: newFakeSystemBus(), fs: fs, procFS: fs, now: immediateClock{}}
 		first, err := unit.Report(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -223,6 +224,7 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 	t.Run("accepts disappeared proc after exit", func(t *testing.T) {
 		unit := newUnit(t, true)
 		unit.bus.(*fakeSystemBus).values["ActiveState"] = "inactive"
+		unit.procFS = missingProcRuntimeFS{}
 
 		report, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
 		if err != nil || failure != accountingCaptureOK {
@@ -240,11 +242,25 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 	}{
 		{name: "active unit", apply: func(unit *systemdUnit) { unit.bus.(*fakeSystemBus).values["ActiveState"] = "active" }, failure: accountingCaptureReportValidationRuntimeAttestation},
 		{name: "unverified snapshot", apply: func(unit *systemdUnit) { unit.snapshotOK = false }, failure: accountingCaptureReportValidationRuntimeAttestation},
-		{name: "runtime identity mutation", apply: func(unit *systemdUnit) { unit.spec.runtimeTreeDigest = strings.Repeat("b", 64) }, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "runtime identity mutation", apply: func(unit *systemdUnit) {
+			fs := unit.fs.(*fakeFS)
+			fs.runtimeContents = []byte("mutated")
+			unit.procFS = fs
+		}, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "malformed proc entry", apply: func(unit *systemdUnit) {
+			fs := unit.fs.(*fakeFS)
+			fs.runtimeRootMode = os.ModeSymlink | 0o777
+			unit.procFS = fs
+		}, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "pid mismatch", apply: func(unit *systemdUnit) {
+			unit.bus.(*fakeSystemBus).values["MainPID"] = uint32(43)
+			unit.procFS = missingProcRuntimeFS{}
+		}, failure: accountingCaptureReportValidationRuntimeAttestation},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			unit := newUnit(t, true)
 			unit.bus.(*fakeSystemBus).values["ActiveState"] = "inactive"
+			unit.procFS = missingProcRuntimeFS{}
 			test.apply(unit)
 
 			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
@@ -1453,14 +1469,16 @@ func (b *fakeSystemBus) ResetFailedUnit(_ context.Context, _ string) error {
 }
 
 type fakeFS struct {
-	files      map[string][]byte
-	writes     map[string][]byte
-	writeErr   error
-	removed    map[string]bool
-	reads      map[string]int
-	failReadAt map[string]int
-	readErr    map[string]error
-	afterRead  func(string)
+	files           map[string][]byte
+	writes          map[string][]byte
+	writeErr        error
+	removed         map[string]bool
+	reads           map[string]int
+	failReadAt      map[string]int
+	readErr         map[string]error
+	afterRead       func(string)
+	runtimeContents []byte
+	runtimeRootMode os.FileMode
 }
 
 func newFakeFS() *fakeFS {
@@ -1468,7 +1486,7 @@ func newFakeFS() *fakeFS {
 }
 func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	if strings.HasSuffix(path, "/.complete") {
-		return []byte{}, nil
+		return append([]byte(nil), f.runtimeContents...), nil
 	}
 	f.reads[path]++
 	if failAt := f.failReadAt[path]; failAt > 0 && f.reads[path] >= failAt {
@@ -1488,10 +1506,14 @@ func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 }
 func (f *fakeFS) Lstat(path string) (os.FileInfo, error) {
 	if strings.HasSuffix(path, runtimeTarget) {
-		return fakeRuntimeInfo{name: "runtime", mode: os.ModeDir | 0o555}, nil
+		mode := f.runtimeRootMode
+		if mode == 0 {
+			mode = os.ModeDir | 0o555
+		}
+		return fakeRuntimeInfo{name: "runtime", mode: mode}, nil
 	}
 	if strings.HasSuffix(path, runtimeTarget+"/.complete") {
-		return fakeRuntimeInfo{name: ".complete", mode: 0o444}, nil
+		return fakeRuntimeInfo{name: ".complete", mode: 0o444, size: int64(len(f.runtimeContents))}, nil
 	}
 	return nil, os.ErrNotExist
 }
@@ -1515,10 +1537,11 @@ func (f *fakeFS) Chmod(string, os.FileMode) error { return nil }
 type fakeRuntimeInfo struct {
 	name string
 	mode os.FileMode
+	size int64
 }
 
 func (i fakeRuntimeInfo) Name() string       { return i.name }
-func (i fakeRuntimeInfo) Size() int64        { return 0 }
+func (i fakeRuntimeInfo) Size() int64        { return i.size }
 func (i fakeRuntimeInfo) Mode() os.FileMode  { return i.mode }
 func (i fakeRuntimeInfo) ModTime() time.Time { return time.Time{} }
 func (i fakeRuntimeInfo) IsDir() bool        { return i.mode.IsDir() }
