@@ -797,10 +797,14 @@ type fakeSystemBus struct {
 	// proof can be asserted independently of stop confirmation.
 	propGoneOnceAfterStop bool
 	propGoneConsumed      bool
-	stopped               bool
-	stopDBusErrorName     string
-	reset                 bool
-	onStop                func()
+	// propGoneAfterStop confirms a successful terminal status once, then
+	// simulates systemd unloading the transient unit before cleanup can poll.
+	propGoneAfterStop   bool
+	propertiesAfterStop int
+	stopped             bool
+	stopDBusErrorName   string
+	reset               bool
+	onStop              func()
 }
 
 func newFakeSystemBus() *fakeSystemBus {
@@ -827,6 +831,12 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 	if b.propGoneOnceAfterStop && b.stopped && !b.propGoneConsumed {
 		b.propGoneConsumed = true
 		return nil, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
+	}
+	if b.propGoneAfterStop && b.stopped {
+		b.propertiesAfterStop++
+		if b.propertiesAfterStop > 1 {
+			return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+		}
 	}
 	return b.values, nil
 }
@@ -1091,6 +1101,7 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
 	bus.values["ExecMainStatus"] = int32(0)
+	bus.propGoneAfterStop = true
 	_, _, _, reason := cleanup(u)
 	if reason != "" {
 		t.Fatalf("expected empty reason, got %q", reason)

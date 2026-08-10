@@ -34,6 +34,7 @@ func (e *ContainmentError) Error() string { return "containment " + e.Stage + ":
 func containment(stage string, err error) error {
 	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
 }
+
 type unitAlreadyGone struct{}
 
 func (unitAlreadyGone) Error() string { return "unit already gone" }
@@ -43,6 +44,7 @@ var errUnitAlreadyGone = unitAlreadyGone{}
 // D-Bus missing-unit classification is operation-specific:
 //   - Manager.StopUnit: only org.freedesktop.systemd1.NoSuchUnit
 //   - UnitProperties follow-up: NoSuchUnit or org.freedesktop.DBus.Error.UnknownObject
+//
 // UnknownObject from StopUnit must remain a failure (unit path may still exist).
 func isDbusStopNoSuchUnit(err error) bool {
 	var dbusErr dbus.Error
@@ -478,27 +480,30 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name           string
-	bus            SystemBus
-	fs             FileSystem
-	procFS         ProcRuntimeFS
-	now            Clock
-	tmp            string
-	listener       *net.UnixListener
-	socket         string
-	resultListener *net.UnixListener
-	resultSocket   string
-	resultMu       sync.Mutex
-	resultClaimed  bool
-	peers          PeerVerifier
-	spec           ServiceSpec
-	reportMu       sync.Mutex
-	controlGroup   string
-	snapshotMu     sync.Mutex
-	snapshot       SandboxReport
-	snapshotCPU    time.Duration
-	snapshotSeen   bool
-	snapshotOK     bool
+	name             string
+	bus              SystemBus
+	fs               FileSystem
+	procFS           ProcRuntimeFS
+	now              Clock
+	tmp              string
+	listener         *net.UnixListener
+	socket           string
+	resultListener   *net.UnixListener
+	resultSocket     string
+	resultMu         sync.Mutex
+	resultClaimed    bool
+	peers            PeerVerifier
+	spec             ServiceSpec
+	reportMu         sync.Mutex
+	controlGroup     string
+	terminalMu       sync.Mutex
+	terminalProof    TerminalStatus
+	hasTerminalProof bool
+	snapshotMu       sync.Mutex
+	snapshot         SandboxReport
+	snapshotCPU      time.Duration
+	snapshotSeen     bool
+	snapshotOK       bool
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -1026,6 +1031,7 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 				return errUnitAlreadyGone
 			}
 		} else if successfulInactiveFromProps(p) {
+			u.recordTerminalProof(terminalStatusFromProps(p))
 			return errUnitAlreadyGone
 		}
 	}
@@ -1065,9 +1071,39 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 	}
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
+		if isDbusUnitPropertiesGone(err) {
+			if proof, ok := u.lastTerminalProof(); ok {
+				return proof, nil
+			}
+		}
 		return TerminalStatus{}, errors.New("unit status unavailable")
 	}
-	return TerminalStatus{MainPID: intValue(p, "MainPID"), State: stringValue(p, "ActiveState"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus")}, nil
+	return terminalStatusFromProps(p), nil
+}
+
+func terminalStatusFromProps(p map[string]any) TerminalStatus {
+	return TerminalStatus{
+		MainPID:        intValue(p, "MainPID"),
+		State:          stringValue(p, "ActiveState"),
+		ServiceResult:  stringValue(p, "Result"),
+		ExecMainStatus: intValue(p, "ExecMainStatus"),
+	}
+}
+
+func (u *systemdUnit) recordTerminalProof(status TerminalStatus) {
+	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		return
+	}
+	u.terminalMu.Lock()
+	u.terminalProof = status
+	u.hasTerminalProof = true
+	u.terminalMu.Unlock()
+}
+
+func (u *systemdUnit) lastTerminalProof() (TerminalStatus, bool) {
+	u.terminalMu.Lock()
+	defer u.terminalMu.Unlock()
+	return u.terminalProof, u.hasTerminalProof
 }
 
 func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (TerminationEvidence, error) {
