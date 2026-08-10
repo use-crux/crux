@@ -120,9 +120,11 @@ canonical string or multimodal content, is ordered, and reaches the child only
 at the next semantic provider-step boundary without changing tools or
 guardrails. Process-local handles do not claim cross-request durability.
 
-Agent-as-Tool children derive a stable occurrence identity from owner, turn,
-tool call, and binding key so adapter/provider replay reconnects the existing
-child instead of starting another. Conflicting reuse rejects deterministically.
+Agent-as-Tool children derive a stable occurrence identity from the parent
+execution owner, turn/step, tool call, and binding key so adapter/provider
+replay reconnects the existing child instead of starting another. Conflicting
+reuse rejects deterministically. Separate parent runs do not share occurrence
+identity even when tool-call ids collide.
 
 ## Process-local means best effort
 

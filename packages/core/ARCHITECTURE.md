@@ -81,17 +81,24 @@ and `spawn(agent, input)`. Backgroundable children retain the same Agent handle
 shape for steering and occurrence identity. Neither path claims cross-request
 durability: process exit loses the registry, mailboxes, and results.
 
-Agent-as-Tool occurrence identity is derived from owner execution, turn/step,
-normalized tool-call id, and binding key. Exact replay reconnects the existing
-child Work; reused identity with conflicting input rejects without allocating
-another child.
+Agent-as-Tool occurrence identity is derived from a per-parent-execution owner
+id, turn/step identity (sealed history length within that execution),
+normalized tool-call id, and binding key. Exact in-turn replay reconnects the
+existing child Work; reused identity with conflicting input rejects without
+allocating another child. Concurrent first accepts of the same occurrence start
+exactly one kernel child and reconnect waiters. Owner occurrence entries are
+released when the parent execution ends; controller records and raw mailbox
+content are disposed when each child terminalizes.
 
 `send()` accepts canonical string or multimodal message content and returns an
 idempotent acceptance receipt. Command identity records store only command id
-and payload digest—never raw content. Accepted steering is ordered and claimed
-only at the next semantic provider-step boundary through `projectStepMessages`,
-appended as user messages with `agent-steering` provenance. Delivery never
-mutates an in-flight provider call, expands child tools, or weakens guardrails.
+and payload digest—never raw content. Multimodal identity hashes Blob and
+byte sources (or stable sha256 asset refs) and rejects unsupported opaque
+sources. Accepted steering is ordered and claimed only at the next semantic
+provider-step boundary through `projectStepMessages`, appended as user messages
+with `agent-steering` provenance. Delivery never mutates an in-flight provider
+call, expands child tools, or weakens guardrails. Official AgentExecutor bridges
+forward `signal` and `projectStepMessages` into the generate planner seam.
 
 The automatic model-facing `work` Tool includes `send` for Agent children only.
 Its schema stays stable while status remains ephemeral. Cancellation,

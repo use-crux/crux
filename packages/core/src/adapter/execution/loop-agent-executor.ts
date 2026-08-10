@@ -34,6 +34,8 @@ export function createLoopAgentExecutor<TModel, TRawResponse>(
       inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
       prepareStep: options.prepareStep ?? agent.prepareStep,
       activeTools: options.activeTools,
+      signal: options.signal,
+      projectStepMessages: options.projectStepMessages,
       [managedGenerationCheckpoint]: options[managedGenerationCheckpoint],
       [managedGenerationStepBoundary]: options[managedGenerationStepBoundary],
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
