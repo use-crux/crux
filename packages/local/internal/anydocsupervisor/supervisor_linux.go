@@ -94,6 +94,17 @@ func closed(code ErrorCode) error                  { return &SupervisorError{Cod
 func closedWith(code ErrorCode, cause error) error { return &SupervisorError{Code: code, cause: cause} }
 func (e *SupervisorError) Unwrap() error           { return e.cause }
 
+// containmentCleanupChain records that cleanup failed after an earlier
+// execution failure. It keeps cleanup provenance separate from the cause that
+// safe diagnostics are allowed to report.
+type containmentCleanupChain struct {
+	prior   error
+	cleanup *ContainmentError
+}
+
+func (e *containmentCleanupChain) Error() string { return "containment cleanup failure" }
+func (e *containmentCleanupChain) Unwrap() error { return e.prior }
+
 type ResultValidationError struct {
 	Stage      string
 	ReasonCode string
@@ -848,10 +859,9 @@ func errorCode(err error) ErrorCode {
 	return OutcomeSuccess
 }
 func safeExecutionFailure(err error, terminal TerminalReport) string {
-	var validation *ResultValidationError
-	hasValidation := errors.As(err, &validation)
-	var containment *ContainmentError
-	hasContainment := errors.As(err, &containment)
+	validation, containment := preCleanupDiagnostic(err)
+	hasValidation := validation != nil
+	hasContainment := containment != nil
 
 	var errorStr string
 	code := errorCode(err)
@@ -949,26 +959,46 @@ func outcomeCode(out error) error {
 	if errors.As(out, &validation) {
 		return closedWith(ErrInvalidResult, validation)
 	}
+	var containment *ContainmentError
+	if errors.As(out, &containment) {
+		return closedWith(ErrContainmentUnavailable, containment)
+	}
 	if out != nil {
 		return closed(ErrWorkerCrash)
 	}
 	return nil
 }
 
-// chainContainment wraps a prior result, or synthesizes a typed ContainmentError
-// when cleanup fails after a successful service. Pure cleanup never uses
-// ResultValidationError so safeExecutionFailure cannot mis-promote it.
+// chainContainment preserves a prior execution failure separately from a
+// synthetic cleanup diagnosis. Pure cleanup remains a ContainmentError.
 func chainContainment(result error, stage, reason string) error {
+	cleanup := &ContainmentError{Stage: stage, ReasonCode: reason}
+	if !validContainmentStage(cleanup.Stage) {
+		cleanup.Stage = "unknown"
+	}
+	if !validContainmentReason(cleanup.ReasonCode) {
+		cleanup.ReasonCode = "unknown"
+	}
 	if result != nil {
-		return closedWith(ErrContainmentUnavailable, result)
+		return closedWith(ErrContainmentUnavailable, &containmentCleanupChain{prior: result, cleanup: cleanup})
 	}
-	if !validContainmentStage(stage) {
-		stage = "unknown"
+	return closedWith(ErrContainmentUnavailable, cleanup)
+}
+
+func preCleanupDiagnostic(err error) (*ResultValidationError, *ContainmentError) {
+	var cleanup *containmentCleanupChain
+	if errors.As(err, &cleanup) {
+		return preCleanupDiagnostic(cleanup.prior)
 	}
-	if !validContainmentReason(reason) {
-		reason = "unknown"
+	var validation *ResultValidationError
+	if errors.As(err, &validation) {
+		return validation, nil
 	}
-	return closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: stage, ReasonCode: reason})
+	var containment *ContainmentError
+	if errors.As(err, &containment) {
+		return nil, containment
+	}
+	return nil, nil
 }
 func (r *Run) monitor() {
 	tick := time.NewTicker(10 * time.Millisecond)

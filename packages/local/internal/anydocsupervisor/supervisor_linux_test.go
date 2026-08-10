@@ -803,6 +803,31 @@ func TestExecutePreservesResultValidationCauseThroughCleanupFailure(t *testing.T
 	if v.Stage != "request-binding" || v.ReasonCode != "mismatch" {
 		t.Fatalf("ResultValidationError = {stage:%q reason:%q}", v.Stage, v.ReasonCode)
 	}
+	got := safeExecutionFailure(err, r.TerminalReport())
+	const want = "error=invalid-result outcome=containment-unavailable service=unknown stage=request-binding reason=mismatch oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+}
+
+func TestExecutePrefersResultReceiveContainmentOverCleanupFailure(t *testing.T) {
+	receive := closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "result-receive", ReasonCode: "io"})
+	b := &fakeBackend{
+		cleanupErr: errors.New("cleanup failed"),
+		receive: func(ctx context.Context, _ Request) (Result, error) {
+			return Result{}, receive
+		},
+	}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.Execute(context.Background())
+	got := safeExecutionFailure(err, r.TerminalReport())
+	const want = "error=containment-unavailable outcome=containment-unavailable service=unknown stage=result-receive reason=io oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
 }
 
 func TestExecuteYieldsCleanupDiagnosisWhenServiceSucceeds(t *testing.T) {
@@ -832,6 +857,20 @@ func TestExecuteYieldsCleanupDiagnosisWhenServiceSucceeds(t *testing.T) {
 	if containment.Stage != "containment-cleanup" || containment.ReasonCode != "unit-cleanup" {
 		t.Fatalf("ContainmentError = {stage:%q reason:%q}", containment.Stage, containment.ReasonCode)
 	}
+	got := safeExecutionFailure(err, r.TerminalReport())
+	const want = "error=containment-unavailable outcome=containment-unavailable service=unknown stage=containment-cleanup reason=unit-cleanup oom-killed=false pids-limited=false"
+	if got != want {
+		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
+	}
+}
+
+func TestFinishNilYieldsCleanupDiagnosis(t *testing.T) {
+	b := &fakeBackend{cleanupErr: errors.New("cleanup failed")}
+	r, err := newTestSupervisor(t, b).startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r.Finish(context.Background(), nil)
 	got := safeExecutionFailure(err, r.TerminalReport())
 	const want = "error=containment-unavailable outcome=containment-unavailable service=unknown stage=containment-cleanup reason=unit-cleanup oom-killed=false pids-limited=false"
 	if got != want {
