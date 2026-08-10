@@ -5,7 +5,7 @@ import { prompt } from "@use-crux/core";
 import { createCruxAi } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
 
-function model(id = "gpt-4o", provider = "openai"): LanguageModel {
+function model(id = "test-model", provider = "openai"): LanguageModel {
   return {
     provider,
     modelId: id,
