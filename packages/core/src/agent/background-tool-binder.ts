@@ -8,21 +8,19 @@
 import type { AnyModel, AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
 import type { ProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
+import { resolveAgentToolTurnId } from "../work/internal/agent-occurrence";
 import type { InternalWorkOwnerPort } from "../work/internal/owner-retained-work";
 import { isBackgroundableAgent } from "./backgroundable";
 import { bindBackgroundToolInput } from "./background-tool-input";
 import type { AgentExecutor } from "./executor";
-import type { ForegroundChildWorkPort } from "./foreground-tool-binder";
 
 interface BindBackgroundAgentToolsOptions {
   readonly executor: AgentExecutor;
   readonly model: AnyModel;
   readonly work: InternalWorkOwnerPort;
-  /** Runs a child Tool invocation within its parent's Work. */
-  readonly foregroundWork: ForegroundChildWorkPort;
   /** Shared Agent Work controller for occurrence identity and steering. */
   readonly agentWork: ProcessLocalAgentWorkController;
-  /** Parent Agent identity used as the owner partition for occurrences. */
+  /** Per-parent-execution owner identity for occurrence partitioning. */
   readonly ownerId: string;
 }
 
@@ -62,7 +60,7 @@ export function bindBackgroundAgentTools(
             );
             const occurrence = Object.freeze({
               ownerId: options.ownerId,
-              turnId: "",
+              turnId: resolveAgentToolTurnId(execution),
               toolCallId: execution.toolCallId,
               bindingKey: name,
             });

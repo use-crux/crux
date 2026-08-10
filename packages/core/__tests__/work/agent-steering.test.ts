@@ -6,21 +6,21 @@ import {
 import { WorkNotActiveError } from "../../src/work/errors";
 
 describe("process-local Agent steering mailbox", () => {
-  it("accepts ordered commands idempotently without storing raw content in identity records", () => {
+  it("accepts ordered commands idempotently without storing raw content in identity records", async () => {
     const mailbox = createAgentSteeringMailbox({
       workId: "work_1",
       now: () => new Date("2026-08-10T12:00:00.000Z"),
     });
 
-    const first = mailbox.accept({
+    const first = await mailbox.accept({
       commandId: "command_1",
       content: "Prioritize primary sources.",
     });
-    const replay = mailbox.accept({
+    const replay = await mailbox.accept({
       commandId: "command_1",
       content: "Prioritize primary sources.",
     });
-    const second = mailbox.accept({
+    const second = await mailbox.accept({
       commandId: "command_2",
       content: [
         { type: "text", text: "Also inspect this screenshot." },
@@ -46,7 +46,7 @@ describe("process-local Agent steering mailbox", () => {
     expect(identities).toHaveLength(2);
     expect(identities[0]).toEqual({
       commandId: "command_1",
-      payloadHash: hashSteeringContent("Prioritize primary sources."),
+      payloadHash: await hashSteeringContent("Prioritize primary sources."),
       cursor: "1",
       acceptedAt: "2026-08-10T12:00:00.000Z",
       outcome: "accepted",
@@ -55,20 +55,21 @@ describe("process-local Agent steering mailbox", () => {
     expect(identities[0]).not.toHaveProperty("payload");
     expect(JSON.stringify(identities)).not.toContain("Prioritize");
 
-    expect(() =>
+    await expect(
       mailbox.accept({
         commandId: "command_1",
         content: "Different payload",
       }),
-    ).toThrow(
+    ).rejects.toThrow(
       "Agent steering command identity was reused with different content.",
     );
   });
 
-  it("claims undelivered steering once at a provider-step boundary", () => {
+  it("claims undelivered steering once at a provider-step boundary and drops raw content", async () => {
     const mailbox = createAgentSteeringMailbox({ workId: "work_2" });
-    mailbox.accept({ commandId: "a", content: "first" });
-    mailbox.accept({ commandId: "b", content: "second" });
+    await mailbox.accept({ commandId: "a", content: "first" });
+    await mailbox.accept({ commandId: "b", content: "second" });
+    expect(mailbox.hasRawContent()).toBe(true);
 
     const claimed = mailbox.claimForProviderStep();
     expect(claimed).toEqual([
@@ -84,13 +85,115 @@ describe("process-local Agent steering mailbox", () => {
       },
     ]);
     expect(mailbox.claimForProviderStep()).toEqual([]);
+    expect(mailbox.hasRawContent()).toBe(false);
+    // Identity records remain for idempotent command replay.
+    expect(mailbox.identities()).toHaveLength(2);
   });
 
-  it("rejects steering after the mailbox closes", () => {
+  it("rejects steering after the mailbox closes", async () => {
     const mailbox = createAgentSteeringMailbox({ workId: "work_3" });
     mailbox.close();
-    expect(() =>
+    await expect(
       mailbox.accept({ commandId: "late", content: "too late" }),
-    ).toThrow(WorkNotActiveError);
+    ).rejects.toBeInstanceOf(WorkNotActiveError);
+  });
+
+  it("hashes Blob bytes so distinct content does not collide", async () => {
+    const mailbox = createAgentSteeringMailbox({ workId: "work_blob" });
+    const first = await mailbox.accept({
+      commandId: "blob_cmd",
+      content: [
+        {
+          type: "image",
+          source: new Blob(["alpha-bytes"], { type: "image/png" }),
+          mediaType: "image/png",
+        },
+      ],
+    });
+    const replay = await mailbox.accept({
+      commandId: "blob_cmd",
+      content: [
+        {
+          type: "image",
+          source: new Blob(["alpha-bytes"], { type: "image/png" }),
+          mediaType: "image/png",
+        },
+      ],
+    });
+    expect(replay).toEqual(first);
+
+    await expect(
+      mailbox.accept({
+        commandId: "blob_cmd",
+        content: [
+          {
+            type: "image",
+            source: new Blob(["beta-bytes-different"], { type: "image/png" }),
+            mediaType: "image/png",
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      "Agent steering command identity was reused with different content.",
+    );
+
+    const sameSizeDifferent = await hashSteeringContent([
+      {
+        type: "image",
+        source: new Blob(["aaaaaaaa"], { type: "image/png" }),
+        mediaType: "image/png",
+      },
+    ]);
+    const sameSizeOther = await hashSteeringContent([
+      {
+        type: "image",
+        source: new Blob(["bbbbbbbb"], { type: "image/png" }),
+        mediaType: "image/png",
+      },
+    ]);
+    expect(sameSizeDifferent).not.toBe(sameSizeOther);
+  });
+
+  it("rejects unsupported opaque media sources instead of collapsing them", async () => {
+    const mailbox = createAgentSteeringMailbox({ workId: "work_opaque" });
+    await expect(
+      mailbox.accept({
+        commandId: "opaque",
+        content: [
+          {
+            type: "image",
+            // plain object without sha256 or recognized media shape
+            source: { kind: "mystery" } as never,
+            mediaType: "image/png",
+          },
+        ],
+      }),
+    ).rejects.toThrow(/not identity-safe/);
+  });
+
+  it("accepts stable sha256 asset refs without requiring raw bytes in identity", async () => {
+    const hashA = await hashSteeringContent([
+      {
+        type: "file",
+        source: {
+          type: "url",
+          url: new URL("https://example.com/a.pdf"),
+          sha256: "a".repeat(64),
+        },
+        mediaType: "application/pdf",
+      },
+    ]);
+    const hashB = await hashSteeringContent([
+      {
+        type: "file",
+        source: {
+          type: "url",
+          url: new URL("https://example.com/b.pdf"),
+          sha256: "b".repeat(64),
+        },
+        mediaType: "application/pdf",
+      },
+    ]);
+    expect(hashA).not.toBe(hashB);
   });
 });

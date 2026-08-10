@@ -3,10 +3,7 @@ import { z } from "zod";
 import { prompt } from "../../src";
 import { agent } from "../../src/agent";
 import type { AgentExecutor } from "../../src/agent/executor";
-import {
-  bindForegroundAgentTools,
-  createForegroundChildWorkPort,
-} from "../../src/agent/foreground-tool-binder";
+import { bindForegroundAgentTools } from "../../src/agent/foreground-tool-binder";
 import type { ToolExecutionOptions } from "../../src/types/tool";
 import { createProcessLocalAgentWorkController } from "../../src/work/internal/agent-work-controller";
 import { createProcessLocalWorkKernel } from "../../src/work/internal/process-local-kernel";
@@ -14,15 +11,13 @@ import { createProcessLocalWorkKernel } from "../../src/work/internal/process-lo
 function boundChild(child: ReturnType<typeof agent>, executor: AgentExecutor) {
   const kernel = createProcessLocalWorkKernel();
   const agentWork = createProcessLocalAgentWorkController({ kernel });
-  const work = createForegroundChildWorkPort(kernel);
   const tools = bindForegroundAgentTools(
     { child },
     {
       executor,
       model: "model",
-      work,
       agentWork,
-      ownerId: "parent",
+      ownerId: "owner_exec_parent",
     },
   );
   return tools.child as {

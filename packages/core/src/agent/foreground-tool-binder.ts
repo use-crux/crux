@@ -10,6 +10,9 @@ import type { ToolExecutionOptions } from "../types/tool";
 import { z } from "zod";
 import { currentInternalWorkAttachment } from "../work/internal/attached-context";
 import type { ProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
+import {
+  resolveAgentToolTurnId,
+} from "../work/internal/agent-occurrence";
 import type { ProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { isAgent } from "./agent";
 import type { AgentExecutor } from "./executor";
@@ -57,8 +60,8 @@ export function createForegroundChildWorkPort(
 interface BindForegroundAgentToolsOptions {
   readonly executor: AgentExecutor;
   readonly model: AnyModel;
-  readonly work: ForegroundChildWorkPort;
   readonly agentWork: ProcessLocalAgentWorkController;
+  /** Per-parent-execution owner identity for occurrence partitioning. */
   readonly ownerId: string;
 }
 
@@ -103,7 +106,9 @@ export function bindForegroundAgentTools(
 ): AnyToolSet {
   return Object.fromEntries(
     Object.entries(tools).map(([name, value]) => {
-      if (!isAgent(value)) return [name, value];
+      if (!isAgent(value)) {
+        return [name, value];
+      }
 
       const description = value.description ?? value.prompt.description;
       if (!description) {
@@ -134,7 +139,7 @@ export function bindForegroundAgentTools(
                 model: options.model,
                 occurrence: Object.freeze({
                   ownerId: options.ownerId,
-                  turnId: "",
+                  turnId: resolveAgentToolTurnId(execution),
                   toolCallId: execution.toolCallId,
                   bindingKey: name,
                 }),

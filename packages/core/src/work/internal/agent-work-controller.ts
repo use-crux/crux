@@ -2,7 +2,10 @@
  * Process-local Agent Work controller over the shared Work kernel.
  *
  * Owns occurrence identity and steering mailboxes only. Lifecycle acceptance
- * remains on the injected process-local kernel.
+ * remains on the injected process-local kernel. First-accept is atomic under
+ * concurrent callers: exactly one kernel child starts and waiters reconnect.
+ * Terminal settlement disposes controller records and raw mailbox content while
+ * preserving only in-turn occurrence replay until the owner execution ends.
  *
  * @internal
  * @module
@@ -30,6 +33,7 @@ import type { WorkProgress, WorkProgressSnapshot } from "../progress";
 import type { WorkOwnership, WorkStatus } from "../status";
 import {
   createAgentToolOccurrenceRegistry,
+  encodeOccurrenceKey,
   type AgentToolOccurrenceKey,
   type AgentToolOccurrenceRegistry,
 } from "./agent-occurrence";
@@ -76,7 +80,14 @@ export interface ProcessLocalAgentWorkController {
   ): Promise<WorkSteeringReceipt>;
   claimSteeringMessages(workId: string): readonly Message[];
   close(workId: string): void;
+  /**
+   * Drop occurrence entries for one parent owner execution after in-turn replay
+   * is no longer required. Live child records remain until they terminalize.
+   */
+  releaseOwner(ownerId: string): void;
   isAgentWork(workId: string): boolean;
+  /** Number of retained Agent Work controller records (tests/diagnostics). */
+  recordCount(): number;
 }
 
 interface AgentWorkRecord<TOutput = unknown> {
@@ -85,6 +96,7 @@ interface AgentWorkRecord<TOutput = unknown> {
   readonly targetLabel: string;
   readonly kind: "agent";
   readonly mailbox: AgentSteeringMailbox;
+  readonly occurrence?: AgentToolOccurrenceKey;
   ownership: WorkOwnership;
   progress?: WorkProgressSnapshot;
   readonly acceptedAt: Date;
@@ -99,6 +111,10 @@ export function createProcessLocalAgentWorkController(options: {
   const now = options.now ?? (() => new Date());
   const occurrences = createAgentToolOccurrenceRegistry();
   const records = new Map<string, AgentWorkRecord>();
+  const pendingByOccurrence = new Map<
+    string,
+    Promise<AgentWorkHandle<unknown>>
+  >();
 
   async function spawnAgent<TAgent extends AnyAgent>(
     agent: TAgent,
@@ -111,19 +127,51 @@ export function createProcessLocalAgentWorkController(options: {
       readonly targetLabel?: string;
     },
   ): Promise<AgentWorkHandle<InferAgentOutput<TAgent>>> {
-    if (spawnOptions.occurrence) {
-      const existing = occurrences.get(spawnOptions.occurrence);
-      if (existing) {
-        occurrences.accept(spawnOptions.occurrence, input, existing.workId);
-        const recovered = records.get(existing.workId);
-        if (recovered) {
-          return agentWorkHandle(recovered) as AgentWorkHandle<
-            InferAgentOutput<TAgent>
-          >;
-        }
+    if (!spawnOptions.occurrence) {
+      return spawnFresh(agent, input, spawnOptions);
+    }
+
+    const occurrence = spawnOptions.occurrence;
+    const identity = encodeOccurrenceKey(occurrence);
+    const existing = occurrences.get(occurrence);
+    if (existing) {
+      occurrences.accept(occurrence, input, existing.workId);
+      const recovered = records.get(existing.workId);
+      if (recovered) {
+        return agentWorkHandle(recovered) as AgentWorkHandle<
+          InferAgentOutput<TAgent>
+        >;
       }
     }
 
+    // Reserve the first accept before any await so concurrent callers reconnect.
+    let starter = pendingByOccurrence.get(identity);
+    if (!starter) {
+      starter = spawnFresh(agent, input, spawnOptions)
+        .then((handle) => handle as AgentWorkHandle<unknown>)
+        .finally(() => {
+          pendingByOccurrence.delete(identity);
+        });
+      pendingByOccurrence.set(identity, starter);
+    }
+
+    const handle = await starter;
+    // Waiters validate their own input against the reserved occurrence.
+    occurrences.accept(occurrence, input, handle.id);
+    return handle as AgentWorkHandle<InferAgentOutput<TAgent>>;
+  }
+
+  async function spawnFresh<TAgent extends AnyAgent>(
+    agent: TAgent,
+    input: unknown,
+    spawnOptions: {
+      readonly executor: AgentExecutor;
+      readonly model?: AnyModel;
+      readonly occurrence?: AgentToolOccurrenceKey;
+      readonly spawn?: InternalWorkSpawnOptions;
+      readonly targetLabel?: string;
+    },
+  ): Promise<AgentWorkHandle<InferAgentOutput<TAgent>>> {
     const handle = await options.kernel.spawn(
       {
         run: async (context) => {
@@ -163,12 +211,25 @@ export function createProcessLocalAgentWorkController(options: {
       return agentWorkHandle(existing) as AgentWorkHandle<TOutput>;
     }
 
+    let occurrence: AgentToolOccurrenceKey | undefined;
     if (attachOptions.occurrence) {
-      occurrences.accept(
+      const accepted = occurrences.accept(
         attachOptions.occurrence,
         attachOptions.input,
         handle.id,
       );
+      if (accepted.workId !== handle.id) {
+        // Another concurrent starter won the occurrence. Cancel this orphan.
+        handle.cancel();
+        const winner = records.get(accepted.workId);
+        if (winner) {
+          return agentWorkHandle(winner) as AgentWorkHandle<TOutput>;
+        }
+        throw new TypeError(
+          "Agent-tool occurrence was reserved by a concurrent spawn.",
+        );
+      }
+      occurrence = attachOptions.occurrence;
     }
 
     const record: AgentWorkRecord = {
@@ -180,6 +241,7 @@ export function createProcessLocalAgentWorkController(options: {
         workId: handle.id,
         now,
       }),
+      ...(occurrence ? { occurrence } : {}),
       ownership: Object.freeze({ state: "attached" }),
       acceptedAt: now(),
       nextCommand: 0,
@@ -188,10 +250,10 @@ export function createProcessLocalAgentWorkController(options: {
 
     void handle.result().then(
       () => {
-        close(handle.id);
+        sealTerminal(handle.id);
       },
       () => {
-        close(handle.id);
+        sealTerminal(handle.id);
       },
     );
 
@@ -233,8 +295,63 @@ export function createProcessLocalAgentWorkController(options: {
     records.get(workId)?.mailbox.close();
   }
 
+  /**
+   * After a child terminals, drop raw steering content but keep the record so
+   * in-turn occurrence replay can still rejoin the same result until the parent
+   * owner execution releases its partition.
+   */
+  function sealTerminal(workId: string): void {
+    const record = records.get(workId);
+    if (!record) {
+      return;
+    }
+    // Clears payload bytes and closes acceptance.
+    record.mailbox.dispose();
+
+    // Host-spawned Work has no occurrence partition: dispose the record now.
+    // Agent-tool children keep the record for in-turn reconnect until the parent
+    // owner releases its partition.
+    if (
+      !record.occurrence ||
+      occurrences.get(record.occurrence) === undefined
+    ) {
+      records.delete(workId);
+    }
+  }
+
+  function dispose(workId: string): void {
+    const record = records.get(workId);
+    if (!record) {
+      return;
+    }
+    record.mailbox.dispose();
+    records.delete(workId);
+  }
+
+  function releaseOwner(ownerId: string): void {
+    occurrences.releaseOwner(ownerId);
+    for (const [workId, record] of [...records.entries()]) {
+      if (record.occurrence?.ownerId !== ownerId) {
+        continue;
+      }
+      void record.handle.status().then((status) => {
+        if (
+          status.state === "completed" ||
+          status.state === "failed" ||
+          status.state === "cancelled"
+        ) {
+          dispose(workId);
+        }
+      });
+    }
+  }
+
   function isAgentWork(workId: string): boolean {
     return records.has(workId);
+  }
+
+  function recordCount(): number {
+    return records.size;
   }
 
   return Object.freeze({
@@ -246,7 +363,9 @@ export function createProcessLocalAgentWorkController(options: {
     acceptSteering,
     claimSteeringMessages,
     close,
+    releaseOwner,
     isAgentWork,
+    recordCount,
   });
 
   function agentWorkHandle<TOutput>(

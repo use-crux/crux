@@ -255,3 +255,146 @@ it("adds one bounded owner-scoped work control Tool for backgroundable children"
     model: "parent-model",
   })).rejects.toThrow('Tool name "work" is reserved for background Work control.');
 });
+
+it("work.send accepts Agent children, rejects non-Agent targets, is idempotent, and rejects terminal Work", async () => {
+  const { bindWorkControlTool, WORK_CONTROL_TOOL_NAME } = await import(
+    "../../src/agent/work-control-tool"
+  );
+  const { createProcessLocalAgentWorkController } = await import(
+    "../../src/work/internal/agent-work-controller"
+  );
+  const { createProcessLocalWorkKernel } = await import(
+    "../../src/work/internal/process-local-kernel"
+  );
+  const { createInternalWorkOwnerPort } = await import(
+    "../../src/work/internal/owner-retained-work"
+  );
+  const { WorkNotActiveError } = await import("../../src/work/errors");
+  const { backgroundable: markBackgroundable } = await import(
+    "../../src/agent"
+  );
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const kernel = createProcessLocalWorkKernel();
+  const agentWork = createProcessLocalAgentWorkController({ kernel });
+  const owner = createInternalWorkOwnerPort(kernel);
+  const child = agent({
+    id: "send-behavior-child",
+    description: "Agent child for work.send behavior",
+    prompt: prompt({
+      id: "send-behavior-child-prompt",
+      input: z.object({ task: z.string() }),
+      prompt: ({ input }) => input.task,
+    }),
+  });
+
+  // Non-Agent retained Work: owner inbox only, not the Agent controller.
+  const nonAgent = await owner.spawnAndRetain(
+    {
+      run: async () => {
+        await gate;
+        return "non-agent-result";
+      },
+    },
+    {
+      kind: "cancellation-only",
+      targetId: "task",
+      targetLabel: "task",
+    },
+  );
+
+  const occurrence = {
+    ownerId: "owner_exec_send_behavior",
+    turnId: "hist:0",
+    toolCallId: "spawn-1",
+    bindingKey: "research",
+  };
+  const agentHandle = await agentWork.spawnAgent(
+    child,
+    { task: "run" },
+    {
+      occurrence,
+      executor: async () => {
+        await gate;
+        return {
+          agentId: "send-behavior-child",
+          output: "agent-result",
+          durationMs: 1,
+        };
+      },
+    },
+  );
+  owner.retainExisting(agentWork.getInternal(agentHandle.id)!, {
+    targetId: child.id,
+    targetLabel: "research",
+  });
+
+  const tools = bindWorkControlTool(
+    { research: markBackgroundable(child) },
+    owner,
+    agentWork,
+  );
+  const workTool = tools[WORK_CONTROL_TOOL_NAME] as {
+    execute(
+      input: unknown,
+      options: { toolCallId: string; runtimeContext: unknown },
+    ): Promise<unknown>;
+  };
+
+  const first = await workTool.execute(
+    {
+      action: "send",
+      id: agentHandle.id,
+      message: "Prioritize primary sources.",
+    },
+    { toolCallId: "send-1", runtimeContext: {} },
+  );
+  expect(first).toMatchObject({
+    workId: agentHandle.id,
+    outcome: "accepted",
+    cursor: "1",
+  });
+  expect(Object.isFrozen(first)).toBe(true);
+
+  // Same toolCallId is idempotent and does not allocate a second cursor.
+  const replay = await workTool.execute(
+    {
+      action: "send",
+      id: agentHandle.id,
+      message: "Prioritize primary sources.",
+    },
+    { toolCallId: "send-1", runtimeContext: {} },
+  );
+  expect(replay).toMatchObject({
+    workId: agentHandle.id,
+    outcome: "accepted",
+    cursor: "1",
+  });
+
+  await expect(
+    workTool.execute(
+      {
+        action: "send",
+        id: nonAgent.id,
+        message: "not an Agent",
+      },
+      { toolCallId: "send-non-agent", runtimeContext: {} },
+    ),
+  ).rejects.toThrow(/only available for Agent Work/);
+
+  release();
+  await expect(agentHandle.result()).resolves.toBe("agent-result");
+  await expect(
+    workTool.execute(
+      {
+        action: "send",
+        id: agentHandle.id,
+        message: "too late",
+      },
+      { toolCallId: "send-late", runtimeContext: {} },
+    ),
+  ).rejects.toBeInstanceOf(WorkNotActiveError);
+});

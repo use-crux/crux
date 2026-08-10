@@ -1,8 +1,9 @@
 /**
  * Stable process-local identity for Agent-tool Work occurrences.
  *
- * Identity derives from owner, turn, tool-call, and binding key so provider
- * or adapter replay reconnects the existing child instead of starting another.
+ * Identity derives from owner execution, turn/step, tool-call, and binding key
+ * so provider or adapter replay reconnects the existing child instead of
+ * starting another. Separate parent runs must not share occurrence partitions.
  *
  * @internal
  * @module
@@ -13,12 +14,13 @@ import { canonicalRuntimeJson } from "../../runtime/engine/canonical-json";
 import type { JsonValue } from "../../storage";
 
 const encoder = new TextEncoder();
+let nextOwnerExecution = 0;
 
 /** Composite key for one logical Agent-tool occurrence. */
 export interface AgentToolOccurrenceKey {
-  /** Owner execution identity that accepted the child. */
+  /** Owner execution identity that accepted the child (not Agent definition id). */
   readonly ownerId: string;
-  /** Parent turn or step occurrence identity when available. */
+  /** Parent turn or step occurrence identity within the owner execution. */
   readonly turnId: string;
   /** Normalized provider Tool-call occurrence identity. */
   readonly toolCallId: string;
@@ -47,6 +49,12 @@ export interface AgentToolOccurrenceRegistry {
   ): AgentToolOccurrenceRecord;
   /** Look up a reserved occurrence without allocating. */
   get(key: AgentToolOccurrenceKey): AgentToolOccurrenceRecord | undefined;
+  /** Drop one occurrence entry when in-turn replay is no longer required. */
+  release(key: AgentToolOccurrenceKey): void;
+  /** Drop every occurrence reserved by one parent owner execution. */
+  releaseOwner(ownerId: string): void;
+  /** Number of retained occurrence entries (tests and diagnostics). */
+  size(): number;
 }
 
 /** Create one isolated occurrence registry. */
@@ -82,7 +90,49 @@ export function createAgentToolOccurrenceRegistry(): AgentToolOccurrenceRegistry
     get(key: AgentToolOccurrenceKey): AgentToolOccurrenceRecord | undefined {
       return records.get(encodeOccurrenceKey(key));
     },
+
+    release(key: AgentToolOccurrenceKey): void {
+      records.delete(encodeOccurrenceKey(key));
+    },
+
+    releaseOwner(ownerId: string): void {
+      for (const [identity, record] of records) {
+        if (record.key.ownerId === ownerId) {
+          records.delete(identity);
+        }
+      }
+    },
+
+    size(): number {
+      return records.size;
+    },
   });
+}
+
+/**
+ * Allocate a unique process-local owner execution identity.
+ *
+ * @remarks Distinct concurrent parent Agent invocations must not share this
+ * identity even when they use the same Agent definition id.
+ */
+export function createOwnerExecutionId(): string {
+  nextOwnerExecution += 1;
+  return `owner_${Date.now().toString(36)}_${nextOwnerExecution.toString(36)}`;
+}
+
+/**
+ * Resolve turn/step identity for one Agent-tool occurrence.
+ *
+ * @remarks Provider/adapter tool retries within the same sealed history share
+ * one turn. A later provider step with a longer history is a distinct turn.
+ */
+export function resolveAgentToolTurnId(execution: {
+  readonly messages?: readonly unknown[];
+}): string {
+  const count = Array.isArray(execution.messages)
+    ? execution.messages.length
+    : 0;
+  return `hist:${count}`;
 }
 
 /** Encode the composite occurrence key as a stable map identity. */

@@ -122,8 +122,8 @@ it("rejects conflicting Agent-tool occurrence reuse at the controller boundary",
     kernel: createProcessLocalWorkKernel(),
   });
   const occurrence = {
-    ownerId: "parent",
-    turnId: "",
+    ownerId: "owner_exec_conflict",
+    turnId: "hist:0",
     toolCallId: "stable-call",
     bindingKey: "research",
   };

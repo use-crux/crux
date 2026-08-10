@@ -3,11 +3,14 @@
  *
  * Identity records store only command ids and payload digests. Raw content is
  * retained in memory for later delivery and is never part of the identity key.
+ * Delivered payloads and closed mailboxes are disposed so process-local memory
+ * does not retain raw steering content after it is no longer needed.
  *
  * @internal
  * @module
  */
 
+import type { Asset } from "../../asset/types";
 import { sha256Hex } from "../../content/sha256";
 import type { Message } from "../../generation/messages";
 import type { MessageContent } from "../../types/content";
@@ -32,7 +35,7 @@ export interface AgentSteeringIdentityRecord {
 /** One accepted steering entry retained only in process memory. */
 export interface AcceptedAgentSteering {
   readonly identity: AgentSteeringIdentityRecord;
-  readonly content: AgentSteeringContent;
+  content: AgentSteeringContent | undefined;
   delivered: boolean;
 }
 
@@ -45,15 +48,19 @@ export interface AcceptAgentSteeringInput {
 /** Process-local steering mailbox for one Work occurrence. @internal */
 export interface AgentSteeringMailbox {
   /** Accept one ordered command idempotently, or reject terminal Work. */
-  accept(input: AcceptAgentSteeringInput): WorkSteeringReceipt;
+  accept(input: AcceptAgentSteeringInput): Promise<WorkSteeringReceipt>;
   /** Claim undelivered steering as ordered canonical user messages. */
   claimForProviderStep(): readonly Message[];
   /** Read identity-only records for tests and diagnostics. */
   identities(): readonly AgentSteeringIdentityRecord[];
   /** Mark the mailbox closed so further acceptance rejects. */
   close(): void;
+  /** Drop raw content and close the mailbox permanently. */
+  dispose(): void;
   /** Whether the mailbox still accepts commands. */
   isOpen(): boolean;
+  /** Whether any raw undelivered content remains (tests and diagnostics). */
+  hasRawContent(): boolean;
 }
 
 /** Create one isolated ordered mailbox for a single Work id. */
@@ -68,12 +75,12 @@ export function createAgentSteeringMailbox(options: {
   let open = true;
 
   return Object.freeze({
-    accept(input: AcceptAgentSteeringInput): WorkSteeringReceipt {
+    async accept(input: AcceptAgentSteeringInput): Promise<WorkSteeringReceipt> {
       if (!open) {
         throw new WorkNotActiveError(options.workId);
       }
       const content = normalizeSteeringContent(input.content);
-      const payloadHash = hashSteeringContent(content);
+      const payloadHash = await hashSteeringContent(content);
       const existing = byCommand.get(input.commandId);
       if (existing) {
         if (existing.identity.payloadHash !== payloadHash) {
@@ -107,11 +114,13 @@ export function createAgentSteeringMailbox(options: {
     claimForProviderStep(): readonly Message[] {
       const claimed: Message[] = [];
       for (const entry of ordered) {
-        if (entry.delivered) {
+        if (entry.delivered || entry.content === undefined) {
           continue;
         }
         entry.delivered = true;
         claimed.push(steeringMessage(entry.content));
+        // Retain identity for idempotent command replay; drop raw payload bytes.
+        entry.content = undefined;
       }
       return Object.freeze(claimed);
     },
@@ -124,15 +133,33 @@ export function createAgentSteeringMailbox(options: {
       open = false;
     },
 
+    dispose(): void {
+      open = false;
+      for (const entry of ordered) {
+        entry.content = undefined;
+        entry.delivered = true;
+      }
+      byCommand.clear();
+      ordered.length = 0;
+    },
+
     isOpen(): boolean {
       return open;
+    },
+
+    hasRawContent(): boolean {
+      return ordered.some((entry) => entry.content !== undefined);
     },
   });
 }
 
 /** Digest steering content for identity records without storing the payload. */
-export function hashSteeringContent(content: AgentSteeringContent): string {
-  return `sha256:${sha256Hex(encoder.encode(fingerprintSteeringContent(content)))}`;
+export async function hashSteeringContent(
+  content: AgentSteeringContent,
+): Promise<string> {
+  return `sha256:${sha256Hex(
+    encoder.encode(await fingerprintSteeringContent(content)),
+  )}`;
 }
 
 function receiptFrom(
@@ -163,27 +190,32 @@ function normalizeSteeringContent(
   return Object.freeze([...content]) as MessageContent;
 }
 
-function fingerprintSteeringContent(content: AgentSteeringContent): string {
+async function fingerprintSteeringContent(
+  content: AgentSteeringContent,
+): Promise<string> {
   if (typeof content === "string") {
     return JSON.stringify({ kind: "text", text: content });
   }
+  const parts = [];
+  for (const part of content) {
+    if (part.type === "text") {
+      parts.push({ type: "text", text: part.text });
+      continue;
+    }
+    parts.push({
+      type: part.type,
+      mediaType: "mediaType" in part ? part.mediaType ?? null : null,
+      filename: "filename" in part ? part.filename ?? null : null,
+      source: await fingerprintMediaSource(part.source),
+    });
+  }
   return JSON.stringify({
     kind: "parts",
-    parts: content.map((part) => {
-      if (part.type === "text") {
-        return { type: "text", text: part.text };
-      }
-      return {
-        type: part.type,
-        mediaType: "mediaType" in part ? part.mediaType ?? null : null,
-        filename: "filename" in part ? part.filename ?? null : null,
-        source: fingerprintMediaSource(part.source),
-      };
-    }),
+    parts,
   });
 }
 
-function fingerprintMediaSource(source: unknown): string {
+async function fingerprintMediaSource(source: unknown): Promise<string> {
   if (typeof source === "string") {
     return `string:${source}`;
   }
@@ -197,7 +229,11 @@ function fingerprintMediaSource(source: unknown): string {
     return `bytes:${sha256Hex(new Uint8Array(source))}`;
   }
   if (typeof Blob !== "undefined" && source instanceof Blob) {
-    return `blob:${source.type}:${source.size}`;
+    const bytes = new Uint8Array(await source.arrayBuffer());
+    return `bytes:${sha256Hex(bytes)}`;
+  }
+  if (isAsset(source)) {
+    return fingerprintAsset(source);
   }
   if (
     typeof source === "object" &&
@@ -207,7 +243,44 @@ function fingerprintMediaSource(source: unknown): string {
   ) {
     return `asset:${(source as { sha256: string }).sha256}`;
   }
-  return `opaque:${Object.prototype.toString.call(source)}`;
+  throw new TypeError(
+    "Agent steering media source is not identity-safe. Provide bytes, a Blob, a URL/string, or a source with a stable sha256 digest.",
+  );
+}
+
+async function fingerprintAsset(asset: Asset): Promise<string> {
+  if (typeof asset.sha256 === "string" && asset.sha256.length > 0) {
+    return `asset:${asset.sha256}`;
+  }
+  if (asset.type === "data") {
+    if (asset.data instanceof Uint8Array) {
+      return `bytes:${sha256Hex(asset.data)}`;
+    }
+    if (typeof Blob !== "undefined" && asset.data instanceof Blob) {
+      const bytes = new Uint8Array(await asset.data.arrayBuffer());
+      return `bytes:${sha256Hex(bytes)}`;
+    }
+  }
+  if (asset.type === "url") {
+    return `url:${asset.url.href}`;
+  }
+  if (asset.type === "provider-file") {
+    return `provider-file:${asset.provider}:${asset.fileId}`;
+  }
+  throw new TypeError(
+    "Agent steering Asset source is not identity-safe without bytes or sha256.",
+  );
+}
+
+function isAsset(source: unknown): source is Asset {
+  return (
+    typeof source === "object" &&
+    source !== null &&
+    "type" in source &&
+    (source.type === "data" ||
+      source.type === "url" ||
+      source.type === "provider-file")
+  );
 }
 
 function steeringMessage(content: AgentSteeringContent): Message {
