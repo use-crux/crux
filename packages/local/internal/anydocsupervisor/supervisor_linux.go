@@ -129,6 +129,22 @@ func validResultValidationReason(reason string) bool {
 	return false
 }
 
+func validContainmentStage(stage string) bool {
+	switch stage {
+	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active", "authorize-accept", "authorize-peer-credentials", "authorize-report", "authorize-peer-identity", "authorize-encode", "containment-cleanup":
+		return true
+	}
+	return false
+}
+
+func validContainmentReason(reason string) bool {
+	switch reason {
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io-or-systemd", "accounting-evidence":
+		return true
+	}
+	return false
+}
+
 var errCPUAccounting = errors.New("cpu accounting unavailable")
 
 type Request struct {
@@ -830,9 +846,14 @@ func errorCode(err error) ErrorCode {
 func safeExecutionFailure(err error, terminal TerminalReport) string {
 	var validation *ResultValidationError
 	hasValidation := errors.As(err, &validation)
+	var containment *ContainmentError
+	hasContainment := errors.As(err, &containment)
 
 	var errorStr string
 	code := errorCode(err)
+	if hasValidation {
+		code = ErrInvalidResult
+	}
 	switch code {
 	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
 		errorStr = string(code)
@@ -867,13 +888,22 @@ func safeExecutionFailure(err error, terminal TerminalReport) string {
 		if !validResultValidationReason(reason) {
 			reason = "unknown"
 		}
+	} else if hasContainment {
+		stage = containment.Stage
+		if !validContainmentStage(stage) {
+			stage = "unknown"
+		}
+		reason = containment.ReasonCode
+		if !validContainmentReason(reason) {
+			reason = "unknown"
+		}
 	} else {
 		stage = safeRunnerStage(terminal.PreStop.ExecMainStatus)
 		reason = ""
 	}
 
 	out := "error=" + errorStr + " outcome=" + outcome + " service=" + serviceResult + " stage=" + stage
-	if hasValidation {
+	if hasValidation || hasContainment {
 		out += " reason=" + reason
 	}
 	out += " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
