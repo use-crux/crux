@@ -40,19 +40,45 @@ func (unitAlreadyGone) Error() string { return "unit already gone" }
 
 var errUnitAlreadyGone = unitAlreadyGone{}
 
-// Fixed allowlist of D-Bus error names that mean the unit object is gone.
-// UnknownObject is relevant for a vanished unit object path; UnknownMethod is not.
-var dbusUnitNotFoundErrors = map[string]bool{
-	"org.freedesktop.systemd1.NoSuchUnit":     true,
-	"org.freedesktop.DBus.Error.UnknownObject": true,
-}
-
-func isDbusUnitNotFound(err error) bool {
+// D-Bus missing-unit classification is operation-specific:
+//   - Manager.StopUnit: only org.freedesktop.systemd1.NoSuchUnit
+//   - UnitProperties follow-up: NoSuchUnit or org.freedesktop.DBus.Error.UnknownObject
+// UnknownObject from StopUnit must remain a failure (unit path may still exist).
+func isDbusStopNoSuchUnit(err error) bool {
 	var dbusErr dbus.Error
 	if !errors.As(err, &dbusErr) {
 		return false
 	}
-	return dbusUnitNotFoundErrors[dbusErr.Name]
+	return dbusErr.Name == "org.freedesktop.systemd1.NoSuchUnit"
+}
+
+func isDbusUnitPropertiesGone(err error) bool {
+	var dbusErr dbus.Error
+	if !errors.As(err, &dbusErr) {
+		return false
+	}
+	switch dbusErr.Name {
+	case "org.freedesktop.systemd1.NoSuchUnit", "org.freedesktop.DBus.Error.UnknownObject":
+		return true
+	default:
+		return false
+	}
+}
+
+// successfulInactiveTerminal is the strict proof that an already-gone unit
+// may count as successful cleanup: MainPID 0, inactive only, Result success,
+// ExecMainStatus 0. failed/oom-kill/exit-code/nonzero never qualifies.
+func successfulInactiveTerminal(state string, mainPID int, serviceResult string, execMainStatus int) bool {
+	return mainPID == 0 && state == "inactive" && serviceResult == "success" && execMainStatus == 0
+}
+
+func successfulInactiveFromProps(p map[string]any) bool {
+	return successfulInactiveTerminal(
+		stringValue(p, "ActiveState"),
+		intValue(p, "MainPID"),
+		stringValue(p, "Result"),
+		intValue(p, "ExecMainStatus"),
+	)
 }
 
 func containmentReason(err error) string {
@@ -990,20 +1016,17 @@ func (u *systemdUnit) captureFailure() accountingCaptureFailure {
 func (u *systemdUnit) Stop(ctx context.Context) error {
 	if err := u.bus.StopUnit(ctx, u.name); err == nil {
 		return nil
-	} else if isDbusUnitNotFound(err) {
-		// Confirm via the same typed not-found condition, or a successful
-		// inactive terminal status. Arbitrary UnitProperties errors are not gone.
+	} else if isDbusStopNoSuchUnit(err) {
+		// Confirm via typed UnitProperties gone, or strict successful-inactive
+		// terminal proof. UnknownObject from StopUnit never enters this branch.
+		// Arbitrary UnitProperties errors are not gone.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
 		if propErr != nil {
-			if isDbusUnitNotFound(propErr) {
+			if isDbusUnitPropertiesGone(propErr) {
 				return errUnitAlreadyGone
 			}
-		} else {
-			state := stringValue(p, "ActiveState")
-			pid := intValue(p, "MainPID")
-			if (state == "inactive" || state == "failed") && pid == 0 {
-				return errUnitAlreadyGone
-			}
+		} else if successfulInactiveFromProps(p) {
+			return errUnitAlreadyGone
 		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {

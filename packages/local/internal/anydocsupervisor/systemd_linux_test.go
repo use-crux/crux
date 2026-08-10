@@ -792,10 +792,15 @@ type fakeSystemBus struct {
 	startErr, stopErr, killErr error
 	propErr                    error
 	propErrAfterStop           bool
-	stopped                    bool
-	stopDBusErrorName          string
-	reset                      bool
-	onStop                     func()
+	// propGoneOnceAfterStop returns a typed properties-gone error on the first
+	// UnitProperties call after StopUnit, then serves values again so terminal
+	// proof can be asserted independently of stop confirmation.
+	propGoneOnceAfterStop bool
+	propGoneConsumed      bool
+	stopped               bool
+	stopDBusErrorName     string
+	reset                 bool
+	onStop                func()
 }
 
 func newFakeSystemBus() *fakeSystemBus {
@@ -818,6 +823,10 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 	}
 	if b.propErrAfterStop && b.stopped {
 		return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+	}
+	if b.propGoneOnceAfterStop && b.stopped && !b.propGoneConsumed {
+		b.propGoneConsumed = true
+		return nil, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
 	}
 	return b.values, nil
 }
@@ -924,15 +933,101 @@ func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndTypedPropertiesNotFound(t *t
 	}
 }
 
-func TestStopReturnsUnitAlreadyGoneWhenUnknownObjectAndInactiveTerminal(t *testing.T) {
+func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndPropertiesUnknownObject(t *testing.T) {
+	// UnitProperties may accept UnknownObject; StopUnit may not.
 	bus := newFakeSystemBus()
-	bus.stopDBusErrorName = "org.freedesktop.DBus.Error.UnknownObject"
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.propErr = dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if !errors.Is(err, errUnitAlreadyGone) {
+		t.Fatalf("expected errUnitAlreadyGone from properties UnknownObject, got %v", err)
+	}
+}
+
+func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndSuccessfulInactiveProps(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(0)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
 	if !errors.Is(err, errUnitAlreadyGone) {
 		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	}
+}
+
+func TestStopDoesNotTreatUnknownObjectFromStopUnitAsAlreadyGone(t *testing.T) {
+	// Manager.StopUnit accepts ONLY NoSuchUnit; UnknownObject must remain a failure.
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.DBus.Error.UnknownObject"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(0)
+	bus.killErr = errors.New("denied")
+	// Force cgroup.kill path to fail so Stop returns an error.
+	bus.values["ControlGroup"] = ""
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("UnknownObject from StopUnit must not classify as alreadyGone")
+	}
+	if err == nil {
+		t.Fatal("expected stop failure for UnknownObject from StopUnit")
+	}
+}
+
+func TestStopDoesNotTreatFailedStateAsAlreadyGone(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "failed"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "exit-code"
+	bus.values["ExecMainStatus"] = int32(1)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("failed/exit-code terminal must not classify as alreadyGone")
+	}
+	if err != nil {
+		t.Fatalf("expected kill fallback success, got %v", err)
+	}
+}
+
+func TestStopDoesNotTreatOOMKillResultAsAlreadyGone(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "oom-kill"
+	bus.values["ExecMainStatus"] = int32(0)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("oom-kill Result must not classify as alreadyGone")
+	}
+	if err != nil {
+		t.Fatalf("expected kill fallback success, got %v", err)
+	}
+}
+
+func TestStopDoesNotTreatNonzeroExecMainStatusAsAlreadyGone(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(76)
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("nonzero ExecMainStatus must not classify as alreadyGone")
+	}
+	if err != nil {
+		t.Fatalf("expected kill fallback success, got %v", err)
 	}
 }
 
@@ -995,9 +1090,83 @@ func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
 	bus.values["Result"] = "success"
+	bus.values["ExecMainStatus"] = int32(0)
 	_, _, _, reason := cleanup(u)
 	if reason != "" {
 		t.Fatalf("expected empty reason, got %q", reason)
+	}
+}
+
+func prepareAlreadyGoneCleanup(t *testing.T, terminal map[string]any) (*systemdUnit, *fakeSystemBus) {
+	t.Helper()
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := u.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.MarkSnapshotVerified()
+	// Stop confirms already-gone via one-shot typed properties-gone; terminal
+	// status then uses the supplied non-success proof and must reject.
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.propGoneOnceAfterStop = true
+	for k, v := range terminal {
+		bus.values[k] = v
+	}
+	bus.onStop = func() {
+		for path := range fs.files {
+			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, path)
+			}
+		}
+	}
+	return u, bus
+}
+
+func TestCleanupRejectsAlreadyGoneWhenFailedState(t *testing.T) {
+	u, _ := prepareAlreadyGoneCleanup(t, map[string]any{
+		"ActiveState":    "failed",
+		"MainPID":        uint32(0),
+		"Result":         "exit-code",
+		"ExecMainStatus": int32(1),
+	})
+	_, _, _, reason := cleanup(u)
+	if reason != "stop-unit" {
+		t.Fatalf("expected stop-unit when terminal is failed, got %q", reason)
+	}
+}
+
+func TestCleanupRejectsAlreadyGoneWhenOOMKillResult(t *testing.T) {
+	u, _ := prepareAlreadyGoneCleanup(t, map[string]any{
+		"ActiveState":    "inactive",
+		"MainPID":        uint32(0),
+		"Result":         "oom-kill",
+		"ExecMainStatus": int32(0),
+	})
+	_, _, _, reason := cleanup(u)
+	if reason != "stop-unit" {
+		t.Fatalf("expected stop-unit when Result is oom-kill, got %q", reason)
+	}
+}
+
+func TestCleanupRejectsAlreadyGoneWhenNonzeroExecMainStatus(t *testing.T) {
+	u, _ := prepareAlreadyGoneCleanup(t, map[string]any{
+		"ActiveState":    "inactive",
+		"MainPID":        uint32(0),
+		"Result":         "success",
+		"ExecMainStatus": int32(76),
+	})
+	_, _, _, reason := cleanup(u)
+	if reason != "stop-unit" {
+		t.Fatalf("expected stop-unit when ExecMainStatus nonzero, got %q", reason)
 	}
 }
 

@@ -1101,9 +1101,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 }
 
 // validateAlreadyGone accepts the intermediate alreadyGone reason only when
-// pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and a
-// successful inactive/failed terminal status with MainPID 0 was retained.
-// Returns "" on accept, or the fixed "stop-unit" sentinel on reject.
+// pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and strict
+// successful-inactive terminal proof is retained (MainPID 0, State inactive,
+// ServiceResult success, ExecMainStatus 0). failed/oom-kill/exit-code/nonzero
+// must not clear the cleanup failure. Returns "" on accept, or "stop-unit".
 func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if terminationErr != nil || termination.ControlGroup == "" {
 		return "stop-unit"
@@ -1114,7 +1115,7 @@ func validateAlreadyGone(termination TerminationEvidence, terminationErr error, 
 	if !termination.Absent && !termination.Empty {
 		return "stop-unit"
 	}
-	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
+	if statusErr != nil || !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
 		return "stop-unit"
 	}
 	return ""
