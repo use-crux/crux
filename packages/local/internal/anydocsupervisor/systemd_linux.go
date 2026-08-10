@@ -40,16 +40,19 @@ func (unitAlreadyGone) Error() string { return "unit already gone" }
 
 var errUnitAlreadyGone = unitAlreadyGone{}
 
-var dbusNoSuchUnitErrors = map[string]bool{
-	"org.freedesktop.systemd1.NoSuchUnit": true,
+// Fixed allowlist of D-Bus error names that mean the unit object is gone.
+// UnknownObject is relevant for a vanished unit object path; UnknownMethod is not.
+var dbusUnitNotFoundErrors = map[string]bool{
+	"org.freedesktop.systemd1.NoSuchUnit":     true,
+	"org.freedesktop.DBus.Error.UnknownObject": true,
 }
 
-func isDbusNoSuchUnit(err error) bool {
+func isDbusUnitNotFound(err error) bool {
 	var dbusErr dbus.Error
 	if !errors.As(err, &dbusErr) {
 		return false
 	}
-	return dbusNoSuchUnitErrors[dbusErr.Name]
+	return dbusUnitNotFoundErrors[dbusErr.Name]
 }
 
 func containmentReason(err error) string {
@@ -987,15 +990,20 @@ func (u *systemdUnit) captureFailure() accountingCaptureFailure {
 func (u *systemdUnit) Stop(ctx context.Context) error {
 	if err := u.bus.StopUnit(ctx, u.name); err == nil {
 		return nil
-	} else if isDbusNoSuchUnit(err) {
+	} else if isDbusUnitNotFound(err) {
+		// Confirm via the same typed not-found condition, or a successful
+		// inactive terminal status. Arbitrary UnitProperties errors are not gone.
 		p, propErr := u.bus.UnitProperties(ctx, u.name)
 		if propErr != nil {
-			return errUnitAlreadyGone
-		}
-		state := stringValue(p, "ActiveState")
-		pid := intValue(p, "MainPID")
-		if (state == "inactive" || state == "failed") && pid == 0 {
-			return errUnitAlreadyGone
+			if isDbusUnitNotFound(propErr) {
+				return errUnitAlreadyGone
+			}
+		} else {
+			state := stringValue(p, "ActiveState")
+			pid := intValue(p, "MainPID")
+			if (state == "inactive" || state == "failed") && pid == 0 {
+				return errUnitAlreadyGone
+			}
 		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {

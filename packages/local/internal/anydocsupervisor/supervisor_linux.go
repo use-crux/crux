@@ -1052,10 +1052,13 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	if stopErr := unit.Stop(ctx); stopErr != nil {
-		if errors.Is(stopErr, errUnitAlreadyGone) {
-			reason = "alreadyGone"
-		} else if reason == "" {
-			reason = "stop-unit"
+		// Never overwrite an earlier reason.
+		if reason == "" {
+			if errors.Is(stopErr, errUnitAlreadyGone) {
+				reason = "alreadyGone"
+			} else {
+				reason = "stop-unit"
+			}
 		}
 	}
 	if unit.WaitInactive(ctx) != nil {
@@ -1080,6 +1083,8 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	if reason == "alreadyGone" {
+		// Absent cgroup alone is insufficient: require pinned Absent/Empty
+		// plus retained successful inactive terminal evidence.
 		reason = validateAlreadyGone(termination, terminationErr, status, statusErr)
 	}
 	if usedCachedAccounting && !termination.Absent {
@@ -1094,12 +1099,20 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	return report, cpu, termination, reason
 }
+
+// validateAlreadyGone accepts the intermediate alreadyGone reason only when
+// pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and a
+// successful inactive/failed terminal status with MainPID 0 was retained.
+// Returns "" on accept, or the fixed "stop-unit" sentinel on reject.
 func validateAlreadyGone(termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
-	if terminationErr != nil || termination.ControlGroup == "" || (!termination.Absent && !termination.Empty) || (termination.Absent == termination.Empty) {
+	if terminationErr != nil || termination.ControlGroup == "" {
 		return "stop-unit"
 	}
-	if termination.Absent {
-		return ""
+	if termination.Absent == termination.Empty {
+		return "stop-unit"
+	}
+	if !termination.Absent && !termination.Empty {
+		return "stop-unit"
 	}
 	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
 		return "stop-unit"

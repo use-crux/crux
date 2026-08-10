@@ -791,6 +791,8 @@ type fakeSystemBus struct {
 	values                     map[string]any
 	startErr, stopErr, killErr error
 	propErr                    error
+	propErrAfterStop           bool
+	stopped                    bool
 	stopDBusErrorName          string
 	reset                      bool
 	onStop                     func()
@@ -814,12 +816,16 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 	if b.propErr != nil {
 		return nil, b.propErr
 	}
+	if b.propErrAfterStop && b.stopped {
+		return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []interface{}{}}
+	}
 	return b.values, nil
 }
 func (b *fakeSystemBus) StopUnit(_ context.Context, _ string) error {
 	if b.onStop != nil {
 		b.onStop()
 	}
+	b.stopped = true
 	if b.stopDBusErrorName != "" {
 		return dbus.Error{Name: b.stopDBusErrorName, Body: []interface{}{}}
 	}
@@ -907,10 +913,10 @@ func propertiesByName(properties []DBusProperty) map[string]any {
 }
 func sameProperty(a, b any) bool { return reflect.DeepEqual(a, b) }
 
-func TestStopReturnsUnitAlreadyGoneWhenDbusNoSuchUnitAndUnitUnqueryable(t *testing.T) {
+func TestStopReturnsUnitAlreadyGoneWhenNoSuchUnitAndTypedPropertiesNotFound(t *testing.T) {
 	bus := newFakeSystemBus()
 	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
-	bus.propErr = errors.New("not found")
+	bus.propErr = dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
 	if !errors.Is(err, errUnitAlreadyGone) {
@@ -918,15 +924,32 @@ func TestStopReturnsUnitAlreadyGoneWhenDbusNoSuchUnitAndUnitUnqueryable(t *testi
 	}
 }
 
-func TestStopReturnsUnitAlreadyGoneWhenDbusNoSuchUnitAndTerminalStatusInactive(t *testing.T) {
+func TestStopReturnsUnitAlreadyGoneWhenUnknownObjectAndInactiveTerminal(t *testing.T) {
 	bus := newFakeSystemBus()
-	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.stopDBusErrorName = "org.freedesktop.DBus.Error.UnknownObject"
 	bus.values["ActiveState"] = "inactive"
 	bus.values["MainPID"] = uint32(0)
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, tmp: "/run/anydoc/private"}
 	err := u.Stop(context.Background())
 	if !errors.Is(err, errUnitAlreadyGone) {
 		t.Fatalf("expected errUnitAlreadyGone, got %v", err)
+	}
+}
+
+func TestStopDoesNotTreatArbitraryPropertiesErrorAsAlreadyGone(t *testing.T) {
+	bus := newFakeSystemBus()
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	bus.propErr = errors.New("not found")
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}, tmp: "/run/anydoc/private"}
+	// Kill also fails; UnitProperties fails so cgroup.kill cannot run either.
+	bus.killErr = errors.New("denied")
+	err := u.Stop(context.Background())
+	if errors.Is(err, errUnitAlreadyGone) {
+		t.Fatal("arbitrary UnitProperties error must not classify as alreadyGone")
+	}
+	if err == nil {
+		t.Fatal("expected stop failure when termination is unproved")
 	}
 }
 
@@ -945,7 +968,7 @@ func TestStopFallsBackToKillWhenUnitStillActive(t *testing.T) {
 	}
 }
 
-func TestCleanupAlreadyGoneAbsentSucceeds(t *testing.T) {
+func TestCleanupAlreadyGoneAbsentWithTerminalSucceeds(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
@@ -978,7 +1001,8 @@ func TestCleanupAlreadyGoneAbsentSucceeds(t *testing.T) {
 	}
 }
 
-func TestCleanupRejectsAlreadyGoneWhenCgroupPresent(t *testing.T) {
+func TestCleanupRejectsAlreadyGoneWhenTerminationUnproved(t *testing.T) {
+	// Cgroup still populated: Absent/Empty termination evidence is unproved.
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
 	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
@@ -1000,7 +1024,44 @@ func TestCleanupRejectsAlreadyGoneWhenCgroupPresent(t *testing.T) {
 	bus.values["Result"] = "success"
 	_, _, _, reason := cleanup(u)
 	if reason != "stop-unit" {
-		t.Fatalf("expected stop-unit reason, got %q", reason)
+		t.Fatalf("expected stop-unit when termination unproved, got %q", reason)
+	}
+}
+
+func TestCleanupRejectsAlreadyGoneWhenAbsentCgroupButNoTerminal(t *testing.T) {
+	// Absent cgroup alone is insufficient without retained inactive terminal status.
+	bus := newFakeSystemBus()
+	fs := newFakeFS()
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+	first, err := u.Report(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+	if _, err := u.Report(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.CPUUsage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	u.MarkSnapshotVerified()
+	bus.onStop = func() {
+		for path := range fs.files {
+			if strings.HasPrefix(path, "/sys/fs/cgroup/crux.slice/test/") {
+				delete(fs.files, path)
+			}
+		}
+	}
+	bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+	// After stop confirmation via inactive properties, drop terminal query so
+	// cleanup cannot retain successful inactive terminal evidence.
+	bus.propErrAfterStop = true
+	bus.values["ActiveState"] = "inactive"
+	bus.values["MainPID"] = uint32(0)
+	bus.values["Result"] = "success"
+	_, _, _, reason := cleanup(u)
+	if reason != "stop-unit" {
+		t.Fatalf("expected stop-unit when terminal evidence missing, got %q", reason)
 	}
 }
 
