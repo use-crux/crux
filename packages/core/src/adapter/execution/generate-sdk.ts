@@ -367,6 +367,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     rearm: (boundaryResolved) => lifecycle.rearm(boundaryResolved),
     configuredActiveTools: args.activeTools,
     stepBoundary: args[managedGenerationStepBoundary],
+    projectStepMessages: args.projectStepMessages,
     inputBudget: args.inputBudget,
     prepareStep: args.prepareStep,
     requestInput: args.input ?? {},
@@ -476,7 +477,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       model: modelInfo.modelId,
       media: dialect.media,
     });
-    if (args.prepareStep || args[managedGenerationStepBoundary]) {
+    if (
+      args.prepareStep ||
+      args[managedGenerationStepBoundary] ||
+      args.projectStepMessages
+    ) {
       await planStep.prime({
         model: args.model,
         modelInfo,

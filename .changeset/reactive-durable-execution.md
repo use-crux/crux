@@ -394,3 +394,13 @@ tab. Progressive guides, recipes, API reference, and architecture docs cover
 statistics and health semantics for operators, including troubleshooting
 coverage markers, shutdown/recovery, and Convex's honest rejection of
 managed-transport accept/checkpoint capabilities.
+
+Add process-local Agent Work handles with Agent-only `send()` on the shared
+Work lifecycle. `createAgentWorkHost({ executor })` and `spawn(agent, input)`
+return `AgentWorkHandle` without claiming cross-request durability. Agent-tool
+occurrence identity reconnects provider/adapter retries instead of double-
+starting children, and conflicting reuse rejects. Steering accepts canonical
+string or multimodal content, is ordered and payload-safe in identity records,
+and delivers only at the next semantic provider-step boundary without changing
+tools or guardrails. The automatic model-facing `work` tool gains `send` for
+Agent children only while retaining a stable schema.

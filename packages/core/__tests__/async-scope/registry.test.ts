@@ -12,6 +12,7 @@ import "../../src/observability/delivery/host-scope";
 import "../../src/runtime/api/host-context";
 import "../../src/runtime/execution-context";
 import "../../src/scope/kernel";
+import "../../src/work/agent-host";
 import "../../src/work/internal/attached-context";
 import "../../src/work/internal/durable-host-context";
 

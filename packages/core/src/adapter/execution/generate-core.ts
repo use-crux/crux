@@ -561,6 +561,7 @@ export async function generateCore<
                 prompt,
                 resolveOptions: boundaryResolveOpts,
               })),
+              ...((await args.projectStepMessages?.()) ?? []),
             ];
             const stepSystemContext = await args.projectStepSystemContext?.();
             const providerMessages = await prepareProviderMessages(messages);
@@ -724,6 +725,7 @@ export async function generateCore<
                   prompt,
                   resolveOptions: boundaryResolveOpts,
                 })),
+                ...((await args.projectStepMessages?.()) ?? []),
               ];
               const stepSystemContext = await args.projectStepSystemContext?.();
               const providerMessages = await prepareProviderMessages(messages);

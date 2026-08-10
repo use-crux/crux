@@ -95,6 +95,15 @@ export interface ExecutorGenerateBaseOptions<
    * @defaultValue `undefined`
    */
   readonly signal?: AbortSignal;
+  /**
+   * Claim process-local Agent steering messages at each semantic provider step.
+   *
+   * @internal
+   * @remarks Delivery is ordered and never mutates tools or guardrails.
+   */
+  readonly projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
   /** Validation-feedback retry policy for structured output. */
   validationRetry?: ValidationRetryOptions;
   /** Semantic constraints checked after structural validation. */

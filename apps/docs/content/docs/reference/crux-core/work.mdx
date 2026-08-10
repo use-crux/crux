@@ -1,16 +1,20 @@
 ---
 title: Application Work
-description: Exact spawn, getWork, WorkHandle, status, event, control, and statistics contracts.
+description: Exact spawn, getWork, WorkHandle, AgentWorkHandle, status, event, control, and statistics contracts.
 ---
 
-Application Work durably accepts an exported Flow and returns a typed live
-handle for one finite occurrence.
+Application Work accepts an exported Flow or process-local Agent and returns a
+typed live handle for one finite occurrence. Flow Work is durable through a
+Runtime host. Agent Work in this slice is process-local and honest about that
+limit.
 
 ```ts
 import {
+  createAgentWorkHost,
   createWorkHost,
   getWork,
   spawn,
+  type AgentWorkHandle,
   type WorkHandle,
 } from "@use-crux/core";
 ```
@@ -67,6 +71,33 @@ interface WorkHandle<TResult> {
 `effects` is the stable Effect scope allocated at acceptance. The handle is a
 live control reference, not a serializable durable reference; persist `id` and
 reconnect with `getWork()`.
+
+## Process-local Agent Work
+
+```ts
+const host = createAgentWorkHost({ executor });
+const child = await host.run(() =>
+  spawn(researcher, { task: "Investigate the regression." }),
+);
+
+await child.send("Prioritize primary sources.");
+const report = await child.result();
+```
+
+```ts
+interface AgentWorkHandle<TResult> extends WorkHandle<TResult> {
+  send(content: string | readonly ContentPart[]): Promise<WorkSteeringReceipt>;
+}
+```
+
+Agent spawn requires `createAgentWorkHost` and returns `AgentWorkHandle`. Flow
+handles remain ordinary `WorkHandle` values and do not expose `send` at compile
+time. Steering is ordered, payload-safe in identity records (Blob/byte sources
+are hashed; unsupported opaque sources reject), and delivered only at the next
+semantic provider-step boundary. Agent-tool occurrence identity is partitioned
+by parent execution owner and turn/step so concurrent requests cannot
+cross-connect. Process exit loses the registry, pending steering, and rejoin
+capability—there is no durable Agent-child execution in this slice.
 
 ### `status()`
 

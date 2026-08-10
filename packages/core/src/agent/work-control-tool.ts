@@ -9,9 +9,8 @@ import { z } from "zod";
 import { parseDuration } from "../flow/lifecycle";
 import type { AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
-import type {
-  InternalWorkOwnerPort,
-} from "../work/internal/owner-retained-work";
+import type { ProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
+import type { InternalWorkOwnerPort } from "../work/internal/owner-retained-work";
 import { isBackgroundableAgent } from "./backgroundable";
 import {
   OWNER_WORK_STATUS_SCAN_LIMIT,
@@ -26,9 +25,10 @@ const DEFAULT_RESULT_WAIT_MS = 30_000;
 const workControlToolBrand: unique symbol = Symbol("work-control-tool");
 
 const workControlInputSchema = z.object({
-  action: z.enum(["list", "status", "result", "cancel", "detach"]),
+  action: z.enum(["list", "status", "result", "cancel", "detach", "send"]),
   id: z.string().optional(),
   timeout: z.string().optional(),
+  message: z.string().optional(),
 });
 
 interface WorkControlToolShape {
@@ -52,14 +52,17 @@ export function isWorkControlTool(value: unknown): value is WorkControlToolShape
 export function bindWorkControlTool(
   tools: AnyToolSet,
   owner: InternalWorkOwnerPort,
+  agentWork: ProcessLocalAgentWorkController,
 ): AnyToolSet {
-  if (!Object.values(tools).some(isBackgroundableAgent)) return tools;
+  if (!Object.values(tools).some(isBackgroundableAgent)) {
+    return tools;
+  }
   if (Object.hasOwn(tools, WORK_CONTROL_TOOL_NAME)) {
     throw reservedWorkToolNameError();
   }
   return {
     ...tools,
-    [WORK_CONTROL_TOOL_NAME]: createWorkControlTool(owner),
+    [WORK_CONTROL_TOOL_NAME]: createWorkControlTool(owner, agentWork),
   };
 }
 
@@ -70,7 +73,10 @@ export function reservedWorkToolNameError(): TypeError {
   );
 }
 
-function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
+function createWorkControlTool(
+  owner: InternalWorkOwnerPort,
+  agentWork: ProcessLocalAgentWorkController,
+): unknown {
   return Object.freeze({
     [workControlToolBrand]: true as const,
     description: "Inspect or control background Work started by this Agent.",
@@ -86,7 +92,9 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
 
       const id = requireId(parsed.data.id, parsed.data.action);
       const retained = owner.inspect(id);
-      if (!retained) return notFound();
+      if (!retained) {
+        return notFound();
+      }
       const { handle } = retained;
 
       switch (parsed.data.action) {
@@ -94,7 +102,9 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
           return projectWorkStatus(await handle.status(), retained);
         case "result": {
           const status = await handle.status();
-          if (status.state === "completed") return await handle.result();
+          if (status.state === "completed") {
+            return await handle.result();
+          }
           const waited = await waitForResult(
             handle.result(),
             resultWaitMs(parsed.data.timeout),
@@ -117,13 +127,41 @@ function createWorkControlTool(owner: InternalWorkOwnerPort): unknown {
         case "detach":
           owner.detach(id);
           return Object.freeze({ id, detached: true as const });
+        case "send": {
+          if (!agentWork.isAgentWork(id)) {
+            throw new TypeError(
+              "work action \"send\" is only available for Agent Work targets.",
+            );
+          }
+          const message = parsed.data.message;
+          if (typeof message !== "string" || message.length === 0) {
+            throw new TypeError(
+              'work action "send" requires a non-empty message string.',
+            );
+          }
+          // toolCallId makes model retries idempotent without storing raw content.
+          const receipt = await agentWork.acceptSteering(
+            id,
+            message,
+            `work-send:${execution.toolCallId}`,
+          );
+          return Object.freeze({
+            workId: id,
+            id: receipt.id,
+            cursor: receipt.cursor.value,
+            acceptedAt: receipt.acceptedAt.toISOString(),
+            outcome: receipt.outcome,
+          });
+        }
       }
     },
   });
 }
 
 function requireId(id: string | undefined, action: string): string {
-  if (id !== undefined) return id;
+  if (id !== undefined) {
+    return id;
+  }
   throw new TypeError(`work action "${action}" requires an id.`);
 }
 
@@ -132,7 +170,9 @@ function notFound(): Readonly<{ status: "not_found" }> {
 }
 
 function resultWaitMs(timeout: string | undefined): number {
-  if (timeout === undefined) return DEFAULT_RESULT_WAIT_MS;
+  if (timeout === undefined) {
+    return DEFAULT_RESULT_WAIT_MS;
+  }
   const parsed = parseDuration(timeout);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
     throw new TypeError(`Invalid work result timeout: ${timeout}`);
@@ -166,7 +206,11 @@ async function waitForResult(
       unavailable,
     ]);
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
-    if (onAbort) abortSignal?.removeEventListener("abort", onAbort);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+    if (onAbort) {
+      abortSignal?.removeEventListener("abort", onAbort);
+    }
   }
 }

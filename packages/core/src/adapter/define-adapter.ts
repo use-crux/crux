@@ -29,10 +29,7 @@ import type { AdapterSpec } from "./spec";
 import { resolveModelCapacityProfile } from "../request/capacity/model-profile";
 import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
-import {
-  bindForegroundAgentTools,
-  createForegroundChildWorkPort,
-} from "../agent/foreground-tool-binder";
+import { bindForegroundAgentTools } from "../agent/foreground-tool-binder";
 import { bindBackgroundAgentTools } from "../agent/background-tool-binder";
 import {
   bindWorkControlTool,
@@ -62,6 +59,8 @@ import { mergeInputBudget } from "../request/budget/input-budget";
 import type { PrepareStep } from "../request/prepare/step";
 import { createProcessLocalWorkKernel } from "../work/internal/process-local-kernel";
 import { createInternalWorkOwnerPort } from "../work/internal/owner-retained-work";
+import { createProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
+import { createOwnerExecutionId } from "../work/internal/agent-occurrence";
 import { projectBackgroundWorkStatusContext } from "../agent/background-work-status-context";
 
 export type {
@@ -153,7 +152,9 @@ export function adapter<
     const baseDialect = coreStepDialect(spec, client);
     const execution = createAdapterExecution(baseDialect);
     const workKernel = createProcessLocalWorkKernel();
-    const foregroundWork = createForegroundChildWorkPort(workKernel);
+    const agentWork = createProcessLocalAgentWorkController({
+      kernel: workKernel,
+    });
 
     // ── generate() ──────────────────────────────────────────────
 
@@ -316,76 +317,88 @@ export function adapter<
     const executor: AgentExecutor = async (agent, options) => {
       const model = (agent.model as string) ?? (options.model as string);
       const start = Date.now();
+      // Partition occurrence identity by this parent execution, not definition id.
+      const ownerExecutionId = createOwnerExecutionId();
 
-      // Merge agent tools + composition-level tools into the prompt
-      // so the tool loop can pick them up from the resolved prompt.
-      const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
-      const backgroundWork = createInternalWorkOwnerPort(workKernel);
-      const toolsWithWorkControl = bindWorkControlTool(
-        mergedTools,
-        backgroundWork,
-      );
-      const backgroundBoundTools = bindBackgroundAgentTools(
-        toolsWithWorkControl,
-        {
+      try {
+        // Merge agent tools + composition-level tools into the prompt
+        // so the tool loop can pick them up from the resolved prompt.
+        const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
+        const backgroundWork = createInternalWorkOwnerPort(workKernel);
+        const toolsWithWorkControl = bindWorkControlTool(
+          mergedTools,
+          backgroundWork,
+          agentWork,
+        );
+        const backgroundBoundTools = bindBackgroundAgentTools(
+          toolsWithWorkControl,
+          {
+            executor,
+            model,
+            work: backgroundWork,
+            agentWork,
+            ownerId: ownerExecutionId,
+          },
+        );
+        const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
           executor,
           model,
-          work: backgroundWork,
-          foregroundWork,
-        },
-      );
-      const boundTools = bindForegroundAgentTools(backgroundBoundTools, {
-        executor,
-        model,
-        work: foregroundWork,
-      });
-      const promptWithTools: AnyPrompt =
-        Object.keys(boundTools).length > 0
-          ? withMergedPromptTools(agent.prompt, boundTools)
-          : agent.prompt;
+          agentWork,
+          ownerId: ownerExecutionId,
+        });
+        const promptWithTools: AnyPrompt =
+          Object.keys(boundTools).length > 0
+            ? withMergedPromptTools(agent.prompt, boundTools)
+            : agent.prompt;
 
-      const generateOpts: AdapterGenerateOptions<
-        TExtra,
-        undefined,
-        AnyPrompt,
-        unknown,
-        TParams,
-        TRawResponse
-      > = {
-        model,
-        input: options.input as Record<string, unknown>,
-        maxSteps: options.maxSteps,
-        validationRetry: options.validationRetry,
-        inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
-        prepareStep: (options.prepareStep ?? agent.prepareStep) as
-          | PrepareStep<string>
-          | undefined,
-        activeTools: options.activeTools,
-        signal: options.signal,
-        extra: {} as TExtra,
-      };
+        const generateOpts: AdapterGenerateOptions<
+          TExtra,
+          undefined,
+          AnyPrompt,
+          unknown,
+          TParams,
+          TRawResponse
+        > = {
+          model,
+          input: options.input as Record<string, unknown>,
+          maxSteps: options.maxSteps,
+          validationRetry: options.validationRetry,
+          inputBudget: mergeInputBudget(agent.inputBudget, options.inputBudget),
+          prepareStep: (options.prepareStep ?? agent.prepareStep) as
+            | PrepareStep<string>
+            | undefined,
+          activeTools: options.activeTools,
+          signal: options.signal,
+          extra: {} as TExtra,
+        };
 
-      const result = await execution.generate({
-        prompt: promptWithTools,
-        ...generateOpts,
-        modelInfo: {
-          provider: spec.providerId,
-          modelId: model,
-        },
-        projectStepSystemContext: () =>
-          projectBackgroundWorkStatusContext(backgroundWork),
-      });
+        const result = await execution.generate({
+          prompt: promptWithTools,
+          ...generateOpts,
+          modelInfo: {
+            provider: spec.providerId,
+            modelId: model,
+          },
+          projectStepSystemContext: () =>
+            projectBackgroundWorkStatusContext(backgroundWork),
+          projectStepMessages: options.projectStepMessages,
+        });
 
-      return {
-        agentId: agent.id,
-        output: agent.prompt.hasOutput ? result.object : result.text,
-        durationMs: Date.now() - start,
-        usage: result._meta.usage,
-        requests: Object.freeze(
-          result.steps.flatMap((step) => (step.request ? [step.request] : [])),
-        ),
-        ...(result.threadCommit ? { threadCommit: result.threadCommit } : {}),
-      };
+        return {
+          agentId: agent.id,
+          output: agent.prompt.hasOutput ? result.object : result.text,
+          durationMs: Date.now() - start,
+          usage: result._meta.usage,
+          requests: Object.freeze(
+            result.steps.flatMap((step) => (step.request ? [step.request] : [])),
+          ),
+          ...(result.threadCommit ? { threadCommit: result.threadCommit } : {}),
+        };
+      } finally {
+        // In-turn occurrence replay ends with the parent execution. Live child
+        // controller records remain until each child terminalizes.
+        agentWork.releaseOwner(ownerExecutionId);
+      }
     };
 
     const compositions = createCompositions(executor);

@@ -184,6 +184,7 @@ export function loopRuntimeAdapter<
       activeTools: opts.activeTools,
       extra: opts.extra,
       signal,
+      projectStepMessages: opts.projectStepMessages,
       [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
       [managedGenerationStepBoundary]: opts[managedGenerationStepBoundary],
     })) as GenerateResult;
@@ -263,6 +264,9 @@ export function loopRuntimeAdapter<
       activeTools: opts.activeTools,
       extra: opts.extra,
       signal,
+      projectStepMessages: opts.projectStepMessages,
+      [managedGenerationCheckpoint]: opts[managedGenerationCheckpoint],
+      [managedGenerationStepBoundary]: opts[managedGenerationStepBoundary],
     })) as ExecutorStreamResult<TRawStream>;
   }
 

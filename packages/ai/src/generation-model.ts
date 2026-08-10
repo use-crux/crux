@@ -125,6 +125,7 @@ function createAiSdkRuntimePort(): GenerationRuntimePort {
           prepareStep: options.prepareStep ?? agent.prepareStep,
           activeTools: options.activeTools,
           signal: options.signal,
+          projectStepMessages: options.projectStepMessages,
           [managedGenerationCheckpoint]: options[managedGenerationCheckpoint],
           ...(Object.keys(mergedTools).length > 0
             ? { tools: mergedTools }

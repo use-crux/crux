@@ -97,6 +97,16 @@ export interface AdapterExecutionGenerateArgs<
     | undefined
     | Promise<SystemBlock | undefined>;
 
+  /**
+   * Claim ordered process-local Agent steering messages at each semantic
+   * provider-step boundary. Appended only to the next sealed request.
+   *
+   * @internal
+   */
+  readonly projectStepMessages?: () =>
+    | readonly Message[]
+    | Promise<readonly Message[]>;
+
   /** Maximum loop iterations before generation stops. Defaults to 10. */
   readonly maxSteps?: number;
 

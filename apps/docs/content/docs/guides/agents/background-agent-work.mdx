@@ -62,9 +62,9 @@ is not a public handle for application code.
 
 When at least one backgroundable child is present, Crux adds one automatic
 model-facing tool named `work`. The model can list visible Work, inspect one
-status, wait briefly for a result, request cancellation, or detach it. Do not
-define your own `work` tool in that Agent or its Prompt: the collision fails
-during preparation.
+status, wait briefly for a result, request cancellation, detach it, or `send`
+additional guidance to a non-terminal Agent child. Do not define your own
+`work` tool in that Agent or its Prompt: the collision fails during preparation.
 
 Teach the coordinator the policy, not the transport details:
 
@@ -98,13 +98,41 @@ parent's context merely because the child settled. It also keeps provider
 behavior consistent: status is sampled by Core before a new semantic provider
 request is sealed.
 
+## Programmatic Agent Work handles
+
+Application code can spawn a process-local Agent with the same handle shape:
+
+```ts
+import { createAgentWorkHost, spawn } from "@use-crux/core";
+
+const host = createAgentWorkHost({ executor });
+const child = await host.run(() =>
+  spawn(researcher, { task: "Investigate the regression." }),
+);
+
+await child.send("Also compare the last two releases.");
+const report = await child.result();
+```
+
+`AgentWorkHandle` extends the canonical Work lifecycle with Agent-only `send()`.
+Flow and task handles do not expose `send` at compile time. Steering accepts
+canonical string or multimodal content, is ordered, and reaches the child only
+at the next semantic provider-step boundary without changing tools or
+guardrails. Process-local handles do not claim cross-request durability.
+
+Agent-as-Tool children derive a stable occurrence identity from the parent
+execution owner, turn/step, tool call, and binding key so adapter/provider
+replay reconnects the existing child instead of starting another. Conflicting
+reuse rejects deterministically. Separate parent runs do not share occurrence
+identity even when tool-call ids collide.
+
 ## Process-local means best effort
 
-The registry, result, and control capability exist only in the current
-JavaScript process. Process exit, a serverless freeze, a crash, or a request
-landing on another worker loses them. There is no crash recovery, remote
-transport, API route, cross-process or Session rejoin, durable replay, or
-automatic application-level persistence.
+The registry, result, control capability, and pending steering exist only in the
+current JavaScript process. Process exit, a serverless freeze, a crash, or a
+request landing on another worker loses them. There is no crash recovery, remote
+transport, API route, cross-process or Session rejoin, durable Agent execution,
+or automatic application-level persistence.
 
 Do not use background Agent Work when the result must survive deployment, must
 be controlled from another request, or must resume after a wait. Choose an
