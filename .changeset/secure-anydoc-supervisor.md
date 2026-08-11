@@ -92,11 +92,12 @@ a verified snapshot for that exact pinned cgroup. Preserve fixed sanitized
 terminal-status operation diagnostics on that pending validation path without
 allowing a status error to establish terminal proof.
 
-For a fully unloaded unit, retain strict inactive-success service evidence only
-when it was observed from available systemd properties, and accept the pending
-path only when that retained evidence, the verified pinned runtime snapshot,
-exclusive pinned-cgroup termination evidence, and a final typed `GetUnit`
-gone result all agree.
+For the existing `unit-properties-gone` path, retain strict inactive-success
+service evidence only when it was observed from available systemd properties,
+and accept that pending path only when the retained terminal-success proof, the
+verified pinned runtime snapshot, exclusive pinned-cgroup termination evidence,
+and a final typed `GetUnit`-gone result all agree. Result-ACK witnesses do not
+apply to this path.
 
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
@@ -126,3 +127,8 @@ was decoded, exact-snapshot accounting refreshed, and acknowledged. Cleanup
 also requires exact typed `GetUnit` disappearance and exclusive pinned-cgroup
 termination; it rejects live, unavailable, stale, OOM, pids-limited,
 mismatched, malformed, failed, and nonzero-exit evidence.
+
+When runtime-target accounting falls back to that witness, available terminal
+status remains authoritative: inactive failed/nonzero/OOM states fail with the
+fixed `already-gone-terminal-not-success` reason. Both `memory.events` `oom`
+and `oom_kill` reject the witness route.

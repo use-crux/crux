@@ -600,7 +600,18 @@ type systemdUnit struct {
 	snapshotCPU    time.Duration
 	snapshotSeen   bool
 	snapshotOK     bool
+	terminalProof  terminalSuccessProof
 	resultACKed    resultACKWitness
+}
+
+// terminalSuccessProof is the verified terminal-status bridge for the
+// unit-properties-gone path only. It is intentionally separate from result
+// acknowledgement evidence, which belongs exclusively to runtime-target-gone.
+type terminalSuccessProof struct {
+	status        TerminalStatus
+	cgroup        string
+	snapshotPID   int
+	runtimeDigest string
 }
 
 // resultACKWitness records the only successful result lifecycle: a verified
@@ -608,7 +619,7 @@ type systemdUnit struct {
 // It is immutable once set and remains meaningful only for that exact identity.
 type resultACKWitness struct {
 	cgroup, runtimeDigest, requestDigest, nonce string
-	pid                                      int
+	pid                                         int
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -639,6 +650,15 @@ func (u *systemdUnit) LastResultACK() (resultACKWitness, bool) {
 		return resultACKWitness{}, false
 	}
 	return u.resultACKed, true
+}
+
+func (u *systemdUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	if u.terminalProof.cgroup == "" {
+		return terminalSuccessProof{}, false
+	}
+	return u.terminalProof, true
 }
 
 func (u *systemdUnit) snapshotMatchesPinnedControlGroup(report SandboxReport) bool {
@@ -820,6 +840,16 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 			u.snapshotSeen = true
 		}
 		u.snapshotMu.Unlock()
+	}
+	if terminalAccounting {
+		terminal, ok := terminalStatusFromProps(p)
+		if ok && successfulInactiveTerminal(terminal.State, terminal.MainPID, terminal.ServiceResult, terminal.ExecMainStatus) {
+			u.snapshotMu.Lock()
+			if u.snapshotOK && u.snapshotSeen && validCgroup(cgroup) && u.snapshot.ControlGroup == cgroup && u.snapshot.MainPID > 0 && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
+				u.terminalProof = terminalSuccessProof{status: terminal, cgroup: cgroup, snapshotPID: u.snapshot.MainPID, runtimeDigest: u.snapshot.RuntimeTreeDigest}
+			}
+			u.snapshotMu.Unlock()
+		}
 	}
 	return report, nil
 }

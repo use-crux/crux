@@ -2486,10 +2486,9 @@ func TestCleanupUnitPropertiesGoneNeedsVerifiedTerminalReportProof(t *testing.T)
 				RestrictAddressFamilies: first.RestrictAddressFamilies,
 			}
 			if test.verify {
-				// MarkSnapshotVerified is called only by verify after its complete
-				// sandbox and runtime validation; this fake bus has no host /proc
-				// identity for VerifyAttestedNode.
-				u.MarkSnapshotVerified()
+				if !verify(context.Background(), &verifiedLifecycleSystemdUnit{systemdUnit: u}, u.spec) {
+					t.Fatal("production verification lifecycle rejected fake unit")
+				}
 			}
 			base.values["ActiveState"] = "inactive"
 			base.values["MainPID"] = uint32(0)
