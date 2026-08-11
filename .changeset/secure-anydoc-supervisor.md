@@ -66,8 +66,8 @@ Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
 
 Treat only an exact typed `ResetFailedUnit` `NoSuchUnit` as idempotent after
-strict inactive-success and exclusive pinned-cgroup termination proof; retain
-fixed D-Bus-category cleanup failures for every other reset and
+the already ordered cleanup proof, without a duplicate terminal-status read;
+retain fixed D-Bus-category cleanup failures for every other reset and
 private-temp cleanup error. Socket listener closure and socket removal remain
 best-effort cleanup.
 

@@ -1202,7 +1202,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	status, statusErr := unit.TerminalStatus(ctx)
-	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
+	if statusErr != nil || !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
 		// Runtime-target disappearance has one composite proof. Its final
 		// terminal status (including an exact GetUnit-gone error) must reach
 		// that validator before generic status handling assigns a reason.
@@ -1238,7 +1238,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if cleanupErr := unit.Cleanup(ctx); cleanupErr != nil {
 		var failure *unitCleanupFailure
-		idempotentResetGone := errors.As(cleanupErr, &failure) && failure.resetFailedUnitNoSuchUnit && len(failure.reasons) == 1 && failure.primaryReason() == "unit-cleanup-reset-failed-unit-no-such-unit" && successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) && terminationErr == nil && termination.ControlGroup == report.ControlGroup && (termination.Empty != termination.Absent)
+		// All lifecycle proof has already been ordered above. ResetFailedUnit
+		// is idempotent only when that proof left no prior cleanup reason.
+		idempotentResetGone := reason == "" && errors.As(cleanupErr, &failure) && failure.resetFailedUnitNoSuchUnit && len(failure.reasons) == 1 && failure.primaryReason() == "unit-cleanup-reset-failed-unit-no-such-unit"
 		if reason == "" && !idempotentResetGone {
 			if errors.As(cleanupErr, &failure) {
 				reason = failure.primaryReason()
