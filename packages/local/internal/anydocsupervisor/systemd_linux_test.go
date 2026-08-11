@@ -2676,6 +2676,155 @@ func TestRunFinishSystemdUnitPropertiesGoneLifecycle(t *testing.T) {
 	}
 }
 
+func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
+	const pinned = "/crux.slice/test"
+	const private = "/private/final-status-detail"
+	strict := map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(0)}
+
+	for _, test := range []struct {
+		name        string
+		receive     bool
+		final       map[string]any
+		finalErr    error
+		termination string
+		mutate      func(*systemdUnit, *fakeFS)
+		wantReason  string
+		wantService string
+		wantClean   bool
+	}{
+		{name: "accepts exact get unit gone with empty cgroup", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
+		{name: "accepts exact get unit gone with absent cgroup", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
+		{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects failed status", receive: true, final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "exit-code"},
+		{name: "rejects oom", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "unknown"},
+		{name: "rejects oom kill", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
+		{name: "rejects nonzero exit", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
+		{name: "rejects live status", receive: true, final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects arbitrary final error", receive: true, finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
+		{name: "rejects unrecognized final error", receive: true, finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "already-gone-terminal-unit-properties-unrecognized"},
+		{name: "rejects nonexclusive termination", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "termination-evidence"},
+		{name: "rejects cgroup mismatch", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "termination-evidence"},
+		{name: "rejects runtime mismatch", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) {
+			u.snapshotMu.Lock()
+			u.snapshot.RuntimeTreeDigest = "stale"
+			u.snapshotMu.Unlock()
+		}, wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects unverified snapshot", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			fs := newFakeFS()
+			u := &systemdUnit{name: "crux-anydoc-runtime-target.service", bus: bus, fs: fs, now: immediateClock{}}
+			active, err := u.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			u.spec = ServiceSpec{runtimeTreeDigest: active.RuntimeTreeDigest, MemoryMax: active.MemoryMax, MemorySwapMax: active.MemorySwapMax, TasksMax: active.TasksMax, CPUQuotaPercent: active.CPUQuotaPercent, CPUQuotaPeriodUSec: active.CPUQuotaPeriodUSec, RuntimeMax: active.RuntimeMax, KillMode: active.KillMode, ProtectSystem: active.ProtectSystem, CPUAccounting: active.CPUAccounting, NoNewPrivileges: active.NoNewPrivileges, PrivateNetwork: active.PrivateNetwork, PrivateTmp: active.PrivateTmp, ProtectHome: active.ProtectHome, ReadOnlyPaths: active.ReadOnlyPaths, InaccessiblePaths: active.InaccessiblePaths, BindReadOnlyPaths: active.BindReadOnlyPaths, ReadWritePaths: active.ReadWritePaths, RestrictAddressFamilies: active.RestrictAddressFamilies}
+			if !verify(context.Background(), &verifiedLifecycleSystemdUnit{systemdUnit: u}, u.spec) {
+				t.Fatal("production verification lifecycle rejected fake unit")
+			}
+
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer read.Close()
+			defer write.Close()
+			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+			run := &Run{unit: u, nonce: request.Nonce, digest: request.RequestDigest, sourceSHA: request.SourceSHA256, format: request.Format, limits: request.Limits, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			if test.receive {
+				path := t.TempDir() + "/result.sock"
+				listener, listenErr := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+				if listenErr != nil {
+					t.Fatal(listenErr)
+				}
+				u.resultListener, u.resultSocket, u.peers = listener, path, fakePeer{pid: 42}
+				ack := make(chan error, 1)
+				go func() {
+					conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+					if dialErr == nil {
+						dialErr = EncodeResult(conn, validWireResult(request))
+					}
+					if dialErr == nil {
+						got := make([]byte, 4)
+						if _, readErr := io.ReadFull(conn, got); readErr != nil || string(got) != "ACK\n" {
+							dialErr = errors.New("ack missing")
+						}
+					}
+					if conn != nil {
+						_ = conn.Close()
+					}
+					ack <- dialErr
+				}()
+				if _, receiveErr := run.ReceiveResult(context.Background()); receiveErr != nil {
+					t.Fatalf("ReceiveResult() = %v", receiveErr)
+				}
+				if ackErr := <-ack; ackErr != nil {
+					t.Fatalf("result ACK = %v", ackErr)
+				}
+			}
+
+			if test.mutate != nil {
+				test.mutate(u, fs)
+			}
+			u.procFS = procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+				if strings.HasSuffix(path, "/root") {
+					return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
+				}
+				return nil, os.ErrNotExist
+			}}
+			bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+			bus.killErr = errors.New("kill " + private)
+			bus.propGoneOnceAfterStop = true
+			bus.propErrAfterGoneOnce = test.finalErr
+			bus.valuesAfterFirstStopProperties = strict
+			if test.final != nil {
+				bus.valuesAfterFirstStopProperties = test.final
+			}
+			bus.onStop = func() {
+				fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
+				fs.files[cgroupFile(pinned, "cgroup.procs")] = []byte{}
+				switch test.termination {
+				case "absent":
+					delete(fs.files, cgroupFile(pinned, "cgroup.events"))
+					delete(fs.files, cgroupFile(pinned, "cgroup.procs"))
+				case "nonexclusive":
+					fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 1\n")
+				case "mismatch":
+					u.reportMu.Lock()
+					u.controlGroup = "/crux.slice/other"
+					u.reportMu.Unlock()
+				}
+			}
+
+			finishErr := run.Finish(context.Background(), nil)
+			terminal := run.TerminalReport()
+			if terminal.Cleaned != test.wantClean {
+				t.Fatalf("terminal report = %#v, want cleaned=%t", terminal, test.wantClean)
+			}
+			if test.wantClean {
+				if terminal.Outcome != OutcomeSuccess || finishErr != nil || terminal.PreStop.ControlGroup != pinned || terminal.Termination.ControlGroup != pinned || terminal.Termination.Empty == terminal.Termination.Absent {
+					t.Fatalf("accepted runtime-target evidence = %#v err=%v", terminal, finishErr)
+				}
+				return
+			}
+			service := test.wantService
+			if service == "" {
+				service = "success"
+			}
+			want := "error=containment-unavailable outcome=containment-unavailable service=" + service + " stage=containment-cleanup reason=" + test.wantReason + " oom-killed=false pids-limited=false"
+			if got := safeExecutionFailure(finishErr, terminal); got != want || strings.Contains(got, private) || strings.Contains(got, pinned) {
+				t.Fatalf("safe diagnostic = %q, want %q without raw detail", got, want)
+			}
+		})
+	}
+}
+
 func TestTerminalStatusFromPropsAcceptsOnlyExactWireTypes(t *testing.T) {
 	valid := map[string]any{"ActiveState": "inactive", "Result": "success", "MainPID": uint32(0), "ExecMainStatus": int32(0)}
 	if _, ok := terminalStatusFromProps(valid); !ok {

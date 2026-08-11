@@ -1201,7 +1201,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	status, statusErr := unit.TerminalStatus(ctx)
 	if statusErr != nil || status.MainPID != 0 || (status.State != "inactive" && status.State != "failed") {
-		if reason == "" && !reportGoneAccounting {
+		// Runtime-target disappearance has one composite proof. Its final
+		// terminal status (including an exact GetUnit-gone error) must reach
+		// that validator before generic status handling assigns a reason.
+		if reason == "" && !reportGoneAccounting && !runtimeTargetMissingAccounting {
 			reason = "terminal-status"
 		}
 	} else {
