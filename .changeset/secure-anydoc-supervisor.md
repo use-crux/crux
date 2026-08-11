@@ -245,3 +245,7 @@ also redact observation-read and canceled start or authorization failures.
 Expose only fixed, typed containment stage/reason diagnostics for canonical
 backend-start and post-start verification failures, retaining validated systemd
 operation diagnoses while redacting raw backend and attestation details.
+
+Split post-start cgroup accounting report failures into fixed, allowlisted
+file-specific diagnostics for memory events, CPU stats, PID events, cgroup
+processes, and cgroup population, without exposing paths or read details.

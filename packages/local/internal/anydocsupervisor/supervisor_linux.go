@@ -161,11 +161,17 @@ func validContainmentReason(reason string) bool {
 		return true
 	case "runtime-target-missing-ack-witness-request-digest-missing", "runtime-target-missing-ack-witness-nonce-missing":
 		return true
+	case "terminal-accounting-report-memory-events", "terminal-accounting-report-cpu-stat", "terminal-accounting-report-pids-events", "terminal-accounting-report-cgroup-procs", "terminal-accounting-report-cgroup-events":
+		return true
 	}
 	return false
 }
 
 func validPostStartReportReason(reason string) bool {
+	switch reason {
+	case "report-memory-events", "report-cpu-stat", "report-pids-events", "report-cgroup-procs", "report-cgroup-events":
+		return true
+	}
 	switch reason {
 	case "report-get-unit-gone", "report-unit-properties-gone", "report-service-properties-gone", "report-get-unit-unrecognized-dbus", "report-unit-properties-unrecognized-dbus", "report-service-properties-unrecognized-dbus", "report-get-unit-unavailable", "report-unit-properties-unavailable", "report-service-properties-unavailable", "report-dbus-fetch", "report-control-group", "report-memory", "report-cgroup-accounting", "report-swap", "report-tasks", "report-cpu", "report-sandbox-properties", "report-runtime-attestation-proc-root-unavailable", "report-runtime-attestation-proc-root-unsafe", "report-runtime-attestation-runtime-target-missing", "report-runtime-attestation-runtime-tree-unsafe", "report-runtime-attestation-runtime-tree-unreadable", "report-runtime-attestation-runtime-digest-mismatch", "report-runtime-attestation-snapshot-identity-mismatch":
 		return true
@@ -746,6 +752,11 @@ const (
 	accountingCaptureReportValidationControlGroup
 	accountingCaptureReportValidationMemory
 	accountingCaptureReportValidationCgroupAccounting
+	accountingCaptureReportValidationMemoryEvents
+	accountingCaptureReportValidationCPUStat
+	accountingCaptureReportValidationPIDsEvents
+	accountingCaptureReportValidationCgroupProcs
+	accountingCaptureReportValidationCgroupEvents
 	accountingCaptureReportValidationSwap
 	accountingCaptureReportValidationTasks
 	accountingCaptureReportValidationCPU

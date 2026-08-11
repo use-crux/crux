@@ -931,15 +931,15 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	}
 	memoryEvents, err := cgroupEvents(u.fs, cgroup, "memory.events")
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationMemoryEvents))
 	}
 	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationCPUStat))
 	}
 	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationPIDsEvents))
 	}
 	swap, err := cgroupLimit(u.fs, cgroup, "memory.swap.max")
 	if err != nil {
@@ -955,11 +955,11 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	}
 	members, err := cgroupPIDs(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationCgroupProcs))
 	}
 	populated, err := cgroupPopulated(u.fs, cgroup)
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportValidationCgroupAccounting)
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationCgroupEvents))
 	}
 	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
 	binds, bindsOK := bindReadOnlyPathsValue(p["BindReadOnlyPaths"])
@@ -1598,6 +1598,11 @@ const (
 	reportValidationControlGroup                               ReportValidationCode = "control-group"
 	reportValidationMemory                                     ReportValidationCode = "memory"
 	reportValidationCgroupAccounting                           ReportValidationCode = "cgroup-accounting"
+	reportValidationMemoryEvents                               ReportValidationCode = "memory-events"
+	reportValidationCPUStat                                    ReportValidationCode = "cpu-stat"
+	reportValidationPIDsEvents                                 ReportValidationCode = "pids-events"
+	reportValidationCgroupProcs                                ReportValidationCode = "cgroup-procs"
+	reportValidationCgroupEvents                               ReportValidationCode = "cgroup-events"
 	reportValidationSwap                                       ReportValidationCode = "swap"
 	reportValidationTasks                                      ReportValidationCode = "tasks"
 	reportValidationCPU                                        ReportValidationCode = "cpu"
@@ -1621,6 +1626,13 @@ func (e *ReportValidationError) Error() string {
 
 func newReportValidationError(code ReportValidationCode) error {
 	return &ReportValidationError{Code: code}
+}
+
+func reportCgroupAccountingValidation(terminalAccounting bool, postStartCode ReportValidationCode) ReportValidationCode {
+	if terminalAccounting {
+		return reportValidationCgroupAccounting
+	}
+	return postStartCode
 }
 
 func accountingCaptureFailureFor(err error, fallback accountingCaptureFailure) accountingCaptureFailure {
@@ -1648,6 +1660,18 @@ func reportValidationCaptureFailure(code ReportValidationCode) accountingCapture
 		return accountingCaptureReportValidationControlGroup
 	case reportValidationMemory:
 		return accountingCaptureReportValidationMemory
+	case reportValidationCgroupAccounting:
+		return accountingCaptureReportValidationCgroupAccounting
+	case reportValidationMemoryEvents:
+		return accountingCaptureReportValidationMemoryEvents
+	case reportValidationCPUStat:
+		return accountingCaptureReportValidationCPUStat
+	case reportValidationPIDsEvents:
+		return accountingCaptureReportValidationPIDsEvents
+	case reportValidationCgroupProcs:
+		return accountingCaptureReportValidationCgroupProcs
+	case reportValidationCgroupEvents:
+		return accountingCaptureReportValidationCgroupEvents
 	case reportValidationSwap:
 		return accountingCaptureReportValidationSwap
 	case reportValidationTasks:
@@ -1670,8 +1694,6 @@ func reportValidationCaptureFailure(code ReportValidationCode) accountingCapture
 		return accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch
 	case reportValidationRuntimeAttestationSnapshotIdentityMismatch:
 		return accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch
-	case reportValidationCgroupAccounting:
-		return accountingCaptureReportValidationCgroupAccounting
 	default:
 		return accountingCaptureReportInvalid
 	}
@@ -1685,6 +1707,18 @@ func reportValidationCodeForCaptureFailure(failure accountingCaptureFailure) (Re
 		return reportValidationControlGroup, true
 	case accountingCaptureReportValidationMemory:
 		return reportValidationMemory, true
+	case accountingCaptureReportValidationCgroupAccounting:
+		return reportValidationCgroupAccounting, true
+	case accountingCaptureReportValidationMemoryEvents:
+		return reportValidationMemoryEvents, true
+	case accountingCaptureReportValidationCPUStat:
+		return reportValidationCPUStat, true
+	case accountingCaptureReportValidationPIDsEvents:
+		return reportValidationPIDsEvents, true
+	case accountingCaptureReportValidationCgroupProcs:
+		return reportValidationCgroupProcs, true
+	case accountingCaptureReportValidationCgroupEvents:
+		return reportValidationCgroupEvents, true
 	case accountingCaptureReportValidationSwap:
 		return reportValidationSwap, true
 	case accountingCaptureReportValidationTasks:
@@ -1707,8 +1741,6 @@ func reportValidationCodeForCaptureFailure(failure accountingCaptureFailure) (Re
 		return reportValidationRuntimeAttestationRuntimeDigestMismatch, true
 	case accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch:
 		return reportValidationRuntimeAttestationSnapshotIdentityMismatch, true
-	case accountingCaptureReportValidationCgroupAccounting:
-		return reportValidationCgroupAccounting, true
 	default:
 		return "", false
 	}

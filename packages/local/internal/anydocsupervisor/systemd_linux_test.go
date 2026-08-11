@@ -592,6 +592,11 @@ func TestReportValidationCodeAccountingMappings(t *testing.T) {
 		{code: reportValidationControlGroup, failure: accountingCaptureReportValidationControlGroup},
 		{code: reportValidationMemory, failure: accountingCaptureReportValidationMemory},
 		{code: reportValidationCgroupAccounting, failure: accountingCaptureReportValidationCgroupAccounting},
+		{code: reportValidationMemoryEvents, failure: accountingCaptureReportValidationMemoryEvents},
+		{code: reportValidationCPUStat, failure: accountingCaptureReportValidationCPUStat},
+		{code: reportValidationPIDsEvents, failure: accountingCaptureReportValidationPIDsEvents},
+		{code: reportValidationCgroupProcs, failure: accountingCaptureReportValidationCgroupProcs},
+		{code: reportValidationCgroupEvents, failure: accountingCaptureReportValidationCgroupEvents},
 		{code: reportValidationSwap, failure: accountingCaptureReportValidationSwap},
 		{code: reportValidationTasks, failure: accountingCaptureReportValidationTasks},
 		{code: reportValidationCPU, failure: accountingCaptureReportValidationCPU},
@@ -628,9 +633,9 @@ func TestSystemdReportValidationErrorsDoNotLeakFakeSources(t *testing.T) {
 	}{
 		{name: "dbus", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private D-Bus value /secret") }, want: reportValidationDBusFetch},
 		{name: "cgroup", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.values["ControlGroup"] = "relative/private-secret" }, want: reportValidationControlGroup},
-		{name: "accounting", apply: func(_ *fakeSystemBus, fs *fakeFS) {
+		{name: "memory events", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.readErr[cgroupFile("/crux.slice/test", "memory.events")] = errors.New("/private/cgroup/accounting-secret")
-		}, want: reportValidationCgroupAccounting},
+		}, want: reportValidationMemoryEvents},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -646,6 +651,43 @@ func TestSystemdReportValidationErrorsDoNotLeakFakeSources(t *testing.T) {
 				t.Fatalf("Report error leaked fake source: %v", err)
 			}
 		})
+	}
+}
+
+func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		file      string
+		malformed []byte
+		want      string
+	}{
+		{name: "memory events", file: "memory.events", malformed: []byte("oom private-value\n"), want: "report-memory-events"},
+		{name: "cpu stat", file: "cpu.stat", malformed: []byte("usage_usec private-value\n"), want: "report-cpu-stat"},
+		{name: "pids events", file: "pids.events", malformed: []byte("max private-value\n"), want: "report-pids-events"},
+		{name: "cgroup procs", file: "cgroup.procs", malformed: []byte("private-value\n"), want: "report-cgroup-procs"},
+		{name: "cgroup events", file: "cgroup.events", malformed: []byte("malformed-record\n"), want: "report-cgroup-events"},
+	} {
+		for _, mode := range []string{"missing", "malformed"} {
+			t.Run(test.name+" "+mode, func(t *testing.T) {
+				fs := newFakeFS()
+				path := cgroupFile("/crux.slice/test", test.file)
+				if mode == "missing" {
+					delete(fs.files, path)
+				} else {
+					fs.files[path] = test.malformed
+				}
+
+				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+				_, err := unit.Report(context.Background())
+				diagnostic := startDiagnostic("post-start-report", err)
+				if diagnostic.ReasonCode != test.want || !validContainmentReason(diagnostic.ReasonCode) {
+					t.Fatalf("post-start diagnostic = %q, want allowlisted %q", diagnostic.Error(), test.want)
+				}
+				if strings.Contains(diagnostic.Error(), "private") || strings.Contains(diagnostic.Error(), "/") {
+					t.Fatalf("post-start diagnostic leaked fake source: %q", diagnostic.Error())
+				}
+			})
+		}
 	}
 }
 
