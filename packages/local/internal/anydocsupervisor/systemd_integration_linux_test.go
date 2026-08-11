@@ -355,22 +355,37 @@ func TestSafeContainmentDiagnosticTraversesTypedCauseAndRedactsDetails(t *testin
 }
 
 func TestSafeHostileTerminalDiagnosticRedactsHostileDetails(t *testing.T) {
-	const unsafe = "/private/path hash=private-hash-secret nonce=secret pid=999 error=customer.docx"
+	const (
+		unsafePath              = "/private/path"
+		unsafeHash              = "private-hash-secret"
+		unsafeNonce             = "secret"
+		unsafePID               = "pid=999"
+		unsafeErrorBody         = "error=customer.docx"
+		unsafe                  = unsafePath + " hash=" + unsafeHash + " nonce=" + unsafeNonce + " " + unsafePID + " " + unsafeErrorBody
+		unsafeControlGroup      = "/private/cgroup-secret"
+		unsafeSourcePath        = "/private/source-secret"
+		unsafeInaccessiblePath  = "/private/inaccessible-secret"
+		unsafeBindReadOnlyPath  = "/private/source-bind-secret:/runtime-secret"
+		unsafeBindPath          = "/private/runtime-bind-secret:/runtime-secret"
+		unsafeReadWritePath     = "/private/write-secret"
+		unsafeRuntimeTreeDigest = "private-runtime-digest-secret"
+		unsafeTerminationGroup  = "/private/termination-secret"
+	)
 	got := safeHostileTerminalDiagnostic(errors.New(unsafe), TerminalReport{
 		PreStop: SandboxReport{
-			ControlGroup:        "/private/cgroup-secret",
+			ControlGroup:        unsafeControlGroup,
 			ControlGroupMembers: []int{999},
-			ReadOnlyPaths:       []string{"/private/source-secret"},
-			InaccessiblePaths:   []string{"/private/inaccessible-secret"},
-			BindReadOnlyPaths:   []string{"/private/source-bind-secret:/runtime-secret"},
-			BindPaths:           []string{"/private/runtime-bind-secret:/runtime-secret"},
-			ReadWritePaths:      []string{"/private/write-secret"},
-			RuntimeTreeDigest:   "private-runtime-digest-secret",
+			ReadOnlyPaths:       []string{unsafeSourcePath},
+			InaccessiblePaths:   []string{unsafeInaccessiblePath},
+			BindReadOnlyPaths:   []string{unsafeBindReadOnlyPath},
+			BindPaths:           []string{unsafeBindPath},
+			ReadWritePaths:      []string{unsafeReadWritePath},
+			RuntimeTreeDigest:   unsafeRuntimeTreeDigest,
 			ServiceResult:       unsafe,
 			MemoryEvents:        map[string]int64{"oom_kill": 1},
 			PIDsEvents:          map[string]int64{"max": 1},
 		},
-		Termination: TerminationEvidence{ControlGroup: "/private/termination-secret", Empty: true},
+		Termination: TerminationEvidence{ControlGroup: unsafeTerminationGroup, Empty: true},
 		Outcome:     ErrWorkerCrash,
 		Cleaned:     true,
 	})
@@ -378,7 +393,23 @@ func TestSafeHostileTerminalDiagnosticRedactsHostileDetails(t *testing.T) {
 	if got != want {
 		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
 	}
-	for _, forbidden := range []string{unsafe, "private", "hash", "nonce", "secret", "pid=999", "customer", "source", "runtime", "999", "runtime-digest"} {
+	for _, forbidden := range []string{
+		unsafe,
+		unsafePath,
+		unsafeHash,
+		unsafeNonce,
+		unsafePID,
+		unsafeErrorBody,
+		unsafeControlGroup,
+		unsafeSourcePath,
+		unsafeInaccessiblePath,
+		unsafeBindReadOnlyPath,
+		unsafeBindPath,
+		unsafeReadWritePath,
+		unsafeRuntimeTreeDigest,
+		unsafeTerminationGroup,
+		"999",
+	} {
 		if strings.Contains(got, forbidden) {
 			t.Fatalf("diagnostic leaked unsafe details: %q", got)
 		}
