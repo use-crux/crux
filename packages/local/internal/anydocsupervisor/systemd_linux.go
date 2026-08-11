@@ -1317,16 +1317,18 @@ func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn
 
 // eligibleLifecycleResources is deliberately a fixed allowlist. Normal results
 // never accept resource-limit evidence; only the sealed pids probe may carry
-// its expected positive, cumulative pids.max counter. Missing counters remain
-// zero, matching systemd's property-report default for an unobserved event.
+// its expected positive, cumulative pids.max counter.
 func eligibleLifecycleResources(snapshot SandboxReport, binding lifecycleWitnessBinding) bool {
-	if snapshot.MemoryEvents["oom"] != 0 || snapshot.MemoryEvents["oom_kill"] != 0 {
+	oom, oomOK := snapshot.MemoryEvents["oom"]
+	oomKill, oomKillOK := snapshot.MemoryEvents["oom_kill"]
+	pidsMax, pidsMaxOK := snapshot.PIDsEvents["max"]
+	if !oomOK || !oomKillOK || !pidsMaxOK || oom != 0 || oomKill != 0 {
 		return false
 	}
 	if binding.kind == lifecycleWitnessProbe && binding.probeCase == "pids" {
-		return snapshot.PIDsEvents["max"] > 0
+		return pidsMax > 0
 	}
-	return snapshot.PIDsEvents["max"] == 0
+	return pidsMax == 0
 }
 
 func (u *systemdUnit) writeACK(conn *net.UnixConn) error {

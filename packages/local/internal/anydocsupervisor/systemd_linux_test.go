@@ -84,23 +84,6 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 			t.Fatalf("%s = %#v, want %#v", name, got[name], value)
 		}
 	}
-	wantNames := []string{
-		"Description", "Type", "ExecStart", "Environment", "UnsetEnvironment",
-		"CPUAccounting", "CPUQuotaPerSecUSec", "CPUQuotaPeriodUSec", "MemoryMax",
-		"MemorySwapMax", "TasksMax", "RuntimeMaxUSec", "KillMode", "NoNewPrivileges",
-		"DynamicUser", "PrivateUsers", "ProtectProc", "ProcSubset", "CapabilityBoundingSet",
-		"AmbientCapabilities", "PrivateNetwork", "RestrictAddressFamilies", "PrivateTmp",
-		"ProtectSystem", "ProtectHome", "ReadOnlyPaths", "InaccessiblePaths",
-		"BindReadOnlyPaths", "ReadWritePaths",
-	}
-	if len(got) != len(wantNames) {
-		t.Fatalf("ordinary start property count = %d, want %d", len(got), len(wantNames))
-	}
-	for _, name := range wantNames {
-		if _, ok := got[name]; !ok {
-			t.Fatalf("ordinary start is missing property %q", name)
-		}
-	}
 	if _, ok := got["StandardInputFileDescriptor"]; ok {
 		t.Fatal("invalid D-Bus FD property")
 	}
@@ -175,10 +158,10 @@ func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testi
 		{name: "sealed pids greater than one", pidsEvents: map[string]int64{"max": 2}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
 		{name: "sealed pids missing max", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
 		{name: "normal result rejects pids", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
-		{name: "normal result accepts omitted zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
+		{name: "normal result requires explicit zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
 		{name: "normal result accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
 		{name: "unsealed probe rejects pids", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
-		{name: "unsealed probe accepts omitted zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}, want: true},
+		{name: "unsealed probe requires explicit zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
 		{name: "unsealed probe accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}, want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {

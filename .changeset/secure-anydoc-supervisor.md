@@ -228,8 +228,7 @@ Keep retained peer-authorization diagnostics within the fixed containment
 stage/reason allowlists, including the typed systemd `NoSuchUnit` category.
 
 Reject malformed, duplicate, negative, overflowing, or nondecimal cgroup
-event counters. Lifecycle witnesses treat omitted zero-valued counters as
-systemd's normal report default: only the sealed pids probe accepts a positive
-`pids.events:max`, while all other witnesses reject positive values. Hostile
-probe harness diagnostics also redact observation-read and canceled start or
-authorization failures.
+event counters. Lifecycle witnesses now require an explicit parsed
+`pids.events:max`: only the sealed pids probe accepts a positive value, while
+all other witnesses require explicit zero. Hostile probe harness diagnostics
+also redact observation-read and canceled start or authorization failures.
