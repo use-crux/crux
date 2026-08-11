@@ -61,6 +61,17 @@ const (
 	terminalStatusDBusUnrecognized
 )
 
+type dbusErrorNameClass uint8
+
+const (
+	dbusErrorNameUnknown dbusErrorNameClass = iota
+	dbusErrorNameNoSuchUnit
+	dbusErrorNameUnknownObject
+	dbusErrorNameAccessDenied
+	dbusErrorNameInvalidArgs
+	dbusErrorNameOther
+)
+
 // terminalStatusOperationError carries only a fixed operation stage and
 // classification across the D-Bus boundary. It deliberately retains neither
 // the source error nor D-Bus details.
@@ -133,7 +144,7 @@ func (e *unitCleanupFailure) primaryReason() string {
 // still exist.
 func isDbusStopNoSuchUnit(err error) bool {
 	name, ok := dbusErrorName(err)
-	return ok && name == "org.freedesktop.systemd1.NoSuchUnit"
+	return ok && name == dbusErrorNameNoSuchUnit
 }
 
 // resetFailedUnitReason classifies only sanitized D-Bus names. Its result is
@@ -145,13 +156,13 @@ func resetFailedUnitReason(err error) string {
 	}
 
 	switch name {
-	case "org.freedesktop.systemd1.NoSuchUnit":
+	case dbusErrorNameNoSuchUnit:
 		return "unit-cleanup-reset-failed-unit-no-such-unit"
-	case "org.freedesktop.DBus.Error.UnknownObject":
+	case dbusErrorNameUnknownObject:
 		return "unit-cleanup-reset-failed-unit-unknown-object"
-	case "org.freedesktop.DBus.Error.AccessDenied":
+	case dbusErrorNameAccessDenied:
 		return "unit-cleanup-reset-failed-unit-access-denied"
-	case "org.freedesktop.DBus.Error.InvalidArgs":
+	case dbusErrorNameInvalidArgs:
 		return "unit-cleanup-reset-failed-unit-invalid-args"
 	default:
 		return "unit-cleanup-reset-failed-unit-dbus-other"
@@ -168,27 +179,42 @@ func isDbusUnitPropertiesGone(err error) bool {
 		return false
 	}
 	switch name {
-	case "org.freedesktop.systemd1.NoSuchUnit", "org.freedesktop.DBus.Error.UnknownObject":
+	case dbusErrorNameNoSuchUnit, dbusErrorNameUnknownObject:
 		return true
 	default:
 		return false
 	}
 }
 
-// dbusErrorName extracts only a D-Bus error name. It intentionally never
-// returns an error body, and callers must not log or return the name.
-func dbusErrorName(err error) (string, bool) {
+// dbusErrorName reduces a D-Bus error to a fixed internal class. It
+// intentionally does not retain or return a D-Bus error, name, or body.
+func dbusErrorName(err error) (dbusErrorNameClass, bool) {
 	var dbusErr *dbus.Error
 	if errors.As(err, &dbusErr) && dbusErr != nil {
-		return dbusErr.Name, true
+		return classifyDBusErrorName(dbusErr.Name), true
 	}
 
 	var dbusValue dbus.Error
 	if errors.As(err, &dbusValue) {
-		return dbusValue.Name, true
+		return classifyDBusErrorName(dbusValue.Name), true
 	}
 
-	return "", false
+	return dbusErrorNameUnknown, false
+}
+
+func classifyDBusErrorName(name string) dbusErrorNameClass {
+	switch name {
+	case "org.freedesktop.systemd1.NoSuchUnit":
+		return dbusErrorNameNoSuchUnit
+	case "org.freedesktop.DBus.Error.UnknownObject":
+		return dbusErrorNameUnknownObject
+	case "org.freedesktop.DBus.Error.AccessDenied":
+		return dbusErrorNameAccessDenied
+	case "org.freedesktop.DBus.Error.InvalidArgs":
+		return dbusErrorNameInvalidArgs
+	default:
+		return dbusErrorNameOther
+	}
 }
 
 // successfulInactiveTerminal is the strict proof that an already-gone unit

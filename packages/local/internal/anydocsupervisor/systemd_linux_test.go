@@ -2316,17 +2316,22 @@ func TestSystemdReportAndVerifyBindPaths(t *testing.T) {
 func TestPostStartReportDiagnosticsPreserveSanitizedGodbusClass(t *testing.T) {
 	private := "/private/post-start-report-secret"
 	for _, test := range []struct {
-		name  string
-		calls []*dbus.Call
-		want  string
+		name string
+		err  error
+		want string
 	}{
-		{name: "GetUnit no such unit", calls: []*dbus.Call{{Err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}}}, want: "report-get-unit-gone"},
-		{name: "Unit properties unknown object", calls: []*dbus.Call{{Body: []any{dbus.ObjectPath("/private/unit")}}, {Err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{private}}}}, want: "report-unit-properties-gone"},
-		{name: "Service properties unrecognized D-Bus", calls: []*dbus.Call{{Body: []any{dbus.ObjectPath("/private/unit")}}, {Body: []any{map[string]dbus.Variant{}}}, {Err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}}}, want: "report-service-properties-unrecognized-dbus"},
-		{name: "GetUnit unavailable transport", calls: []*dbus.Call{{Err: errors.New(private)}}, want: "report-get-unit-unavailable"},
+		{name: "gone value", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
+		{name: "gone pointer", err: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
+		{name: "gone wrapped value", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
+		{name: "gone wrapped pointer", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
+		{name: "unrecognized value", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
+		{name: "unrecognized pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
+		{name: "unrecognized wrapped value", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
+		{name: "unrecognized wrapped pointer", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
+		{name: "transport remains generic", err: errors.New(private), want: "report-get-unit-unavailable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			object := &fakeDBusObject{calls: test.calls}
+			object := &fakeDBusObject{calls: []*dbus.Call{{Err: test.err}}}
 			bus := &dbusHelperSystemBus{fakeSystemBus: newFakeSystemBus(), unitProperties: func(context.Context, string) (map[string]any, error) {
 				return dbusUnitProperties(context.Background(), object, func(dbus.ObjectPath) dbus.BusObject { return object }, "crux-anydoc-test.service")
 			}}
