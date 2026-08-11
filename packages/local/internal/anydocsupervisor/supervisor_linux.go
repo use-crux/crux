@@ -154,7 +154,7 @@ func validContainmentStage(stage string) bool {
 // including peer-mismatch and Finish cleanup diagnoses.
 func validContainmentReason(reason string) bool {
 	switch reason {
-	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-report-dbus-fetch", "terminal-accounting-report-control-group", "terminal-accounting-report-memory", "terminal-accounting-report-cgroup-accounting", "terminal-accounting-report-swap", "terminal-accounting-report-tasks", "terminal-accounting-report-cpu", "terminal-accounting-report-sandbox-properties", "terminal-accounting-report-runtime-attestation-proc-root-unavailable", "terminal-accounting-report-runtime-attestation-proc-root-unsafe", "terminal-accounting-report-runtime-attestation-runtime-target-missing", "terminal-accounting-report-runtime-attestation-runtime-tree-unsafe", "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable", "terminal-accounting-report-runtime-attestation-runtime-digest-mismatch", "terminal-accounting-report-runtime-attestation-snapshot-identity-mismatch", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-unrecognized-dbus", "already-gone-terminal-not-success", "already-gone-terminal-get-unit", "already-gone-terminal-unit-properties", "already-gone-terminal-service-properties", "already-gone-terminal-get-unit-gone", "already-gone-terminal-get-unit-unrecognized", "already-gone-terminal-get-unit-unavailable", "already-gone-terminal-unit-properties-gone", "already-gone-terminal-unit-properties-unrecognized", "already-gone-terminal-unit-properties-unavailable", "already-gone-terminal-service-properties-gone", "already-gone-terminal-service-properties-unrecognized", "already-gone-terminal-service-properties-unavailable", "already-gone-terminal-decode-unavailable", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-report-dbus-fetch", "terminal-accounting-report-control-group", "terminal-accounting-report-memory", "terminal-accounting-report-cgroup-accounting", "terminal-accounting-report-swap", "terminal-accounting-report-tasks", "terminal-accounting-report-cpu", "terminal-accounting-report-sandbox-properties", "terminal-accounting-report-runtime-attestation-proc-root-unavailable", "terminal-accounting-report-runtime-attestation-proc-root-unsafe", "terminal-accounting-report-runtime-attestation-runtime-target-missing", "terminal-accounting-report-runtime-attestation-runtime-tree-unsafe", "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable", "terminal-accounting-report-runtime-attestation-runtime-digest-mismatch", "terminal-accounting-report-runtime-attestation-snapshot-identity-mismatch", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-unrecognized-dbus", "already-gone-terminal-not-success", "already-gone-terminal-get-unit", "already-gone-terminal-unit-properties", "already-gone-terminal-service-properties", "already-gone-terminal-get-unit-gone", "already-gone-terminal-get-unit-unrecognized", "already-gone-terminal-get-unit-unavailable", "already-gone-terminal-unit-properties-gone", "already-gone-terminal-unit-properties-unrecognized", "already-gone-terminal-unit-properties-unavailable", "already-gone-terminal-service-properties-gone", "already-gone-terminal-service-properties-unrecognized", "already-gone-terminal-service-properties-unavailable", "already-gone-terminal-decode-unavailable", "runtime-target-missing-termination-unavailable", "runtime-target-missing-termination-mismatch", "runtime-target-missing-termination-not-exclusive", "runtime-target-missing-ack-witness-absent", "runtime-target-missing-ack-witness-cgroup-mismatch", "runtime-target-missing-ack-witness-pid-invalid", "runtime-target-missing-ack-witness-request-digest-missing", "runtime-target-missing-ack-witness-nonce-missing", "runtime-target-missing-snapshot-cgroup-mismatch", "runtime-target-missing-snapshot-pid-mismatch", "runtime-target-missing-snapshot-runtime-digest-missing", "runtime-target-missing-snapshot-runtime-digest-mismatch", "runtime-target-missing-snapshot-oom", "runtime-target-missing-snapshot-oom-kill", "runtime-target-missing-snapshot-pids-max", "runtime-target-missing-terminal-status-not-success", "runtime-target-missing-terminal-status-not-gone", "runtime-target-missing-terminal-status-carried-gone", "runtime-target-missing-terminal-status-unrecognized", "runtime-target-missing-terminal-status-unavailable", "runtime-target-missing-terminal-status-decode-unavailable", "runtime-target-missing-terminal-status-get-unit-unrecognized", "runtime-target-missing-terminal-status-get-unit-unavailable", "runtime-target-missing-terminal-status-unit-properties-gone", "runtime-target-missing-terminal-status-unit-properties-unrecognized", "runtime-target-missing-terminal-status-unit-properties-unavailable", "runtime-target-missing-terminal-status-service-properties-gone", "runtime-target-missing-terminal-status-service-properties-unrecognized", "runtime-target-missing-terminal-status-service-properties-unavailable", "used-cached-accounting", "unit-cleanup", "staged-cleanup":
 		return true
 	}
 	return false
@@ -1214,7 +1214,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
 	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
-		if reason == "" {
+		if reason == "" && !runtimeTargetMissingAccounting {
 			reason = "termination-evidence"
 		}
 	}
@@ -1248,29 +1248,121 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 // immutable snapshot, plus exact GetUnit-gone and exclusive pinned-cgroup
 // termination, can establish that the worker has actually exited.
 func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness resultACKWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
-	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+	if reason := runtimeTargetMissingTerminationReason(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
-	if !witnessOK || witness.cgroup != expectedCgroup || witness.pid <= 0 || witness.requestDigest == "" || witness.nonce == "" || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != witness.pid || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != witness.runtimeDigest || snapshot.MemoryEvents["oom"] != 0 || snapshot.MemoryEvents["oom_kill"] != 0 || snapshot.PIDsEvents["max"] != 0 {
-		return "already-gone-terminal-unavailable"
+	if reason := runtimeTargetMissingWitnessReason(expectedCgroup, snapshot, witness, witnessOK); reason != "" {
+		return reason
 	}
 	if statusErr == nil {
 		if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
-			return "already-gone-terminal-not-success"
+			return "runtime-target-missing-terminal-status-not-success"
 		}
-		return "already-gone-terminal-unavailable"
+		return "runtime-target-missing-terminal-status-not-gone"
 	}
 	var operation *terminalStatusOperationError
 	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
 		return ""
 	}
-	if statusErr == nil {
-		return "already-gone-terminal-unavailable"
+	return runtimeTargetMissingTerminalStatusReason(statusErr)
+}
+
+func runtimeTargetMissingTerminationReason(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {
+	switch validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr) {
+	case "":
+		return ""
+	case "already-gone-termination-mismatch":
+		return "runtime-target-missing-termination-mismatch"
+	case "already-gone-termination-not-exclusive":
+		return "runtime-target-missing-termination-not-exclusive"
+	default:
+		return "runtime-target-missing-termination-unavailable"
 	}
-	if reason, ok := terminalStatusFailureReason(statusErr); ok {
-		return reason
+}
+
+func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxReport, witness resultACKWitness, witnessOK bool) string {
+	if !witnessOK {
+		return "runtime-target-missing-ack-witness-absent"
 	}
-	return "already-gone-terminal-unavailable"
+	if witness.cgroup != expectedCgroup {
+		return "runtime-target-missing-ack-witness-cgroup-mismatch"
+	}
+	if witness.pid <= 0 {
+		return "runtime-target-missing-ack-witness-pid-invalid"
+	}
+	if witness.requestDigest == "" {
+		return "runtime-target-missing-ack-witness-request-digest-missing"
+	}
+	if witness.nonce == "" {
+		return "runtime-target-missing-ack-witness-nonce-missing"
+	}
+	if snapshot.ControlGroup != expectedCgroup {
+		return "runtime-target-missing-snapshot-cgroup-mismatch"
+	}
+	if snapshot.MainPID != witness.pid {
+		return "runtime-target-missing-snapshot-pid-mismatch"
+	}
+	if snapshot.RuntimeTreeDigest == "" {
+		return "runtime-target-missing-snapshot-runtime-digest-missing"
+	}
+	if snapshot.RuntimeTreeDigest != witness.runtimeDigest {
+		return "runtime-target-missing-snapshot-runtime-digest-mismatch"
+	}
+	if snapshot.MemoryEvents["oom"] != 0 {
+		return "runtime-target-missing-snapshot-oom"
+	}
+	if snapshot.MemoryEvents["oom_kill"] != 0 {
+		return "runtime-target-missing-snapshot-oom-kill"
+	}
+	if snapshot.PIDsEvents["max"] != 0 {
+		return "runtime-target-missing-snapshot-pids-max"
+	}
+	return ""
+}
+
+func runtimeTargetMissingTerminalStatusReason(statusErr error) string {
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		switch operation.stage {
+		case terminalStatusGetUnit:
+			switch operation.dbusClass {
+			case terminalStatusDBusUnrecognized:
+				return "runtime-target-missing-terminal-status-get-unit-unrecognized"
+			case terminalStatusDBusGeneric:
+				return "runtime-target-missing-terminal-status-get-unit-unavailable"
+			}
+		case terminalStatusUnitProperties:
+			return runtimeTargetMissingTerminalStatusOperationReason("unit-properties", operation.dbusClass)
+		case terminalStatusServiceProperties:
+			return runtimeTargetMissingTerminalStatusOperationReason("service-properties", operation.dbusClass)
+		case terminalStatusDecode:
+			return "runtime-target-missing-terminal-status-decode-unavailable"
+		}
+	}
+	var gone *terminalStatusGoneError
+	if errors.As(statusErr, &gone) {
+		return "runtime-target-missing-terminal-status-carried-gone"
+	}
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) && unavailable.stage == terminalStatusDecode {
+		return "runtime-target-missing-terminal-status-decode-unavailable"
+	}
+	var unrecognized *terminalStatusUnrecognizedDBusError
+	if errors.As(statusErr, &unrecognized) {
+		return "runtime-target-missing-terminal-status-unrecognized"
+	}
+	return "runtime-target-missing-terminal-status-unavailable"
+}
+
+func runtimeTargetMissingTerminalStatusOperationReason(stage string, class terminalStatusDBusClass) string {
+	switch class {
+	case terminalStatusDBusGone:
+		return "runtime-target-missing-terminal-status-" + stage + "-gone"
+	case terminalStatusDBusUnrecognized:
+		return "runtime-target-missing-terminal-status-" + stage + "-unrecognized"
+	default:
+		return "runtime-target-missing-terminal-status-" + stage + "-unavailable"
+	}
 }
 
 // validateReportGone permits cached accounting only after systemd has reported

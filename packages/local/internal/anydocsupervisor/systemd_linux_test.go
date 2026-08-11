@@ -2708,6 +2708,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		finalErr    error
 		termination string
 		mutate      func(*systemdUnit, *fakeFS)
+		witness     func(*systemdUnit)
 		wantReason  string
 		wantService string
 		wantClean   bool
@@ -2715,21 +2716,25 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 	}{
 		{name: "accepts exact get unit gone with empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
 		{name: "accepts exact get unit gone with absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
-		{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects failed status", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "exit-code"},
-		{name: "rejects oom", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "unknown"},
-		{name: "rejects oom kill", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
-		{name: "rejects nonzero exit", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
-		{name: "rejects live status", receive: "valid", final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
-		{name: "rejects arbitrary final error", receive: "valid", finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
-		{name: "rejects unrecognized final error", receive: "valid", finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "already-gone-terminal-unit-properties-unrecognized"},
-		{name: "nonexclusive termination is intercepted before composite validation", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "termination-evidence"},
-		{name: "cgroup mismatch is intercepted before composite validation", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "termination-evidence"},
+		{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-ack-witness-absent"},
+		{name: "rejects failed status", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-not-success", wantService: "exit-code"},
+		{name: "rejects oom", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-not-success", wantService: "unknown"},
+		{name: "rejects oom kill", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-not-success", wantService: "oom-kill"},
+		{name: "rejects nonzero exit", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-not-success"},
+		{name: "rejects live status", receive: "valid", final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-not-success"},
+		{name: "rejects arbitrary final error", receive: "valid", finalErr: errors.New(private), termination: "empty", wantReason: "runtime-target-missing-terminal-status-unit-properties-unavailable"},
+		{name: "rejects unrecognized final error", receive: "valid", finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "runtime-target-missing-terminal-status-unit-properties-unrecognized"},
+		{name: "nonexclusive termination evidence unavailable", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "runtime-target-missing-termination-unavailable"},
+		{name: "cgroup mismatch evidence unavailable", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "runtime-target-missing-termination-unavailable"},
 		{name: "rejects runtime mismatch", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) {
 			u.snapshotMu.Lock()
 			u.snapshot.RuntimeTreeDigest = "stale"
 			u.snapshotMu.Unlock()
-		}, wantReason: "already-gone-terminal-unavailable"},
+		}, wantReason: "runtime-target-missing-snapshot-runtime-digest-mismatch"},
+		{name: "rejects witness cgroup mismatch", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.cgroup = "/other" }, wantReason: "runtime-target-missing-ack-witness-cgroup-mismatch"},
+		{name: "rejects witness pid", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.pid = 0 }, wantReason: "runtime-target-missing-ack-witness-pid-invalid"},
+		{name: "rejects missing witness digest", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.requestDigest = "" }, wantReason: "runtime-target-missing-ack-witness-request-digest-missing"},
+		{name: "rejects missing witness nonce", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.nonce = "" }, wantReason: "runtime-target-missing-ack-witness-nonce-missing"},
 		{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
 		{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 		{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
@@ -2838,6 +2843,11 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 
 			if test.mutate != nil {
 				test.mutate(u, fs)
+			}
+			if test.witness != nil {
+				u.snapshotMu.Lock()
+				test.witness(u)
+				u.snapshotMu.Unlock()
 			}
 			u.procFS = procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
 				if strings.HasSuffix(path, "/root") {

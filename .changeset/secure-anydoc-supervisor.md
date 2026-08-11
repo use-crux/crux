@@ -128,6 +128,11 @@ also requires exact typed `GetUnit` disappearance and exclusive pinned-cgroup
 termination; it rejects live, unavailable, stale, OOM, pids-limited,
 mismatched, malformed, failed, and nonzero-exit evidence.
 
+Expose fixed, path-specific runtime-target-missing cleanup diagnostics for the
+capture path, ACK witness and snapshot mismatches, termination evidence, and
+final terminal-status outcomes, without exposing raw runtime, D-Bus, request,
+or snapshot values.
+
 When runtime-target accounting falls back to that witness, available terminal
 status remains authoritative: inactive failed/nonzero/OOM states fail with the
 fixed `already-gone-terminal-not-success` reason. Both `memory.events` `oom`
