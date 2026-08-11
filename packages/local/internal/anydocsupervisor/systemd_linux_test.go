@@ -240,22 +240,22 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 		apply   func(*systemdUnit)
 		failure accountingCaptureFailure
 	}{
-		{name: "active unit", apply: func(unit *systemdUnit) { unit.bus.(*fakeSystemBus).values["ActiveState"] = "active" }, failure: accountingCaptureReportValidationRuntimeAttestation},
-		{name: "unverified snapshot", apply: func(unit *systemdUnit) { unit.snapshotOK = false }, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{name: "active unit", apply: func(unit *systemdUnit) { unit.bus.(*fakeSystemBus).values["ActiveState"] = "active" }, failure: accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch},
+		{name: "unverified snapshot", apply: func(unit *systemdUnit) { unit.snapshotOK = false }, failure: accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch},
 		{name: "runtime identity mutation", apply: func(unit *systemdUnit) {
 			fs := unit.fs.(*fakeFS)
 			fs.runtimeContents = []byte("mutated")
 			unit.procFS = fs
-		}, failure: accountingCaptureReportValidationRuntimeAttestation},
+		}, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch},
 		{name: "malformed proc entry", apply: func(unit *systemdUnit) {
 			fs := unit.fs.(*fakeFS)
 			fs.runtimeRootMode = os.ModeSymlink | 0o777
 			unit.procFS = fs
-		}, failure: accountingCaptureReportValidationRuntimeAttestation},
+		}, failure: accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe},
 		{name: "pid mismatch", apply: func(unit *systemdUnit) {
 			unit.bus.(*fakeSystemBus).values["MainPID"] = uint32(43)
 			unit.procFS = missingProcRuntimeFS{}
-		}, failure: accountingCaptureReportValidationRuntimeAttestation},
+		}, failure: accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			unit := newUnit(t, true)
@@ -266,6 +266,73 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
 			if err == nil || failure != test.failure {
 				t.Fatalf("capture = failure %v err %v, want failure %v", failure, err, test.failure)
+			}
+		})
+	}
+}
+
+func TestFinishReportsTypedTerminalRuntimeAttestationDiagnostics(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		procFS ProcRuntimeFS
+		mutate func(*systemdUnit, *fakeSystemBus, *fakeFS)
+		want   string
+	}{
+		{name: "proc root unavailable", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return nil, errors.New("/private/proc") }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unavailable"},
+		{name: "proc root unsafe", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return fakeRuntimeInfo{mode: os.ModeDir | 0o555}, nil }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unsafe"},
+		{name: "runtime target missing", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+			if strings.HasSuffix(path, "/root") {
+				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
+			}
+			return nil, os.ErrNotExist
+		}}, want: "terminal-accounting-report-runtime-attestation-runtime-target-missing"},
+		{name: "runtime tree unreadable", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+			if strings.HasSuffix(path, "/root") {
+				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
+			}
+			return fakeRuntimeInfo{mode: os.ModeDir | 0o555}, nil
+		}, readDir: func(string) ([]os.DirEntry, error) { return nil, errors.New("/private/tree") }}, want: "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable"},
+		{name: "runtime digest mismatch", mutate: func(unit *systemdUnit, _ *fakeSystemBus, fs *fakeFS) {
+			fs.runtimeContents = []byte("mutated")
+			unit.procFS = fs
+		}, want: "terminal-accounting-report-runtime-attestation-runtime-digest-mismatch"},
+		{name: "verified snapshot identity mismatch", procFS: missingProcRuntimeFS{}, mutate: func(_ *systemdUnit, bus *fakeSystemBus, _ *fakeFS) { bus.values["ActiveState"] = "active" }, want: "terminal-accounting-report-runtime-attestation-snapshot-identity-mismatch"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fs := newFakeFS()
+			bus := newFakeSystemBus()
+			unit := &systemdUnit{name: "crux-anydoc-terminal-runtime.service", bus: bus, fs: fs, procFS: fs, now: immediateClock{}}
+			first, err := unit.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+			if _, err := unit.Report(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			unit.MarkSnapshotVerified()
+			if test.procFS != nil {
+				unit.procFS = test.procFS
+			}
+			if test.mutate != nil {
+				test.mutate(unit, bus, fs)
+			}
+			bus.onStop = func() { bus.values["ActiveState"] = "inactive"; bus.values["MainPID"] = uint32(0) }
+
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			finishErr := run.Finish(context.Background(), nil)
+			terminal := run.TerminalReport()
+			got := safeExecutionFailure(finishErr, terminal)
+			if !strings.Contains(got, "stage=containment-cleanup reason="+test.want) || strings.Contains(got, "private") || strings.Contains(got, "/proc") {
+				t.Fatalf("safe diagnostic = %q, want sanitized reason %q", got, test.want)
 			}
 		})
 	}
@@ -305,12 +372,18 @@ func TestMountedRuntimeDigestOnlyTreatsExactProcRootAbsenceAsDisappearance(t *te
 }
 
 type procRuntimeFSFunc struct {
-	lstat func(string) (os.FileInfo, error)
+	lstat   func(string) (os.FileInfo, error)
+	readDir func(string) ([]os.DirEntry, error)
 }
 
 func (f procRuntimeFSFunc) Lstat(path string) (os.FileInfo, error) { return f.lstat(path) }
-func (procRuntimeFSFunc) ReadDir(string) ([]os.DirEntry, error)    { return nil, os.ErrNotExist }
-func (procRuntimeFSFunc) ReadFile(string) ([]byte, error)          { return nil, os.ErrNotExist }
+func (f procRuntimeFSFunc) ReadDir(path string) ([]os.DirEntry, error) {
+	if f.readDir != nil {
+		return f.readDir(path)
+	}
+	return nil, os.ErrNotExist
+}
+func (procRuntimeFSFunc) ReadFile(string) ([]byte, error) { return nil, os.ErrNotExist }
 
 func TestReportValidationCodeAccountingMappings(t *testing.T) {
 	for _, test := range []struct {
@@ -325,7 +398,13 @@ func TestReportValidationCodeAccountingMappings(t *testing.T) {
 		{code: reportValidationTasks, failure: accountingCaptureReportValidationTasks},
 		{code: reportValidationCPU, failure: accountingCaptureReportValidationCPU},
 		{code: reportValidationSandboxProperties, failure: accountingCaptureReportValidationSandboxProperties},
-		{code: reportValidationRuntimeAttestation, failure: accountingCaptureReportValidationRuntimeAttestation},
+		{code: reportValidationRuntimeAttestationProcRootUnavailable, failure: accountingCaptureReportValidationRuntimeAttestationProcRootUnavailable},
+		{code: reportValidationRuntimeAttestationProcRootUnsafe, failure: accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe},
+		{code: reportValidationRuntimeAttestationRuntimeTargetMissing, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing},
+		{code: reportValidationRuntimeAttestationRuntimeTreeUnsafe, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnsafe},
+		{code: reportValidationRuntimeAttestationRuntimeTreeUnreadable, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnreadable},
+		{code: reportValidationRuntimeAttestationRuntimeDigestMismatch, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch},
+		{code: reportValidationRuntimeAttestationSnapshotIdentityMismatch, failure: accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch},
 	} {
 		t.Run(string(test.code), func(t *testing.T) {
 			if got := reportValidationCaptureFailure(test.code); got != test.failure {

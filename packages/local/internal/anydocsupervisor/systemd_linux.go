@@ -778,14 +778,17 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 		}
 		runtimeDigest, err = mountedRuntimeDigest(procFS, pid)
 		if err != nil {
-			if !terminalAccounting || !runtimeProcDisappeared(err, pid) || !u.canReuseTerminalRuntime(cgroup, stringValue(p, "ActiveState"), pid) {
-				return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
+			if !terminalAccounting || !runtimeProcDisappeared(err, pid) {
+				return SandboxReport{}, newReportValidationError(runtimeAttestationValidationCode(err))
+			}
+			if !u.canReuseTerminalRuntime(cgroup, stringValue(p, "ActiveState"), pid) {
+				return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestationSnapshotIdentityMismatch)
 			}
 			u.snapshotMu.Lock()
 			runtimeDigest = u.snapshot.RuntimeTreeDigest
 			u.snapshotMu.Unlock()
 		} else if terminalAccounting && runtimeDigest != u.spec.runtimeTreeDigest {
-			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestation)
+			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestationRuntimeDigestMismatch)
 		}
 	}
 	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
@@ -828,9 +831,40 @@ func runtimeProcDisappeared(err error, pid int) bool {
 	return pid > 0 && errors.As(err, &gone) && gone.pid == pid
 }
 
+type runtimeAttestationFailure uint8
+
+const (
+	runtimeAttestationProcRootUnavailable runtimeAttestationFailure = iota
+	runtimeAttestationProcRootUnsafe
+	runtimeAttestationRuntimeTargetMissing
+	runtimeAttestationRuntimeTreeUnsafe
+	runtimeAttestationRuntimeTreeUnreadable
+)
+
+type runtimeAttestationError struct{ failure runtimeAttestationFailure }
+
+func (e *runtimeAttestationError) Error() string { return "runtime attestation failed" }
+
+func runtimeAttestationValidationCode(err error) ReportValidationCode {
+	var attestation *runtimeAttestationError
+	if errors.As(err, &attestation) {
+		switch attestation.failure {
+		case runtimeAttestationProcRootUnsafe:
+			return reportValidationRuntimeAttestationProcRootUnsafe
+		case runtimeAttestationRuntimeTargetMissing:
+			return reportValidationRuntimeAttestationRuntimeTargetMissing
+		case runtimeAttestationRuntimeTreeUnsafe:
+			return reportValidationRuntimeAttestationRuntimeTreeUnsafe
+		case runtimeAttestationRuntimeTreeUnreadable:
+			return reportValidationRuntimeAttestationRuntimeTreeUnreadable
+		}
+	}
+	return reportValidationRuntimeAttestationProcRootUnavailable
+}
+
 func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 	if fs == nil || pid <= 0 {
-		return "", errors.New("runtime filesystem unavailable")
+		return "", &runtimeAttestationError{failure: runtimeAttestationProcRootUnavailable}
 	}
 	procRoot := filepath.Join("/proc", strconv.Itoa(pid), "root")
 	procRootInfo, err := fs.Lstat(procRoot)
@@ -838,13 +872,13 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 		if os.IsNotExist(err) {
 			return "", &procRuntimeDisappearedError{pid: pid}
 		}
-		return "", err
+		return "", &runtimeAttestationError{failure: runtimeAttestationProcRootUnavailable}
 	}
 	// /proc/<pid>/root is the kernel-owned symlink into the exact process
 	// mount namespace. Do not walk a lookalike directory supplied by a fake or
 	// malformed proc view.
 	if procRootInfo.Mode()&os.ModeSymlink == 0 {
-		return "", errors.New("unsafe proc root entry")
+		return "", &runtimeAttestationError{failure: runtimeAttestationProcRootUnsafe}
 	}
 	root := filepath.Join(procRoot, strings.TrimPrefix(runtimeTarget, "/"))
 	h := sha256.New()
@@ -852,10 +886,13 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 	walk = func(path, rel string, rootEntry bool) error {
 		info, err := fs.Lstat(path)
 		if err != nil {
-			return err
+			if os.IsNotExist(err) && rootEntry {
+				return &runtimeAttestationError{failure: runtimeAttestationRuntimeTargetMissing}
+			}
+			return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnreadable}
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return errors.New("unsafe mounted runtime entry")
+			return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnsafe}
 		}
 		if info.IsDir() {
 			want := os.FileMode(0o755)
@@ -863,12 +900,12 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 				want = 0o555
 			}
 			if info.Mode().Perm() != want {
-				return errors.New("mounted runtime directory mode mismatch")
+				return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnsafe}
 			}
 			_, _ = fmt.Fprintf(h, "d\x00%s\x00%04o\x00", rel, info.Mode().Perm())
 			entries, err := fs.ReadDir(path)
 			if err != nil {
-				return err
+				return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnreadable}
 			}
 			for _, entry := range entries {
 				childRel := entry.Name()
@@ -882,11 +919,11 @@ func mountedRuntimeDigest(fs ProcRuntimeFS, pid int) (string, error) {
 			return nil
 		}
 		if !info.Mode().IsRegular() || info.Mode().Perm() != 0o444 {
-			return errors.New("mounted runtime file mismatch")
+			return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnsafe}
 		}
 		contents, err := fs.ReadFile(path)
 		if err != nil || int64(len(contents)) != info.Size() {
-			return errors.New("mounted runtime file unavailable")
+			return &runtimeAttestationError{failure: runtimeAttestationRuntimeTreeUnreadable}
 		}
 		sum := sha256.Sum256(contents)
 		_, _ = fmt.Fprintf(h, "f\x00%s\x00%04o\x00%d\x00%s\x00", rel, info.Mode().Perm(), info.Size(), hex.EncodeToString(sum[:]))
@@ -1189,15 +1226,21 @@ func terminalAccountingError(failure accountingCaptureFailure, err error) error 
 type ReportValidationCode string
 
 const (
-	reportValidationDBusFetch          ReportValidationCode = "dbus-fetch"
-	reportValidationControlGroup       ReportValidationCode = "control-group"
-	reportValidationMemory             ReportValidationCode = "memory"
-	reportValidationCgroupAccounting   ReportValidationCode = "cgroup-accounting"
-	reportValidationSwap               ReportValidationCode = "swap"
-	reportValidationTasks              ReportValidationCode = "tasks"
-	reportValidationCPU                ReportValidationCode = "cpu"
-	reportValidationSandboxProperties  ReportValidationCode = "sandbox-properties"
-	reportValidationRuntimeAttestation ReportValidationCode = "runtime-attestation"
+	reportValidationDBusFetch                                  ReportValidationCode = "dbus-fetch"
+	reportValidationControlGroup                               ReportValidationCode = "control-group"
+	reportValidationMemory                                     ReportValidationCode = "memory"
+	reportValidationCgroupAccounting                           ReportValidationCode = "cgroup-accounting"
+	reportValidationSwap                                       ReportValidationCode = "swap"
+	reportValidationTasks                                      ReportValidationCode = "tasks"
+	reportValidationCPU                                        ReportValidationCode = "cpu"
+	reportValidationSandboxProperties                          ReportValidationCode = "sandbox-properties"
+	reportValidationRuntimeAttestationProcRootUnavailable      ReportValidationCode = "runtime-attestation-proc-root-unavailable"
+	reportValidationRuntimeAttestationProcRootUnsafe           ReportValidationCode = "runtime-attestation-proc-root-unsafe"
+	reportValidationRuntimeAttestationRuntimeTargetMissing     ReportValidationCode = "runtime-attestation-runtime-target-missing"
+	reportValidationRuntimeAttestationRuntimeTreeUnsafe        ReportValidationCode = "runtime-attestation-runtime-tree-unsafe"
+	reportValidationRuntimeAttestationRuntimeTreeUnreadable    ReportValidationCode = "runtime-attestation-runtime-tree-unreadable"
+	reportValidationRuntimeAttestationRuntimeDigestMismatch    ReportValidationCode = "runtime-attestation-runtime-digest-mismatch"
+	reportValidationRuntimeAttestationSnapshotIdentityMismatch ReportValidationCode = "runtime-attestation-snapshot-identity-mismatch"
 )
 
 type ReportValidationError struct {
@@ -1245,8 +1288,20 @@ func reportValidationCaptureFailure(code ReportValidationCode) accountingCapture
 		return accountingCaptureReportValidationCPU
 	case reportValidationSandboxProperties:
 		return accountingCaptureReportValidationSandboxProperties
-	case reportValidationRuntimeAttestation:
-		return accountingCaptureReportValidationRuntimeAttestation
+	case reportValidationRuntimeAttestationProcRootUnavailable:
+		return accountingCaptureReportValidationRuntimeAttestationProcRootUnavailable
+	case reportValidationRuntimeAttestationProcRootUnsafe:
+		return accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe
+	case reportValidationRuntimeAttestationRuntimeTargetMissing:
+		return accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing
+	case reportValidationRuntimeAttestationRuntimeTreeUnsafe:
+		return accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnsafe
+	case reportValidationRuntimeAttestationRuntimeTreeUnreadable:
+		return accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnreadable
+	case reportValidationRuntimeAttestationRuntimeDigestMismatch:
+		return accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch
+	case reportValidationRuntimeAttestationSnapshotIdentityMismatch:
+		return accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch
 	case reportValidationCgroupAccounting:
 		return accountingCaptureReportValidationCgroupAccounting
 	default:
@@ -1270,8 +1325,20 @@ func reportValidationCodeForCaptureFailure(failure accountingCaptureFailure) (Re
 		return reportValidationCPU, true
 	case accountingCaptureReportValidationSandboxProperties:
 		return reportValidationSandboxProperties, true
-	case accountingCaptureReportValidationRuntimeAttestation:
-		return reportValidationRuntimeAttestation, true
+	case accountingCaptureReportValidationRuntimeAttestationProcRootUnavailable:
+		return reportValidationRuntimeAttestationProcRootUnavailable, true
+	case accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe:
+		return reportValidationRuntimeAttestationProcRootUnsafe, true
+	case accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing:
+		return reportValidationRuntimeAttestationRuntimeTargetMissing, true
+	case accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnsafe:
+		return reportValidationRuntimeAttestationRuntimeTreeUnsafe, true
+	case accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnreadable:
+		return reportValidationRuntimeAttestationRuntimeTreeUnreadable, true
+	case accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch:
+		return reportValidationRuntimeAttestationRuntimeDigestMismatch, true
+	case accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch:
+		return reportValidationRuntimeAttestationSnapshotIdentityMismatch, true
 	case accountingCaptureReportValidationCgroupAccounting:
 		return reportValidationCgroupAccounting, true
 	default:

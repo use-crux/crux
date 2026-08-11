@@ -106,3 +106,10 @@ entry is typed absent. The proc root is probed for existence and expected symlin
 shape before its runtime tree is walked; active, mismatched, unverified,
 malformed, partial-disappearance, unreadable, and digest-mismatched reports
 continue to fail closed.
+
+Expose only fixed sanitized terminal-accounting diagnostics for failed runtime
+attestation: proc-root availability or safety, missing runtime target, unsafe or
+unreadable runtime tree, runtime digest mismatch, and failed verified-snapshot
+identity reuse. These diagnostics preserve the exact proc-root disappearance
+fallback and never include paths, process IDs, digests, D-Bus data, or source
+error values.
