@@ -2099,12 +2099,15 @@ func verifyDiagnostic(ctx context.Context, u Unit, s ServiceSpec) *ContainmentEr
 	}
 	if s.probe != nil {
 		verifier, ok := u.(attestedProbeVerifier)
-		if !ok || verifier.VerifyAttestedProbe(ctx, s.probe) != nil {
+		if !ok {
 			return containmentDiagnostic("post-start-probe-attestation", "unavailable")
+		}
+		if err := verifier.VerifyAttestedProbe(ctx, s.probe); err != nil {
+			return startDiagnostic("post-start-probe-attestation", err)
 		}
 	} else if verifier, ok := u.(attestedNodeVerifier); ok {
 		if err := verifier.VerifyAttestedNode(ctx, s.Node); err != nil {
-			return containmentDiagnostic("post-start-node-attestation", "unavailable")
+			return startDiagnostic("post-start-node-attestation", err)
 		}
 	}
 	valid := r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.BindPaths, bindPathsForSpec(s)) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)

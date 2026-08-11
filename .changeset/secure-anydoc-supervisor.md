@@ -72,6 +72,10 @@ failures; reserve fixed `accounting-refresh` result-validation diagnostics for
 authenticated, decoded results whose accounting refresh fails, including when
 terminal accounting cleanup also fails.
 
+Preserve allowlisted typed containment diagnostics returned by post-start Node
+and probe attestations, while keeping absent attestators classified as
+unavailable and never exposing raw attestation details.
+
 Route sealed hostile-probe observations through the same private, one-use
 lifecycle witness transition as normal results. Require the exact sealed probe,
 authorized peer capability, bounded versioned case/invocation observation,
