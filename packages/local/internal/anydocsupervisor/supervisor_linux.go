@@ -556,6 +556,9 @@ type verifiedAccountingSnapshot interface {
 	MarkSnapshotVerified()
 	LastVerifiedSnapshot() (SandboxReport, time.Duration, bool)
 }
+type terminalSuccessSnapshot interface {
+	LastTerminalSuccess() (TerminalStatus, string, bool)
+}
 type activeAccountingCollector interface {
 	RefreshAccounting(context.Context) (time.Duration, error)
 }
@@ -1153,6 +1156,10 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	var alreadyGone *alreadyGoneError
 	var propertiesGone *unitPropertiesGonePending
+	terminalProof, terminalProofCgroup, terminalProofOK := TerminalStatus{}, "", false
+	if snapshot, ok := unit.(terminalSuccessSnapshot); ok {
+		terminalProof, terminalProofCgroup, terminalProofOK = snapshot.LastTerminalSuccess()
+	}
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
 		// Never overwrite an earlier reason.
@@ -1201,7 +1208,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reason == "alreadyGone" {
 		if propertiesGone != nil {
-			reason = validateUnitPropertiesGone(propertiesGone.cgroup, termination, terminationErr, status, statusErr)
+			reason = validateUnitPropertiesGone(propertiesGone.cgroup, terminalProof, terminalProofCgroup, terminalProofOK, termination, terminationErr, status, statusErr)
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
 			// plus carried successful inactive terminal evidence.
@@ -1261,9 +1268,16 @@ func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached
 // against fresh post-stop evidence. Unlike a direct alreadyGoneError, a gone
 // terminal status cannot stand in because the pre-ACK snapshot carries no
 // terminal proof.
-func validateUnitPropertiesGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateUnitPropertiesGone(expectedCgroup string, proof TerminalStatus, proofCgroup string, proofOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
+	}
+	if !proofOK || proofCgroup != expectedCgroup || !successfulInactiveTerminal(proof.State, proof.MainPID, proof.ServiceResult, proof.ExecMainStatus) {
+		return "already-gone-terminal-unavailable"
+	}
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
+		return ""
 	}
 	if statusErr != nil {
 		if reason, ok := terminalStatusFailureReason(statusErr); ok {
@@ -1274,7 +1288,7 @@ func validateUnitPropertiesGone(expectedCgroup string, termination TerminationEv
 	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
 		return "already-gone-terminal-not-success"
 	}
-	return ""
+	return "already-gone-terminal-unavailable"
 }
 
 // validateAlreadyGone accepts the intermediate alreadyGone reason only when

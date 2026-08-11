@@ -928,9 +928,9 @@ func TestCleanupUsesTypedStopFailureOnlyWithoutEarlierReason(t *testing.T) {
 
 func TestCleanupTerminalAccountingFailureReasons(t *testing.T) {
 	for _, test := range []struct {
-		name string
+		name    string
 		failure accountingCaptureFailure
-		want string
+		want    string
 	}{
 		{name: "report unavailable", failure: accountingCaptureReportUnavailable, want: "terminal-accounting-report-unavailable"},
 		{name: "report invalid", failure: accountingCaptureReportInvalid, want: "terminal-accounting-report-invalid"},
@@ -974,9 +974,8 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 		{name: "invalid snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-snapshot-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
 		{name: "mismatched snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: snapshotCgroup, ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
 		{name: "invalid pinned cgroup", pinned: "relative-pinned-secret", snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-pinned-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
-		{name: "active verified snapshot and later terminal success", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: strictTerminal},
-		{name: "failed verified snapshot and later terminal success", pinned: pinnedCgroup, snapshot: SandboxReport{ControlGroup: pinnedCgroup, ServiceResult: "exit-code", ExecMainStatus: 1}, verified: true, status: strictTerminal},
-		{name: "nonzero verified snapshot and later terminal success", pinned: pinnedCgroup, snapshot: SandboxReport{ControlGroup: pinnedCgroup, ServiceResult: "success", ExecMainStatus: 1}, verified: true, status: strictTerminal},
+		{name: "strict terminal capture and final get unit gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, statusErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}},
+		{name: "terminal success without final get unit gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: strictTerminal, want: "already-gone-terminal-unavailable"},
 		{name: "terminal unavailable", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, statusErr: errors.New("terminal private failure"), want: "already-gone-terminal-unavailable"},
 		{name: "terminal gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, statusErr: &terminalStatusGoneError{}, want: "already-gone-terminal-unavailable"},
 		{name: "terminal failed", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
@@ -985,10 +984,13 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			unit := &fakeUnit{
-				rep:        SandboxReport{ControlGroup: test.pinned},
-				stopErr:    &stopFailure{reason: "unit-properties-gone"},
-				snapshot:   test.snapshot,
-				snapshotOK: test.verified,
+				rep:             SandboxReport{ControlGroup: test.pinned},
+				stopErr:         &stopFailure{reason: "unit-properties-gone"},
+				snapshot:        test.snapshot,
+				snapshotOK:      test.verified,
+				terminalProof:   strictTerminal,
+				terminalCgroup:  test.pinned,
+				terminalProofOK: true,
 				termination: func(context.Context, string) (TerminationEvidence, error) {
 					return TerminationEvidence{ControlGroup: test.pinned, Absent: true}, nil
 				},
@@ -1188,6 +1190,9 @@ type fakeUnit struct {
 	snapshot         SandboxReport
 	snapshotCPU      time.Duration
 	snapshotOK       bool
+	terminalProof    TerminalStatus
+	terminalCgroup   string
+	terminalProofOK  bool
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -1247,6 +1252,9 @@ func (u *fakeUnit) Cleanup(context.Context) error {
 func (u *fakeUnit) MarkSnapshotVerified() {}
 func (u *fakeUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
 	return u.snapshot, u.snapshotCPU, u.snapshotOK
+}
+func (u *fakeUnit) LastTerminalSuccess() (TerminalStatus, string, bool) {
+	return u.terminalProof, u.terminalCgroup, u.terminalProofOK
 }
 func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
 func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }

@@ -600,6 +600,9 @@ type systemdUnit struct {
 	snapshotCPU    time.Duration
 	snapshotSeen   bool
 	snapshotOK     bool
+	terminalProof  TerminalStatus
+	terminalCgroup string
+	terminalOK     bool
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -621,6 +624,14 @@ func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool
 		return SandboxReport{}, 0, false
 	}
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
+}
+
+// LastTerminalSuccess returns only a strict terminal observation captured while
+// systemd properties were available. It is never derived from an active report.
+func (u *systemdUnit) LastTerminalSuccess() (TerminalStatus, string, bool) {
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	return u.terminalProof, u.terminalCgroup, u.terminalOK
 }
 
 func (u *systemdUnit) snapshotMatchesPinnedControlGroup(report SandboxReport) bool {
@@ -718,6 +729,11 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	u.reportMu.Unlock()
 	if !matchedCgroup {
 		return SandboxReport{}, newReportValidationError(reportValidationControlGroup)
+	}
+	if terminal, ok := terminalStatusFromProps(p); ok && successfulInactiveTerminal(terminal.State, terminal.MainPID, terminal.ServiceResult, terminal.ExecMainStatus) {
+		u.snapshotMu.Lock()
+		u.terminalProof, u.terminalCgroup, u.terminalOK = terminal, cgroup, true
+		u.snapshotMu.Unlock()
 	}
 	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
 	if err != nil {

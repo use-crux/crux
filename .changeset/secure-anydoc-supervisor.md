@@ -93,6 +93,12 @@ terminal status, rather than the pre-ACK snapshot, to establish success.
 Preserve fixed sanitized terminal-status operation diagnostics on that pending
 validation path without allowing the status error to establish terminal proof.
 
+For a fully unloaded unit, retain strict inactive-success service evidence only
+when it was observed from available systemd properties, and accept the pending
+path only when that retained evidence, the verified pinned runtime snapshot,
+exclusive pinned-cgroup termination evidence, and a final typed `GetUnit`
+gone result all agree.
+
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
 snapshot only for exact-cgroup ENOENT or report-gone, always retaining the
