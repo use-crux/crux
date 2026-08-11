@@ -146,3 +146,10 @@ When runtime-target accounting falls back to that witness, available terminal
 status remains authoritative: inactive failed/nonzero/OOM states fail with the
 fixed `runtime-target-missing-terminal-status-not-success` reason. Both `memory.events` `oom`
 and `oom_kill` reject the witness route.
+
+Permit the same deferred immutable result-ACK proof during teardown when the
+typed runtime-tree read is unreadable after the worker exits. It still requires
+the exact verified snapshot, successful accounting refresh and ACK witness,
+typed final `GetUnit` disappearance, and exclusive pinned-cgroup termination;
+unsafe, malformed, digest-mismatched, and generic runtime-attestation failures
+remain fail-closed.
