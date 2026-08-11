@@ -1861,11 +1861,18 @@ func TestTask1LifecycleWitnessRejectsDuplicateReceiver(t *testing.T) {
 func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 	for _, test := range []struct {
 		name        string
+		probeCase   string
 		mutate      func(*systemdUnit, *fakeFS, *sealedProbeObservation)
 		wantAck     bool
 		wantWitness bool
 	}{
 		{name: "contained", wantAck: true, wantWitness: true},
+		{name: "pids exact evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 1\n")
+		}, wantAck: true, wantWitness: true},
+		{name: "pids excess evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 2\n")
+		}},
 		{name: "case mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Case = "other" }},
 		{name: "invocation mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Invocation = strings.Repeat("b", 64) }},
 		{name: "invalid observation", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Checks = nil }},
@@ -1891,7 +1898,11 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 				t.Fatal(err)
 			}
 			fs := newFakeFS()
-			probe := &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", caseID: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+			probeCase := test.probeCase
+			if probeCase == "" {
+				probeCase = "network"
+			}
+			probe := &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: probeCase, caseID: probeCase, resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
 			u := &systemdUnit{name: "crux-anydoc-task3.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}, spec: ServiceSpec{probe: probe}, verifyProbe: func(context.Context, *containmentProbe) error { return nil }}
 			first, err := u.Report(context.Background())
 			if err != nil {
@@ -1912,7 +1923,7 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			done := make(chan error, 1)
-			go func() { done <- u.ReceiveSealedProbeObservation(ctx, request, probe) }()
+			go func() { done <- u.receiveSealedProbeObservation(ctx, request, probe) }()
 			if test.name != "sealed executable mismatch" {
 				conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 				if dialErr == nil {
@@ -1928,10 +1939,53 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 			err = <-done
 			_, witnessed := u.lastLifecycleWitness()
 			if (err == nil) != test.wantWitness || witnessed != test.wantWitness {
-				t.Fatalf("ReceiveSealedProbeObservation() = %v, witness=%v", err, witnessed)
+				t.Fatalf("receiveSealedProbeObservation() = %v, witness=%v", err, witnessed)
 			}
 			if witnessed && u.lifecycleWitness.kind != lifecycleWitnessProbe {
 				t.Fatalf("witness kind = %d", u.lifecycleWitness.kind)
+			}
+			if witnessed {
+				replayErr := u.receiveSealedProbeObservation(context.Background(), request, probe)
+				var replay *SupervisorError
+				if !errors.As(replayErr, &replay) || replay.Code != ErrReplay {
+					t.Fatalf("replay = %T %v, want typed %q", replayErr, replayErr, ErrReplay)
+				}
+			}
+		})
+	}
+}
+
+func TestTask3ProbeWitnessCleanupEligibility(t *testing.T) {
+	const pinned = "/crux.slice/test"
+	termination := TerminationEvidence{ControlGroup: pinned, Empty: true}
+	statusErr := &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+	base := lifecycleWitness{kind: lifecycleWitnessProbe, probeCase: "pids", cgroup: pinned, pid: 42, requestDigest: strings.Repeat("a", 64), nonce: strings.Repeat("b", 32), runtimeDigest: "digest"}
+	snapshot := SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: "digest", PIDsEvents: map[string]int64{"max": 1}}
+
+	if reason := validateRuntimeTargetMissing(pinned, snapshot, base, true, termination, nil, TerminalStatus{}, statusErr); reason != "" {
+		t.Fatalf("runtime teardown probe witness reason = %q", reason)
+	}
+	if reason := validateUnitPropertiesGone(pinned, snapshot, terminalSuccessProof{}, false, base, true, termination, nil, TerminalStatus{}, statusErr); reason != "" {
+		t.Fatalf("unit-gone probe witness reason = %q", reason)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*lifecycleWitness, *SandboxReport)
+	}{
+		{name: "result kind carries probe case", mutate: func(w *lifecycleWitness, _ *SandboxReport) { w.kind = lifecycleWitnessResult }},
+		{name: "unknown probe case", mutate: func(w *lifecycleWitness, _ *SandboxReport) { w.probeCase = "other" }},
+		{name: "identity cgroup mismatch", mutate: func(w *lifecycleWitness, _ *SandboxReport) { w.cgroup = "/crux.slice/other" }},
+		{name: "identity pid mismatch", mutate: func(_ *lifecycleWitness, s *SandboxReport) { s.MainPID = 43 }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			witness, candidate := base, cloneSandboxReport(snapshot)
+			test.mutate(&witness, &candidate)
+			if reason := validateRuntimeTargetMissing(pinned, candidate, witness, true, termination, nil, TerminalStatus{}, statusErr); reason == "" {
+				t.Fatal("runtime teardown accepted mismatched probe witness")
+			}
+			if reason := validateUnitPropertiesGone(pinned, candidate, terminalSuccessProof{}, false, witness, true, termination, nil, TerminalStatus{}, statusErr); reason == "" {
+				t.Fatal("unit-gone accepted mismatched probe witness")
 			}
 		})
 	}

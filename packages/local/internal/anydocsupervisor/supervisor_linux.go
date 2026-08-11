@@ -1525,6 +1525,9 @@ func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxRe
 	if !witnessOK {
 		return "runtime-target-missing-ack-witness-absent"
 	}
+	if !validLifecycleWitnessBinding(witness) {
+		return "runtime-target-missing-ack-witness-absent"
+	}
 	if witness.cgroup != expectedCgroup {
 		return "runtime-target-missing-ack-witness-cgroup-mismatch"
 	}
@@ -1549,16 +1552,33 @@ func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxRe
 	if snapshot.RuntimeTreeDigest != witness.runtimeDigest {
 		return "runtime-target-missing-snapshot-runtime-digest-mismatch"
 	}
-	if snapshot.MemoryEvents["oom"] != 0 {
-		return "runtime-target-missing-snapshot-oom"
-	}
-	if snapshot.MemoryEvents["oom_kill"] != 0 {
-		return "runtime-target-missing-snapshot-oom-kill"
-	}
-	if snapshot.PIDsEvents["max"] != 0 {
+	binding := lifecycleWitnessBinding{kind: witness.kind, probeCase: witness.probeCase}
+	if !eligibleLifecycleResources(snapshot, binding) {
+		if snapshot.MemoryEvents["oom"] != 0 {
+			return "runtime-target-missing-snapshot-oom"
+		}
+		if snapshot.MemoryEvents["oom_kill"] != 0 {
+			return "runtime-target-missing-snapshot-oom-kill"
+		}
 		return "runtime-target-missing-snapshot-pids-max"
 	}
 	return ""
+}
+
+func validLifecycleWitnessBinding(witness lifecycleWitness) bool {
+	switch witness.kind {
+	case lifecycleWitnessResult:
+		return witness.probeCase == ""
+	case lifecycleWitnessProbe:
+		switch witness.probeCase {
+		case "network", "filesystem", "privileges", "pids", "descendants":
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
 }
 
 func runtimeTargetMissingTerminalStatusReason(statusErr error) string {

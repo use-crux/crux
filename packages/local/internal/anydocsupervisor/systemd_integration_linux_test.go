@@ -700,7 +700,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	probeReceiver, receivesProbe := unit.(*systemdUnit)
 	probeDone := make(chan error, 1)
 	if receivesProbe && (control == "result" || control == "descendant") {
-		go func() { probeDone <- probeReceiver.ReceiveSealedProbeObservation(ctx, request, probe) }()
+		go func() { probeDone <- probeReceiver.receiveSealedProbeObservation(ctx, request, probe) }()
 	} else {
 		close(probeDone)
 	}

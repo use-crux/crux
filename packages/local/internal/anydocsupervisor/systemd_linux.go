@@ -1289,7 +1289,7 @@ func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn
 	if !snapshotOK || !lifecycleSnapshotMatchesPeer(peer, refreshed) {
 		return resultValidation("accounting-refresh", "snapshot-mismatch")
 	}
-	if refreshed.MemoryEvents["oom"] != 0 || refreshed.MemoryEvents["oom_kill"] != 0 || refreshed.PIDsEvents["max"] != 0 {
+	if !eligibleLifecycleResources(refreshed, binding) {
 		return resultValidation("accounting-refresh", "unavailable")
 	}
 	if err := u.writeACK(conn); err != nil {
@@ -1301,6 +1301,19 @@ func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn
 	return nil
 }
 
+// eligibleLifecycleResources is deliberately a fixed allowlist. Normal results
+// never accept resource-limit evidence; only the sealed pids probe may carry
+// its expected single pids.max event.
+func eligibleLifecycleResources(snapshot SandboxReport, binding lifecycleWitnessBinding) bool {
+	if snapshot.MemoryEvents["oom"] != 0 || snapshot.MemoryEvents["oom_kill"] != 0 {
+		return false
+	}
+	if binding.kind == lifecycleWitnessProbe && binding.probeCase == "pids" {
+		return snapshot.PIDsEvents["max"] == 1
+	}
+	return snapshot.PIDsEvents["max"] == 0
+}
+
 func (u *systemdUnit) writeACK(conn *net.UnixConn) error {
 	if u.writeResultACK != nil {
 		return u.writeResultACK(conn)
@@ -1309,10 +1322,10 @@ func (u *systemdUnit) writeACK(conn *net.UnixConn) error {
 	return err
 }
 
-// ReceiveSealedProbeObservation is intentionally unexported and is reachable
+// receiveSealedProbeObservation is intentionally unexported and is reachable
 // only from the sealed hostile-probe harness. A probe has no authority to
 // submit a Result or to activate normal document routing.
-func (u *systemdUnit) ReceiveSealedProbeObservation(ctx context.Context, expected Request, probe *containmentProbe) error {
+func (u *systemdUnit) receiveSealedProbeObservation(ctx context.Context, expected Request, probe *containmentProbe) error {
 	if probe == nil || probe.caseID == "" || u.spec.probe != probe || !validRequest(expected) || u.VerifyAttestedProbe(ctx, probe) != nil {
 		u.resultMu.Lock()
 		listener := u.resultListener
