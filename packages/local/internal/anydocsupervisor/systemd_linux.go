@@ -1214,6 +1214,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 	}()
 	stopCancel := context.AfterFunc(ctx, func() { _ = listener.SetDeadline(time.Now()) })
 	defer stopCancel()
+	lastStage, lastReason := "", ""
 	for {
 		deadline := time.Now().Add(100 * time.Millisecond)
 		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
@@ -1223,6 +1224,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		conn, err := listener.AcceptUnix()
 		if err != nil {
 			if ctx.Err() != nil {
+				if lastStage != "" {
+					return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: lastStage, ReasonCode: lastReason})
+				}
 				return Result{}, ctx.Err()
 			}
 			status, statusErr := u.TerminalStatus(ctx)
@@ -1269,8 +1273,18 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			return result, nil
 		}
 		_ = conn.Close()
+		if peerErr != nil {
+			lastStage, lastReason = "authorize-peer-credentials", containmentReason(peerErr)
+		} else if reportErr != nil {
+			lastStage, lastReason = "authorize-report", containmentReason(reportErr)
+		} else {
+			lastStage, lastReason = "authorize-peer-identity", "peer-mismatch"
+		}
 		select {
 		case <-ctx.Done():
+			if lastStage != "" {
+				return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: lastStage, ReasonCode: lastReason})
+			}
 			return Result{}, ctx.Err()
 		case <-u.now.After(10 * time.Millisecond):
 		}

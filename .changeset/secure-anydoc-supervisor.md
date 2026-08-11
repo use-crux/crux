@@ -170,6 +170,11 @@ capture path, ACK witness and snapshot mismatches, termination evidence, and
 final terminal-status outcomes, without exposing raw runtime, D-Bus, request,
 or snapshot values.
 
+When runtime-target cleanup cannot be verified, retain a prior typed result
+validation or peer-authentication diagnostic instead of replacing it with the
+later missing-witness cleanup reason; the outer outcome remains containment
+unavailable and `Cleaned` remains false.
+
 When runtime-target accounting falls back to that witness, available terminal
 status remains authoritative: a claimed success still requires strict inactive
 success status, while inactive failed, nonzero, and OOM states may prove

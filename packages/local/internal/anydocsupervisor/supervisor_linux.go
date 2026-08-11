@@ -1277,6 +1277,14 @@ func chainContainment(result error, hadPreCleanup bool, stage, reason string) er
 func preCleanupDiagnostic(err error) (*ResultValidationError, *ContainmentError) {
 	var cleanup *containmentCleanupChain
 	if errors.As(err, &cleanup) {
+		var validation *ResultValidationError
+		if errors.As(cleanup.prior, &validation) {
+			return validation, nil
+		}
+		var containment *ContainmentError
+		if errors.As(cleanup.prior, &containment) {
+			return nil, containment
+		}
 		return nil, cleanup.cleanup
 	}
 	var validation *ResultValidationError

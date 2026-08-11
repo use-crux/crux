@@ -3485,12 +3485,14 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			wantService string
 			wantClean   bool
 			wantSafe    string
+			wantPrior   *ContainmentError
+			wantCleanup bool
 			wantOutcome WorkloadOutcomeCode
 			wantError   ErrorCode
 		}{
 			{name: "accepts exact get unit gone with empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess},
 			{name: "accepts exact get unit gone with absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess},
-			{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-ack-witness-absent"},
+			{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-ack-witness-absent", wantCleanup: true},
 			{name: "accepts failed status with truthful crash outcome", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash},
 			{name: "accepts failed status with witness and reset no such unit", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash},
 			{name: "accepts oom with truthful OOM outcome", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeOOM, wantError: ErrWorkerCrash},
@@ -3514,7 +3516,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: runtime.unverifiedSnapshotReason, wantService: "unknown"},
 			{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 			{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
-			{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=success oom-killed=false pids-limited=false"},
+			{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=authorize-peer-credentials reason=io-or-systemd oom-killed=false pids-limited=false", wantPrior: &ContainmentError{Stage: "authorize-peer-credentials", ReasonCode: "io-or-systemd"}},
 		} {
 			t.Run(runtime.name+"/"+test.name, func(t *testing.T) {
 				bus := newFakeSystemBus()
@@ -3602,8 +3604,11 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 							t.Fatalf("result validation stage = %q, want %q", validation.Stage, wantStage)
 						}
 					}
-					if test.receive == "peer-auth" && !errors.Is(receiveErr, context.DeadlineExceeded) {
-						t.Fatalf("ReceiveResult() = %T %v, want bounded peer authentication failure", receiveErr, receiveErr)
+					if test.wantPrior != nil {
+						var containment *ContainmentError
+						if !errors.As(receiveErr, &containment) || containment.Stage != test.wantPrior.Stage || containment.ReasonCode != test.wantPrior.ReasonCode {
+							t.Fatalf("ReceiveResult() = %T %v, want containment %#v", receiveErr, receiveErr, test.wantPrior)
+						}
 					}
 					if test.receive != "peer-auth" {
 						if ackErr := <-ack; ackErr != nil {
@@ -3686,6 +3691,12 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 						t.Fatalf("safe diagnostic = %q, want %q without raw detail", got, test.wantSafe)
 					}
 					return
+				}
+				if test.wantCleanup {
+					validation, containment := preCleanupDiagnostic(finishErr)
+					if validation != nil || containment == nil || containment.ReasonCode != test.wantReason {
+						t.Fatalf("pure missing witness diagnostic = validation:%#v containment:%#v", validation, containment)
+					}
 				}
 				service := test.wantService
 				if service == "" {
