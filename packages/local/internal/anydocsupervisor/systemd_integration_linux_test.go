@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -532,6 +533,63 @@ func TestProbeObservationCodecRejectsHostileInput(t *testing.T) {
 	}
 }
 
+type probeObservationLifecycleUnit struct {
+	fakeUnit
+	path   string
+	events []string
+}
+
+func (u *probeObservationLifecycleUnit) Stop(ctx context.Context) error {
+	u.events = append(u.events, "stop")
+	return u.fakeUnit.Stop(ctx)
+}
+
+func (u *probeObservationLifecycleUnit) WaitInactive(ctx context.Context) error {
+	u.events = append(u.events, "wait")
+	if err := writeProbeObservation(u.path, "network", map[string]bool{
+		"ipv4Denied": true,
+		"ipv6Denied": true,
+		"dnsDenied":  true,
+	}, 0); err != nil {
+		return err
+	}
+	return u.fakeUnit.WaitInactive(ctx)
+}
+
+func (u *probeObservationLifecycleUnit) Cleanup(ctx context.Context) error {
+	u.events = append(u.events, "cleanup")
+	if err := os.RemoveAll(filepath.Dir(u.path)); err != nil {
+		return err
+	}
+	return u.fakeUnit.Cleanup(ctx)
+}
+
+func TestProbeObservationLifecycleReadsAfterExitBeforeCleanup(t *testing.T) {
+	privateTemp := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(privateTemp, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(privateTemp, "observation.json")
+	unit := &probeObservationLifecycleUnit{
+		fakeUnit: fakeUnit{rep: SandboxReport{ControlGroup: "/fake"}},
+		path:     path,
+	}
+
+	observation, err := stopAwaitAndReadProbeObservation(context.Background(), unit, path, "network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !observation.Checks["ipv4Denied"] || !same(unit.events, []string{"stop", "wait"}) {
+		t.Fatalf("observation was not read after producer exit: checks=%#v events=%#v", observation.Checks, unit.events)
+	}
+	if err := unit.Cleanup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(privateTemp); !os.IsNotExist(err) || !same(unit.events, []string{"stop", "wait", "cleanup"}) {
+		t.Fatalf("cleanup did not follow observation read: err=%v events=%#v", err, unit.events)
+	}
+}
+
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
 	t.Helper()
 	cases := []struct {
@@ -585,9 +643,6 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	}
 	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
 	hostObservationPath := filepath.Join(privateTemp, "observation.json")
-	if err := os.Mkdir(filepath.Dir(hostObservationPath), 0o700); err != nil {
-		t.Fatal(err)
-	}
 	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
 	if control == "abort" {
 		return runCanceledSupervisorProbe(t, launch, probe, stagingRoot, privateTemp, name, limits)
@@ -662,11 +717,20 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	case "abort":
 		// Cancellation is represented by the caller terminating the isolated job.
 	}
+	var observationErr error
+	if control == "result" || control == "descendant" {
+		observation, observationErr = stopAwaitAndReadProbeObservation(ctx, unit, resultPath, name)
+	}
 	report, cpu, termination, cleanupReason := cleanup(unit)
 	cleaned := cleanupReason == ""
 	wall := time.Since(started)
+	if observationErr != nil {
+		t.Fatalf("%s probe observation lifecycle failed: %v (cleanup: %s)", name, observationErr, cleanupReason)
+	}
+	if cleanupReason != "" {
+		t.Fatalf("%s probe cleanup failed: %s", name, cleanupReason)
+	}
 	if control == "result" || control == "descendant" {
-		observation = awaitProbeObservation(t, resultPath, name)
 		if name == "filesystem" {
 			_, hostErr := os.Stat(workerTemp)
 			observation.Checks["workerTempInvisibleOutside"] = os.IsNotExist(hostErr)
@@ -854,17 +918,22 @@ func observedProbeOutcome(name string, observation probeObservation, report Sand
 	return ErrContainmentUnavailable
 }
 
-func awaitProbeObservation(t *testing.T, path, wantCase string) probeObservation {
-	t.Helper()
+func stopAwaitAndReadProbeObservation(ctx context.Context, unit Unit, path, wantCase string) (probeObservation, error) {
+	if err := unit.Stop(ctx); err != nil {
+		return probeObservation{}, fmt.Errorf("stop unit: %w", err)
+	}
+	if err := unit.WaitInactive(ctx); err != nil {
+		return probeObservation{}, fmt.Errorf("await unit inactive: %w", err)
+	}
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatal("probe observation unavailable")
+		return probeObservation{}, fmt.Errorf("read observation: %w", err)
 	}
 	value, reason := decodeProbeObservation(bytes, wantCase)
 	if reason != "" {
-		t.Fatalf("invalid probe observation: %s", reason)
+		return probeObservation{}, fmt.Errorf("decode observation: %s", reason)
 	}
-	return value
+	return value, nil
 }
 
 func awaitUnitInactive(t *testing.T, ctx context.Context, unit Unit) {
