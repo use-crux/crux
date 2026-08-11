@@ -136,6 +136,28 @@ func isDbusStopNoSuchUnit(err error) bool {
 	return ok && name == "org.freedesktop.systemd1.NoSuchUnit"
 }
 
+// resetFailedUnitReason classifies only sanitized D-Bus names. Its result is
+// safe to expose as a containment reason; callers must not retain the error.
+func resetFailedUnitReason(err error) string {
+	name, ok := dbusErrorName(err)
+	if !ok {
+		return "unit-cleanup-reset-failed-unit-unavailable"
+	}
+
+	switch name {
+	case "org.freedesktop.systemd1.NoSuchUnit":
+		return "unit-cleanup-reset-failed-unit-no-such-unit"
+	case "org.freedesktop.DBus.Error.UnknownObject":
+		return "unit-cleanup-reset-failed-unit-unknown-object"
+	case "org.freedesktop.DBus.Error.AccessDenied":
+		return "unit-cleanup-reset-failed-unit-access-denied"
+	case "org.freedesktop.DBus.Error.InvalidArgs":
+		return "unit-cleanup-reset-failed-unit-invalid-args"
+	default:
+		return "unit-cleanup-reset-failed-unit-dbus-other"
+	}
+}
+
 func isDbusUnitPropertiesGone(err error) bool {
 	var operation *terminalStatusOperationError
 	if errors.As(err, &operation) {
@@ -1567,7 +1589,7 @@ func (u *systemdUnit) Cleanup(ctx context.Context) error {
 		_ = os.Remove(u.resultSocket)
 	}
 	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
-		failure := &unitCleanupFailure{reasons: []string{"unit-cleanup-reset-failed-unit"}, resetFailedUnitNoSuchUnit: isDbusStopNoSuchUnit(err)}
+		failure := &unitCleanupFailure{reasons: []string{resetFailedUnitReason(err)}, resetFailedUnitNoSuchUnit: isDbusStopNoSuchUnit(err)}
 		if u.tmp != "" {
 			if removeErr := u.fs.RemoveAll(u.tmp); removeErr != nil {
 				failure.reasons = append(failure.reasons, "unit-cleanup-private-temp")

@@ -67,7 +67,7 @@ exposing unit names, D-Bus bodies, or cgroup paths.
 
 Treat only an exact typed `ResetFailedUnit` `NoSuchUnit` as idempotent after
 strict inactive-success and exclusive pinned-cgroup termination proof; retain
-fixed operation-specific cleanup failures for every other reset and
+fixed D-Bus-category cleanup failures for every other reset and
 private-temp cleanup error. Socket listener closure and socket removal remain
 best-effort cleanup.
 

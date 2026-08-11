@@ -1302,18 +1302,20 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 		wantClean   bool
 		wantReason  string
 	}{
-		{name: "accepts exact no such unit with empty cgroup", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, wantClean: true},
-		{name: "accepts exact no such unit with absent cgroup", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, termination: "absent", wantClean: true},
-		{name: "rejects unknown object", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "rejects access denied", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "rejects invalid args", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "rejects transport error", resetErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "rejects failed result", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"Result": "exit-code"}, wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "rejects nonzero status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ExecMainStatus": int32(1)}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "accepts exact no such unit value with empty cgroup", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, wantClean: true},
+		{name: "accepts exact no such unit pointer with absent cgroup", resetErr: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, termination: "absent", wantClean: true},
+		{name: "accepts exact no such unit wrapped", resetErr: fmt.Errorf("reset failed: %w", dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}), wantClean: true},
+		{name: "rejects unknown object", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit-unknown-object"},
+		{name: "rejects access denied", resetErr: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit-access-denied"},
+		{name: "rejects invalid args", resetErr: fmt.Errorf("reset failed: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{secret}}), wantReason: "unit-cleanup-reset-failed-unit-invalid-args"},
+		{name: "rejects other dbus", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.OtherFailure", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit-dbus-other"},
+		{name: "rejects unavailable", resetErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit-unavailable"},
+		{name: "rejects failed result", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"Result": "exit-code"}, wantReason: "unit-cleanup-reset-failed-unit-no-such-unit"},
+		{name: "rejects nonzero status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ExecMainStatus": int32(1)}, wantReason: "unit-cleanup-reset-failed-unit-no-such-unit"},
 		{name: "rejects live status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ActiveState": "active", "MainPID": uint32(42)}, wantReason: "wait-inactive"},
 		{name: "rejects nonexclusive termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "nonexclusive", wantReason: "termination-evidence"},
 		{name: "rejects mismatched termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "mismatch", wantReason: "termination-evidence"},
-		{name: "rejects reset and private-temp failure", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, removeErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects reset and private-temp failure", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, removeErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit-no-such-unit"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -1403,7 +1405,7 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 				return
 			}
 			got := safeExecutionFailure(finishErr, terminal)
-			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") || strings.Contains(got, "InvalidArgs") {
+			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "NoSuchUnit") || strings.Contains(got, "OtherFailure") || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") || strings.Contains(got, "InvalidArgs") {
 				t.Fatalf("safe execution failure = %q", got)
 			}
 			if !fs.removed[secret] || !bus.reset {
