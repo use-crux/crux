@@ -392,7 +392,7 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 		wantProbe   ProbeOutcome
 	}{
 		{name: "success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true},
-		{name: "sealed contained probe is not workload success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeUnverified, wantError: OutcomeSuccess, wantCleanup: true, sealedProbe: true, wantProbe: ProbeOutcomeContained},
+		{name: "sealed contained probe retains workload success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true, sealedProbe: true, wantProbe: ProbeOutcomeContained},
 		{name: "parser validation survives exit code", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives core dump", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives signal", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "signal", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
@@ -430,7 +430,12 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 				}
 				return test.status, nil
 			}}
-			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbeObserved: test.sealedProbe}
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbe: func() *containmentProbe {
+				if test.sealedProbe {
+					return &containmentProbe{caseID: "network"}
+				}
+				return nil
+			}(), sealedProbeObserved: test.sealedProbe}
 			err = run.Finish(context.Background(), test.out)
 			if got := errorCode(err); got != test.wantError {
 				t.Fatalf("Finish error code = %q, want %q (%v)", got, test.wantError, err)
@@ -446,7 +451,7 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 				t.Fatalf("workload outcome = %q, want %q", terminal.Workload.Code, test.wantOutcome)
 			}
 			wantProbe := test.wantProbe
-			if wantProbe == "" {
+			if test.sealedProbe && wantProbe == "" {
 				wantProbe = ProbeOutcomeUnverified
 			}
 			if terminal.ProbeOutcome != wantProbe {
@@ -458,6 +463,45 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 		})
 	}
 }
+
+func TestTask3ProbeOutcomeBoundary(t *testing.T) {
+	accepted := CleanupProof{Accepted: true}
+	if got := classifyProbeOutcome(nil, false, false, WorkloadOutcome{Code: WorkloadOutcomeSuccess}, SandboxReport{}, accepted); got != "" {
+		t.Fatalf("ordinary workload probe outcome = %q, want zero", got)
+	}
+	for _, test := range []struct {
+		name     string
+		caseID   string
+		observed bool
+		breach   bool
+		workload WorkloadOutcome
+		report   SandboxReport
+		cleanup  CleanupProof
+		want     ProbeOutcome
+	}{
+		{name: "network observation", caseID: "network", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "filesystem observation", caseID: "filesystem", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "privileges observation", caseID: "privileges", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "pids observation", caseID: "pids", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "memory resource", caseID: "memory", workload: WorkloadOutcome{Code: WorkloadOutcomeOOM}, report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "cpu resource", caseID: "cpu", workload: WorkloadOutcome{Code: WorkloadOutcomeCPUTimeout}, report: SandboxReport{CPUStats: map[string]int64{"nr_throttled": 1, "throttled_usec": 1}}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "wall timeout", caseID: "wall", workload: WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}, report: SandboxReport{ServiceResult: "timeout"}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "crash", caseID: "crash", workload: WorkloadOutcome{Code: WorkloadOutcomeCrash}, report: SandboxReport{ServiceResult: "exit-code", ExecMainStatus: 19}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "abort", caseID: "abort", workload: WorkloadOutcome{Code: WorkloadOutcomeAborted}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "descendants witness", caseID: "descendants", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeAborted}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "missing witness", caseID: "network", workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeUnverified},
+		{name: "missing cleanup", caseID: "network", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, want: ProbeOutcomeUnverified},
+		{name: "observed violation", caseID: "network", breach: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, want: ProbeOutcomeBreach},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := classifyProbeOutcome(&containmentProbe{caseID: test.caseID}, test.observed, test.breach, test.workload, test.report, test.cleanup)
+			if got != test.want {
+				t.Fatalf("probe outcome = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestReceiveResultPreservesTypedErrorOverExpiredContext(t *testing.T) {
 	typed := closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
 	b := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {

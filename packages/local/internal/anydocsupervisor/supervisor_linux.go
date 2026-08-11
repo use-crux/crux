@@ -448,6 +448,13 @@ type containmentProbe struct {
 	hostResultPath string
 }
 
+// probeContainmentViolation marks a structurally valid sealed observation
+// whose check explicitly reports that containment failed. It is distinct from
+// malformed or missing observations, which remain unverified.
+type probeContainmentViolation struct{}
+
+func (*probeContainmentViolation) Error() string { return "sealed probe containment violation" }
+
 // sealedProbeObservation is deliberately separate from a worker Result. It is
 // accepted only by the test-only sealed-probe path and never enters normal
 // document routing.
@@ -479,6 +486,26 @@ func validSealedProbeObservation(value sealedProbeObservation, probe *containmen
 		}
 	}
 	return true
+}
+
+func observedSealedProbeViolation(value sealedProbeObservation, probe *containmentProbe, request Request) bool {
+	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case != probe.caseID || value.Invocation != request.RequestDigest {
+		return false
+	}
+	want, ok := sealedProbeObservationChecks(probe.caseID)
+	if !ok || len(value.Checks) != len(want) {
+		return false
+	}
+	for name := range want {
+		passed, present := value.Checks[name]
+		if !present {
+			return false
+		}
+		if !passed {
+			return true
+		}
+	}
+	return false
 }
 
 // sealedProbeObservationChecks is the single exact, versioned observation
@@ -808,7 +835,9 @@ type Run struct {
 	finished            chan struct{}
 	result              error
 	receivedFailure     error
+	sealedProbe         *containmentProbe
 	sealedProbeObserved bool
+	sealedProbeBreach   bool
 	terminal            TerminalReport
 	started             time.Time
 	done                bool
@@ -983,13 +1012,35 @@ func (r *Run) receiveSealedProbeObservation(ctx context.Context, probe *containm
 		return closed(ErrContainmentUnavailable)
 	}
 	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	r.mu.Lock()
+	r.sealedProbe = probe
+	r.mu.Unlock()
 	err := receiver.receiveSealedProbeObservation(ctx, expected, probe)
 	if err == nil {
 		r.mu.Lock()
 		r.sealedProbeObserved = true
 		r.mu.Unlock()
+	} else {
+		var violation *probeContainmentViolation
+		if errors.As(err, &violation) {
+			r.mu.Lock()
+			r.sealedProbeBreach = true
+			r.mu.Unlock()
+		}
 	}
 	return err
+}
+
+// expectSealedProbe records the integration-only probe contract before a
+// resource, cancellation, or crash probe runs. It remains unexported so it
+// cannot influence ordinary document execution.
+func (r *Run) expectSealedProbe(probe *containmentProbe) {
+	if r == nil || probe == nil {
+		return
+	}
+	r.mu.Lock()
+	r.sealedProbe = probe
+	r.mu.Unlock()
 }
 
 // Execute receives the one permitted result and always tears down its unit.
@@ -1011,7 +1062,9 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		_ = r.write.Close()
 		r.stopOnce.Do(func() { close(r.stop) })
 		receivedFailure := r.receivedFailure
+		sealedProbe := r.sealedProbe
 		sealedProbeObserved := r.sealedProbeObserved
+		sealedProbeBreach := r.sealedProbeBreach
 		r.mu.Unlock()
 		if out == nil {
 			out = receivedFailure
@@ -1032,11 +1085,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		}
 		r.mu.Lock()
 		workload := workloadOutcome(out, classified, report)
-		probeOutcome := ProbeOutcomeUnverified
-		if sealedProbeObserved && workload.Code == WorkloadOutcomeSuccess {
-			workload = WorkloadOutcome{Code: WorkloadOutcomeUnverified}
-			probeOutcome = ProbeOutcomeContained
-		}
+		probeOutcome := classifyProbeOutcome(sealedProbe, sealedProbeObserved, sealedProbeBreach, workload, report, proof)
 		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, ProbeOutcome: probeOutcome, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
 		r.result = result
 		r.mu.Unlock()
@@ -1046,6 +1095,49 @@ func (r *Run) Finish(_ context.Context, out error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.result
+}
+
+func classifyProbeOutcome(probe *containmentProbe, observed, breach bool, workload WorkloadOutcome, report SandboxReport, cleanup CleanupProof) ProbeOutcome {
+	if probe == nil {
+		return ""
+	}
+	if breach {
+		return ProbeOutcomeBreach
+	}
+	if !cleanup.Accepted {
+		return ProbeOutcomeUnverified
+	}
+	switch probe.caseID {
+	case "network", "filesystem", "privileges", "pids":
+		if observed && workload.Code == WorkloadOutcomeSuccess {
+			return ProbeOutcomeContained
+		}
+	case "memory":
+		if workload.Code == WorkloadOutcomeOOM && (report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill") {
+			return ProbeOutcomeContained
+		}
+	case "cpu":
+		if workload.Code == WorkloadOutcomeCPUTimeout && report.CPUStats["nr_throttled"] > 0 && report.CPUStats["throttled_usec"] > 0 {
+			return ProbeOutcomeContained
+		}
+	case "wall":
+		if workload.Code == WorkloadOutcomeWallTimeout && report.ServiceResult == "timeout" {
+			return ProbeOutcomeContained
+		}
+	case "crash":
+		if workload.Code == WorkloadOutcomeCrash && report.ServiceResult != "success" && report.ExecMainStatus != 0 {
+			return ProbeOutcomeContained
+		}
+	case "abort":
+		if workload.Code == WorkloadOutcomeAborted {
+			return ProbeOutcomeContained
+		}
+	case "descendants":
+		if observed && workload.Code == WorkloadOutcomeAborted {
+			return ProbeOutcomeContained
+		}
+	}
+	return ProbeOutcomeUnverified
 }
 func (r *Run) TerminalReport() TerminalReport {
 	if r == nil {

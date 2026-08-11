@@ -276,7 +276,8 @@ jobs:
           test "$(jq '.hostile | length' artifacts/anydoc-containment.json)" -eq 10
           jq -e '(.cleaned == true) and (.terminationEmpty == true or .terminationAbsent == true) and all(.hostile[]; .cleaned == true and (.terminationEmpty == true or .terminationAbsent == true))' artifacts/anydoc-containment.json
           jq -e '[.hostile[].name] | sort == ["abort","cpu","crash","descendants","filesystem","memory","network","pids","privileges","wall"]' artifacts/anydoc-containment.json
-          jq -e '(.hostile | map({key: .name, value: .outcome}) | from_entries) == {abort:"aborted",cpu:"timeout",crash:"worker-crash",descendants:"aborted",filesystem:"success",memory:"worker-crash",network:"success",pids:"success",privileges:"success",wall:"timeout"}' artifacts/anydoc-containment.json
+          jq -e 'all(.hostile[]; .probeOutcome == "contained")' artifacts/anydoc-containment.json
+          jq -e '(.hostile | map({key: .name, value: .workloadOutcome}) | from_entries) == {abort:"aborted",cpu:"cpu-timeout",crash:"crash",descendants:"aborted",filesystem:"success",memory:"oom",network:"success",pids:"success",privileges:"success",wall:"wall-timeout"}' artifacts/anydoc-containment.json
 
       - name: Upload containment evidence
         if: always()

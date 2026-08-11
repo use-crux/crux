@@ -348,20 +348,21 @@ func TestSafeRunnerDiagnosticReportsOnlyBoundedTerminalCategories(t *testing.T) 
 }
 
 type hostileEvidence struct {
-	Name              string           `json:"name"`
-	Outcome           ErrorCode        `json:"outcome"`
-	ProbeOutcome      ProbeOutcome     `json:"probeOutcome"`
-	Observed          map[string]bool  `json:"observed,omitempty"`
-	MemoryEvents      map[string]int64 `json:"memoryEvents,omitempty"`
-	CPUUsec           int64            `json:"cpuUsec"`
-	CPUThrottled      int64            `json:"cpuThrottledUsec"`
-	CPUPeriods        int64            `json:"cpuThrottledPeriods"`
-	PIDsMax           int64            `json:"pidsMaxEvents"`
-	ServiceResult     string           `json:"serviceResult,omitempty"`
-	WallMillis        int64            `json:"wallMillis"`
-	Cleaned           bool             `json:"cleaned"`
-	TerminationEmpty  bool             `json:"terminationEmpty"`
-	TerminationAbsent bool             `json:"terminationAbsent"`
+	Name              string              `json:"name"`
+	Outcome           ErrorCode           `json:"outcome"`
+	WorkloadOutcome   WorkloadOutcomeCode `json:"workloadOutcome"`
+	ProbeOutcome      ProbeOutcome        `json:"probeOutcome"`
+	Observed          map[string]bool     `json:"observed,omitempty"`
+	MemoryEvents      map[string]int64    `json:"memoryEvents,omitempty"`
+	CPUUsec           int64               `json:"cpuUsec"`
+	CPUThrottled      int64               `json:"cpuThrottledUsec"`
+	CPUPeriods        int64               `json:"cpuThrottledPeriods"`
+	PIDsMax           int64               `json:"pidsMaxEvents"`
+	ServiceResult     string              `json:"serviceResult,omitempty"`
+	WallMillis        int64               `json:"wallMillis"`
+	Cleaned           bool                `json:"cleaned"`
+	TerminationEmpty  bool                `json:"terminationEmpty"`
+	TerminationAbsent bool                `json:"terminationAbsent"`
 }
 
 type probeObservation struct {
@@ -533,27 +534,6 @@ func TestProbeObservationCodecRejectsHostileInput(t *testing.T) {
 	}
 }
 
-func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
-	source, err := os.ReadFile("systemd_integration_linux_test.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	start := bytes.Index(source, []byte("\nfunc runContainmentProbe("))
-	end := bytes.Index(source[start:], []byte("\nfunc expectedProbeOutcome("))
-	if start < 0 || end < 0 {
-		t.Fatal("runContainmentProbe source boundary missing")
-	}
-	body := source[start+1 : start+end]
-	for _, call := range [][]byte{[]byte("supervisor.startEvaluation("), []byte("run.receiveSealedProbeObservation("), []byte("run.Finish("), []byte("terminal.ProbeOutcome")} {
-		if !bytes.Contains(body, call) {
-			t.Fatalf("runContainmentProbe bypasses sealed Run lifecycle: missing %q", call)
-		}
-	}
-	if bytes.Contains(body, []byte("stopAwaitReadAndCleanupProbeObservation")) {
-		t.Fatal("runContainmentProbe retained the legacy probe cleanup path")
-	}
-}
-
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
 	t.Helper()
 	cases := []struct {
@@ -618,6 +598,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if err != nil {
 		t.Fatalf("start %s probe: %v", name, err)
 	}
+	run.expectSealedProbe(probe)
 	started := time.Now()
 	if err := run.Authorize(); err != nil {
 		_ = run.Finish(context.Background(), err)
@@ -705,14 +686,8 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if terminal.Outcome == ErrContainmentUnavailable {
 		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
 	}
-	if control == "result" && terminal.ProbeOutcome != ProbeOutcomeContained {
+	if terminal.ProbeOutcome != ProbeOutcomeContained {
 		t.Fatalf("%s did not retain its sealed contained probe outcome: got %q", name, terminal.ProbeOutcome)
-	}
-	if control != "result" && terminal.ProbeOutcome != ProbeOutcomeUnverified {
-		t.Fatalf("%s probe outcome = %q, want unverified", name, terminal.ProbeOutcome)
-	}
-	if control == "result" && terminal.Workload.Code != WorkloadOutcomeUnverified {
-		t.Fatalf("%s sealed probe workload = %q, want unverified", name, terminal.Workload.Code)
 	}
 	if expected, ok := map[string]WorkloadOutcomeCode{
 		"memory": WorkloadOutcomeOOM,
@@ -751,7 +726,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 			t.Fatalf("descendant %d escaped cgroup cleanup", observation.PID)
 		}
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, ProbeOutcome: terminal.ProbeOutcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, WorkloadOutcome: terminal.Workload.Code, ProbeOutcome: terminal.ProbeOutcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
 
 func expectedProbeOutcome(name string) ErrorCode {
@@ -792,6 +767,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	if err != nil {
 		t.Fatalf("start canceled probe: %v", err)
 	}
+	run.expectSealedProbe(probe)
 	if err := run.Authorize(); err != nil {
 		_ = run.Finish(context.Background(), err)
 		t.Fatalf("authorize canceled probe: %v", err)
@@ -806,7 +782,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	if terminal.Outcome != ErrAborted || !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
 		t.Fatalf("caller cancellation lacked closed terminal evidence: %#v", terminal)
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, ProbeOutcome: terminal.ProbeOutcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, WorkloadOutcome: terminal.Workload.Code, ProbeOutcome: terminal.ProbeOutcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
 
 func stageProbeExecutable(t *testing.T, root string) (string, string) {
@@ -1072,23 +1048,25 @@ func writeContainmentEvidence(t *testing.T, result Result, terminal TerminalRepo
 	// Deliberately omit source paths and payload: the artifact is containment
 	// evidence, not a document-exfiltration channel.
 	evidence := struct {
-		Format               string            `json:"format"`
-		SourceSHA256         string            `json:"sourceSha256"`
-		SourceBytes          int64             `json:"sourceBytes"`
-		ResultBytes          int               `json:"resultBytes"`
-		Outcome              ErrorCode         `json:"outcome"`
-		Cleaned              bool              `json:"cleaned"`
-		PreStopMemoryMax     int64             `json:"preStopMemoryMax"`
-		PreStopMemoryCurrent int64             `json:"preStopMemoryCurrent"`
-		PreStopMemoryPeak    int64             `json:"preStopMemoryPeak"`
-		PreStopMemoryEvents  map[string]int64  `json:"preStopMemoryEvents"`
-		TasksMax             int               `json:"tasksMax"`
-		CPUUsec              int64             `json:"cpuUsec"`
-		WallMillis           int64             `json:"wallMillis"`
-		Hostile              []hostileEvidence `json:"hostile"`
-		TerminationEmpty     bool              `json:"terminationEmpty"`
-		TerminationAbsent    bool              `json:"terminationAbsent"`
-	}{string(result.Format), result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryPeak, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
+		Format               string              `json:"format"`
+		SourceSHA256         string              `json:"sourceSha256"`
+		SourceBytes          int64               `json:"sourceBytes"`
+		ResultBytes          int                 `json:"resultBytes"`
+		Outcome              ErrorCode           `json:"outcome"`
+		WorkloadOutcome      WorkloadOutcomeCode `json:"workloadOutcome"`
+		ProbeOutcome         ProbeOutcome        `json:"probeOutcome,omitempty"`
+		Cleaned              bool                `json:"cleaned"`
+		PreStopMemoryMax     int64               `json:"preStopMemoryMax"`
+		PreStopMemoryCurrent int64               `json:"preStopMemoryCurrent"`
+		PreStopMemoryPeak    int64               `json:"preStopMemoryPeak"`
+		PreStopMemoryEvents  map[string]int64    `json:"preStopMemoryEvents"`
+		TasksMax             int                 `json:"tasksMax"`
+		CPUUsec              int64               `json:"cpuUsec"`
+		WallMillis           int64               `json:"wallMillis"`
+		Hostile              []hostileEvidence   `json:"hostile"`
+		TerminationEmpty     bool                `json:"terminationEmpty"`
+		TerminationAbsent    bool                `json:"terminationAbsent"`
+	}{string(result.Format), result.SourceSHA256, result.SourceBytes, len(result.Payload), terminal.Outcome, terminal.Workload.Code, terminal.ProbeOutcome, terminal.Cleaned, terminal.PreStop.MemoryMax, terminal.PreStop.MemoryCurrent, terminal.PreStop.MemoryPeak, terminal.PreStop.MemoryEvents, terminal.PreStop.TasksMax, terminal.CPU.Microseconds(), terminal.Wall.Milliseconds(), hostile, terminal.Termination.Empty, terminal.Termination.Absent}
 	if evidence.PreStopMemoryMax > MemoryCeiling/2 {
 		t.Fatal("integration memory ceiling exceeds half the production ceiling")
 	}

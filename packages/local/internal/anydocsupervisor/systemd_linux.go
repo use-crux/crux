@@ -1402,6 +1402,9 @@ func (u *systemdUnit) receiveSealedProbeObservation(ctx context.Context, expecte
 		decodeErr := readFrame(conn, &observation)
 		if decodeErr != nil || !validSealedProbeObservation(observation, probe, expected) {
 			_ = conn.Close()
+			if decodeErr == nil && observedSealedProbeViolation(observation, probe, expected) {
+				return closedWith(ErrInvalidResult, &probeContainmentViolation{})
+			}
 			return closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result"))
 		}
 		if !u.verifiedSnapshotMatchesPeer(report) {
