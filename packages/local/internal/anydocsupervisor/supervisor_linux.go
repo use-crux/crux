@@ -1308,7 +1308,7 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 }
 
 // workloadOutcomeForSealedProbe keeps a successful, attested pids containment
-// probe from treating its expected single TasksMax event as a worker crash.
+// probe from treating its expected cumulative TasksMax event as a worker crash.
 // All other pids-limit observations retain the ordinary crash classification.
 func workloadOutcomeForSealedProbe(out, result error, report SandboxReport, probe *containmentProbe, observed, breach bool) WorkloadOutcome {
 	// Host-established terminal evidence has priority over a peer result
@@ -1362,7 +1362,7 @@ func workloadOutcomeForSealedProbe(out, result error, report SandboxReport, prob
 }
 
 func expectedSealedPIDsProbe(probe *containmentProbe, observed, breach bool, report SandboxReport) bool {
-	return probe != nil && probe.caseID == "pids" && observed && !breach && report.PIDsEvents["max"] == 1 && report.ServiceResult == "success" && report.ExecMainStatus == 0
+	return probe != nil && probe.caseID == "pids" && observed && !breach && report.PIDsEvents["max"] > 0 && report.ServiceResult == "success" && report.ExecMainStatus == 0
 }
 
 // establishedInvalidResult is a parser-result classification that terminal

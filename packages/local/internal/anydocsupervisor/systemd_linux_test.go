@@ -115,6 +115,87 @@ func TestSystemdProbeUsesOneExactWritableObservationBind(t *testing.T) {
 	}
 }
 
+func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		max     int64
+		binding lifecycleWitnessBinding
+		want    bool
+	}{
+		{name: "sealed pids one", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
+		{name: "sealed pids cumulative", max: 2, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
+		{name: "sealed pids missing", max: 0, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
+		{name: "normal result rejects pids", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
+		{name: "unsealed probe rejects pids", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
+		{name: "normal result accepts no pids", max: 0, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			snapshot := SandboxReport{MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": test.max}}
+			if got := eligibleLifecycleResources(snapshot, test.binding); got != test.want {
+				t.Fatalf("eligibleLifecycleResources(max=%d, binding=%#v) = %t, want %t", test.max, test.binding, got, test.want)
+			}
+		})
+	}
+}
+
+func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T) {
+	root := t.TempDir()
+	runtime := filepath.Join(root, "runtime")
+	sharedProbe := filepath.Join(root, "probe")
+	for _, path := range []string{runtime, sharedProbe} {
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	probePath := filepath.Join(sharedProbe, "probe")
+	if err := os.WriteFile(probePath, []byte("probe"), 0o555); err != nil {
+		t.Fatal(err)
+	}
+
+	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: osFS{}, Clock: immediateClock{}})
+	startProbe := func(name string) *systemdUnit {
+		input := filepath.Join(root, name+"-input")
+		private := filepath.Join(root, name+"-private")
+		for _, path := range []string{input, private} {
+			if err := os.Mkdir(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		spec, err := newTestServiceSpec(input, runtime, private, Limits{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec.probe = &containmentProbe{hostExecutable: probePath, executableSHA: strings.Repeat("a", 64), action: "pids", caseID: "pids", resultPath: probeObservationTarget, hostResultPath: filepath.Join(private, "observation.json")}
+		spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probePath+":"+probeTarget)
+		read, write, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer write.Close()
+		unit, err := backend.Start(context.Background(), spec, read)
+		if err != nil {
+			t.Fatalf("start %s probe: %s", name, safeContainmentDiagnostic(err))
+		}
+		return unit.(*systemdUnit)
+	}
+
+	first := startProbe("first")
+	if err := first.Cleanup(context.Background()); err != nil {
+		t.Fatalf("cleanup first probe: %s", safeContainmentDiagnostic(err))
+	}
+	if _, err := os.Stat(probePath); err != nil {
+		t.Fatalf("shared probe executable removed by first cleanup: %v", err)
+	}
+	if _, err := os.Stat(sharedProbe); err != nil {
+		t.Fatalf("shared integration stage removed by first cleanup: %v", err)
+	}
+
+	second := startProbe("second")
+	if err := second.Cleanup(context.Background()); err != nil {
+		t.Fatalf("cleanup second probe: %s", safeContainmentDiagnostic(err))
+	}
+}
+
 func TestSystemdBackendFailsClosedForUnavailablePermissionAndCanceledContexts(t *testing.T) {
 	spec, _ := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
 	read, write, _ := os.Pipe()
@@ -1887,12 +1968,12 @@ func TestTask3SealedProbeLifecycleOutcome(t *testing.T) {
 		wantWitness bool
 	}{
 		{name: "contained", wantAck: true, wantWitness: true},
-		{name: "pids exact evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+		{name: "pids positive evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
 			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 1\n")
 		}, wantAck: true, wantWitness: true},
-		{name: "pids excess evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+		{name: "pids cumulative evidence", probeCase: "pids", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
 			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 2\n")
-		}},
+		}, wantAck: true, wantWitness: true},
 		{name: "case mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Case = "other" }},
 		{name: "invocation mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Invocation = strings.Repeat("b", 64) }},
 		{name: "invalid observation", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Checks = nil }},

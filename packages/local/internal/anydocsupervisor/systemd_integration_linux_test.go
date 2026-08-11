@@ -557,6 +557,7 @@ func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
 
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
 	t.Helper()
+	probePath, probeSHA := stageProbeExecutable(t, root)
 	cases := []struct {
 		name    string
 		action  string
@@ -579,13 +580,13 @@ func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root stri
 	results := make([]hostileEvidence, 0, len(cases))
 	for _, tc := range cases {
 		t.Run("hostile/"+tc.name, func(t *testing.T) {
-			results = append(results, runContainmentProbe(t, launch, root, tc.name, tc.action, tc.control, tc.limits))
+			results = append(results, runContainmentProbe(t, launch, root, probePath, probeSHA, tc.name, tc.action, tc.control, tc.limits))
 		})
 	}
 	return results
 }
 
-func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, action, control string, limits Limits) hostileEvidence {
+func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath, probeSHA, name, action, control string, limits Limits) hostileEvidence {
 	t.Helper()
 	caseRoot := filepath.Join(root, "hostile-"+name)
 	stagingRoot := filepath.Join(caseRoot, "input")
@@ -606,7 +607,6 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 		defer os.Remove(hostTemp)
 		action = "filesystem:" + token
 	}
-	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
 	hostObservationPath := filepath.Join(privateTemp, "observation.json")
 	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, caseID: name, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
 	if control == "abort" {
@@ -617,13 +617,13 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	supervisor := NewWithStager(&sealedProbeBackend{delegate: NewSystemdBackend(), probe: probe}, NewStager(stagingRoot))
 	run, err := supervisor.startEvaluation(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
 	if err != nil {
-		t.Fatalf("start %s probe: %v", name, err)
+		t.Fatalf("start %s probe: %s", name, safeProbeFailure(err))
 	}
 	run.expectSealedProbe(probe)
 	started := time.Now()
 	if err := run.Authorize(); err != nil {
 		_ = run.Finish(context.Background(), err)
-		t.Fatalf("%s probe authorization failed: %v", name, err)
+		t.Fatalf("%s probe authorization failed: %s", name, safeProbeFailure(err))
 	}
 
 	var observation probeObservation
@@ -632,7 +632,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	case "result", "descendant":
 		if err := run.receiveSealedProbeObservation(ctx, probe); err != nil {
 			_ = run.Finish(context.Background(), err)
-			t.Fatalf("%s probe witness failed: %v", name, err)
+			t.Fatalf("%s probe witness failed: %s", name, safeProbeFailure(err))
 		}
 		bytes, err := os.ReadFile(probe.hostResultPath)
 		if err != nil {
@@ -673,7 +673,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	wall := time.Since(started)
 	terminal := run.TerminalReport()
 	if finishErr != nil && errorCode(finishErr) == ErrContainmentUnavailable {
-		t.Fatalf("%s probe cleanup failed: %v", name, finishErr)
+		t.Fatalf("%s probe cleanup failed: %s", name, safeProbeFailure(finishErr))
 	}
 	if control == "result" || control == "descendant" {
 		if name == "filesystem" {
@@ -748,6 +748,20 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 		}
 	}
 	return hostileEvidence{Name: name, Outcome: terminal.Outcome, WorkloadOutcome: terminal.Workload.Code, ProbeOutcome: terminal.ProbeOutcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+}
+
+func safeProbeFailure(err error) string {
+	if err == nil {
+		return "success"
+	}
+	if diagnostic := safeContainmentDiagnostic(err); diagnostic != "containment-unavailable" {
+		return diagnostic
+	}
+	switch errorCode(err) {
+	case ErrTimeout, ErrWorkerCrash, ErrInvalidResult, ErrAborted, ErrReplay:
+		return string(errorCode(err))
+	}
+	return "unknown"
 }
 
 func expectedProbeOutcome(name string) ErrorCode {

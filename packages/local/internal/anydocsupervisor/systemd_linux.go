@@ -1317,13 +1317,13 @@ func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn
 
 // eligibleLifecycleResources is deliberately a fixed allowlist. Normal results
 // never accept resource-limit evidence; only the sealed pids probe may carry
-// its expected single pids.max event.
+// its expected positive, cumulative pids.max counter.
 func eligibleLifecycleResources(snapshot SandboxReport, binding lifecycleWitnessBinding) bool {
 	if snapshot.MemoryEvents["oom"] != 0 || snapshot.MemoryEvents["oom_kill"] != 0 {
 		return false
 	}
 	if binding.kind == lifecycleWitnessProbe && binding.probeCase == "pids" {
-		return snapshot.PIDsEvents["max"] == 1
+		return snapshot.PIDsEvents["max"] > 0
 	}
 	return snapshot.PIDsEvents["max"] == 0
 }

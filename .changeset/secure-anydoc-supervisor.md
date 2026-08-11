@@ -92,10 +92,9 @@ observation or resource/cancellation/crash evidence and exact cleanup. Missing
 or malformed evidence remains `unverified`, while an explicit failed
 containment check reports `breach`.
 
-Keep a successful sealed pids containment probe's exact witnessed single
+Keep a successful sealed pids containment probe's positive cumulative
 `pids.events:max` observation out of generic worker-crash derivation; ordinary,
-missing, malformed, mismatched, and unwitnessed pids-limit cases remain
-fail-closed.
+zero, malformed, mismatched, and unwitnessed pids-limit cases remain fail-closed.
 
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
