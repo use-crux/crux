@@ -1070,7 +1070,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 			out = receivedFailure
 		}
 		result := outcomeCode(out)
-		report, cpu, termination, proof, classified, cleanupReason := cleanupForOutcome(r.unit, result)
+		report, cpu, termination, proof, classified, cleanupReason := cleanupForOutcome(r.unit, result, sealedProbe, sealedProbeObserved, sealedProbeBreach)
 		result = classified
 		hadPreCleanup := result != nil
 		unitCleaned := cleanupReason == ""
@@ -1084,7 +1084,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 			result = chainContainment(result, hadPreCleanup, "containment-cleanup", "staged-cleanup")
 		}
 		r.mu.Lock()
-		workload := workloadOutcome(out, classified, report)
+		workload := workloadOutcomeForSealedProbe(out, classified, report, sealedProbe, sealedProbeObserved, sealedProbeBreach)
 		probeOutcome := classifyProbeOutcome(sealedProbe, sealedProbeObserved, sealedProbeBreach, workload, report, proof)
 		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, ProbeOutcome: probeOutcome, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
 		r.result = result
@@ -1304,6 +1304,13 @@ func outcomeCode(out error) error {
 }
 
 func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
+	return workloadOutcomeForSealedProbe(out, result, report, nil, false, false)
+}
+
+// workloadOutcomeForSealedProbe keeps a successful, attested pids containment
+// probe from treating its expected single TasksMax event as a worker crash.
+// All other pids-limit observations retain the ordinary crash classification.
+func workloadOutcomeForSealedProbe(out, result error, report SandboxReport, probe *containmentProbe, observed, breach bool) WorkloadOutcome {
 	// Host-established terminal evidence has priority over a peer result
 	// candidate. Keep the original cause so CPU accounting is never confused
 	// with an ordinary context deadline.
@@ -1319,7 +1326,7 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill" {
 		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
 	}
-	if report.PIDsEvents["max"] > 0 {
+	if report.PIDsEvents["max"] > 0 && !expectedSealedPIDsProbe(probe, observed, breach, report) {
 		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
 	}
 	if report.ServiceResult == "timeout" {
@@ -1352,6 +1359,10 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 		return WorkloadOutcome{Code: WorkloadOutcomeSuccess}
 	}
 	return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+}
+
+func expectedSealedPIDsProbe(probe *containmentProbe, observed, breach bool, report SandboxReport) bool {
+	return probe != nil && probe.caseID == "pids" && observed && !breach && report.PIDsEvents["max"] == 1 && report.ServiceResult == "success" && report.ExecMainStatus == 0
 }
 
 // establishedInvalidResult is a parser-result classification that terminal
@@ -1503,14 +1514,14 @@ func (r *Run) monitor() {
 	}
 }
 func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, string) {
-	report, cpu, termination, _, _, reason := cleanupForOutcome(unit, nil)
+	report, cpu, termination, _, _, reason := cleanupForOutcome(unit, nil, nil, false, false)
 	return report, cpu, termination, reason
 }
 
 // cleanupForOutcome establishes cleanup facts independently from a known
 // workload outcome. A failed workload may legitimately have failed service
 // status; only an otherwise claimed success needs successful terminal status.
-func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, TerminationEvidence, CleanupProof, error, string) {
+func cleanupForOutcome(unit Unit, result error, probe *containmentProbe, observed, breach bool) (SandboxReport, time.Duration, TerminationEvidence, CleanupProof, error, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
@@ -1568,8 +1579,10 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		proof.VerifiedSnapshot = true
 	}
 	if result == nil {
-		derived := workloadOutcome(nil, nil, report)
-		if derived.Code != WorkloadOutcomeSuccess && derived.Code != WorkloadOutcomeUnverified {
+		derived := workloadOutcomeForSealedProbe(nil, nil, report, probe, observed, breach)
+		// PID-limit classification needs the terminal status below: the sealed
+		// pids exception is valid only for a successfully terminated unit.
+		if derived.Code != WorkloadOutcomeSuccess && derived.Code != WorkloadOutcomeUnverified && !(derived.Code == WorkloadOutcomeCrash && report.PIDsEvents["max"] > 0) {
 			result = workloadError(derived)
 		}
 	}
@@ -1622,7 +1635,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		report.ServiceResult = status.ServiceResult
 		report.ExecMainStatus = status.ExecMainStatus
 		if result == nil {
-			derived := workloadOutcome(nil, nil, report)
+			derived := workloadOutcomeForSealedProbe(nil, nil, report, probe, observed, breach)
 			if derived.Code != WorkloadOutcomeSuccess {
 				result = workloadError(derived)
 			}

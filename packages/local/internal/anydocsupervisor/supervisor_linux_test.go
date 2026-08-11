@@ -389,10 +389,18 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 		wantCleanup bool
 		validation  bool
 		sealedProbe bool
+		probeCase   string
+		observed    bool
 		wantProbe   ProbeOutcome
 	}{
 		{name: "success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true},
 		{name: "sealed contained probe retains workload success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true, sealedProbe: true, wantProbe: ProbeOutcomeContained},
+		{name: "sealed pids probe retains workload success with exact witnessed evidence", report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true, sealedProbe: true, probeCase: "pids", observed: true, wantProbe: ProbeOutcomeContained},
+		{name: "non-probe pids event remains crash", report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
+		{name: "generic sealed probe pids event remains crash", report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true, sealedProbe: true, wantProbe: ProbeOutcomeUnverified},
+		{name: "unwitnessed or malformed sealed pids probe remains crash", report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true, sealedProbe: true, probeCase: "pids", wantProbe: ProbeOutcomeUnverified},
+		{name: "sealed pids probe with excess evidence remains crash", report: SandboxReport{PIDsEvents: map[string]int64{"max": 2}}, status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true, sealedProbe: true, probeCase: "pids", observed: true, wantProbe: ProbeOutcomeUnverified},
+		{name: "sealed pids probe with failed terminal status remains crash", report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true, sealedProbe: true, probeCase: "pids", observed: true, wantProbe: ProbeOutcomeUnverified},
 		{name: "parser validation survives exit code", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives core dump", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives signal", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "signal", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
@@ -424,6 +432,9 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 			if test.report.MemoryEvents != nil {
 				report.MemoryEvents = test.report.MemoryEvents
 			}
+			if test.report.PIDsEvents != nil {
+				report.PIDsEvents = test.report.PIDsEvents
+			}
 			unit := &fakeUnit{rep: report, stopErr: test.stopErr, cleanupErr: test.cleanupErr, terminalStatus: func(context.Context) (TerminalStatus, error) {
 				if _, ok := test.stopErr.(*alreadyGoneError); ok {
 					return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
@@ -432,10 +443,14 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 			}}
 			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbe: func() *containmentProbe {
 				if test.sealedProbe {
-					return &containmentProbe{caseID: "network"}
+					caseID := test.probeCase
+					if caseID == "" {
+						caseID = "network"
+					}
+					return &containmentProbe{caseID: caseID}
 				}
 				return nil
-			}(), sealedProbeObserved: test.sealedProbe}
+			}(), sealedProbeObserved: test.sealedProbe && (test.probeCase == "" || test.observed)}
 			err = run.Finish(context.Background(), test.out)
 			if got := errorCode(err); got != test.wantError {
 				t.Fatalf("Finish error code = %q, want %q (%v)", got, test.wantError, err)
@@ -483,6 +498,7 @@ func TestTask3ProbeOutcomeBoundary(t *testing.T) {
 		{name: "filesystem observation", caseID: "filesystem", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "privileges observation", caseID: "privileges", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "pids observation", caseID: "pids", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeContained},
+		{name: "pids crash remains unverified", caseID: "pids", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeCrash}, report: SandboxReport{PIDsEvents: map[string]int64{"max": 1}}, cleanup: accepted, want: ProbeOutcomeUnverified},
 		{name: "memory resource", caseID: "memory", workload: WorkloadOutcome{Code: WorkloadOutcomeOOM}, report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "cpu resource", caseID: "cpu", workload: WorkloadOutcome{Code: WorkloadOutcomeCPUTimeout}, report: SandboxReport{CPUStats: map[string]int64{"nr_throttled": 1, "throttled_usec": 1}}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "wall timeout", caseID: "wall", workload: WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}, report: SandboxReport{ServiceResult: "timeout"}, cleanup: accepted, want: ProbeOutcomeContained},
