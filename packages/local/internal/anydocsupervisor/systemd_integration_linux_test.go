@@ -424,7 +424,7 @@ func TestSafeHostileTerminalDiagnosticRedactsHostileDetails(t *testing.T) {
 	}
 
 	validation := closedWith(ErrInvalidResult, &ResultValidationError{Stage: "request-binding", ReasonCode: "mismatch"})
-	if got := safeHostileTerminalDiagnostic(validation, TerminalReport{}); got != "outcome=success service=unknown stage=request-binding reason=mismatch oom-killed=false pids-limited=false cleaned=false termination-empty=false termination-absent=false" {
+	if got := safeHostileTerminalDiagnostic(validation, TerminalReport{}); got != "outcome=unknown service=unknown stage=request-binding reason=mismatch oom-killed=false pids-limited=false cleaned=false termination-empty=false termination-absent=false" {
 		t.Fatalf("diagnostic leaked unsafe details: %q", got)
 	}
 }
