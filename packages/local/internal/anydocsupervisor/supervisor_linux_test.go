@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"golang.org/x/sys/unix"
 )
 
@@ -103,6 +104,75 @@ func TestSpecAndMismatchCleanup(t *testing.T) {
 	if readErr != nil || len(entries) != 0 {
 		t.Fatalf("start failure retained staged source: %#v, %v", entries, readErr)
 	}
+}
+
+func TestStartDiagnosticsAreTypedAndRedactBackendDetails(t *testing.T) {
+	const secret = "/private/backend-start-secret"
+	for _, test := range []struct {
+		name, want string
+		err        error
+	}{
+		{name: "raw backend failure", err: errors.New(secret), want: "containment-unavailable stage=backend-start reason=unavailable"},
+		{name: "typed backend failure", err: containment("start-transient-unit", errors.New(secret)), want: "containment-unavailable stage=start-transient-unit reason=unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			backend := &fakeBackend{startErr: test.err}
+			supervisor := newTestSupervisor(t, backend)
+			_, err := supervisor.startEvaluation(context.Background(), []byte("x"), FormatDOCX, testLaunch(), "/run/tmp", Limits{})
+			assert(t, err, ErrContainmentUnavailable)
+			if got := containmentDiagnosticText(err); got != test.want {
+				t.Fatalf("diagnostic = %q, want %q", got, test.want)
+			}
+			if strings.Contains(containmentDiagnosticText(err), secret) {
+				t.Fatalf("diagnostic leaked backend detail: %q", containmentDiagnosticText(err))
+			}
+			entries, readErr := os.ReadDir(supervisor.stager.root)
+			if readErr != nil || len(entries) != 0 {
+				t.Fatalf("start failure retained staged source: %#v, %v", entries, readErr)
+			}
+		})
+	}
+}
+
+func TestPostStartVerificationDiagnosticsAreTypedAndRedactDetails(t *testing.T) {
+	const secret = "/private/post-start-secret"
+	spec, err := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := &fakeUnit{rep: harnessReport(spec)}
+	invalid := &fakeUnit{rep: harnessReport(spec)}
+	invalid.rep.MemoryMax = 1
+	for _, test := range []struct {
+		name, want string
+		unit       Unit
+		spec       ServiceSpec
+	}{
+		{name: "missing unit", unit: nil, spec: spec, want: "containment-unavailable stage=post-start-verify reason=unavailable"},
+		{name: "report failure", unit: &fakeUnit{reportErr: errors.New(secret)}, spec: spec, want: "containment-unavailable stage=post-start-report reason=unavailable"},
+		{name: "property mismatch", unit: invalid, spec: spec, want: "containment-unavailable stage=post-start-verify reason=verification-mismatch"},
+		{name: "node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: spec, want: "containment-unavailable stage=post-start-node-attestation reason=unavailable"},
+		{name: "probe attestation", unit: &probeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: ServiceSpec{probe: &containmentProbe{}}, want: "containment-unavailable stage=post-start-probe-attestation reason=unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			failure := verifyDiagnostic(context.Background(), test.unit, test.spec)
+			got := containmentDiagnosticText(closedWith(ErrContainmentUnavailable, failure))
+			if got != test.want {
+				t.Fatalf("diagnostic = %q, want %q", got, test.want)
+			}
+			if strings.Contains(got, secret) {
+				t.Fatalf("diagnostic leaked verification detail: %q", got)
+			}
+		})
+	}
+}
+
+func containmentDiagnosticText(err error) string {
+	var diagnostic *ContainmentError
+	if !errors.As(err, &diagnostic) {
+		return "containment-unavailable"
+	}
+	return "containment-unavailable stage=" + diagnostic.Stage + " reason=" + diagnostic.ReasonCode
 }
 func TestCPULimitStops(t *testing.T) {
 	b := &fakeBackend{cpu: CPUCeiling + time.Second}
@@ -1415,6 +1485,7 @@ func fileIdentity(t *testing.T, info os.FileInfo) fileIdent {
 type fakeBackend struct {
 	u          *fakeUnit
 	read       *os.File
+	startErr   error
 	bad        bool
 	cpu        time.Duration
 	cpuErr     bool
@@ -1424,6 +1495,9 @@ type fakeBackend struct {
 
 func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit, error) {
 	b.read = r
+	if b.startErr != nil {
+		return nil, b.startErr
+	}
 	rep := SandboxReport{MainPID: 42, ControlGroup: "/fake", RuntimeTreeDigest: s.runtimeTreeDigest, UID: 1000, DynamicUser: true, PrivateUsers: true, ProtectProc: "invisible", ProcSubset: "pid", ControlGroupMembers: []int{42}, MemoryMax: s.MemoryMax, MemorySwapMax: 0, TasksMax: s.TasksMax, CPUQuotaPercent: s.CPUQuotaPercent, CPUQuotaPeriodUSec: s.CPUQuotaPeriodUSec, RuntimeMax: s.RuntimeMax, KillMode: s.KillMode, ProtectSystem: s.ProtectSystem, CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true, CapabilityBoundingSet: 0, AmbientCapabilities: 0, ReadOnlyPaths: s.ReadOnlyPaths, InaccessiblePaths: s.InaccessiblePaths, BindReadOnlyPaths: s.BindReadOnlyPaths, BindPaths: bindPathsForSpec(s), ReadWritePaths: s.ReadWritePaths, RestrictAddressFamiliesAllow: true, RestrictAddressFamilies: s.RestrictAddressFamilies, Populated: true}
 	if b.bad {
 		rep.MemoryMax = 1
@@ -1434,6 +1508,7 @@ func (b *fakeBackend) Start(_ context.Context, s ServiceSpec, r *os.File) (Unit,
 
 type fakeUnit struct {
 	rep              SandboxReport
+	reportErr        error
 	cpu              time.Duration
 	cpuErr           bool
 	receive          func(context.Context, Request) (Result, error)
@@ -1462,7 +1537,25 @@ func (u *terminalAccountingFakeUnit) CaptureTerminalAccounting(context.Context) 
 	return SandboxReport{}, 0, u.failure, u.err
 }
 
-func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, nil }
+func (u *fakeUnit) Report(context.Context) (SandboxReport, error) { return u.rep, u.reportErr }
+
+type nodeAttestationFailure struct {
+	*fakeUnit
+	err error
+}
+
+func (u *nodeAttestationFailure) VerifyAttestedNode(context.Context, assets.AttestedNode) error {
+	return u.err
+}
+
+type probeAttestationFailure struct {
+	*fakeUnit
+	err error
+}
+
+func (u *probeAttestationFailure) VerifyAttestedProbe(context.Context, *containmentProbe) error {
+	return u.err
+}
 func (u *fakeUnit) ReceiveResult(ctx context.Context, request Request) (Result, error) {
 	if u.receive != nil {
 		return u.receive(ctx, request)

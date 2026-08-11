@@ -232,3 +232,7 @@ event counters. Lifecycle witnesses now require an explicit parsed
 `pids.events:max`: only the sealed pids probe accepts a positive value, while
 all other witnesses require explicit zero. Hostile probe harness diagnostics
 also redact observation-read and canceled start or authorization failures.
+
+Expose only fixed, typed containment stage/reason diagnostics for canonical
+backend-start and post-start verification failures, retaining validated systemd
+operation diagnoses while redacting raw backend and attestation details.

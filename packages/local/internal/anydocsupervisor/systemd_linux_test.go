@@ -149,6 +149,7 @@ func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testi
 
 	for _, test := range []struct {
 		name       string
+		memory     map[string]int64
 		pidsEvents map[string]int64
 		binding    lifecycleWitnessBinding
 		want       bool
@@ -157,6 +158,8 @@ func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testi
 		{name: "sealed pids one", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
 		{name: "sealed pids greater than one", pidsEvents: map[string]int64{"max": 2}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
 		{name: "sealed pids missing max", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
+		{name: "missing oom", memory: map[string]int64{"oom_kill": 0}, pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
+		{name: "missing oom kill", memory: map[string]int64{"oom": 0}, pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
 		{name: "normal result rejects pids", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
 		{name: "normal result requires explicit zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
 		{name: "normal result accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
@@ -165,7 +168,11 @@ func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testi
 		{name: "unsealed probe accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}, want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			snapshot := SandboxReport{MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: test.pidsEvents}
+			memory := test.memory
+			if memory == nil {
+				memory = map[string]int64{"oom": 0, "oom_kill": 0}
+			}
+			snapshot := SandboxReport{MemoryEvents: memory, PIDsEvents: test.pidsEvents}
 			if got := eligibleLifecycleResources(snapshot, test.binding); got != test.want {
 				t.Fatalf("eligibleLifecycleResources(pids=%#v, binding=%#v) = %t, want %t", test.pidsEvents, test.binding, got, test.want)
 			}
