@@ -637,30 +637,30 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name           string
-	bus            SystemBus
-	fs             FileSystem
-	procFS         ProcRuntimeFS
-	now            Clock
-	tmp            string
-	listener       *net.UnixListener
-	socket         string
-	resultListener *net.UnixListener
-	resultSocket   string
-	resultMu       sync.Mutex
-	resultClaimed  bool
-	writeResultACK func(*net.UnixConn) error
-	peers          PeerVerifier
-	spec           ServiceSpec
-	reportMu       sync.Mutex
-	controlGroup   string
-	snapshotMu     sync.Mutex
-	snapshot       SandboxReport
-	snapshotCPU    time.Duration
-	snapshotSeen   bool
-	snapshotOK     bool
-	terminalProof  terminalSuccessProof
-	resultACKed    resultACKWitness
+	name             string
+	bus              SystemBus
+	fs               FileSystem
+	procFS           ProcRuntimeFS
+	now              Clock
+	tmp              string
+	listener         *net.UnixListener
+	socket           string
+	resultListener   *net.UnixListener
+	resultSocket     string
+	resultMu         sync.Mutex
+	resultClaimed    bool
+	writeResultACK   func(*net.UnixConn) error
+	peers            PeerVerifier
+	spec             ServiceSpec
+	reportMu         sync.Mutex
+	controlGroup     string
+	snapshotMu       sync.Mutex
+	snapshot         SandboxReport
+	snapshotCPU      time.Duration
+	snapshotSeen     bool
+	snapshotOK       bool
+	terminalProof    terminalSuccessProof
+	lifecycleWitness LifecycleWitness
 }
 
 // terminalSuccessProof is the verified terminal-status bridge for the
@@ -673,12 +673,16 @@ type terminalSuccessProof struct {
 	runtimeDigest string
 }
 
-// resultACKWitness records the only successful result lifecycle: a verified
-// snapshot, request-bound authenticated result, refreshed accounting, and ACK.
-// It is immutable once set and remains meaningful only for that exact identity.
-type resultACKWitness struct {
-	cgroup, runtimeDigest, requestDigest, nonce string
-	pid                                         int
+// LifecycleWitness is an opaque, one-use record of the only successful result
+// lifecycle. It is minted only after an exact peer, strict result/request
+// validation, refreshed verified accounting, and a successful host ACK write.
+// The resource snapshot is copied at mint time so later accounting changes
+// cannot alter the fact cleanup evaluates.
+type LifecycleWitness struct {
+	unit, cgroup, runtimeDigest, requestDigest, nonce string
+	pid                                               int
+	snapshot                                          SandboxReport
+	snapshotCPU                                       time.Duration
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -702,13 +706,51 @@ func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
 }
 
-func (u *systemdUnit) LastResultACK() (resultACKWitness, bool) {
+func (u *systemdUnit) LastLifecycleWitness() (LifecycleWitness, bool) {
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	if u.resultACKed.cgroup == "" {
-		return resultACKWitness{}, false
+	if u.lifecycleWitness.cgroup == "" {
+		return LifecycleWitness{}, false
 	}
-	return u.resultACKed, true
+	witness := u.lifecycleWitness
+	witness.snapshot = cloneSandboxReport(witness.snapshot)
+	return witness, true
+}
+
+// mintLifecycleWitness is deliberately private: receiving a result is the
+// sole authority that may create this capability, and only after host ACK.
+// snapshotMu makes the check-and-store one atomic, one-shot transition.
+func (u *systemdUnit) mintLifecycleWitness(snapshot SandboxReport, snapshotCPU time.Duration, expected Request) bool {
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	if u.lifecycleWitness.cgroup != "" {
+		return false
+	}
+	u.lifecycleWitness = LifecycleWitness{
+		unit:          u.name,
+		cgroup:        snapshot.ControlGroup,
+		runtimeDigest: snapshot.RuntimeTreeDigest,
+		pid:           snapshot.MainPID,
+		requestDigest: expected.RequestDigest,
+		nonce:         expected.Nonce,
+		snapshot:      cloneSandboxReport(snapshot),
+		snapshotCPU:   snapshotCPU,
+	}
+	return true
+}
+
+func (u *systemdUnit) verifiedSnapshotMatchesPeer(report SandboxReport) bool {
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	return validCgroup(report.ControlGroup) && report.MainPID > 0 && report.RuntimeTreeDigest != "" &&
+		u.snapshotOK && u.snapshotSeen && validCgroup(u.snapshot.ControlGroup) &&
+		u.snapshot.ControlGroup == report.ControlGroup &&
+		u.snapshot.MainPID == report.MainPID &&
+		u.snapshot.RuntimeTreeDigest == report.RuntimeTreeDigest
+}
+
+func lifecycleSnapshotMatchesPeer(report, snapshot SandboxReport) bool {
+	return validCgroup(snapshot.ControlGroup) && snapshot.ControlGroup == report.ControlGroup && snapshot.MainPID > 0 && snapshot.MainPID == report.MainPID && snapshot.RuntimeTreeDigest != "" && snapshot.RuntimeTreeDigest == report.RuntimeTreeDigest
 }
 
 func (u *systemdUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
@@ -1075,7 +1117,7 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 		}
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
-		if peerErr == nil && reportErr == nil && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
+		if peerErr == nil && reportErr == nil && validCgroup(report.ControlGroup) && pid == report.MainPID && uint64(uid) == report.UID && contains(report.ControlGroupMembers, pid) {
 			if deadline, ok := ctx.Deadline(); ok {
 				_ = conn.SetDeadline(deadline)
 			}
@@ -1123,6 +1165,9 @@ func (u *systemdUnit) PrepareAuthorization(ctx context.Context) error {
 }
 
 func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Result, error) {
+	if !validRequest(expected) {
+		return Result{}, closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
+	}
 	u.resultMu.Lock()
 	if u.resultClaimed {
 		u.resultMu.Unlock()
@@ -1180,10 +1225,21 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr == nil && result.Request != expected {
 				decodeErr = resultValidation("request-binding", "mismatch")
 			}
+			if decodeErr == nil && !u.verifiedSnapshotMatchesPeer(report) {
+				decodeErr = resultValidation("accounting-refresh", "unavailable")
+			}
+			var refreshed SandboxReport
+			var refreshedCPU time.Duration
 			if decodeErr == nil {
 				_, err := u.RefreshAccounting(ctx)
 				if err != nil {
 					decodeErr = resultValidation("accounting-refresh", "unavailable")
+				} else {
+					var snapshotOK bool
+					refreshed, refreshedCPU, snapshotOK = u.LastVerifiedSnapshot()
+					if !snapshotOK || !lifecycleSnapshotMatchesPeer(report, refreshed) {
+						decodeErr = resultValidation("accounting-refresh", "snapshot-mismatch")
+					}
 				}
 			}
 			if decodeErr == nil {
@@ -1192,13 +1248,9 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 				}
 			}
 			if decodeErr == nil {
-				u.snapshotMu.Lock()
-				if u.snapshotOK && u.snapshotSeen && u.snapshot.ControlGroup == report.ControlGroup && u.snapshot.MainPID == report.MainPID && u.snapshot.RuntimeTreeDigest == report.RuntimeTreeDigest && u.resultACKed.cgroup == "" {
-					u.resultACKed = resultACKWitness{cgroup: report.ControlGroup, runtimeDigest: report.RuntimeTreeDigest, pid: report.MainPID, requestDigest: expected.RequestDigest, nonce: expected.Nonce}
-				} else {
-					decodeErr = resultValidation("ack-witness", "snapshot-mismatch")
+				if !u.mintLifecycleWitness(refreshed, refreshedCPU, expected) {
+					decodeErr = resultValidation("lifecycle-witness", "replay")
 				}
-				u.snapshotMu.Unlock()
 			}
 			_ = conn.Close()
 			if decodeErr != nil {
@@ -1259,9 +1311,13 @@ func (u *systemdUnit) RefreshAccounting(ctx context.Context) (time.Duration, err
 	if u == nil || u.fs == nil || ctx.Err() != nil {
 		return 0, errors.New("accounting unavailable")
 	}
-	u.reportMu.Lock()
-	cgroup := u.controlGroup
-	u.reportMu.Unlock()
+	u.snapshotMu.Lock()
+	if !u.snapshotOK || !u.snapshotSeen {
+		u.snapshotMu.Unlock()
+		return 0, errors.New("accounting snapshot is not verified")
+	}
+	cgroup := u.snapshot.ControlGroup
+	u.snapshotMu.Unlock()
 	if !validCgroup(cgroup) {
 		return 0, errors.New("accounting unavailable")
 	}

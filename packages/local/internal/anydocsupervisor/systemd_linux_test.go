@@ -1518,7 +1518,7 @@ func TestSystemdAuthorizationSkipsForeignPeerBeforeAuthorizingWorker(t *testing.
 	}
 }
 
-func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
+func TestTask1LifecycleWitnessOrdersACKAndCopiesSnapshot(t *testing.T) {
 	path := t.TempDir() + "/result.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -1534,6 +1534,13 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 		t.Fatal(err)
 	}
 	u.MarkSnapshotVerified()
+	witnessPresentAtACK := make(chan bool, 1)
+	u.writeResultACK = func(conn *net.UnixConn) error {
+		_, ok := u.LastLifecycleWitness()
+		witnessPresentAtACK <- ok
+		_, err := conn.Write([]byte("ACK\n"))
+		return err
+	}
 	done := make(chan struct {
 		result Result
 		err    error
@@ -1563,16 +1570,29 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	if got.err != nil || !bytes.Equal(got.result.Payload, validWireResult(request).Payload) {
 		t.Fatalf("result = %#v, %v", got.result, got.err)
 	}
-	witness, ok := u.LastResultACK()
-	if !ok || witness.cgroup != first.ControlGroup || witness.pid != first.MainPID || witness.runtimeDigest != first.RuntimeTreeDigest || witness.requestDigest != request.RequestDigest || witness.nonce != request.Nonce {
-		t.Fatalf("result ACK witness = %#v, %v", witness, ok)
+	if <-witnessPresentAtACK {
+		t.Fatal("witness minted before ACK write")
+	}
+	witness, ok := u.LastLifecycleWitness()
+	if !ok || witness.unit != u.name || witness.cgroup != first.ControlGroup || witness.pid != first.MainPID || witness.runtimeDigest != first.RuntimeTreeDigest || witness.requestDigest != request.RequestDigest || witness.nonce != request.Nonce {
+		t.Fatalf("lifecycle witness = %#v, %v", witness, ok)
+	}
+	if witness.snapshot.MemoryEvents["oom"] != 0 || witness.snapshot.MemoryEvents["oom_kill"] != 0 || witness.snapshot.PIDsEvents["max"] != 0 || !reflect.DeepEqual(witness.snapshot.ControlGroupMembers, first.ControlGroupMembers) {
+		t.Fatalf("lifecycle witness snapshot = %#v", witness.snapshot)
+	}
+	witness.snapshot.MemoryEvents["oom_kill"] = 1
+	witness.snapshot.PIDsEvents["max"] = 1
+	witness.snapshot.ControlGroupMembers[0] = 0
+	witnessAgain, ok := u.LastLifecycleWitness()
+	if !ok || witnessAgain.snapshot.MemoryEvents["oom_kill"] != 0 || witnessAgain.snapshot.PIDsEvents["max"] != 0 || witnessAgain.snapshot.ControlGroupMembers[0] != first.ControlGroupMembers[0] {
+		t.Fatalf("lifecycle witness was mutable: %#v", witnessAgain.snapshot)
 	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
 		t.Fatalf("socket retained: %v", err)
 	}
 }
 
-func TestSystemdResultRejectsMismatchedCapabilityBeforeAcknowledging(t *testing.T) {
+func TestTask1LifecycleWitnessRejectsIdentityMismatch(t *testing.T) {
 	path := t.TempDir() + "/result.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -1600,6 +1620,73 @@ func TestSystemdResultRejectsMismatchedCapabilityBeforeAcknowledging(t *testing.
 	_ = conn.Close()
 	if err := <-done; err == nil {
 		t.Fatal("mismatched result accepted")
+	}
+}
+
+func TestTask1LifecycleWitnessRejectsEarlierFailures(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		setup func(*systemdUnit, *fakeFS, SandboxReport)
+		stage string
+	}{
+		{
+			name: "refresh",
+			setup: func(_ *systemdUnit, fs *fakeFS, report SandboxReport) {
+				path := cgroupFile(report.ControlGroup, "memory.current")
+				// ReceiveResult reads this once for peer identity and once more
+				// during RefreshAccounting. Fail only the latter.
+				fs.failReadAt[path] = fs.reads[path] + 2
+			},
+			stage: "accounting-refresh",
+		},
+		{
+			name: "ack",
+			setup: func(unit *systemdUnit, _ *fakeFS, _ SandboxReport) {
+				unit.writeResultACK = func(*net.UnixConn) error { return errors.New("ACK failed") }
+			},
+			stage: "ack-write",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := t.TempDir() + "/result.sock"
+			listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fs := newFakeFS()
+			unit := &systemdUnit{name: "crux-anydoc-task1.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+			first, err := unit.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+			if _, err := unit.Report(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			unit.MarkSnapshotVerified()
+			test.setup(unit, fs, first)
+			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+			done := make(chan error, 1)
+			go func() { _, receiveErr := unit.ReceiveResult(context.Background(), request); done <- receiveErr }()
+			conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// A host-side rejection may close after reading the complete frame, so
+			// the client can observe a write error while the receiver still records
+			// the intended accounting/ACK failure.
+			_ = EncodeResult(conn, validWireResult(request))
+			_ = conn.Close()
+			err = <-done
+			var validation *ResultValidationError
+			if !errors.As(err, &validation) || validation.Stage != test.stage {
+				t.Fatalf("ReceiveResult() = %T %v, want %s validation", err, err, test.stage)
+			}
+			if _, ok := unit.LastLifecycleWitness(); ok {
+				t.Fatal("failure minted a lifecycle witness")
+			}
+		})
 	}
 }
 
@@ -1668,7 +1755,7 @@ func TestSystemdResultReceiveFailuresUseContainmentErrors(t *testing.T) {
 	}
 }
 
-func TestSystemdResultHasExactlyOneReceiver(t *testing.T) {
+func TestTask1LifecycleWitnessRejectsDuplicateReceiver(t *testing.T) {
 	path := t.TempDir() + "/result.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
@@ -3169,10 +3256,10 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 				u.snapshotMu.Unlock()
 			}, wantReason: "runtime-target-missing-snapshot-runtime-digest-mismatch"},
 			{name: "rejects unsafe runtime tree", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", procFS: unsafeRuntimeTreeFS(), wantReason: "terminal-accounting-report-runtime-attestation-runtime-tree-unsafe", wantService: "unknown"},
-			{name: "rejects witness cgroup mismatch", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.cgroup = "/other" }, wantReason: "runtime-target-missing-ack-witness-cgroup-mismatch"},
-			{name: "rejects witness pid", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.pid = 0 }, wantReason: "runtime-target-missing-ack-witness-pid-invalid"},
-			{name: "rejects missing witness digest", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.requestDigest = "" }, wantReason: "runtime-target-missing-ack-witness-request-digest-missing"},
-			{name: "rejects missing witness nonce", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.nonce = "" }, wantReason: "runtime-target-missing-ack-witness-nonce-missing"},
+			{name: "rejects witness cgroup mismatch", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.lifecycleWitness.cgroup = "/other" }, wantReason: "runtime-target-missing-ack-witness-cgroup-mismatch"},
+			{name: "rejects witness pid", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.lifecycleWitness.pid = 0 }, wantReason: "runtime-target-missing-ack-witness-pid-invalid"},
+			{name: "rejects missing witness digest", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.lifecycleWitness.requestDigest = "" }, wantReason: "runtime-target-missing-ack-witness-request-digest-missing"},
+			{name: "rejects missing witness nonce", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.lifecycleWitness.nonce = "" }, wantReason: "runtime-target-missing-ack-witness-nonce-missing"},
 			{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: runtime.unverifiedSnapshotReason, wantService: "unknown"},
 			{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 			{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
@@ -3273,7 +3360,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 						}
 					}
 					if test.receive != "valid" {
-						if _, ok := u.LastResultACK(); ok {
+						if _, ok := u.LastLifecycleWitness(); ok {
 							t.Fatal("failed result receive minted an ACK witness")
 						}
 					}

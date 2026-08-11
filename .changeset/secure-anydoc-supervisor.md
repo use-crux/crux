@@ -158,6 +158,13 @@ status remains authoritative: inactive failed/nonzero/OOM states fail with the
 fixed `runtime-target-missing-terminal-status-not-success` reason. Both `memory.events` `oom`
 and `oom_kill` reject the witness route.
 
+Replace the mutable result-ACK record with an opaque internal lifecycle witness.
+It is atomically minted once after exact peer authentication, strict
+result/request validation, accounting refresh against the verified immutable
+snapshot, and the unchanged successful host ACK write. The witness binds the
+unit, cgroup, runtime digest, MainPID, request digest, and nonce, and retains a
+deep-copied resource snapshot including OOM and PID-limit evidence.
+
 Permit the same deferred immutable result-ACK proof during teardown when the
 typed runtime-tree read is unreadable after the worker exits. It still requires
 the exact verified snapshot, successful accounting refresh and ACK witness,
