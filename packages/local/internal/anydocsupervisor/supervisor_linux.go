@@ -498,30 +498,30 @@ func serviceSpec(hostSource string, launch LaunchDependency, tmp string, l Limit
 }
 
 type SandboxReport struct {
-	MainPID                                                                   int
-	ControlGroup                                                              string
-	ControlGroupMembers                                                       []int
-	MemoryMax, MemorySwapMax                                                  int64
-	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                             int
-	RuntimeMax                                                                time.Duration
-	KillMode, ProtectSystem                                                   string
-	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome   bool
-	ReadOnlyPaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
-	InaccessiblePaths                                                         []string
-	CapabilityBoundingSet, AmbientCapabilities                                uint64
-	RestrictAddressFamiliesAllow                                              bool
-	DynamicUser                                                               bool
-	UID                                                                       uint64
-	PrivateUsers                                                              bool
-	ProtectProc, ProcSubset                                                   string
-	ServiceResult                                                             string
-	ExecMainStatus                                                            int
-	Populated                                                                 bool
-	MemoryCurrent                                                             int64
-	MemoryPeak                                                                int64
-	MemoryEvents                                                              map[string]int64
-	CPUStats, PIDsEvents                                                      map[string]int64
-	RuntimeTreeDigest                                                         string
+	MainPID                                                                              int
+	ControlGroup                                                                         string
+	ControlGroupMembers                                                                  []int
+	MemoryMax, MemorySwapMax                                                             int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                        int
+	RuntimeMax                                                                           time.Duration
+	KillMode, ProtectSystem                                                              string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome              bool
+	ReadOnlyPaths, BindReadOnlyPaths, BindPaths, ReadWritePaths, RestrictAddressFamilies []string
+	InaccessiblePaths                                                                    []string
+	CapabilityBoundingSet, AmbientCapabilities                                           uint64
+	RestrictAddressFamiliesAllow                                                         bool
+	DynamicUser                                                                          bool
+	UID                                                                                  uint64
+	PrivateUsers                                                                         bool
+	ProtectProc, ProcSubset                                                              string
+	ServiceResult                                                                        string
+	ExecMainStatus                                                                       int
+	Populated                                                                            bool
+	MemoryCurrent                                                                        int64
+	MemoryPeak                                                                           int64
+	MemoryEvents                                                                         map[string]int64
+	CPUStats, PIDsEvents                                                                 map[string]int64
+	RuntimeTreeDigest                                                                    string
 }
 
 // TerminationEvidence is gathered after the unit is inactive and before it is
@@ -900,6 +900,7 @@ func cloneSandboxReport(in SandboxReport) SandboxReport {
 	out.ReadOnlyPaths = append([]string(nil), in.ReadOnlyPaths...)
 	out.InaccessiblePaths = append([]string(nil), in.InaccessiblePaths...)
 	out.BindReadOnlyPaths = append([]string(nil), in.BindReadOnlyPaths...)
+	out.BindPaths = append([]string(nil), in.BindPaths...)
 	out.ReadWritePaths = append([]string(nil), in.ReadWritePaths...)
 	out.RestrictAddressFamilies = append([]string(nil), in.RestrictAddressFamilies...)
 	if in.MemoryEvents != nil {
@@ -1611,7 +1612,7 @@ func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
 			return false
 		}
 	}
-	valid := r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	valid := r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.BindPaths, bindPathsForSpec(s)) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
 	if valid {
 		if snapshots, ok := u.(verifiedAccountingSnapshot); ok {
 			snapshots.MarkSnapshotVerified()

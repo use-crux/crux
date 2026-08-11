@@ -80,7 +80,7 @@ func TestSealedHostileProbeUsesOnlyFixedAttestedMount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	probe := &containmentProbe{hostExecutable: "/run/crux-anydoc-test/staged-probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: "/run/crux-anydoc-test/private/result"}
+	probe := &containmentProbe{hostExecutable: "/run/crux-anydoc-test/staged-probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/crux-anydoc-test/private/observation.json"}
 	spec.probe = probe
 	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probe.hostExecutable+":"+probeTarget)
 	if !validBackendSpec(spec) {

@@ -546,6 +546,13 @@ func bindReadOnlyPathProperties(paths []string) []bindReadOnlyPath {
 	return result
 }
 
+func bindPathsForSpec(spec ServiceSpec) []string {
+	if spec.probe == nil {
+		return nil
+	}
+	return []string{spec.probe.hostResultPath + ":" + probeObservationTarget}
+}
+
 func systemdProperties(spec ServiceSpec) []DBusProperty {
 	sockets := []string{authorizationSocketTarget, resultSocketTarget}
 	command := []execStart{{Path: spec.Command[0], Args: append(append([]string{}, spec.Command...), sockets...), Fail: false}}
@@ -584,7 +591,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"ReadWritePaths", spec.ReadWritePaths},
 	}
 	if spec.probe != nil {
-		properties = append(properties, DBusProperty{"BindPaths", bindReadOnlyPathProperties([]string{spec.probe.hostResultPath + ":" + probeObservationTarget})})
+		properties = append(properties, DBusProperty{"BindPaths", bindReadOnlyPathProperties(bindPathsForSpec(spec))})
 	}
 	return properties
 }
@@ -854,6 +861,15 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	}
 	rafAllow, raf, ok := restrictAddressFamiliesValue(p["RestrictAddressFamilies"])
 	binds, bindsOK := bindReadOnlyPathsValue(p["BindReadOnlyPaths"])
+	bindPaths := []string(nil)
+	bindPathsRaw, hasBindPaths := p["BindPaths"]
+	if hasBindPaths {
+		var bindPathsOK bool
+		bindPaths, bindPathsOK = bindReadOnlyPathsValue(bindPathsRaw)
+		if !bindPathsOK {
+			return SandboxReport{}, newReportValidationError(reportValidationSandboxProperties)
+		}
+	}
 	protectHome, protectHomeOK := p["ProtectHome"].(string)
 	if !ok || !bindsOK || !protectHomeOK || protectHome != "yes" || !uint64ValueOK(p, "CapabilityBoundingSet") || !uint64ValueOK(p, "AmbientCapabilities") {
 		return SandboxReport{}, newReportValidationError(reportValidationSandboxProperties)
@@ -880,7 +896,7 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 			return SandboxReport{}, newReportValidationError(reportValidationRuntimeAttestationRuntimeDigestMismatch)
 		}
 	}
-	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
+	report := SandboxReport{MainPID: pid, ControlGroup: cgroup, RuntimeTreeDigest: runtimeDigest, UID: uintValue(p, "UID"), DynamicUser: boolValue(p, "DynamicUser"), PrivateUsers: boolValue(p, "PrivateUsers"), ProtectProc: stringValue(p, "ProtectProc"), ProcSubset: stringValue(p, "ProcSubset"), ServiceResult: stringValue(p, "Result"), ExecMainStatus: intValue(p, "ExecMainStatus"), ControlGroupMembers: members, MemoryMax: memory, MemoryCurrent: memoryCurrent, MemoryPeak: memoryPeak, MemoryEvents: memoryEvents, CPUStats: cpuStats, PIDsEvents: pidsEvents, MemorySwapMax: swap, TasksMax: int(tasks), CPUQuotaPercent: int(quota * 100 / period), CPUQuotaPeriodUSec: int(period), RuntimeMax: time.Duration(uintValue(p, "RuntimeMaxUSec")) * time.Microsecond, KillMode: stringValue(p, "KillMode"), ProtectSystem: stringValue(p, "ProtectSystem"), CPUAccounting: boolValue(p, "CPUAccounting"), NoNewPrivileges: boolValue(p, "NoNewPrivileges"), PrivateNetwork: boolValue(p, "PrivateNetwork"), PrivateTmp: boolValue(p, "PrivateTmp"), ProtectHome: true, CapabilityBoundingSet: uintValue(p, "CapabilityBoundingSet"), AmbientCapabilities: uintValue(p, "AmbientCapabilities"), ReadOnlyPaths: stringsValue(p, "ReadOnlyPaths"), InaccessiblePaths: stringsValue(p, "InaccessiblePaths"), BindReadOnlyPaths: binds, BindPaths: bindPaths, ReadWritePaths: stringsValue(p, "ReadWritePaths"), RestrictAddressFamiliesAllow: rafAllow, RestrictAddressFamilies: raf, Populated: populated}
 	// Candidate snapshots are only PID/runtime-attested. After verify() marks
 	// the fully verified base, leave that base immutable for ENOENT reuse;
 	// callers still receive this live report for peer authorization.

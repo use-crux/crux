@@ -876,6 +876,7 @@ func TestSystemdReportRejectsMalformedBindAndProtectHomeProperties(t *testing.T)
 		{name: "legacy bind string array", key: "BindReadOnlyPaths", value: []string{"/source:/target"}},
 		{name: "bind ignores missing", key: "BindReadOnlyPaths", value: []any{[]any{"/source", "/target", true, uint64(0)}}},
 		{name: "bind mount flags", key: "BindReadOnlyPaths", value: []any{[]any{"/source", "/target", false, uint64(1)}}},
+		{name: "malformed writable bind", key: "BindPaths", value: []any{[]any{"/source", "/target", false, uint64(1)}}},
 		{name: "boolean protect home", key: "ProtectHome", value: true},
 		{name: "non-enforcing protect home", key: "ProtectHome", value: "read-only"},
 	} {
@@ -1785,6 +1786,51 @@ func TestSystemdPropertyWireTypesRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSystemdReportAndVerifyBindPaths(t *testing.T) {
+	spec, err := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+
+	for _, test := range []struct {
+		name      string
+		bindPaths any
+		present   bool
+		want      bool
+	}{
+		{name: "exact", bindPaths: bindReadOnlyPathProperties(bindPathsForSpec(spec)), present: true, want: true},
+		{name: "missing", want: false},
+		{name: "extra", bindPaths: append(bindReadOnlyPathProperties(bindPathsForSpec(spec)), bindReadOnlyPath{Source: "/run/extra", Destination: "/run/extra"}), present: true, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			if test.present {
+				bus.values["BindPaths"] = test.bindPaths
+			}
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}, spec: spec}
+			report, err := unit.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.want != same(report.BindPaths, bindPathsForSpec(spec)) {
+				t.Fatalf("report BindPaths = %#v", report.BindPaths)
+			}
+			verification := &verifiedProbeFakeUnit{fakeUnit: fakeUnit{rep: harnessReport(spec)}}
+			verification.rep.BindPaths = report.BindPaths
+			if got := verify(context.Background(), verification, spec); got != test.want {
+				t.Fatalf("verify = %t, want %t", got, test.want)
+			}
+		})
+	}
+
+	ordinary := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}}
+	report, err := ordinary.Report(context.Background())
+	if err != nil || len(report.BindPaths) != 0 {
+		t.Fatalf("ordinary BindPaths = %#v, err = %v", report.BindPaths, err)
+	}
+}
+
 type fakeSystemBus struct {
 	fdOK                       bool
 	name                       string
@@ -1831,6 +1877,12 @@ func (*verifiedLifecycleSystemdUnit) VerifyAttestedNode(context.Context, assets.
 	return nil
 }
 
+type verifiedProbeFakeUnit struct{ fakeUnit }
+
+func (*verifiedProbeFakeUnit) VerifyAttestedProbe(context.Context, *containmentProbe) error {
+	return nil
+}
+
 func newFakeSystemBus() *fakeSystemBus {
 	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "Result": "success", "MainPID": uint32(42), "ExecMainStatus": int32(0), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []any{[]any{"/run/anydoc/input/source", stagedSourceTarget, false, uint64(0)}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
@@ -1841,6 +1893,11 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 	b.values["ReadOnlyPaths"] = values["ReadOnlyPaths"]
 	b.values["InaccessiblePaths"] = values["InaccessiblePaths"]
 	b.values["BindReadOnlyPaths"] = values["BindReadOnlyPaths"]
+	if bindPaths, ok := values["BindPaths"]; ok {
+		b.values["BindPaths"] = bindPaths
+	} else {
+		delete(b.values, "BindPaths")
+	}
 	b.values["ReadWritePaths"] = values["ReadWritePaths"]
 	b.values["RestrictAddressFamilies"] = values["RestrictAddressFamilies"]
 	return b.startErr
