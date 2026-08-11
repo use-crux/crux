@@ -444,6 +444,9 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if err != nil {
 		t.Fatalf("start %s probe: %v", name, err)
 	}
+	if adjusted, ok := unit.(verifiedServiceSpec); ok {
+		spec = adjusted.VerifiedServiceSpec(spec)
+	}
 	started := time.Now()
 	if !verify(ctx, unit, spec) {
 		_, _, _, _ = cleanup(unit)
