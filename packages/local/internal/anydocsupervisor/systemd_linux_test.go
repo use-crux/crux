@@ -47,6 +47,9 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !reflect.DeepEqual(backend.(*systemdBackend).fs.(*fakeFS).chmods[:2], []os.FileMode{0o666, 0}) {
+		t.Fatalf("authorization/result socket startup modes = %#v, want connectable authorization barrier and closed result socket", backend.(*systemdBackend).fs.(*fakeFS).chmods)
+	}
 	if _, err := read.Stat(); err == nil {
 		t.Fatal("backend retained local stdin FD")
 	}
@@ -1837,6 +1840,7 @@ type fakeFS struct {
 	afterRead       func(string)
 	runtimeContents []byte
 	runtimeRootMode os.FileMode
+	chmods          []os.FileMode
 }
 
 func newFakeFS() *fakeFS {
@@ -1893,7 +1897,10 @@ func (f *fakeFS) WriteFile(path string, contents []byte) error {
 }
 func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return f.removeErr }
 func (f *fakeFS) Chown(string, int, int) error    { return nil }
-func (f *fakeFS) Chmod(string, os.FileMode) error { return nil }
+func (f *fakeFS) Chmod(_ string, mode os.FileMode) error {
+	f.chmods = append(f.chmods, mode)
+	return nil
+}
 
 type fakeRuntimeInfo struct {
 	name string

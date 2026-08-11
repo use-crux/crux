@@ -383,7 +383,14 @@ func (b *systemdBackend) Start(ctx context.Context, spec ServiceSpec, stdin *os.
 	if err != nil {
 		return nil, containment("authorization-socket", err)
 	}
-	if err := b.fs.Chmod(socketPath, 0); err != nil {
+	// The worker starts before the supervisor can attest the transient unit.
+	// Leave only this mounted, per-run authorization listener connectable so the
+	// worker blocks in DecodeRequest instead of exiting in that interval.  A
+	// connection grants nothing: AuthorizeCapability verifies SO_PEERCRED
+	// against the freshly attested MainPID, UID, and cgroup before writing the
+	// one request. PrepareAuthorization narrows it to the verified UID once
+	// attestation completes. The result socket remains closed until then.
+	if err := b.fs.Chmod(socketPath, 0o666); err != nil {
 		_ = listener.Close()
 		_ = os.Remove(socketPath)
 		return nil, containment("authorization-socket-chmod", err)

@@ -111,6 +111,11 @@ authentication, request/result binding, verified-snapshot accounting refresh,
 and successful acknowledgement; it rejects mismatched, OOM, oom-kill, and
 pids-limited snapshots.
 
+Keep the fixed mounted authorization socket connectable during startup so a
+worker blocks on the centrally verified one-shot capability instead of exiting
+before attestation; the result socket stays closed and capability delivery
+continues to require exact `SO_PEERCRED` UID, MainPID, and cgroup identity.
+
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
 snapshot only for exact-cgroup ENOENT or report-gone, always retaining the
