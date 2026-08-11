@@ -1032,24 +1032,86 @@ func TestRunFinishTerminalReportSafeExecutionFailureUnitPropertiesGoneProofReaso
 		{name: "proof missing", want: "unit-properties-gone-proof-missing"},
 		{name: "proof cgroup mismatch", proofOK: true, proof: terminalSuccessProof{status: proof.status, cgroup: "/private/proof-cgroup-secret", snapshotPID: proof.snapshotPID, runtimeDigest: proof.runtimeDigest}, snapshot: snapshot, want: "unit-properties-gone-proof-cgroup-mismatch"},
 		{name: "proof pid invalid", proofOK: true, proof: terminalSuccessProof{status: proof.status, cgroup: proof.cgroup, runtimeDigest: proof.runtimeDigest}, snapshot: snapshot, want: "unit-properties-gone-proof-pid-invalid"},
-		{name: "snapshot cgroup mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: "/private/snapshot-cgroup-secret", MainPID: 42, RuntimeTreeDigest: secret}, want: "unit-properties-gone-snapshot-cgroup-mismatch"},
 		{name: "snapshot pid mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 43, RuntimeTreeDigest: secret}, want: "unit-properties-gone-snapshot-pid-mismatch"},
 		{name: "runtime digest missing", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 42}, want: "unit-properties-gone-runtime-digest-missing"},
 		{name: "runtime digest mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: "/private/other-digest-secret"}, want: "unit-properties-gone-runtime-digest-mismatch"},
 		{name: "proof terminal not success", proofOK: true, proof: terminalSuccessProof{status: TerminalStatus{State: "failed", ServiceResult: "exit-code"}, cgroup: pinned, snapshotPID: 42, runtimeDigest: secret}, snapshot: snapshot, want: "unit-properties-gone-proof-terminal-not-success"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			reason := validateUnitPropertiesGone(pinned, test.snapshot, test.proof, test.proofOK, termination, nil, TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone})
-			if reason != test.want || !validContainmentReason(reason) {
-				t.Fatalf("reason = %q, want allowlisted %q", reason, test.want)
+			cachedSnapshot := test.snapshot
+			if cachedSnapshot.ControlGroup == "" {
+				cachedSnapshot = snapshot
 			}
-
-			terminal := TerminalReport{Outcome: ErrContainmentUnavailable, PreStop: SandboxReport{ServiceResult: "success"}}
-			got := safeExecutionFailure(closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "containment-cleanup", ReasonCode: reason}), terminal)
-			if !strings.Contains(got, "reason="+reason) || strings.Contains(got, "private") || strings.Contains(got, "42") || strings.Contains(got, secret) {
-				t.Fatalf("safe execution failure leaked detail: %q", got)
+			unit := &fakeUnit{
+				rep:             SandboxReport{ControlGroup: pinned, ServiceResult: "success"},
+				stopErr:         &stopFailure{reason: "unit-properties-gone"},
+				snapshot:        cachedSnapshot,
+				snapshotOK:      true,
+				terminalProof:   test.proof,
+				terminalProofOK: test.proofOK,
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return termination, nil
+				},
+				terminalStatus: func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+				},
+			}
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer read.Close()
+			defer write.Close()
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			finishErr := run.Finish(context.Background(), nil)
+			terminal := run.TerminalReport()
+			got := safeExecutionFailure(finishErr, terminal)
+			if !strings.Contains(got, "reason="+test.want) || strings.Contains(got, "private") || strings.Contains(got, "42") || strings.Contains(got, secret) {
+				t.Fatalf("safe execution failure = %q, want reason=%q without private detail", got, test.want)
 			}
 		})
+	}
+}
+
+func TestRunFinishUnitPropertiesGoneSnapshotCgroupMismatchPreemptsProofMapper(t *testing.T) {
+	const pinned = "/crux.slice/pinned"
+	unit := &fakeUnit{
+		rep:        SandboxReport{ControlGroup: pinned, ServiceResult: "success"},
+		stopErr:    &stopFailure{reason: "unit-properties-gone"},
+		snapshot:   SandboxReport{ControlGroup: "/crux.slice/other", MainPID: 42, RuntimeTreeDigest: "digest"},
+		snapshotOK: true,
+		termination: func(context.Context, string) (TerminationEvidence, error) {
+			return TerminationEvidence{ControlGroup: pinned, Absent: true}, nil
+		},
+	}
+	staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Close()
+	defer write.Close()
+	run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+	finishErr := run.Finish(context.Background(), nil)
+	got := safeExecutionFailure(finishErr, run.TerminalReport())
+	if !strings.Contains(got, "reason=unit-properties-gone-snapshot-cgroup") {
+		t.Fatalf("safe execution failure = %q, want snapshot-cgroup preemption", got)
+	}
+}
+
+func TestValidateUnitPropertiesGoneDefensiveUnreachableSnapshotCgroupMismatch(t *testing.T) {
+	// Promotion/storage requires the cached snapshot cgroup to equal the pinned
+	// cgroup, so Run.Finish preempts this predicate with snapshot-cgroup.
+	reason := validateUnitPropertiesGone("/crux.slice/pinned", SandboxReport{ControlGroup: "/crux.slice/other", MainPID: 42, RuntimeTreeDigest: "digest"}, terminalSuccessProof{status: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/crux.slice/pinned", snapshotPID: 42, runtimeDigest: "digest"}, true, TerminationEvidence{ControlGroup: "/crux.slice/pinned", Absent: true}, nil, TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone})
+	if reason != "unit-properties-gone-snapshot-cgroup-mismatch" {
+		t.Fatalf("reason = %q, want defensive snapshot-cgroup-mismatch", reason)
 	}
 }
 
@@ -1230,6 +1292,8 @@ type fakeUnit struct {
 	snapshot         SandboxReport
 	snapshotCPU      time.Duration
 	snapshotOK       bool
+	terminalProof    terminalSuccessProof
+	terminalProofOK  bool
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -1289,6 +1353,9 @@ func (u *fakeUnit) Cleanup(context.Context) error {
 func (u *fakeUnit) MarkSnapshotVerified() {}
 func (u *fakeUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
 	return u.snapshot, u.snapshotCPU, u.snapshotOK
+}
+func (u *fakeUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
+	return u.terminalProof, u.terminalProofOK
 }
 func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
 func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }
