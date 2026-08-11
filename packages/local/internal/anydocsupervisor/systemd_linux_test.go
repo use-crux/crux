@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/godbus/dbus/v5"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 )
 
 func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T) {
@@ -1576,6 +1577,14 @@ type fakeSystemBus struct {
 	onStop                          func()
 }
 
+// verifiedLifecycleSystemdUnit lets this lifecycle test exercise verify's
+// production snapshot-minting path without coupling it to host /proc state.
+type verifiedLifecycleSystemdUnit struct{ *systemdUnit }
+
+func (*verifiedLifecycleSystemdUnit) VerifyAttestedNode(context.Context, assets.AttestedNode) error {
+	return nil
+}
+
 func newFakeSystemBus() *fakeSystemBus {
 	return &fakeSystemBus{fdOK: true, values: map[string]any{"ActiveState": "active", "Result": "success", "MainPID": uint32(42), "ExecMainStatus": int32(0), "UID": uint32(1000), "DynamicUser": true, "PrivateUsers": true, "ProtectProc": "invisible", "ProcSubset": "pid", "ControlGroup": "/crux.slice/test", "RuntimeMaxUSec": uint64(RuntimeCeiling / time.Microsecond), "KillMode": "control-group", "ProtectSystem": "strict", "CPUAccounting": true, "NoNewPrivileges": true, "PrivateNetwork": true, "PrivateTmp": true, "ProtectHome": "yes", "CapabilityBoundingSet": uint64(0), "AmbientCapabilities": uint64(0), "ReadOnlyPaths": []string{"/run/anydoc/runtime"}, "BindReadOnlyPaths": []any{[]any{"/run/anydoc/input/source", stagedSourceTarget, false, uint64(0)}}, "ReadWritePaths": []string{"/run/anydoc/private"}, "RestrictAddressFamilies": restrictAddressFamilies{Allow: true, Families: []string{"AF_UNIX"}}}}
 }
@@ -2556,7 +2565,30 @@ func TestRunFinishSystemdUnitPropertiesGoneLifecycle(t *testing.T) {
 			if _, err := u.CPUUsage(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			u.MarkSnapshotVerified()
+			u.spec = ServiceSpec{
+				runtimeTreeDigest:       active.RuntimeTreeDigest,
+				MemoryMax:               active.MemoryMax,
+				MemorySwapMax:           active.MemorySwapMax,
+				TasksMax:                active.TasksMax,
+				CPUQuotaPercent:         active.CPUQuotaPercent,
+				CPUQuotaPeriodUSec:      active.CPUQuotaPeriodUSec,
+				RuntimeMax:              active.RuntimeMax,
+				KillMode:                active.KillMode,
+				ProtectSystem:           active.ProtectSystem,
+				CPUAccounting:           active.CPUAccounting,
+				NoNewPrivileges:         active.NoNewPrivileges,
+				PrivateNetwork:          active.PrivateNetwork,
+				PrivateTmp:              active.PrivateTmp,
+				ProtectHome:             active.ProtectHome,
+				ReadOnlyPaths:           active.ReadOnlyPaths,
+				InaccessiblePaths:       active.InaccessiblePaths,
+				BindReadOnlyPaths:       active.BindReadOnlyPaths,
+				ReadWritePaths:          active.ReadWritePaths,
+				RestrictAddressFamilies: active.RestrictAddressFamilies,
+			}
+			if !verify(context.Background(), &verifiedLifecycleSystemdUnit{systemdUnit: u}, u.spec) {
+				t.Fatal("production verification lifecycle rejected fake unit")
+			}
 
 			terminalReport := strict
 			if test.terminal != nil {
@@ -2576,6 +2608,12 @@ func TestRunFinishSystemdUnitPropertiesGoneLifecycle(t *testing.T) {
 			bus.killErr = errors.New("kill " + private)
 			bus.propGoneOnceAfterStop = true
 			bus.propErrAfterGoneOnce = test.finalErr
+			if test.finalErr == nil && terminalReport["ActiveState"] == "active" {
+				// The first gone response is consumed while stopping. Follow the
+				// live pre-stop report with a finite gone status so WaitInactive
+				// reaches the final proof validation instead of polling forever.
+				bus.propErrAfterGoneOnce = &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+			}
 			bus.valuesAfterFirstStopProperties = terminalReport
 			if test.final != nil {
 				bus.valuesAfterFirstStopProperties = test.final
@@ -2605,10 +2643,12 @@ func TestRunFinishSystemdUnitPropertiesGoneLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, write, err := os.Pipe()
+			read, write, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer read.Close()
+			defer write.Close()
 			run := &Run{unit: u, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
 			finishErr := run.Finish(context.Background(), nil)
 			terminal := run.TerminalReport()
