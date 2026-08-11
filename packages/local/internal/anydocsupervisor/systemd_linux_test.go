@@ -1331,8 +1331,8 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 		{name: "rejects invalid args", resetErr: fmt.Errorf("reset failed: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{secret}}), wantReason: "unit-cleanup-reset-failed-unit-invalid-args"},
 		{name: "rejects other dbus", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.OtherFailure", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit-dbus-other"},
 		{name: "rejects unavailable", resetErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit-unavailable"},
-		{name: "rejects failed result without independent proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"Result": "exit-code"}, wantReason: "terminal-status", wantWorkload: WorkloadOutcomeCrash},
-		{name: "rejects nonzero status without independent proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ExecMainStatus": int32(1)}, wantReason: "terminal-status", wantWorkload: WorkloadOutcomeCrash},
+		{name: "rejects failed result without independent proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"Result": "exit-code"}, wantWorkload: WorkloadOutcomeCrash},
+		{name: "rejects nonzero status without independent proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ExecMainStatus": int32(1)}, wantWorkload: WorkloadOutcomeCrash},
 		{name: "rejects live status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ActiveState": "active", "MainPID": uint32(42)}, wantReason: "wait-inactive"},
 		{name: "rejects nonexclusive termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "nonexclusive", wantReason: "termination-evidence"},
 		{name: "rejects mismatched termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "mismatch", wantReason: "termination-evidence"},
@@ -1433,7 +1433,7 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 				return
 			}
 			got := safeExecutionFailure(finishErr, terminal)
-			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "NoSuchUnit") || strings.Contains(got, "OtherFailure") || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") || strings.Contains(got, "InvalidArgs") {
+			if (test.wantReason != "" && !strings.Contains(got, "reason="+test.wantReason)) || strings.Contains(got, secret) || strings.Contains(got, "NoSuchUnit") || strings.Contains(got, "OtherFailure") || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") || strings.Contains(got, "InvalidArgs") {
 				t.Fatalf("safe execution failure = %q", got)
 			}
 			if !fs.removed[secret] || !bus.reset {
@@ -3300,8 +3300,8 @@ func TestRunFinishUnitPropertiesGoneACKWitnessLifecycle(t *testing.T) {
 		wantError   ErrorCode
 		validation  string
 	}{
-		{name: "accepts acknowledged parser failure with exact gone and empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess},
-		{name: "accepts acknowledged parser failure with exact gone and absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess},
+		{name: "accepts acknowledged parser failure with exact gone and empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrEncrypted},
+		{name: "accepts acknowledged parser failure with exact gone and absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrEncrypted},
 		{name: "rejects missing witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "unit-properties-gone-proof-missing"},
 		{name: "accepts mismatched request with independent terminal success proof", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "request-binding"},
 		{name: "accepts failed ACK with independent terminal success proof", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "ack-write"},
@@ -3450,6 +3450,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			receive     string
 			final       map[string]any
 			finalErr    error
+			resetErr    error
 			termination string
 			procFS      ProcRuntimeFS
 			mutate      func(*systemdUnit, *fakeFS)
@@ -3465,6 +3466,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			{name: "accepts exact get unit gone with absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess},
 			{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-ack-witness-absent"},
 			{name: "accepts failed status with truthful crash outcome", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash},
+			{name: "accepts failed status with witness and reset no such unit", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash},
 			{name: "accepts oom with truthful OOM outcome", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeOOM, wantError: ErrWorkerCrash},
 			{name: "accepts oom kill with truthful OOM outcome", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeOOM, wantError: ErrWorkerCrash},
 			{name: "accepts nonzero exit with truthful crash outcome", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash},
@@ -3609,6 +3611,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 					u.procFS = runtime.procFS
 				}
 				bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+				bus.resetErr = test.resetErr
 				bus.killErr = errors.New("kill " + private)
 				bus.propGoneOnceAfterStop = true
 				bus.propErrAfterGoneOnce = test.finalErr

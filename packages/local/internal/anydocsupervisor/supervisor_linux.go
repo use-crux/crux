@@ -742,23 +742,24 @@ func NewWithStager(b Backend, stager *Stager) *Supervisor {
 }
 
 type Run struct {
-	unit          Unit
-	write         *os.File
-	nonce, digest string
-	sourceSHA     string
-	sourceBytes   int64
-	format        Format
-	limits        JobLimits
-	staged        *StagedSource
-	mu            sync.Mutex
-	stopOnce      sync.Once
-	finishOnce    sync.Once
-	finished      chan struct{}
-	result        error
-	terminal      TerminalReport
-	started       time.Time
-	done          bool
-	stop          chan struct{}
+	unit            Unit
+	write           *os.File
+	nonce, digest   string
+	sourceSHA       string
+	sourceBytes     int64
+	format          Format
+	limits          JobLimits
+	staged          *StagedSource
+	mu              sync.Mutex
+	stopOnce        sync.Once
+	finishOnce      sync.Once
+	finished        chan struct{}
+	result          error
+	receivedFailure error
+	terminal        TerminalReport
+	started         time.Time
+	done            bool
+	stop            chan struct{}
 }
 
 func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
@@ -911,6 +912,9 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	if result.Request != expected {
 		return Result{}, closed(ErrReplay)
 	}
+	r.mu.Lock()
+	r.receivedFailure = parserResultFailure(result)
+	r.mu.Unlock()
 	return result, nil
 }
 
@@ -932,7 +936,11 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.done = true
 		_ = r.write.Close()
 		r.stopOnce.Do(func() { close(r.stop) })
+		receivedFailure := r.receivedFailure
 		r.mu.Unlock()
+		if out == nil {
+			out = receivedFailure
+		}
 		result := outcomeCode(out)
 		report, cpu, termination, proof, classified, cleanupReason := cleanupForOutcome(r.unit, result)
 		result = classified
@@ -1114,6 +1122,9 @@ func outcomeCode(out error) error {
 	if errors.As(out, &containment) {
 		return closedWith(ErrContainmentUnavailable, containment)
 	}
+	if parserFailureError(out) {
+		return out
+	}
 	if out != nil {
 		return closed(ErrWorkerCrash)
 	}
@@ -1140,6 +1151,9 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
 	}
 	if establishedInvalidResult(result) {
+		return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+	}
+	if parserFailureError(result) {
 		return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
 	}
 	if ordinaryTerminalCrashCanDetermine(result) && (report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0) {
@@ -1210,6 +1224,28 @@ func workloadError(outcome WorkloadOutcome) error {
 func establishedWorkloadResult(result error) bool {
 	switch errorCode(result) {
 	case ErrInvalidResult, ErrTimeout, ErrAborted, ErrWorkerCrash:
+		return true
+	default:
+		return false
+	}
+}
+
+// parserResultFailure converts an authenticated parser-failure envelope into
+// the terminal workload error without treating the envelope as invalid.
+func parserResultFailure(result Result) error {
+	if result.OK || result.FailureKind != FailureParser || !validParserFailure(result.Error) {
+		return nil
+	}
+	return closed(result.Error)
+}
+
+func parserFailureError(err error) bool {
+	return validParserFailure(errorCode(err))
+}
+
+func validParserFailure(code ErrorCode) bool {
+	switch code {
+	case ErrInvalidResult, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat:
 		return true
 	default:
 		return false
@@ -1416,6 +1452,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		}
 	}
 	unitTerminal := statusErr == nil && status.MainPID == 0 && status.State == "inactive"
+	lifecycleProof := statusErr == nil && successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)
 	// A terminal failure can establish the workload outcome after its status is
 	// read. Recompute strictness here so that cleanup proof remains independent
 	// of a truthful failed outcome, while a claimed success still needs strict
@@ -1449,10 +1486,16 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 			reason = validateAlreadyGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 		}
 	}
+	if propertiesGone != nil && reason == "" {
+		lifecycleProof = true
+	}
 	if reportGoneAccounting && reason == "" {
 		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 	} else if terminalRuntimeDisappearingAccounting && reason == "" {
 		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, witness, witnessOK, termination, terminationErr, status, statusErr, strictSuccess)
+		if reason == "" {
+			lifecycleProof = true
+		}
 	} else if usedCachedAccounting && !termination.Absent && reason == "" {
 		reason = "used-cached-accounting"
 	}
@@ -1460,7 +1503,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		var failure *unitCleanupFailure
 		// All lifecycle proof has already been ordered above. ResetFailedUnit
 		// is idempotent only when that proof left no prior cleanup reason.
-		idempotentResetGone := reason == "" && errors.As(cleanupErr, &failure) && failure.resetFailedUnitNoSuchUnit && len(failure.reasons) == 1 && failure.primaryReason() == "unit-cleanup-reset-failed-unit-no-such-unit"
+		idempotentResetGone := reason == "" && lifecycleProof && errors.As(cleanupErr, &failure) && failure.resetFailedUnitNoSuchUnit && len(failure.reasons) == 1 && failure.primaryReason() == "unit-cleanup-reset-failed-unit-no-such-unit"
 		if reason == "" && !idempotentResetGone {
 			if errors.As(cleanupErr, &failure) {
 				reason = failure.primaryReason()
@@ -1503,7 +1546,7 @@ func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport,
 		if strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
 			return "runtime-target-missing-terminal-status-not-success"
 		}
-		if status.MainPID == 0 && status.State == "inactive" {
+		if status.MainPID == 0 && (status.State == "inactive" || (!strictSuccess && status.State == "failed")) {
 			return ""
 		}
 		return "runtime-target-missing-terminal-status-not-gone"

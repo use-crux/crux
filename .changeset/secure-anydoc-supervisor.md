@@ -12,6 +12,10 @@ staged-source facts without requiring a successful service result after an
 already-established parser, crash, CPU or wall timeout, abort, or resource
 outcome; unverified and containment failures remain fail-closed.
 
+Preserve authenticated parser-failure outcomes through teardown, and require
+an independent lifecycle proof before accepting an idempotent ResetFailedUnit
+NoSuchUnit after a failed or nonzero terminal status.
+
 Package and attest the pinned Linux x64 GNU Anydoc native runtime before
 launching its isolated Node runner.
 
