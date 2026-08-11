@@ -1733,7 +1733,24 @@ func (u *systemdUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error
 	if !ok {
 		return TerminalStatus{}, &terminalStatusUnavailableError{stage: terminalStatusDecode}
 	}
+	u.recordTerminalSuccess(status)
 	return status, nil
+}
+
+// recordTerminalSuccess retains strict terminal evidence observed through the
+// terminal-status path. It does not create a lifecycle witness: it merely
+// binds that independently observed terminal fact to the immutable verified
+// launch snapshot for the UnitProperties-gone cleanup fallback.
+func (u *systemdUnit) recordTerminalSuccess(status TerminalStatus) {
+	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		return
+	}
+	u.snapshotMu.Lock()
+	defer u.snapshotMu.Unlock()
+	if !u.snapshotOK || !u.snapshotSeen || !validCgroup(u.snapshot.ControlGroup) || u.snapshot.MainPID <= 0 || u.snapshot.RuntimeTreeDigest == "" {
+		return
+	}
+	u.terminalProof = terminalSuccessProof{status: status, cgroup: u.snapshot.ControlGroup, snapshotPID: u.snapshot.MainPID, runtimeDigest: u.snapshot.RuntimeTreeDigest}
 }
 
 func terminalStatusFromProps(p map[string]any) (TerminalStatus, bool) {

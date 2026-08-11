@@ -1147,6 +1147,9 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill" {
 		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
 	}
+	if report.PIDsEvents["max"] > 0 {
+		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+	}
 	if report.ServiceResult == "timeout" {
 		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
 	}
@@ -1274,7 +1277,7 @@ func chainContainment(result error, hadPreCleanup bool, stage, reason string) er
 func preCleanupDiagnostic(err error) (*ResultValidationError, *ContainmentError) {
 	var cleanup *containmentCleanupChain
 	if errors.As(err, &cleanup) {
-		return preCleanupDiagnostic(cleanup.prior)
+		return nil, cleanup.cleanup
 	}
 	var validation *ResultValidationError
 	if errors.As(err, &validation) {
@@ -1723,7 +1726,7 @@ func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, p
 	if proofOK {
 		if reason := validateUnitPropertiesGoneProof(expectedCgroup, snapshot, proof, status, statusErr); reason == "" {
 			return ""
-		} else if !witnessOK {
+		} else {
 			return reason
 		}
 	}

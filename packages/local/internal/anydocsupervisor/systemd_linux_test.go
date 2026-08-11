@@ -3290,7 +3290,8 @@ func TestRunFinishUnitPropertiesGoneACKWitnessLifecycle(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		receive     string
-		mutate      func(*systemdUnit)
+		mutate      func(*systemdUnit, *fakeFS)
+		terminalProof bool
 		finalErr    error
 		termination string
 		wantReason  string
@@ -3303,15 +3304,32 @@ func TestRunFinishUnitPropertiesGoneACKWitnessLifecycle(t *testing.T) {
 		{name: "accepts acknowledged parser failure with exact gone and empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrEncrypted},
 		{name: "accepts acknowledged parser failure with exact gone and absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrEncrypted},
 		{name: "rejects missing witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "unit-properties-gone-proof-missing"},
-		{name: "accepts mismatched request with independent terminal success proof", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "request-binding"},
-		{name: "accepts failed ACK with independent terminal success proof", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "ack-write"},
-		{name: "rejects OOM snapshot", receive: "valid", mutate: func(u *systemdUnit) { u.snapshotMu.Lock(); u.snapshot.MemoryEvents["oom"] = 1; u.snapshotMu.Unlock() }, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-snapshot-oom"},
-		{name: "rejects OOM kill snapshot", receive: "valid", mutate: func(u *systemdUnit) {
+		{name: "accepts mismatched request with independent terminal success proof", receive: "mismatch", terminalProof: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "request-binding"},
+		{name: "accepts failed ACK with independent terminal success proof", receive: "ack-write", terminalProof: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, validation: "ack-write"},
+		{name: "accepts OOM with independent terminal proof", receive: "valid", terminalProof: true, mutate: func(u *systemdUnit, fs *fakeFS) {
+			u.snapshotMu.Lock()
+			u.snapshot.MemoryEvents["oom"] = 1
+			u.snapshotMu.Unlock()
+			fs.files[cgroupFile(pinned, "memory.events")] = []byte("oom 1\noom_kill 0\n")
+		}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeOOM, wantError: ErrEncrypted},
+		{name: "accepts OOM kill with independent terminal proof", receive: "valid", terminalProof: true, mutate: func(u *systemdUnit, fs *fakeFS) {
 			u.snapshotMu.Lock()
 			u.snapshot.MemoryEvents["oom_kill"] = 1
 			u.snapshotMu.Unlock()
-		}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-snapshot-oom-kill"},
-		{name: "rejects pids limited snapshot", receive: "valid", mutate: func(u *systemdUnit) { u.snapshotMu.Lock(); u.snapshot.PIDsEvents["max"] = 1; u.snapshotMu.Unlock() }, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "runtime-target-missing-snapshot-pids-max"},
+			fs.files[cgroupFile(pinned, "memory.events")] = []byte("oom 0\noom_kill 1\n")
+		}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeOOM, wantError: ErrEncrypted},
+		{name: "rejects pids limit without terminal proof", receive: "valid", mutate: func(u *systemdUnit, fs *fakeFS) {
+			u.snapshotMu.Lock()
+			u.snapshot.PIDsEvents["max"] = 1
+			u.snapshotMu.Unlock()
+			fs.files[cgroupFile(pinned, "pids.events")] = []byte("max 1\n")
+		}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=containment-cleanup reason=runtime-target-missing-snapshot-pids-max oom-killed=false pids-limited=true"},
+		{name: "accepts pids limit with independent terminal proof", receive: "valid", terminalProof: true, mutate: func(u *systemdUnit, fs *fakeFS) {
+			u.snapshotMu.Lock()
+			u.snapshot.PIDsEvents["max"] = 1
+			u.snapshotMu.Unlock()
+			fs.files[cgroupFile(pinned, "pids.events")] = []byte("max 1\n")
+		}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true, wantOutcome: WorkloadOutcomeCrash, wantError: ErrEncrypted},
 		{name: "rejects nonexact final status", receive: "valid", finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
 		{name: "rejects nonexclusive cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "already-gone-termination-unavailable"},
 	} {
@@ -3381,7 +3399,15 @@ func TestRunFinishUnitPropertiesGoneACKWitnessLifecycle(t *testing.T) {
 				}
 			}
 			if test.mutate != nil {
-				test.mutate(u)
+				test.mutate(u, fs)
+			}
+			if test.terminalProof {
+				for key, value := range strict {
+					bus.values[key] = value
+				}
+				if _, err := u.TerminalStatus(context.Background()); err != nil {
+					t.Fatalf("independent terminal status = %v", err)
+				}
 			}
 			bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
 			bus.killErr = errors.New("kill " + private)

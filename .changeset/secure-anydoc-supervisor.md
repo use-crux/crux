@@ -195,3 +195,9 @@ Allow an independently valid retained terminal-success proof to authorize the
 pending `unit-properties-gone` cleanup path even when result binding or ACK
 delivery failed; preserve that typed result-validation cause and its non-success
 workload outcome rather than converting it into containment failure.
+
+Keep OOM, OOM-kill, and PID-limit workload outcomes separate from the retained
+terminal-success cleanup proof on that path. A PID-limited ACK witness without
+that independent proof remains ineligible and returns its fixed cleanup
+diagnostic; unavailable final-status and nonexclusive-termination diagnostics
+remain equally granular.
