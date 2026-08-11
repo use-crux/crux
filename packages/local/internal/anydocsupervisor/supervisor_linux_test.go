@@ -388,8 +388,11 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 		wantError   ErrorCode
 		wantCleanup bool
 		validation  bool
+		sealedProbe bool
+		wantProbe   ProbeOutcome
 	}{
 		{name: "success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true},
+		{name: "sealed contained probe is not workload success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeUnverified, wantError: OutcomeSuccess, wantCleanup: true, sealedProbe: true, wantProbe: ProbeOutcomeContained},
 		{name: "parser validation survives exit code", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives core dump", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "parser validation survives signal", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "signal", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
@@ -427,7 +430,7 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 				}
 				return test.status, nil
 			}}
-			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbeObserved: test.sealedProbe}
 			err = run.Finish(context.Background(), test.out)
 			if got := errorCode(err); got != test.wantError {
 				t.Fatalf("Finish error code = %q, want %q (%v)", got, test.wantError, err)
@@ -441,6 +444,13 @@ func TestTask2RunFinishPrecedence(t *testing.T) {
 			terminal := run.TerminalReport()
 			if terminal.Workload.Code != test.wantOutcome {
 				t.Fatalf("workload outcome = %q, want %q", terminal.Workload.Code, test.wantOutcome)
+			}
+			wantProbe := test.wantProbe
+			if wantProbe == "" {
+				wantProbe = ProbeOutcomeUnverified
+			}
+			if terminal.ProbeOutcome != wantProbe {
+				t.Fatalf("probe outcome = %q, want %q", terminal.ProbeOutcome, wantProbe)
 			}
 			if terminal.Cleanup.Accepted != test.wantCleanup || terminal.Cleaned != test.wantCleanup {
 				t.Fatalf("cleanup = %#v, legacy cleaned=%v, want %v", terminal.Cleanup, terminal.Cleaned, test.wantCleanup)

@@ -1866,7 +1866,7 @@ func TestTask1LifecycleWitnessRejectsDuplicateReceiver(t *testing.T) {
 	}
 }
 
-func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
+func TestTask3SealedProbeLifecycleOutcome(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		probeCase   string
@@ -1957,6 +1957,12 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 			_, witnessed := u.lastLifecycleWitness()
 			if (err == nil) != test.wantWitness || witnessed != test.wantWitness {
 				t.Fatalf("receiveSealedProbeObservation() = %v, witness=%v", err, witnessed)
+			}
+			run.mu.Lock()
+			probeObserved := run.sealedProbeObserved
+			run.mu.Unlock()
+			if probeObserved != test.wantWitness {
+				t.Fatalf("sealed probe outcome evidence = %v, want %v", probeObserved, test.wantWitness)
 			}
 			if witnessed && u.lifecycleWitness.kind != lifecycleWitnessProbe {
 				t.Fatalf("witness kind = %d", u.lifecycleWitness.kind)

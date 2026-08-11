@@ -350,6 +350,7 @@ func TestSafeRunnerDiagnosticReportsOnlyBoundedTerminalCategories(t *testing.T) 
 type hostileEvidence struct {
 	Name              string           `json:"name"`
 	Outcome           ErrorCode        `json:"outcome"`
+	ProbeOutcome      ProbeOutcome     `json:"probeOutcome"`
 	Observed          map[string]bool  `json:"observed,omitempty"`
 	MemoryEvents      map[string]int64 `json:"memoryEvents,omitempty"`
 	CPUUsec           int64            `json:"cpuUsec"`
@@ -543,7 +544,7 @@ func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
 		t.Fatal("runContainmentProbe source boundary missing")
 	}
 	body := source[start+1 : start+end]
-	for _, call := range [][]byte{[]byte("supervisor.startEvaluation("), []byte("run.receiveSealedProbeObservation("), []byte("run.Finish(")} {
+	for _, call := range [][]byte{[]byte("supervisor.startEvaluation("), []byte("run.receiveSealedProbeObservation("), []byte("run.Finish("), []byte("terminal.ProbeOutcome")} {
 		if !bytes.Contains(body, call) {
 			t.Fatalf("runContainmentProbe bypasses sealed Run lifecycle: missing %q", call)
 		}
@@ -704,6 +705,15 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if terminal.Outcome == ErrContainmentUnavailable {
 		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
 	}
+	if control == "result" && terminal.ProbeOutcome != ProbeOutcomeContained {
+		t.Fatalf("%s did not retain its sealed contained probe outcome: got %q", name, terminal.ProbeOutcome)
+	}
+	if control != "result" && terminal.ProbeOutcome != ProbeOutcomeUnverified {
+		t.Fatalf("%s probe outcome = %q, want unverified", name, terminal.ProbeOutcome)
+	}
+	if control == "result" && terminal.Workload.Code != WorkloadOutcomeUnverified {
+		t.Fatalf("%s sealed probe workload = %q, want unverified", name, terminal.Workload.Code)
+	}
 	if expected, ok := map[string]WorkloadOutcomeCode{
 		"memory": WorkloadOutcomeOOM,
 		"cpu":    WorkloadOutcomeCPUTimeout,
@@ -741,7 +751,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 			t.Fatalf("descendant %d escaped cgroup cleanup", observation.PID)
 		}
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, ProbeOutcome: terminal.ProbeOutcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
 
 func expectedProbeOutcome(name string) ErrorCode {
@@ -796,7 +806,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	if terminal.Outcome != ErrAborted || !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
 		t.Fatalf("caller cancellation lacked closed terminal evidence: %#v", terminal)
 	}
-	return hostileEvidence{Name: name, Outcome: terminal.Outcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
+	return hostileEvidence{Name: name, Outcome: terminal.Outcome, ProbeOutcome: terminal.ProbeOutcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
 
 func stageProbeExecutable(t *testing.T, root string) (string, string) {

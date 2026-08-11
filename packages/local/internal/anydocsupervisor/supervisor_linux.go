@@ -628,6 +628,16 @@ type WorkloadOutcome struct {
 	Code WorkloadOutcomeCode
 }
 
+// ProbeOutcome records the closed result of a sealed containment probe.
+// It is deliberately independent from worker execution classification.
+type ProbeOutcome string
+
+const (
+	ProbeOutcomeContained  ProbeOutcome = "contained"
+	ProbeOutcomeBreach     ProbeOutcome = "breach"
+	ProbeOutcomeUnverified ProbeOutcome = "unverified"
+)
+
 // CleanupProof records only lifecycle containment facts. It deliberately does
 // not assert that the workload itself succeeded.
 type CleanupProof struct {
@@ -643,12 +653,13 @@ type CleanupProof struct {
 }
 
 type TerminalReport struct {
-	PreStop     SandboxReport
-	Termination TerminationEvidence
-	CPU         time.Duration
-	Wall        time.Duration
-	Workload    WorkloadOutcome
-	Cleanup     CleanupProof
+	PreStop      SandboxReport
+	Termination  TerminationEvidence
+	CPU          time.Duration
+	Wall         time.Duration
+	Workload     WorkloadOutcome
+	ProbeOutcome ProbeOutcome
+	Cleanup      CleanupProof
 	// Outcome and Cleaned are retained for existing local diagnostics.
 	Outcome ErrorCode
 	Cleaned bool
@@ -783,24 +794,25 @@ func NewWithStager(b Backend, stager *Stager) *Supervisor {
 }
 
 type Run struct {
-	unit            Unit
-	write           *os.File
-	nonce, digest   string
-	sourceSHA       string
-	sourceBytes     int64
-	format          Format
-	limits          JobLimits
-	staged          *StagedSource
-	mu              sync.Mutex
-	stopOnce        sync.Once
-	finishOnce      sync.Once
-	finished        chan struct{}
-	result          error
-	receivedFailure error
-	terminal        TerminalReport
-	started         time.Time
-	done            bool
-	stop            chan struct{}
+	unit                Unit
+	write               *os.File
+	nonce, digest       string
+	sourceSHA           string
+	sourceBytes         int64
+	format              Format
+	limits              JobLimits
+	staged              *StagedSource
+	mu                  sync.Mutex
+	stopOnce            sync.Once
+	finishOnce          sync.Once
+	finished            chan struct{}
+	result              error
+	receivedFailure     error
+	sealedProbeObserved bool
+	terminal            TerminalReport
+	started             time.Time
+	done                bool
+	stop                chan struct{}
 }
 
 func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
@@ -971,7 +983,13 @@ func (r *Run) receiveSealedProbeObservation(ctx context.Context, probe *containm
 		return closed(ErrContainmentUnavailable)
 	}
 	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
-	return receiver.receiveSealedProbeObservation(ctx, expected, probe)
+	err := receiver.receiveSealedProbeObservation(ctx, expected, probe)
+	if err == nil {
+		r.mu.Lock()
+		r.sealedProbeObserved = true
+		r.mu.Unlock()
+	}
+	return err
 }
 
 // Execute receives the one permitted result and always tears down its unit.
@@ -993,6 +1011,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		_ = r.write.Close()
 		r.stopOnce.Do(func() { close(r.stop) })
 		receivedFailure := r.receivedFailure
+		sealedProbeObserved := r.sealedProbeObserved
 		r.mu.Unlock()
 		if out == nil {
 			out = receivedFailure
@@ -1013,7 +1032,12 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		}
 		r.mu.Lock()
 		workload := workloadOutcome(out, classified, report)
-		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
+		probeOutcome := ProbeOutcomeUnverified
+		if sealedProbeObserved && workload.Code == WorkloadOutcomeSuccess {
+			workload = WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+			probeOutcome = ProbeOutcomeContained
+		}
+		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, ProbeOutcome: probeOutcome, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
 		r.result = result
 		r.mu.Unlock()
 		close(r.finished)
@@ -1029,7 +1053,7 @@ func (r *Run) TerminalReport() TerminalReport {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Workload: r.terminal.Workload, Cleanup: r.terminal.Cleanup, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
+	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Workload: r.terminal.Workload, ProbeOutcome: r.terminal.ProbeOutcome, Cleanup: r.terminal.Cleanup, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
 }
 func cloneSandboxReport(in SandboxReport) SandboxReport {
 	out := in

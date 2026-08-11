@@ -97,12 +97,15 @@ func TestSealedHostileProbeUsesOnlyFixedAttestedMount(t *testing.T) {
 	}
 }
 
-func TestSuccessfulHostileChecksUseExplicitSuccessOutcome(t *testing.T) {
+func TestSuccessfulHostileChecksUseDistinctProbeOutcome(t *testing.T) {
 	for _, name := range []string{"network", "filesystem", "privileges", "pids"} {
 		t.Run(name, func(t *testing.T) {
 			got := observedProbeOutcome(name, probeObservation{Checks: map[string]bool{"verified": true}}, SandboxReport{}, 0, 0)
 			if got != OutcomeSuccess {
 				t.Fatalf("outcome = %q, want %q", got, OutcomeSuccess)
+			}
+			if ProbeOutcomeContained == ProbeOutcomeUnverified || ProbeOutcomeContained == ProbeOutcomeBreach {
+				t.Fatal("contained probe outcome is not distinct")
 			}
 		})
 	}

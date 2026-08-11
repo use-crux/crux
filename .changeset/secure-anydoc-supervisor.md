@@ -86,6 +86,10 @@ Resource, timeout, crash, and cancellation probes retain their independent
 Task2 workload outcomes instead of treating probe observation delivery as a
 workload result.
 
+Record the sealed probe outcome separately from the workload outcome: a
+verified contained observation is never reported as workload success, while
+resource, cancellation, and crash probes remain probe-unverified.
+
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
 
