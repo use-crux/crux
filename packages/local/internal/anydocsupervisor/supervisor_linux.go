@@ -431,6 +431,7 @@ type containmentProbe struct {
 	executableSHA  string
 	action         string
 	resultPath     string
+	hostResultPath string
 }
 
 type LaunchDependency struct {

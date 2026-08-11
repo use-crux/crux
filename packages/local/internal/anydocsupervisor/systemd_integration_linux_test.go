@@ -378,7 +378,9 @@ func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root stri
 		{"network", "network", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
 		{"filesystem", "filesystem", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
 		{"privileges", "privileges", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
-		{"pids", "pids", Limits{64 << 20, 4, 25, 3 * time.Second}, "result"},
+		// Eight is the smallest deterministic ceiling observed to admit the Go
+		// probe and authorization handshake; it remains below admission's 16.
+		{"pids", "pids", Limits{64 << 20, 8, 25, 3 * time.Second}, "result"},
 		{"memory", "memory", Limits{64 << 20, 8, 25, 4 * time.Second}, "inactive"},
 		{"cpu", "cpu", Limits{64 << 20, 8, 25, 4 * time.Second}, "cpu"},
 		{"wall", "wall", Limits{64 << 20, 8, 25, 500 * time.Millisecond}, "inactive"},
@@ -417,7 +419,11 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 		action = "filesystem:" + token
 	}
 	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
-	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: filepath.Join(privateTemp, "observation.json")}
+	hostObservationPath := filepath.Join(privateTemp, "observation.json")
+	if err := os.WriteFile(hostObservationPath, nil, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
 	if control == "abort" {
 		return runCanceledSupervisorProbe(t, launch, probe, stagingRoot, privateTemp, name, limits)
 	}
@@ -430,7 +436,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if err != nil {
 		t.Fatal(err)
 	}
-	resultPath := probe.resultPath
+	resultPath := probe.hostResultPath
 	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probePath+":"+probeTarget)
 	spec.probe = probe
 	read, write, err := os.Pipe()

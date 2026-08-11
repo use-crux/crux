@@ -466,7 +466,7 @@ func validBackendSpec(spec ServiceSpec) bool {
 	if spec.probe == nil && (len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1])) {
 		return false
 	}
-	if spec.probe != nil && (!validAbsolutePath(spec.probe.hostExecutable) || len(spec.probe.executableSHA) != sha256.Size*2 || spec.probe.action == "" || spec.probe.resultPath == "") {
+	if spec.probe != nil && (!validAbsolutePath(spec.probe.hostExecutable) || len(spec.probe.executableSHA) != sha256.Size*2 || spec.probe.action == "" || spec.probe.resultPath != probeObservationTarget || spec.probe.hostResultPath != filepath.Join(onlyPrivateTemp(spec), "observation.json")) {
 		return false
 	}
 	wantBinds := 2
@@ -526,6 +526,7 @@ type restrictAddressFamilies struct {
 const (
 	authorizationSocketTarget = "/run/crux-anydoc/authorize.sock"
 	resultSocketTarget        = "/run/crux-anydoc/result.sock"
+	probeObservationTarget    = "/run/crux-anydoc/observation.json"
 )
 
 // bindReadOnlyPath matches systemd's a(ssbt) BindReadOnlyPaths wire contract.
@@ -551,7 +552,7 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 	if spec.probe != nil {
 		command = []execStart{{Path: probeTarget, Args: append([]string{probeTarget, "-test.run=^TestContainmentProbeProcess$", "--", spec.probe.action, spec.probe.resultPath}, sockets...), Fail: false}}
 	}
-	return []DBusProperty{
+	properties := []DBusProperty{
 		{"Description", "Crux Anydoc isolated runner"},
 		{"Type", "exec"},
 		{"ExecStart", command},
@@ -582,6 +583,10 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 		{"BindReadOnlyPaths", bindReadOnlyPathProperties(spec.BindReadOnlyPaths)},
 		{"ReadWritePaths", spec.ReadWritePaths},
 	}
+	if spec.probe != nil {
+		properties = append(properties, DBusProperty{"BindPaths", bindReadOnlyPathProperties([]string{spec.probe.hostResultPath + ":" + probeObservationTarget})})
+	}
+	return properties
 }
 
 func (u *systemdUnit) VerifyAttestedProbe(ctx context.Context, want *containmentProbe) error {

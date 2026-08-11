@@ -97,6 +97,22 @@ func TestSystemdStartUsesExactContainmentPropertiesAndClosesLocalFD(t *testing.T
 	if !ok || len(binds) != 4 || !same(binds[:2], []string{runtime + ":" + runtimeTarget, input + ":" + stagedSourceTarget}) || !strings.HasPrefix(binds[2], tmp+"/.a-") || !strings.HasSuffix(binds[2], ":/run/crux-anydoc/authorize.sock") || !strings.HasPrefix(binds[3], tmp+"/.r-") || !strings.HasSuffix(binds[3], ":/run/crux-anydoc/result.sock") {
 		t.Fatalf("source bind mapping %#v", got["BindReadOnlyPaths"])
 	}
+	if _, ok := got["BindPaths"]; ok {
+		t.Fatal("production spec exposed a writable bind")
+	}
+}
+
+func TestSystemdProbeUsesOneExactWritableObservationBind(t *testing.T) {
+	spec, err := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+	properties := propertiesByName(systemdProperties(spec))
+	binds, ok := bindReadOnlyPathsValue(properties["BindPaths"])
+	if !ok || !same(binds, []string{"/run/private/observation.json:" + probeObservationTarget}) {
+		t.Fatalf("probe writable bind = %#v", properties["BindPaths"])
+	}
 }
 
 func TestSystemdBackendFailsClosedForUnavailablePermissionAndCanceledContexts(t *testing.T) {
