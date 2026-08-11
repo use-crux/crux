@@ -490,6 +490,7 @@ func TestTask3ProbeOutcomeBoundary(t *testing.T) {
 		{name: "abort", caseID: "abort", workload: WorkloadOutcome{Code: WorkloadOutcomeAborted}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "descendants witness", caseID: "descendants", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeAborted}, cleanup: accepted, want: ProbeOutcomeContained},
 		{name: "missing witness", caseID: "network", workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, cleanup: accepted, want: ProbeOutcomeUnverified},
+		{name: "malformed witness", caseID: "network", workload: WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}, cleanup: accepted, want: ProbeOutcomeUnverified},
 		{name: "missing cleanup", caseID: "network", observed: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, want: ProbeOutcomeUnverified},
 		{name: "observed violation", caseID: "network", breach: true, workload: WorkloadOutcome{Code: WorkloadOutcomeSuccess}, want: ProbeOutcomeBreach},
 	} {

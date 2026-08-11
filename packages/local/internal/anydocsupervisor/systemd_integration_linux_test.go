@@ -534,6 +534,27 @@ func TestProbeObservationCodecRejectsHostileInput(t *testing.T) {
 	}
 }
 
+func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
+	source, err := os.ReadFile("systemd_integration_linux_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bytes.Index(source, []byte("\nfunc runContainmentProbe("))
+	end := bytes.Index(source[start:], []byte("\nfunc expectedProbeOutcome("))
+	if start < 0 || end < 0 {
+		t.Fatal("runContainmentProbe source boundary missing")
+	}
+	body := source[start+1 : start+end]
+	for _, call := range [][]byte{[]byte("supervisor.startEvaluation("), []byte("run.expectSealedProbe("), []byte("run.receiveSealedProbeObservation("), []byte("run.Finish("), []byte("terminal.ProbeOutcome")} {
+		if !bytes.Contains(body, call) {
+			t.Fatalf("runContainmentProbe bypasses sealed Run lifecycle: missing %q", call)
+		}
+	}
+	if bytes.Contains(body, []byte("stopAwaitReadAndCleanupProbeObservation")) {
+		t.Fatal("runContainmentProbe retained the legacy probe cleanup path")
+	}
+}
+
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
 	t.Helper()
 	cases := []struct {
