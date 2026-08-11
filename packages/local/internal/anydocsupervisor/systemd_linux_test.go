@@ -107,7 +107,7 @@ func TestSystemdProbeUsesOneExactWritableObservationBind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", caseID: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
 	properties := propertiesByName(systemdProperties(spec))
 	binds, ok := bindReadOnlyPathsValue(properties["BindPaths"])
 	if !ok || !same(binds, []string{"/run/private:" + probeObservationDirectoryTarget}) {
@@ -1924,14 +1924,23 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
 			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
 			u.authorized, u.authorizedRequest = true, request
-			observation := sealedProbeObservation{Schema: sealedProbeObservationSchema, Version: sealedProbeObservationVersion, Case: probe.caseID, Invocation: request.RequestDigest, Checks: map[string]bool{"contained": true}}
+			checks, ok := sealedProbeObservationChecks(probe.caseID)
+			if !ok {
+				t.Fatal("missing sealed probe check contract")
+			}
+			observationChecks := make(map[string]bool, len(checks))
+			for check := range checks {
+				observationChecks[check] = true
+			}
+			observation := sealedProbeObservation{Schema: sealedProbeObservationSchema, Version: sealedProbeObservationVersion, Case: probe.caseID, Invocation: request.RequestDigest, Checks: observationChecks}
 			if test.mutate != nil {
 				test.mutate(u, fs, &observation)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
+			run := &Run{unit: u, nonce: request.Nonce, digest: request.RequestDigest, sourceSHA: request.SourceSHA256, sourceBytes: request.SourceBytes, format: request.Format, limits: request.Limits}
 			done := make(chan error, 1)
-			go func() { done <- u.receiveSealedProbeObservation(ctx, request, probe) }()
+			go func() { done <- run.receiveSealedProbeObservation(ctx, probe) }()
 			if test.name != "sealed executable mismatch" {
 				conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 				if dialErr == nil {
@@ -1953,7 +1962,7 @@ func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
 				t.Fatalf("witness kind = %d", u.lifecycleWitness.kind)
 			}
 			if witnessed {
-				replayErr := u.receiveSealedProbeObservation(context.Background(), request, probe)
+				replayErr := run.receiveSealedProbeObservation(context.Background(), probe)
 				var replay *SupervisorError
 				if !errors.As(replayErr, &replay) || replay.Code != ErrReplay {
 					t.Fatalf("replay = %T %v, want typed %q", replayErr, replayErr, ErrReplay)
@@ -2088,7 +2097,7 @@ func TestSystemdReportAndVerifyBindPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", caseID: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
 
 	for _, test := range []struct {
 		name      string

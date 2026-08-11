@@ -532,65 +532,24 @@ func TestProbeObservationCodecRejectsHostileInput(t *testing.T) {
 	}
 }
 
-type probeObservationLifecycleUnit struct {
-	fakeUnit
-	path   string
-	events []string
-}
-
-func (u *probeObservationLifecycleUnit) Stop(ctx context.Context) error {
-	u.events = append(u.events, "stop")
-	return u.fakeUnit.Stop(ctx)
-}
-
-func (u *probeObservationLifecycleUnit) WaitInactive(ctx context.Context) error {
-	u.events = append(u.events, "wait")
-	if err := writeProbeObservation(u.path, "network", map[string]bool{
-		"ipv4Denied": true,
-		"ipv6Denied": true,
-		"dnsDenied":  true,
-	}, 0); err != nil {
-		return err
-	}
-	return u.fakeUnit.WaitInactive(ctx)
-}
-
-func (u *probeObservationLifecycleUnit) Cleanup(ctx context.Context) error {
-	u.events = append(u.events, "cleanup")
-	if err := os.RemoveAll(filepath.Dir(u.path)); err != nil {
-		return err
-	}
-	return u.fakeUnit.Cleanup(ctx)
-}
-
-func TestProbeObservationLifecycleReadsAfterWaitBeforeCleanup(t *testing.T) {
-	privateTemp := filepath.Join(t.TempDir(), "private")
-	if err := os.Mkdir(privateTemp, 0o700); err != nil {
+func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
+	source, err := os.ReadFile("systemd_integration_linux_test.go")
+	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(privateTemp, "observation.json")
-	unit := &probeObservationLifecycleUnit{
-		fakeUnit: fakeUnit{
-			rep: SandboxReport{ControlGroup: "/fake"},
-			terminalStatus: func(context.Context) (TerminalStatus, error) {
-				return TerminalStatus{State: "inactive", ServiceResult: "success"}, nil
-			},
-		},
-		path: path,
+	start := bytes.Index(source, []byte("\nfunc runContainmentProbe("))
+	end := bytes.Index(source[start:], []byte("\nfunc expectedProbeOutcome("))
+	if start < 0 || end < 0 {
+		t.Fatal("runContainmentProbe source boundary missing")
 	}
-
-	observation, _, _, _, cleanupReason, observationErr := stopAwaitReadAndCleanupProbeObservation(context.Background(), unit, path, "network")
-	if observationErr != nil {
-		t.Fatalf("probe observation lifecycle failed: stage=%s reason=%s", observationErr.stage, observationErr.reason)
+	body := source[start+1 : start+end]
+	for _, call := range [][]byte{[]byte("supervisor.startEvaluation("), []byte("run.receiveSealedProbeObservation("), []byte("run.Finish(")} {
+		if !bytes.Contains(body, call) {
+			t.Fatalf("runContainmentProbe bypasses sealed Run lifecycle: missing %q", call)
+		}
 	}
-	if cleanupReason != "" {
-		t.Fatalf("probe cleanup failed: %s", cleanupReason)
-	}
-	if !observation.Checks["ipv4Denied"] || !same(unit.events, []string{"stop", "wait", "stop", "wait", "cleanup"}) {
-		t.Fatalf("observation was not read after producer exit: checks=%#v events=%#v", observation.Checks, unit.events)
-	}
-	if _, err := os.Stat(privateTemp); !os.IsNotExist(err) {
-		t.Fatalf("cleanup did not follow observation read: err=%v events=%#v", err, unit.events)
+	if bytes.Contains(body, []byte("stopAwaitReadAndCleanupProbeObservation")) {
+		t.Fatal("runContainmentProbe retained the legacy probe cleanup path")
 	}
 }
 
@@ -651,66 +610,44 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	if control == "abort" {
 		return runCanceledSupervisorProbe(t, launch, probe, stagingRoot, privateTemp, name, limits)
 	}
-	staged, err := NewStager(stagingRoot).Stage([]byte("probe"), 1024)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer staged.Cleanup()
-	spec, err := serviceSpec(staged.HostPath, launch, privateTemp, limits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resultPath := probe.hostResultPath
-	spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probePath+":"+probeTarget)
-	spec.probe = probe
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer write.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	unit, err := NewSystemdBackend().Start(ctx, spec, read)
+	supervisor := NewWithStager(&sealedProbeBackend{delegate: NewSystemdBackend(), probe: probe}, NewStager(stagingRoot))
+	run, err := supervisor.startEvaluation(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
 	if err != nil {
 		t.Fatalf("start %s probe: %v", name, err)
 	}
-	if adjusted, ok := unit.(verifiedServiceSpec); ok {
-		spec = adjusted.VerifiedServiceSpec(spec)
-	}
 	started := time.Now()
-	if !verify(ctx, unit, spec) {
-		_, _, _, _ = cleanup(unit)
-		t.Fatalf("%s probe did not enter the centrally verified production sandbox", name)
-	}
-	preparer, prepareOK := unit.(authorizationPreparer)
-	authorizer, authorizeOK := unit.(capabilityAuthorizer)
-	if !prepareOK || !authorizeOK || preparer.PrepareAuthorization(ctx) != nil {
-		_, _, _, _ = cleanup(unit)
-		t.Fatalf("%s probe could not prepare its production authorization channel", name)
-	}
-	sourceSHA := sha256Hex([]byte("probe"))
-	jobLimits := testJobLimits()
-	nonce := "00000000000000000000000000000000"
-	request := Request{Version: ProtocolVersion, Nonce: nonce, Format: "docx", SourceSHA256: sourceSHA, SourceBytes: 5, Limits: jobLimits}
-	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
-	if err := authorizer.AuthorizeCapability(ctx, request); err != nil {
-		_, _, _, _ = cleanup(unit)
+	if err := run.Authorize(); err != nil {
+		_ = run.Finish(context.Background(), err)
 		t.Fatalf("%s probe authorization failed: %v", name, err)
-	}
-	probeReceiver, receivesProbe := unit.(*systemdUnit)
-	probeDone := make(chan error, 1)
-	if receivesProbe && (control == "result" || control == "descendant") {
-		go func() { probeDone <- probeReceiver.receiveSealedProbeObservation(ctx, request, probe) }()
-	} else {
-		close(probeDone)
 	}
 
 	var observation probeObservation
+	var finishInput error
 	switch control {
 	case "result", "descendant":
+		if err := run.receiveSealedProbeObservation(ctx, probe); err != nil {
+			_ = run.Finish(context.Background(), err)
+			t.Fatalf("%s probe witness failed: %v", name, err)
+		}
+		bytes, err := os.ReadFile(probe.hostResultPath)
+		if err != nil {
+			_ = run.Finish(context.Background(), err)
+			t.Fatalf("%s probe observation artifact unavailable: %v", name, err)
+		}
+		var reason string
+		observation, reason = decodeProbeObservation(bytes, name)
+		if reason != "" {
+			_ = run.Finish(context.Background(), closed(ErrInvalidResult))
+			t.Fatalf("%s probe observation artifact rejected: %s", name, reason)
+		}
+		if control == "descendant" {
+			finishInput = context.Canceled
+		}
 	case "cpu":
 		for {
-			usage, usageErr := unit.CPUUsage(ctx)
+			usage, usageErr := run.unit.CPUUsage(ctx)
 			if usageErr != nil {
 				t.Fatal(usageErr)
 			}
@@ -723,33 +660,17 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 			case <-time.After(20 * time.Millisecond):
 			}
 		}
+		finishInput = errCPUCeiling
 	case "inactive":
-		awaitUnitInactive(t, ctx, unit)
+		awaitUnitInactive(t, ctx, run.unit)
 	case "abort":
 		// Cancellation is represented by the caller terminating the isolated job.
 	}
-	var observationErr *probeObservationLifecycleError
-	var report SandboxReport
-	var cpu time.Duration
-	var termination TerminationEvidence
-	var cleanupReason string
-	if control == "result" || control == "descendant" {
-		observation, report, cpu, termination, cleanupReason, observationErr = stopAwaitReadAndCleanupProbeObservation(ctx, unit, resultPath, name)
-	} else {
-		report, cpu, termination, cleanupReason = cleanup(unit)
-	}
-	cleaned := cleanupReason == ""
+	finishErr := run.Finish(context.Background(), finishInput)
 	wall := time.Since(started)
-	if observationErr != nil {
-		t.Fatalf("%s probe observation lifecycle failed: stage=%s reason=%s cleanup=%s", name, observationErr.stage, observationErr.reason, cleanupReason)
-	}
-	if receivesProbe && (control == "result" || control == "descendant") {
-		if err := <-probeDone; err != nil {
-			t.Fatalf("%s probe witness failed: %v", name, err)
-		}
-	}
-	if cleanupReason != "" {
-		t.Fatalf("%s probe cleanup failed: %s", name, cleanupReason)
+	terminal := run.TerminalReport()
+	if finishErr != nil && errorCode(finishErr) == ErrContainmentUnavailable {
+		t.Fatalf("%s probe cleanup failed: %v", name, finishErr)
 	}
 	if control == "result" || control == "descendant" {
 		if name == "filesystem" {
@@ -762,11 +683,11 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 			}
 		}
 	}
-	outcome := observedProbeOutcome(name, observation, report, cpu, wall)
+	outcome := terminal.Outcome
 	if outcome != expectedProbeOutcome(name) {
 		t.Fatalf("%s observed unexpected outcome %q", name, outcome)
 	}
-	terminal := TerminalReport{PreStop: report, Termination: termination, CPU: cpu, Wall: wall, Outcome: outcome, Cleaned: cleaned}
+	terminal.Wall = wall
 	if !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
 		t.Fatalf("%s lacked verified termination evidence", name)
 	}
@@ -782,6 +703,14 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	}
 	if terminal.Outcome == ErrContainmentUnavailable {
 		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
+	}
+	if expected, ok := map[string]WorkloadOutcomeCode{
+		"memory": WorkloadOutcomeOOM,
+		"cpu":    WorkloadOutcomeCPUTimeout,
+		"wall":   WorkloadOutcomeWallTimeout,
+		"crash":  WorkloadOutcomeCrash,
+	}[name]; ok && terminal.Workload.Code != expected {
+		t.Fatalf("%s did not retain its Task2 workload outcome: got %q, want %q", name, terminal.Workload.Code, expected)
 	}
 	if name == "memory" && terminal.PreStop.MemoryEvents["oom_kill"] < 1 && terminal.PreStop.ServiceResult != "oom-kill" {
 		t.Fatalf("memory probe lacked observed OOM evidence: events=%#v result=%q", terminal.PreStop.MemoryEvents, terminal.PreStop.ServiceResult)
@@ -937,51 +866,6 @@ func observedProbeOutcome(name string, observation probeObservation, report Sand
 		}
 	}
 	return ErrContainmentUnavailable
-}
-
-type probeObservationLifecycleError struct {
-	stage  string
-	reason string
-	cause  error
-}
-
-func (e *probeObservationLifecycleError) Error() string {
-	return "probe observation lifecycle unavailable"
-}
-
-func (e *probeObservationLifecycleError) Unwrap() error {
-	return e.cause
-}
-
-func probeObservationFailure(stage, reason string, cause error) *probeObservationLifecycleError {
-	return &probeObservationLifecycleError{stage: stage, reason: reason, cause: cause}
-}
-
-func stopAwaitReadAndCleanupProbeObservation(ctx context.Context, unit Unit, path, wantCase string) (observation probeObservation, report SandboxReport, cpu time.Duration, termination TerminationEvidence, cleanupReason string, observationErr *probeObservationLifecycleError) {
-	defer func() {
-		report, cpu, termination, cleanupReason = cleanup(unit)
-	}()
-
-	if err := unit.Stop(ctx); err != nil {
-		observationErr = probeObservationFailure("probe-observation-stop", "unit-stop", err)
-		return
-	}
-	if err := unit.WaitInactive(ctx); err != nil {
-		observationErr = probeObservationFailure("probe-observation-wait", "unit-wait-inactive", err)
-		return
-	}
-	bytes, err := os.ReadFile(path)
-	if err != nil {
-		observationErr = probeObservationFailure("probe-observation-read", "observation-unavailable", err)
-		return
-	}
-	value, reason := decodeProbeObservation(bytes, wantCase)
-	if reason != "" {
-		observationErr = probeObservationFailure("probe-observation-decode", reason, nil)
-		return
-	}
-	observation = value
-	return
 }
 
 func awaitUnitInactive(t *testing.T, ctx context.Context, unit Unit) {

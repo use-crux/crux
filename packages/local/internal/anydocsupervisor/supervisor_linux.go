@@ -466,15 +466,43 @@ const (
 )
 
 func validSealedProbeObservation(value sealedProbeObservation, probe *containmentProbe, request Request) bool {
-	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case == "" || value.Case != probe.caseID || value.Invocation != request.RequestDigest || len(value.Checks) == 0 || len(value.Checks) > maxProbeObservationChecks {
+	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case == "" || value.Case != probe.caseID || value.Invocation != request.RequestDigest || len(value.Checks) > maxProbeObservationChecks {
+		return false
+	}
+	want, ok := sealedProbeObservationChecks(probe.caseID)
+	if !ok || len(value.Checks) != len(want) {
 		return false
 	}
 	for name, passed := range value.Checks {
-		if name == "" || len(name) > 64 || !passed {
+		if _, ok := want[name]; !ok || !passed {
 			return false
 		}
 	}
 	return true
+}
+
+// sealedProbeObservationChecks is the single exact, versioned observation
+// contract accepted by the sealed integration receiver.
+func sealedProbeObservationChecks(probeCase string) (map[string]struct{}, bool) {
+	switch probeCase {
+	case "network":
+		return map[string]struct{}{"ipv4Denied": {}, "ipv6Denied": {}, "dnsDenied": {}}, true
+	case "filesystem":
+		return map[string]struct{}{"homeReadDenied": {}, "projectReadDenied": {}, "hostReadDenied": {}, "hostWriteDenied": {}, "hostTempInvisible": {}, "privateTempWritable": {}}, true
+	case "privileges":
+		return map[string]struct{}{"noNewPrivileges": {}, "capabilitiesEmpty": {}, "setuidDenied": {}}, true
+	case "pids":
+		return map[string]struct{}{"tasksLimitEnforced": {}}, true
+	case "descendants":
+		return map[string]struct{}{}, true
+	default:
+		return nil, false
+	}
+}
+
+func validSealedProbeCase(probeCase string) bool {
+	_, ok := sealedProbeObservationChecks(probeCase)
+	return ok
 }
 
 type LaunchDependency struct {
@@ -728,6 +756,9 @@ type capabilityAuthorizer interface {
 type resultReceiver interface {
 	ReceiveResult(context.Context, Request) (Result, error)
 }
+type sealedProbeReceiver interface {
+	receiveSealedProbeObservation(context.Context, Request, *containmentProbe) error
+}
 type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
 type verifiedServiceSpec interface {
 	VerifiedServiceSpec(ServiceSpec) ServiceSpec
@@ -926,6 +957,21 @@ func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
 	r.receivedFailure = parserResultFailure(result)
 	r.mu.Unlock()
 	return result, nil
+}
+
+// receiveSealedProbeObservation is the integration-only counterpart to
+// ReceiveResult. It stays unexported so a sealed hostile probe cannot expose
+// or activate production document routing.
+func (r *Run) receiveSealedProbeObservation(ctx context.Context, probe *containmentProbe) error {
+	if r == nil || probe == nil {
+		return closed(ErrReplay)
+	}
+	receiver, ok := r.unit.(sealedProbeReceiver)
+	if !ok {
+		return closed(ErrContainmentUnavailable)
+	}
+	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	return receiver.receiveSealedProbeObservation(ctx, expected, probe)
 }
 
 // Execute receives the one permitted result and always tears down its unit.

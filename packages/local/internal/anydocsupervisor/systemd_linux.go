@@ -466,7 +466,7 @@ func validBackendSpec(spec ServiceSpec) bool {
 	if spec.probe == nil && (len(spec.Command) != 2 || !validAbsolutePath(spec.Command[0]) || !validAbsolutePath(spec.Command[1])) {
 		return false
 	}
-	if spec.probe != nil && (!validAbsolutePath(spec.probe.hostExecutable) || len(spec.probe.executableSHA) != sha256.Size*2 || spec.probe.action == "" || spec.probe.resultPath != probeObservationTarget || spec.probe.hostResultPath != filepath.Join(onlyPrivateTemp(spec), "observation.json")) {
+	if spec.probe != nil && (!validAbsolutePath(spec.probe.hostExecutable) || len(spec.probe.executableSHA) != sha256.Size*2 || spec.probe.action == "" || spec.probe.caseID == "" || !validSealedProbeCase(spec.probe.caseID) || spec.probe.resultPath != probeObservationTarget || spec.probe.hostResultPath != filepath.Join(onlyPrivateTemp(spec), "observation.json")) {
 		return false
 	}
 	wantBinds := 2

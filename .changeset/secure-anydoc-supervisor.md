@@ -79,6 +79,13 @@ refreshed immutable accounting snapshot, and successful host ACK before minting
 a probe-bound witness; malformed, mismatched, resource-limited, or ACK-failed
 probes mint nothing and never enter production routing.
 
+Run every hostile systemd probe through the supervisor Run lifecycle: preserve
+the bounded observation artifact only after its sealed receiver ACKs and mints
+the probe witness, then let Run.Finish consume that witness during cleanup.
+Resource, timeout, crash, and cancellation probes retain their independent
+Task2 workload outcomes instead of treating probe observation delivery as a
+workload result.
+
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
 
