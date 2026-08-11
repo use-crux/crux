@@ -2849,11 +2849,12 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 	strict := map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(0)}
 
 	for _, runtime := range []struct {
-		name   string
-		procFS ProcRuntimeFS
+		name                     string
+		procFS                   ProcRuntimeFS
+		unverifiedSnapshotReason string
 	}{
-		{name: "runtime target missing"},
-		{name: "runtime tree unreadable", procFS: unreadableRuntimeTreeFS()},
+		{name: "runtime target missing", unverifiedSnapshotReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing"},
+		{name: "runtime tree unreadable", procFS: unreadableRuntimeTreeFS(), unverifiedSnapshotReason: "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable"},
 	} {
 		for _, test := range []struct {
 			name        string
@@ -2891,7 +2892,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			{name: "rejects witness pid", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.pid = 0 }, wantReason: "runtime-target-missing-ack-witness-pid-invalid"},
 			{name: "rejects missing witness digest", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.requestDigest = "" }, wantReason: "runtime-target-missing-ack-witness-request-digest-missing"},
 			{name: "rejects missing witness nonce", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", witness: func(u *systemdUnit) { u.resultACKed.nonce = "" }, wantReason: "runtime-target-missing-ack-witness-nonce-missing"},
-			{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
+			{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: runtime.unverifiedSnapshotReason, wantService: "unknown"},
 			{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 			{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
 			{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=success oom-killed=false pids-limited=false"},
