@@ -3474,6 +3474,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 		for _, test := range []struct {
 			name        string
 			receive     string
+			peerErr     error
 			final       map[string]any
 			finalErr    error
 			resetErr    error
@@ -3517,6 +3518,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 			{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 			{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
 			{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=authorize-peer-credentials reason=io-or-systemd oom-killed=false pids-limited=false", wantPrior: &ContainmentError{Stage: "authorize-peer-credentials", ReasonCode: "io-or-systemd"}},
+			{name: "retains allowlisted no such unit peer diagnostic", receive: "peer-auth", peerErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=authorize-peer-credentials reason=dbus-no-such-unit oom-killed=false pids-limited=false", wantPrior: &ContainmentError{Stage: "authorize-peer-credentials", ReasonCode: "dbus-no-such-unit"}},
 		} {
 			t.Run(runtime.name+"/"+test.name, func(t *testing.T) {
 				bus := newFakeSystemBus()
@@ -3553,7 +3555,10 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 					}
 					peer := fakePeer{pid: 42}
 					if test.receive == "peer-auth" {
-						peer.err = errors.New("peer credentials unavailable")
+						peer.err = test.peerErr
+						if peer.err == nil {
+							peer.err = errors.New("peer credentials unavailable")
+						}
 					}
 					u.resultListener, u.resultSocket, u.peers = listener, path, peer
 					if test.receive == "ack-write" {

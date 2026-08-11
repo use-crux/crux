@@ -32,7 +32,7 @@ type ContainmentError struct{ Stage, ReasonCode string }
 
 func (e *ContainmentError) Error() string { return "containment " + e.Stage + ":" + e.ReasonCode }
 func containment(stage string, err error) error {
-	return &ContainmentError{Stage: stage, ReasonCode: containmentReason(err)}
+	return containmentDiagnostic(stage, containmentReason(err))
 }
 
 // alreadyGoneError carries strict terminal proof and its pinned cgroup.
@@ -1134,7 +1134,7 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 		conn, err := u.listener.AcceptUnix()
 		if err != nil {
 			if errors.Is(err, os.ErrDeadlineExceeded) && lastStage != "authorize-accept" {
-				return &ContainmentError{Stage: lastStage, ReasonCode: lastReason}
+				return containmentDiagnostic(lastStage, lastReason)
 			}
 			return containment("authorize-accept", err)
 		}
@@ -1165,7 +1165,7 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 		}
 		select {
 		case <-ctx.Done():
-			return &ContainmentError{Stage: lastStage, ReasonCode: lastReason}
+			return containmentDiagnostic(lastStage, lastReason)
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}
@@ -1202,7 +1202,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 	}
 	if u.resultListener == nil || u.peers == nil {
 		u.resultMu.Unlock()
-		return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "result-receive", ReasonCode: "unavailable"})
+		return Result{}, closedWith(ErrContainmentUnavailable, containmentDiagnostic("result-receive", "unavailable"))
 	}
 	listener := u.resultListener
 	u.resultListener = nil
@@ -1225,7 +1225,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		if err != nil {
 			if ctx.Err() != nil {
 				if lastStage != "" {
-					return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: lastStage, ReasonCode: lastReason})
+					return Result{}, closedWith(ErrContainmentUnavailable, containmentDiagnostic(lastStage, lastReason))
 				}
 				return Result{}, ctx.Err()
 			}
@@ -1236,7 +1236,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "result-receive", ReasonCode: "io"})
+			return Result{}, closedWith(ErrContainmentUnavailable, containmentDiagnostic("result-receive", "io"))
 		}
 		pid, uid, peerErr := u.peers.Credentials(conn)
 		report, reportErr := u.Report(ctx)
@@ -1283,7 +1283,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		select {
 		case <-ctx.Done():
 			if lastStage != "" {
-				return Result{}, closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: lastStage, ReasonCode: lastReason})
+				return Result{}, closedWith(ErrContainmentUnavailable, containmentDiagnostic(lastStage, lastReason))
 			}
 			return Result{}, ctx.Err()
 		case <-u.now.After(10 * time.Millisecond):

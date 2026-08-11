@@ -206,3 +206,6 @@ terminal-success cleanup proof on that path. A PID-limited ACK witness without
 that independent proof remains ineligible and returns its fixed cleanup
 diagnostic; unavailable final-status and nonexclusive-termination diagnostics
 remain equally granular.
+
+Keep retained peer-authorization diagnostics within the fixed containment
+stage/reason allowlists, including the typed systemd `NoSuchUnit` category.
