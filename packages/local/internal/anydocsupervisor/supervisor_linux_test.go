@@ -375,6 +375,67 @@ func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 		t.Fatalf("cancellation terminal report = %#v", report)
 	}
 }
+
+func TestTask2RunFinishSeparatesWorkloadOutcomeFromCleanupProof(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		out         error
+		status      TerminalStatus
+		report      SandboxReport
+		stopErr     error
+		cleanupErr  error
+		wantOutcome WorkloadOutcomeCode
+		wantError   ErrorCode
+		wantCleanup bool
+	}{
+		{name: "success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true},
+		{name: "parser failure", out: closedWith(ErrInvalidResult, resultValidation("envelope", "malformed")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true},
+		{name: "worker crash exit", out: errors.New("exit"), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
+		{name: "worker crash core", out: errors.New("core"), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
+		{name: "worker oom", report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "oom-kill", ExecMainStatus: 9}, wantOutcome: WorkloadOutcomeOOM, wantError: ErrWorkerCrash, wantCleanup: true},
+		{name: "cpu timeout", out: context.DeadlineExceeded, status: TerminalStatus{State: "inactive", ServiceResult: "timeout"}, wantOutcome: WorkloadOutcomeTimeout, wantError: ErrTimeout, wantCleanup: true},
+		{name: "wall timeout", out: context.DeadlineExceeded, status: TerminalStatus{State: "inactive", ServiceResult: "timeout"}, wantOutcome: WorkloadOutcomeTimeout, wantError: ErrTimeout, wantCleanup: true},
+		{name: "cancellation abort", out: context.Canceled, status: TerminalStatus{State: "inactive", ServiceResult: "signal"}, wantOutcome: WorkloadOutcomeAborted, wantError: ErrAborted, wantCleanup: true},
+		{name: "exact unit gone", out: errors.New("exit"), stopErr: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/fake"}, status: TerminalStatus{}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
+		{name: "cleanup failure contains prior crash", out: errors.New("exit"), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, cleanupErr: errors.New("reset"), wantOutcome: WorkloadOutcomeCrash, wantError: ErrContainmentUnavailable},
+		{name: "no false success from terminal failure", status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer read.Close()
+			defer write.Close()
+			report := SandboxReport{ControlGroup: "/fake", MainPID: 42}
+			if test.report.MemoryEvents != nil {
+				report.MemoryEvents = test.report.MemoryEvents
+			}
+			unit := &fakeUnit{rep: report, stopErr: test.stopErr, cleanupErr: test.cleanupErr, terminalStatus: func(context.Context) (TerminalStatus, error) {
+				if _, ok := test.stopErr.(*alreadyGoneError); ok {
+					return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+				}
+				return test.status, nil
+			}}
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			err = run.Finish(context.Background(), test.out)
+			if got := errorCode(err); got != test.wantError {
+				t.Fatalf("Finish error code = %q, want %q (%v)", got, test.wantError, err)
+			}
+			terminal := run.TerminalReport()
+			if terminal.Workload.Code != test.wantOutcome {
+				t.Fatalf("workload outcome = %q, want %q", terminal.Workload.Code, test.wantOutcome)
+			}
+			if terminal.Cleanup.Accepted != test.wantCleanup || terminal.Cleaned != test.wantCleanup {
+				t.Fatalf("cleanup = %#v, legacy cleaned=%v, want %v", terminal.Cleanup, terminal.Cleaned, test.wantCleanup)
+			}
+		})
+	}
+}
 func TestReceiveResultPreservesTypedErrorOverExpiredContext(t *testing.T) {
 	typed := closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
 	b := &fakeBackend{receive: func(ctx context.Context, _ Request) (Result, error) {

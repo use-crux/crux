@@ -538,13 +538,48 @@ type TerminalStatus struct {
 	ExecMainStatus int
 }
 
+// WorkloadOutcome is the independently classified result of the worker's
+// execution. Cleanup evidence may contain that execution, but never changes it.
+type WorkloadOutcomeCode string
+
+const (
+	WorkloadOutcomeSuccess       WorkloadOutcomeCode = "success"
+	WorkloadOutcomeInvalidResult WorkloadOutcomeCode = "invalid-result"
+	WorkloadOutcomeOOM           WorkloadOutcomeCode = "oom"
+	WorkloadOutcomeCrash         WorkloadOutcomeCode = "crash"
+	WorkloadOutcomeTimeout       WorkloadOutcomeCode = "timeout"
+	WorkloadOutcomeAborted       WorkloadOutcomeCode = "aborted"
+	WorkloadOutcomeUnverified    WorkloadOutcomeCode = "unverified"
+)
+
+type WorkloadOutcome struct {
+	Code WorkloadOutcomeCode
+}
+
+// CleanupProof records only lifecycle containment facts. It deliberately does
+// not assert that the workload itself succeeded.
+type CleanupProof struct {
+	AccountingAvailable bool
+	VerifiedSnapshot    bool
+	UnitTerminal        bool
+	Termination         TerminationEvidence
+	StopAttempted       bool
+	WaitedInactive      bool
+	Reset               bool
+	Staged              bool
+	Accepted            bool
+}
+
 type TerminalReport struct {
 	PreStop     SandboxReport
 	Termination TerminationEvidence
 	CPU         time.Duration
 	Wall        time.Duration
-	Outcome     ErrorCode
-	Cleaned     bool
+	Workload    WorkloadOutcome
+	Cleanup     CleanupProof
+	// Outcome and Cleaned are retained for existing local diagnostics.
+	Outcome ErrorCode
+	Cleaned bool
 }
 type Unit interface {
 	Report(context.Context) (SandboxReport, error)
@@ -865,18 +900,29 @@ func (r *Run) Finish(_ context.Context, out error) error {
 		r.stopOnce.Do(func() { close(r.stop) })
 		r.mu.Unlock()
 		result := outcomeCode(out)
+		report, cpu, termination, proof, classified, cleanupReason := cleanupForOutcome(r.unit, result)
+		result = classified
 		hadPreCleanup := result != nil
-		report, cpu, termination, cleanupReason := cleanup(r.unit)
 		unitCleaned := cleanupReason == ""
 		if !unitCleaned {
 			result = chainContainment(result, hadPreCleanup, "containment-cleanup", cleanupReason)
 		}
 		stagedCleaned := r.staged != nil && r.staged.Cleanup() == nil
+		proof.Staged = stagedCleaned
+		proof.Accepted = unitCleaned && stagedCleaned
 		if !stagedCleaned {
 			result = chainContainment(result, hadPreCleanup, "containment-cleanup", "staged-cleanup")
 		}
 		r.mu.Lock()
-		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Outcome: errorCode(result), Cleaned: unitCleaned && stagedCleaned}
+		workload := workloadOutcome(classified, report)
+		// The legacy error surface groups OOM with worker crashes, but the
+		// independent workload record keeps authoritative OOM accounting.
+		if workload.Code == WorkloadOutcomeCrash {
+			if terminal := workloadOutcome(nil, report); terminal.Code == WorkloadOutcomeOOM {
+				workload = terminal
+			}
+		}
+		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
 		r.result = result
 		r.mu.Unlock()
 		close(r.finished)
@@ -892,7 +938,7 @@ func (r *Run) TerminalReport() TerminalReport {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
+	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Workload: r.terminal.Workload, Cleanup: r.terminal.Cleanup, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
 }
 func cloneSandboxReport(in SandboxReport) SandboxReport {
 	out := in
@@ -1041,6 +1087,53 @@ func outcomeCode(out error) error {
 	return nil
 }
 
+func workloadOutcome(result error, report SandboxReport) WorkloadOutcome {
+	if result != nil {
+		switch errorCode(result) {
+		case ErrInvalidResult:
+			return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+		case ErrTimeout:
+			return WorkloadOutcome{Code: WorkloadOutcomeTimeout}
+		case ErrAborted:
+			return WorkloadOutcome{Code: WorkloadOutcomeAborted}
+		case ErrWorkerCrash:
+			return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+		default:
+			return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+		}
+	}
+	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom-kill" {
+		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
+	}
+	if report.ServiceResult == "timeout" {
+		return WorkloadOutcome{Code: WorkloadOutcomeTimeout}
+	}
+	if report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0 {
+		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+	}
+	if report.ServiceResult == "success" && report.ExecMainStatus == 0 {
+		return WorkloadOutcome{Code: WorkloadOutcomeSuccess}
+	}
+	return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+}
+
+func workloadError(outcome WorkloadOutcome) error {
+	switch outcome.Code {
+	case WorkloadOutcomeSuccess:
+		return nil
+	case WorkloadOutcomeInvalidResult:
+		return closed(ErrInvalidResult)
+	case WorkloadOutcomeTimeout:
+		return closed(ErrTimeout)
+	case WorkloadOutcomeAborted:
+		return closed(ErrAborted)
+	case WorkloadOutcomeOOM, WorkloadOutcomeCrash:
+		return closed(ErrWorkerCrash)
+	default:
+		return closed(ErrContainmentUnavailable)
+	}
+}
+
 // chainContainment preserves a prior execution failure separately from a
 // synthetic cleanup diagnosis. Pure cleanup remains a ContainmentError.
 func chainContainment(result error, hadPreCleanup bool, stage, reason string) error {
@@ -1115,11 +1208,20 @@ func (r *Run) monitor() {
 	}
 }
 func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, string) {
+	report, cpu, termination, _, _, reason := cleanupForOutcome(unit, nil)
+	return report, cpu, termination, reason
+}
+
+// cleanupForOutcome establishes cleanup facts independently from a known
+// workload outcome. A failed workload may legitimately have failed service
+// status; only an otherwise claimed success needs successful terminal status.
+func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, TerminationEvidence, CleanupProof, error, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	if unit == nil {
-		return SandboxReport{}, 0, TerminationEvidence{}, "unit-cleanup"
+		return SandboxReport{}, 0, TerminationEvidence{}, CleanupProof{}, result, "unit-cleanup"
 	}
+	proof := CleanupProof{}
 	var reason string
 	usedCachedAccounting := false
 	reportGoneAccounting := false
@@ -1154,6 +1256,8 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		if cachedAccountingSnapshotMatchesUnit(unit, cachedReport, cached) && (captureFailure == accountingCaptureExactCgroupAbsent || captureFailure == accountingCaptureReportGone || terminalRuntimeDisappearing(captureFailure)) {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
+			proof.AccountingAvailable = true
+			proof.VerifiedSnapshot = true
 			reportGoneAccounting = captureFailure == accountingCaptureReportGone
 			terminalRuntimeDisappearingAccounting = terminalRuntimeDisappearing(captureFailure)
 		} else if reason == "" {
@@ -1161,6 +1265,17 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 			if reason == "" {
 				reason = "accounting-evidence"
 			}
+		}
+	} else {
+		proof.AccountingAvailable = true
+		// Accounting is captured from the unit that was verified at launch; a
+		// retained verified snapshot is additionally required only on fallback.
+		proof.VerifiedSnapshot = true
+	}
+	if result == nil {
+		derived := workloadOutcome(nil, report)
+		if derived.Code != WorkloadOutcomeSuccess && derived.Code != WorkloadOutcomeUnverified {
+			result = workloadError(derived)
 		}
 	}
 	var alreadyGone *alreadyGoneError
@@ -1173,6 +1288,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	if snapshot, ok := unit.(lifecycleWitnessSnapshot); ok {
 		witness, witnessOK = snapshot.lastLifecycleWitness()
 	}
+	proof.StopAttempted = true
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
 		// Never overwrite an earlier reason.
@@ -1202,28 +1318,44 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		if reason == "" && !terminalRuntimeDisappearingAccounting {
 			reason = "wait-inactive"
 		}
+	} else {
+		proof.WaitedInactive = true
 	}
 	status, statusErr := unit.TerminalStatus(ctx)
-	if statusErr != nil || !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+	if statusErr == nil {
+		report.MainPID = status.MainPID
+		report.ServiceResult = status.ServiceResult
+		report.ExecMainStatus = status.ExecMainStatus
+		if result == nil {
+			derived := workloadOutcome(nil, report)
+			if derived.Code != WorkloadOutcomeSuccess {
+				result = workloadError(derived)
+			}
+		}
+	}
+	strictSuccess := result == nil
+	unitTerminal := statusErr == nil && status.MainPID == 0 && status.State == "inactive"
+	statusGone := terminalStatusExactlyGone(statusErr)
+	if (statusErr != nil && (strictSuccess || !statusGone)) || (strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)) || (!strictSuccess && !unitTerminal && !statusGone) {
 		// Runtime-target disappearance has one composite proof. Its final
 		// terminal status (including an exact GetUnit-gone error) must reach
 		// that validator before generic status handling assigns a reason.
 		if reason == "" && !reportGoneAccounting && !terminalRuntimeDisappearingAccounting {
 			reason = "terminal-status"
 		}
-	} else {
-		report.MainPID = status.MainPID
-		report.ServiceResult = status.ServiceResult
-		report.ExecMainStatus = status.ExecMainStatus
 	}
+	proof.UnitTerminal = unitTerminal || statusGone
 	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
+	proof.Termination = termination
 	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
 		if reason == "" && !terminalRuntimeDisappearingAccounting {
 			reason = "termination-evidence"
 		}
 	}
 	if reason == "alreadyGone" {
-		if propertiesGone != nil {
+		if result != nil && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
+			reason = ""
+		} else if propertiesGone != nil {
 			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, witness, witnessOK, termination, terminationErr, status, statusErr)
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
@@ -1250,8 +1382,16 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 				reason = "unit-cleanup"
 			}
 		}
+	} else {
+		proof.Reset = true
 	}
-	return report, cpu, termination, reason
+	proof.Accepted = reason == ""
+	return report, cpu, termination, proof, result, reason
+}
+
+func terminalStatusExactlyGone(err error) bool {
+	var operation *terminalStatusOperationError
+	return errors.As(err, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone
 }
 
 // terminalRuntimeDisappearing is the narrow deferred-proof eligibility for a
