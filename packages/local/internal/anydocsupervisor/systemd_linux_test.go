@@ -319,9 +319,10 @@ func TestSystemdReportReadsActualCgroupLimitsAndRejectsMismatch(t *testing.T) {
 
 func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T) {
 	for _, test := range []struct {
-		name  string
-		apply func(*fakeSystemBus, *fakeFS)
-		want  accountingCaptureFailure
+		name            string
+		apply           func(*fakeSystemBus, *fakeFS)
+		prepareCPUError func(*testing.T, *systemdUnit, *fakeFS)
+		want            accountingCaptureFailure
 	}{
 		{name: "report unavailable", apply: func(bus *fakeSystemBus, _ *fakeFS) { bus.propErr = errors.New("private report failure") }, want: accountingCaptureReportValidationDBusFetch},
 		{name: "report gone", apply: func(bus *fakeSystemBus, _ *fakeFS) {
@@ -350,13 +351,37 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 		{name: "cgroup events malformed", apply: func(_ *fakeSystemBus, fs *fakeFS) {
 			fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("bad")
 		}, want: accountingCaptureReportValidationCgroupAccounting},
-		{name: "cpu unavailable", apply: func(_ *fakeSystemBus, fs *fakeFS) { fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = 2 }, want: accountingCaptureCPUUnavailable},
+		{
+			name: "cpu unavailable",
+			prepareCPUError: func(t *testing.T, unit *systemdUnit, fs *fakeFS) {
+				t.Helper()
+				first, err := unit.Report(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+				if _, err := unit.Report(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := unit.CPUUsage(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				unit.MarkSnapshotVerified()
+				fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = fs.reads[cgroupFile("/crux.slice/test", "cpu.stat")] + 2
+			},
+			want: accountingCaptureCPUUnavailable,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
 			fs := newFakeFS()
-			test.apply(bus, fs)
+			if test.apply != nil {
+				test.apply(bus, fs)
+			}
 			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			if test.prepareCPUError != nil {
+				test.prepareCPUError(t, unit, fs)
+			}
 			_, _, failure, err := unit.CaptureTerminalAccounting(context.Background())
 			if err == nil || failure != test.want {
 				t.Fatalf("capture = failure %v err %v, want failure %v and an error", failure, err, test.want)
