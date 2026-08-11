@@ -162,7 +162,10 @@ func validContainmentReason(reason string) bool {
 	return false
 }
 
-var errCPUAccounting = errors.New("cpu accounting unavailable")
+var (
+	errCPUAccounting = errors.New("cpu accounting unavailable")
+	errCPUCeiling    = errors.New("cpu ceiling exceeded")
+)
 
 type Request struct {
 	Version       int       `json:"version"`
@@ -547,7 +550,8 @@ const (
 	WorkloadOutcomeInvalidResult WorkloadOutcomeCode = "invalid-result"
 	WorkloadOutcomeOOM           WorkloadOutcomeCode = "oom"
 	WorkloadOutcomeCrash         WorkloadOutcomeCode = "crash"
-	WorkloadOutcomeTimeout       WorkloadOutcomeCode = "timeout"
+	WorkloadOutcomeCPUTimeout    WorkloadOutcomeCode = "cpu-timeout"
+	WorkloadOutcomeWallTimeout   WorkloadOutcomeCode = "wall-timeout"
 	WorkloadOutcomeAborted       WorkloadOutcomeCode = "aborted"
 	WorkloadOutcomeUnverified    WorkloadOutcomeCode = "unverified"
 )
@@ -914,14 +918,7 @@ func (r *Run) Finish(_ context.Context, out error) error {
 			result = chainContainment(result, hadPreCleanup, "containment-cleanup", "staged-cleanup")
 		}
 		r.mu.Lock()
-		workload := workloadOutcome(classified, report)
-		// The legacy error surface groups OOM with worker crashes, but the
-		// independent workload record keeps authoritative OOM accounting.
-		if workload.Code == WorkloadOutcomeCrash {
-			if terminal := workloadOutcome(nil, report); terminal.Code == WorkloadOutcomeOOM {
-				workload = terminal
-			}
-		}
+		workload := workloadOutcome(out, classified, report)
 		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
 		r.result = result
 		r.mu.Unlock()
@@ -1067,6 +1064,12 @@ func outcomeCode(out error) error {
 	if errors.Is(out, errCPUAccounting) {
 		return closed(ErrContainmentUnavailable)
 	}
+	if errors.Is(out, errCPUCeiling) {
+		return closed(ErrTimeout)
+	}
+	if errorCode(out) == ErrContainmentUnavailable {
+		return out
+	}
 	if errors.Is(out, context.DeadlineExceeded) {
 		return closed(ErrTimeout)
 	}
@@ -1087,13 +1090,34 @@ func outcomeCode(out error) error {
 	return nil
 }
 
-func workloadOutcome(result error, report SandboxReport) WorkloadOutcome {
+func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
+	// Host-established terminal evidence has priority over a peer result
+	// candidate. Keep the original cause so CPU accounting is never confused
+	// with an ordinary context deadline.
+	if errors.Is(out, context.Canceled) {
+		return WorkloadOutcome{Code: WorkloadOutcomeAborted}
+	}
+	if errors.Is(out, context.DeadlineExceeded) {
+		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
+	}
+	if errors.Is(out, errCPUCeiling) {
+		return WorkloadOutcome{Code: WorkloadOutcomeCPUTimeout}
+	}
+	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom-kill" {
+		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
+	}
+	if report.ServiceResult == "timeout" {
+		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
+	}
+	if report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0 {
+		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+	}
 	if result != nil {
 		switch errorCode(result) {
 		case ErrInvalidResult:
 			return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
 		case ErrTimeout:
-			return WorkloadOutcome{Code: WorkloadOutcomeTimeout}
+			return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
 		case ErrAborted:
 			return WorkloadOutcome{Code: WorkloadOutcomeAborted}
 		case ErrWorkerCrash:
@@ -1101,15 +1125,6 @@ func workloadOutcome(result error, report SandboxReport) WorkloadOutcome {
 		default:
 			return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
 		}
-	}
-	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom-kill" {
-		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
-	}
-	if report.ServiceResult == "timeout" {
-		return WorkloadOutcome{Code: WorkloadOutcomeTimeout}
-	}
-	if report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0 {
-		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
 	}
 	if report.ServiceResult == "success" && report.ExecMainStatus == 0 {
 		return WorkloadOutcome{Code: WorkloadOutcomeSuccess}
@@ -1123,7 +1138,7 @@ func workloadError(outcome WorkloadOutcome) error {
 		return nil
 	case WorkloadOutcomeInvalidResult:
 		return closed(ErrInvalidResult)
-	case WorkloadOutcomeTimeout:
+	case WorkloadOutcomeCPUTimeout, WorkloadOutcomeWallTimeout:
 		return closed(ErrTimeout)
 	case WorkloadOutcomeAborted:
 		return closed(ErrAborted)
@@ -1131,6 +1146,18 @@ func workloadError(outcome WorkloadOutcome) error {
 		return closed(ErrWorkerCrash)
 	default:
 		return closed(ErrContainmentUnavailable)
+	}
+}
+
+// establishedWorkloadResult identifies outcomes for which a failed service
+// terminal status is expected. Containment failures and unverified outcomes
+// remain strict so cleanup cannot accept an unproven failed terminal state.
+func establishedWorkloadResult(result error) bool {
+	switch errorCode(result) {
+	case ErrInvalidResult, ErrTimeout, ErrAborted, ErrWorkerCrash:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -1201,7 +1228,7 @@ func (r *Run) monitor() {
 			}
 			cancel()
 			if u >= CPUCeiling {
-				r.Finish(context.Background(), context.DeadlineExceeded)
+				r.Finish(context.Background(), errCPUCeiling)
 				return
 			}
 		}
@@ -1273,7 +1300,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		proof.VerifiedSnapshot = true
 	}
 	if result == nil {
-		derived := workloadOutcome(nil, report)
+		derived := workloadOutcome(nil, nil, report)
 		if derived.Code != WorkloadOutcomeSuccess && derived.Code != WorkloadOutcomeUnverified {
 			result = workloadError(derived)
 		}
@@ -1327,13 +1354,13 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		report.ServiceResult = status.ServiceResult
 		report.ExecMainStatus = status.ExecMainStatus
 		if result == nil {
-			derived := workloadOutcome(nil, report)
+			derived := workloadOutcome(nil, nil, report)
 			if derived.Code != WorkloadOutcomeSuccess {
 				result = workloadError(derived)
 			}
 		}
 	}
-	strictSuccess := result == nil
+	strictSuccess := !establishedWorkloadResult(result)
 	unitTerminal := statusErr == nil && status.MainPID == 0 && status.State == "inactive"
 	statusGone := terminalStatusExactlyGone(statusErr)
 	if (statusErr != nil && (strictSuccess || !statusGone)) || (strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)) || (!strictSuccess && !unitTerminal && !statusGone) {
@@ -1353,7 +1380,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		}
 	}
 	if reason == "alreadyGone" {
-		if result != nil && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
+		if establishedWorkloadResult(result) && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
 			reason = ""
 		} else if propertiesGone != nil {
 			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, witness, witnessOK, termination, terminationErr, status, statusErr)

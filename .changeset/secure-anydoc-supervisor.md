@@ -9,7 +9,8 @@ worker socket reads and acknowledgements.
 Record independent workload outcomes and cleanup proofs during Anydoc teardown.
 Cleanup now verifies accounting, terminal unit/cgroup, stop/wait/reset, and
 staged-source facts without requiring a successful service result after an
-already-established parser, crash, timeout, abort, or resource outcome.
+already-established parser, crash, CPU or wall timeout, abort, or resource
+outcome; unverified and containment failures remain fail-closed.
 
 Package and attest the pinned Linux x64 GNU Anydoc native runtime before
 launching its isolated Node runner.
