@@ -167,9 +167,11 @@ final terminal-status outcomes, without exposing raw runtime, D-Bus, request,
 or snapshot values.
 
 When runtime-target accounting falls back to that witness, available terminal
-status remains authoritative: inactive failed/nonzero/OOM states fail with the
-fixed `runtime-target-missing-terminal-status-not-success` reason. Both `memory.events` `oom`
-and `oom_kill` reject the witness route.
+status remains authoritative: a claimed success still requires strict inactive
+success status, while inactive failed, nonzero, and OOM states may prove
+cleanup with the valid witness and exact termination evidence while retaining
+their truthful crash or OOM workload outcome. Both `memory.events` `oom` and
+`oom_kill` reject the witness route.
 
 Replace the mutable result-ACK record with an opaque internal lifecycle witness.
 It is atomically minted once after exact peer authentication, strict
@@ -184,3 +186,8 @@ the exact verified snapshot, successful accounting refresh and ACK witness,
 typed final `GetUnit` disappearance, and exclusive pinned-cgroup termination;
 unsafe, malformed, digest-mismatched, and generic runtime-attestation failures
 remain fail-closed.
+
+Allow an independently valid retained terminal-success proof to authorize the
+pending `unit-properties-gone` cleanup path even when result binding or ACK
+delivery failed; preserve that typed result-validation cause and its non-success
+workload outcome rather than converting it into containment failure.

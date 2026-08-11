@@ -1133,7 +1133,7 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 	if errors.Is(out, errCPUCeiling) {
 		return WorkloadOutcome{Code: WorkloadOutcomeCPUTimeout}
 	}
-	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom-kill" {
+	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill" {
 		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
 	}
 	if report.ServiceResult == "timeout" {
@@ -1415,8 +1415,12 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 			}
 		}
 	}
-	strictSuccess := !establishedWorkloadResult(result)
 	unitTerminal := statusErr == nil && status.MainPID == 0 && status.State == "inactive"
+	// A terminal failure can establish the workload outcome after its status is
+	// read. Recompute strictness here so that cleanup proof remains independent
+	// of a truthful failed outcome, while a claimed success still needs strict
+	// successful terminal status.
+	strictSuccess := !establishedWorkloadResult(result)
 	statusGone := terminalStatusExactlyGone(statusErr)
 	if (statusErr != nil && (strictSuccess || !statusGone)) || (strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)) || (!strictSuccess && !unitTerminal && !statusGone) {
 		// Runtime-target disappearance has one composite proof. Its final
@@ -1448,7 +1452,7 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 	if reportGoneAccounting && reason == "" {
 		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 	} else if terminalRuntimeDisappearingAccounting && reason == "" {
-		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, witness, witnessOK, termination, terminationErr, status, statusErr)
+		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, witness, witnessOK, termination, terminationErr, status, statusErr, strictSuccess)
 	} else if usedCachedAccounting && !termination.Absent && reason == "" {
 		reason = "used-cached-accounting"
 	}
@@ -1488,7 +1492,7 @@ func terminalRuntimeDisappearing(failure accountingCaptureFailure) bool {
 // exists, so only an ordered result-ACK witness bound to the fully verified
 // immutable snapshot, plus exact GetUnit-gone and exclusive pinned-cgroup
 // termination, can establish that the worker has actually exited.
-func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, strictSuccess bool) string {
 	if reason := runtimeTargetMissingTerminationReason(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
@@ -1496,8 +1500,11 @@ func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport,
 		return reason
 	}
 	if statusErr == nil {
-		if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		if strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
 			return "runtime-target-missing-terminal-status-not-success"
+		}
+		if status.MainPID == 0 && status.State == "inactive" {
+			return ""
 		}
 		return "runtime-target-missing-terminal-status-not-gone"
 	}
