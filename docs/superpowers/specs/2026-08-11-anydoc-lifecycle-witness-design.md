@@ -52,12 +52,14 @@ a currently matching unit name or cgroup path. A name/cgroup reuse, PID reuse,
 missing stop record, or a different invocation fails closed.
 
 Witnesses are opaque, internal, one-use capabilities. The central verifier
-alone mints a `ResultAckWitness` or `ContainmentProbeWitness` after it verifies
-the bound run identity, peer/capability, result or probe observation, and fresh
-authoritative accounting. It then writes the host ACK for that exact
-request/probe binding; peer receipt confirmation is not required. The ACK and
-witness cannot be replayed, duplicated, transferred to another run, or reused
-for cleanup.
+alone follows this required order: it validates the bound run identity,
+peer/capability, and result or probe observation; calls `RefreshAccounting`
+to obtain the exact verified authoritative snapshot; successfully writes the
+verified host ACK for that exact request/probe binding (peer receipt
+confirmation is not required); and only then atomically mints the immutable
+`ResultAckWitness` or `ContainmentProbeWitness`. An ACK write failure mints no
+witness. The ACK and witness cannot be replayed, duplicated, transferred to
+another run, or reused for cleanup.
 
 Witness minting is independent of cleanup. Cleanup may still be pending or may
 later fail after a valid witness; conversely cleanup can never mint one.
