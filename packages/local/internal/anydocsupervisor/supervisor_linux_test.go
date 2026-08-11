@@ -1109,7 +1109,7 @@ func TestRunFinishUnitPropertiesGoneSnapshotCgroupMismatchPreemptsProofMapper(t 
 func TestValidateUnitPropertiesGoneDefensiveUnreachableSnapshotCgroupMismatch(t *testing.T) {
 	// Promotion/storage requires the cached snapshot cgroup to equal the pinned
 	// cgroup, so Run.Finish preempts this predicate with snapshot-cgroup.
-	reason := validateUnitPropertiesGone("/crux.slice/pinned", SandboxReport{ControlGroup: "/crux.slice/other", MainPID: 42, RuntimeTreeDigest: "digest"}, terminalSuccessProof{status: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/crux.slice/pinned", snapshotPID: 42, runtimeDigest: "digest"}, true, TerminationEvidence{ControlGroup: "/crux.slice/pinned", Absent: true}, nil, TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone})
+	reason := validateUnitPropertiesGone("/crux.slice/pinned", SandboxReport{ControlGroup: "/crux.slice/other", MainPID: 42, RuntimeTreeDigest: "digest"}, terminalSuccessProof{status: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/crux.slice/pinned", snapshotPID: 42, runtimeDigest: "digest"}, true, resultACKWitness{}, false, TerminationEvidence{ControlGroup: "/crux.slice/pinned", Absent: true}, nil, TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone})
 	if reason != "unit-properties-gone-snapshot-cgroup-mismatch" {
 		t.Fatalf("reason = %q, want defensive snapshot-cgroup-mismatch", reason)
 	}
@@ -1294,6 +1294,8 @@ type fakeUnit struct {
 	snapshotOK       bool
 	terminalProof    terminalSuccessProof
 	terminalProofOK  bool
+	resultACK        resultACKWitness
+	resultACKOK      bool
 	stopped, cleaned bool
 	mu               sync.Mutex
 }
@@ -1356,6 +1358,9 @@ func (u *fakeUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool) {
 }
 func (u *fakeUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
 	return u.terminalProof, u.terminalProofOK
+}
+func (u *fakeUnit) LastResultACK() (resultACKWitness, bool) {
+	return u.resultACK, u.resultACKOK
 }
 func (u *fakeUnit) Stopped() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.stopped }
 func (u *fakeUnit) Cleaned() bool { u.mu.Lock(); defer u.mu.Unlock(); return u.cleaned }

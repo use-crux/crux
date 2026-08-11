@@ -1220,7 +1220,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reason == "alreadyGone" {
 		if propertiesGone != nil {
-			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, termination, terminationErr, status, statusErr)
+			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, witness, witnessOK, termination, terminationErr, status, statusErr)
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
 			// plus carried successful inactive terminal evidence.
@@ -1415,15 +1415,30 @@ func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached
 }
 
 // validateUnitPropertiesGone validates the pending UnitProperties-gone path
-// against fresh post-stop evidence. It cannot clear cleanup because a
-// UnitProperties-gone stop result is not result-ACK lifecycle evidence.
-func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+// against fresh post-stop evidence. It accepts either the existing strict
+// terminal-success proof or the ordered result-ACK witness; a stop result by
+// itself is never lifecycle evidence.
+func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, witness resultACKWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
-	if !proofOK {
-		return "unit-properties-gone-proof-missing"
+	if proofOK {
+		if reason := validateUnitPropertiesGoneProof(expectedCgroup, snapshot, proof, status, statusErr); reason == "" {
+			return ""
+		} else if !witnessOK {
+			return reason
+		}
 	}
+	if witnessOK {
+		if reason := runtimeTargetMissingWitnessReason(expectedCgroup, snapshot, witness, witnessOK); reason != "" {
+			return reason
+		}
+		return validateUnitPropertiesGoneFinalStatus(status, statusErr)
+	}
+	return "unit-properties-gone-proof-missing"
+}
+
+func validateUnitPropertiesGoneProof(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, status TerminalStatus, statusErr error) string {
 	if proof.cgroup != expectedCgroup {
 		return "unit-properties-gone-proof-cgroup-mismatch"
 	}
@@ -1445,6 +1460,10 @@ func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, p
 	if !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) {
 		return "unit-properties-gone-proof-terminal-not-success"
 	}
+	return validateUnitPropertiesGoneFinalStatus(status, statusErr)
+}
+
+func validateUnitPropertiesGoneFinalStatus(status TerminalStatus, statusErr error) string {
 	var operation *terminalStatusOperationError
 	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
 		return ""

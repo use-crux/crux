@@ -102,11 +102,14 @@ terminal-status operation diagnostics on that pending validation path without
 allowing a status error to establish terminal proof.
 
 For the existing `unit-properties-gone` path, retain strict inactive-success
-service evidence only when it was observed from available systemd properties,
-and accept that pending path only when the retained terminal-success proof, the
-verified pinned runtime snapshot, exclusive pinned-cgroup termination evidence,
-and a final typed `GetUnit`-gone result all agree. Result-ACK witnesses do not
-apply to this path.
+service evidence only when it was observed from available systemd properties.
+Accept that pending path only when either the retained terminal-success proof
+or an ordered result-ACK witness agrees with the verified pinned runtime
+snapshot, exclusive pinned-cgroup termination evidence, and a final typed
+`GetUnit`-gone result. The ACK witness is usable only after exact peer
+authentication, request/result binding, verified-snapshot accounting refresh,
+and successful acknowledgement; it rejects mismatched, OOM, oom-kill, and
+pids-limited snapshots.
 
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting
