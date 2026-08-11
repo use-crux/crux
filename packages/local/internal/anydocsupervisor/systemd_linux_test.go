@@ -2711,6 +2711,8 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		wantReason  string
 		wantService string
 		wantClean   bool
+		preCleanup  bool
+		wantSafe    string
 	}{
 		{name: "accepts exact get unit gone with empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
 		{name: "accepts exact get unit gone with absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
@@ -2730,9 +2732,9 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			u.snapshotMu.Unlock()
 		}, wantReason: "already-gone-terminal-unavailable"},
 		{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
-		{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
+		{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
+		{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", preCleanup: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -2772,6 +2774,9 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 					peer.err = errors.New("peer credentials unavailable")
 				}
 				u.resultListener, u.resultSocket, u.peers = listener, path, peer
+				if test.receive == "ack-write" {
+					u.writeResultACK = func(*net.UnixConn) error { return errors.New("injected ACK write failure") }
+				}
 				ack := make(chan error, 1)
 				go func() {
 					conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
@@ -2779,6 +2784,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 						result := validWireResult(request)
 						if test.receive == "mismatch" {
 							result.Request.Nonce = strings.Repeat("b", 32)
+							result.Request.RequestDigest = requestDigest(result.Request.Version, result.Request.Nonce, result.Request.Format, result.Request.SourceSHA256, result.Request.SourceBytes, result.Request.Limits)
 						}
 						dialErr = EncodeResult(conn, result)
 					}
@@ -2819,8 +2825,10 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 				if test.receive == "peer-auth" && !errors.Is(receiveErr, context.DeadlineExceeded) {
 					t.Fatalf("ReceiveResult() = %T %v, want bounded peer authentication failure", receiveErr, receiveErr)
 				}
-				if ackErr := <-ack; ackErr != nil {
-					t.Fatalf("result ACK = %v", ackErr)
+				if test.receive != "peer-auth" {
+					if ackErr := <-ack; ackErr != nil {
+						t.Fatalf("result ACK = %v", ackErr)
+					}
 				}
 				if test.receive != "valid" {
 					if _, ok := u.LastResultACK(); ok {
@@ -2845,11 +2853,6 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			bus.valuesAfterFirstStopProperties = strict
 			if test.final != nil {
 				bus.valuesAfterFirstStopProperties = test.final
-				if test.final["ActiveState"] == "active" {
-					gone := &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
-					bus.postStopProperties = []fakeSystemBusProperties{{values: test.final}, {err: gone}, {err: gone}}
-					bus.valuesAfterFirstStopProperties = nil
-				}
 			}
 			bus.onStop = func() {
 				fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
@@ -2875,6 +2878,20 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			if test.wantClean {
 				if terminal.Outcome != OutcomeSuccess || finishErr != nil || terminal.PreStop.ControlGroup != pinned || terminal.Termination.ControlGroup != pinned || terminal.Termination.Empty == terminal.Termination.Absent {
 					t.Fatalf("accepted runtime-target evidence = %#v err=%v", terminal, finishErr)
+				}
+				return
+			}
+			if test.wantSafe != "" {
+				if got := safeExecutionFailure(finishErr, terminal); got != test.wantSafe || strings.Contains(got, private) || strings.Contains(got, pinned) {
+					t.Fatalf("safe diagnostic = %q, want %q without raw detail", got, test.wantSafe)
+				}
+				return
+			}
+			if test.preCleanup {
+				preCleanup := TerminalReport{PreStop: terminal.PreStop, Outcome: errorCode(outcomeCode(receiveErr))}
+				want := "error=timeout outcome=timeout service=success stage=success oom-killed=false pids-limited=false"
+				if got := safeExecutionFailure(receiveErr, preCleanup); got != want || strings.Contains(got, private) || strings.Contains(got, pinned) {
+					t.Fatalf("pre-cleanup safe diagnostic = %q, want %q without raw detail", got, want)
 				}
 				return
 			}

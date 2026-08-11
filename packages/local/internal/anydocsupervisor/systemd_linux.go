@@ -591,6 +591,7 @@ type systemdUnit struct {
 	resultSocket   string
 	resultMu       sync.Mutex
 	resultClaimed  bool
+	writeResultACK func(*net.UnixConn) error
 	peers          PeerVerifier
 	spec           ServiceSpec
 	reportMu       sync.Mutex
@@ -1119,8 +1120,7 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 				}
 			}
 			if decodeErr == nil {
-				_, err := conn.Write([]byte("ACK\n"))
-				if err != nil {
+				if err := u.writeACK(conn); err != nil {
 					decodeErr = resultValidation("ack-write", "io")
 				}
 			}
@@ -1150,6 +1150,14 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 		case <-u.now.After(10 * time.Millisecond):
 		}
 	}
+}
+
+func (u *systemdUnit) writeACK(conn *net.UnixConn) error {
+	if u.writeResultACK != nil {
+		return u.writeResultACK(conn)
+	}
+	_, err := conn.Write([]byte("ACK\n"))
+	return err
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {
