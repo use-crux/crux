@@ -355,18 +355,11 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 			name: "cpu unavailable",
 			prepareCPUError: func(t *testing.T, unit *systemdUnit, fs *fakeFS) {
 				t.Helper()
-				first, err := unit.Report(context.Background())
-				if err != nil {
-					t.Fatal(err)
-				}
-				unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
 				if _, err := unit.Report(context.Background()); err != nil {
 					t.Fatal(err)
 				}
-				if _, err := unit.CPUUsage(context.Background()); err != nil {
-					t.Fatal(err)
-				}
-				unit.MarkSnapshotVerified()
+				// A successful Report establishes runtime prerequisites; CPUUsage
+				// classification is independent of verified-cache fallback.
 				fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = fs.reads[cgroupFile("/crux.slice/test", "cpu.stat")] + 2
 			},
 			want: accountingCaptureCPUUnavailable,
