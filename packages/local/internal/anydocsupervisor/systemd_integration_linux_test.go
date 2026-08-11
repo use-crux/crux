@@ -824,7 +824,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	cancelNow()
 	_, err = run.Execute(canceled)
 	if errorCode(err) != ErrAborted {
-		t.Fatalf("caller cancellation was not mapped to abort: %v", err)
+		t.Fatalf("caller cancellation was not mapped to abort: %s", safeProbeFailure(err))
 	}
 	terminal := run.TerminalReport()
 	if terminal.Outcome != ErrAborted || !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {

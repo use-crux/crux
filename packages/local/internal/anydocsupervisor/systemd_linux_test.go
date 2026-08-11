@@ -5,11 +5,13 @@ package anydocsupervisor
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -172,7 +174,11 @@ func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testi
 }
 
 func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T) {
-	root := t.TempDir()
+	root, err := os.MkdirTemp("/tmp", "a-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
 	runtime := filepath.Join(root, "runtime")
 	sharedProbe := filepath.Join(root, "probe")
 	for _, path := range []string{runtime, sharedProbe} {
@@ -180,25 +186,42 @@ func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	probePath := filepath.Join(sharedProbe, "probe")
-	if err := os.WriteFile(probePath, []byte("probe"), 0o555); err != nil {
+	runner := filepath.Join(runtime, "runner.mjs")
+	runnerContents := []byte("export {}\n")
+	if err := os.WriteFile(runner, runnerContents, 0o555); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(runtime, ".complete"), nil, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "source")
+	if err := os.WriteFile(source, []byte("probe source"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeContents, err := os.ReadFile(nodePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeDigest := fmt.Sprintf("%x", sha256.Sum256(nodeContents))
+	runtimeDigest := fmt.Sprintf("%x", sha256.Sum256(runnerContents))
+	probePath, probeDigest := stageProbeExecutable(t, sharedProbe)
 
-	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: newFakeFS(), Clock: immediateClock{}})
-	startProbe := func(name string) *systemdUnit {
-		input := filepath.Join(root, name+"-input")
+	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: osFS{}, Clock: immediateClock{}})
+	startProbe := func(name string) (*systemdUnit, string) {
 		private := filepath.Join(root, name+"-private")
-		for _, path := range []string{input, private} {
-			if err := os.Mkdir(path, 0o700); err != nil {
-				t.Fatal(err)
-			}
+		if err := os.Mkdir(private, 0o700); err != nil {
+			t.Fatal(err)
 		}
-		spec, err := newTestServiceSpec(input, runtime, private, Limits{})
+		launch := LaunchDependency{runtimeRoot: runtime, runtimeRunner: runner, runtimeTreeDigest: runtimeDigest, nodePath: nodePath, nodeSHA256: nodeDigest}
+		spec, err := serviceSpec(source, launch, private, Limits{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		spec.probe = &containmentProbe{hostExecutable: probePath, executableSHA: strings.Repeat("a", 64), action: "pids", caseID: "pids", resultPath: probeObservationTarget, hostResultPath: filepath.Join(private, "observation.json")}
+		spec.probe = &containmentProbe{hostExecutable: probePath, executableSHA: probeDigest, action: "pids", caseID: "pids", resultPath: probeObservationTarget, hostResultPath: filepath.Join(private, "observation.json")}
 		spec.BindReadOnlyPaths = append(spec.BindReadOnlyPaths, probePath+":"+probeTarget)
 		read, write, err := os.Pipe()
 		if err != nil {
@@ -209,23 +232,29 @@ func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T)
 		if err != nil {
 			t.Fatalf("start %s probe: %s", name, safeContainmentDiagnostic(err))
 		}
-		return unit.(*systemdUnit)
+		return unit.(*systemdUnit), private
 	}
 
-	first := startProbe("first")
+	first, firstPrivate := startProbe("first")
 	if err := first.Cleanup(context.Background()); err != nil {
 		t.Fatalf("cleanup first probe: %s", safeContainmentDiagnostic(err))
 	}
-	if _, err := os.Stat(probePath); err != nil {
+	if _, err := os.Lstat(firstPrivate); !os.IsNotExist(err) {
+		t.Fatalf("first probe private directory retained: %v", err)
+	}
+	if info, err := os.Lstat(probePath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 {
 		t.Fatalf("shared probe executable removed by first cleanup: %v", err)
 	}
-	if _, err := os.Stat(sharedProbe); err != nil {
+	if info, err := os.Lstat(sharedProbe); err != nil || !info.IsDir() {
 		t.Fatalf("shared integration stage removed by first cleanup: %v", err)
 	}
 
-	second := startProbe("second")
+	second, secondPrivate := startProbe("second")
 	if err := second.Cleanup(context.Background()); err != nil {
 		t.Fatalf("cleanup second probe: %s", safeContainmentDiagnostic(err))
+	}
+	if _, err := os.Lstat(secondPrivate); !os.IsNotExist(err) {
+		t.Fatalf("second probe private directory retained: %v", err)
 	}
 }
 
