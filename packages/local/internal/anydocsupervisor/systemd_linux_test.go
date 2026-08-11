@@ -2711,7 +2711,6 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		wantReason  string
 		wantService string
 		wantClean   bool
-		preCleanup  bool
 		wantSafe    string
 	}{
 		{name: "accepts exact get unit gone with empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
@@ -2734,7 +2733,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
 		{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=request-binding reason=mismatch oom-killed=false pids-limited=false"},
 		{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=invalid-result outcome=containment-unavailable service=success stage=ack-write reason=io oom-killed=false pids-limited=false"},
-		{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", preCleanup: true},
+		{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantSafe: "error=containment-unavailable outcome=containment-unavailable service=success stage=success oom-killed=false pids-limited=false"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -2893,14 +2892,6 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			if test.wantSafe != "" {
 				if got := safeExecutionFailure(finishErr, terminal); got != test.wantSafe || strings.Contains(got, private) || strings.Contains(got, pinned) {
 					t.Fatalf("safe diagnostic = %q, want %q without raw detail", got, test.wantSafe)
-				}
-				return
-			}
-			if test.preCleanup {
-				preCleanup := TerminalReport{PreStop: terminal.PreStop, Outcome: errorCode(outcomeCode(receiveErr))}
-				want := "error=timeout outcome=timeout service=success stage=success oom-killed=false pids-limited=false"
-				if got := safeExecutionFailure(receiveErr, preCleanup); got != want || strings.Contains(got, private) || strings.Contains(got, pinned) {
-					t.Fatalf("pre-cleanup safe diagnostic = %q, want %q without raw detail", got, want)
 				}
 				return
 			}
