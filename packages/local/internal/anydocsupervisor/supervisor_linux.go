@@ -1109,7 +1109,10 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 	if report.ServiceResult == "timeout" {
 		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
 	}
-	if report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0 {
+	if establishedInvalidResult(result) {
+		return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+	}
+	if ordinaryTerminalCrashCanDetermine(result) && (report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0) {
 		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
 	}
 	if result != nil {
@@ -1130,6 +1133,28 @@ func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
 		return WorkloadOutcome{Code: WorkloadOutcomeSuccess}
 	}
 	return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+}
+
+// establishedInvalidResult is a parser-result classification that terminal
+// crash evidence cannot replace. Host cancellation and resource evidence are
+// handled first in workloadOutcome.
+func establishedInvalidResult(result error) bool {
+	var validation *ResultValidationError
+	return errors.As(result, &validation) || errorCode(result) == ErrInvalidResult
+}
+
+// ordinaryTerminalCrashCanDetermine limits exit-code, core-dump, and signal
+// evidence to outcomes that have not established a more specific result.
+func ordinaryTerminalCrashCanDetermine(result error) bool {
+	if result == nil {
+		return true
+	}
+	switch errorCode(result) {
+	case ErrWorkerCrash, ErrContainmentUnavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 func workloadError(outcome WorkloadOutcome) error {

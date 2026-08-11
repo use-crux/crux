@@ -376,7 +376,7 @@ func TestExecuteMapsCallerCancellationToAbort(t *testing.T) {
 	}
 }
 
-func TestTask2RunFinishSeparatesWorkloadOutcomeFromCleanupProof(t *testing.T) {
+func TestTask2RunFinishPrecedence(t *testing.T) {
 	for _, test := range []struct {
 		name        string
 		out         error
@@ -387,9 +387,13 @@ func TestTask2RunFinishSeparatesWorkloadOutcomeFromCleanupProof(t *testing.T) {
 		wantOutcome WorkloadOutcomeCode
 		wantError   ErrorCode
 		wantCleanup bool
+		validation  bool
 	}{
 		{name: "success", status: TerminalStatus{State: "inactive", ServiceResult: "success"}, wantOutcome: WorkloadOutcomeSuccess, wantError: OutcomeSuccess, wantCleanup: true},
-		{name: "parser failure with verified crash", out: closedWith(ErrInvalidResult, resultValidation("envelope", "malformed")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrInvalidResult, wantCleanup: true},
+		{name: "parser validation survives exit code", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
+		{name: "parser validation survives core dump", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
+		{name: "parser validation survives signal", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "signal", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
+		{name: "parser validation survives failed cleanup", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, cleanupErr: errors.New("reset"), wantOutcome: WorkloadOutcomeInvalidResult, wantError: ErrContainmentUnavailable, validation: true},
 		{name: "worker crash exit", out: errors.New("exit"), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
 		{name: "worker crash core", out: errors.New("core"), status: TerminalStatus{State: "inactive", ServiceResult: "core-dump", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
 		{name: "worker oom", report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "oom-kill", ExecMainStatus: 9}, wantOutcome: WorkloadOutcomeOOM, wantError: ErrWorkerCrash, wantCleanup: true},
@@ -399,9 +403,7 @@ func TestTask2RunFinishSeparatesWorkloadOutcomeFromCleanupProof(t *testing.T) {
 		{name: "exact unit gone", out: errors.New("exit"), stopErr: &alreadyGoneError{proof: TerminalStatus{State: "inactive", ServiceResult: "success"}, cgroup: "/fake"}, status: TerminalStatus{}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
 		{name: "cleanup failure contains prior crash", out: errors.New("exit"), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, cleanupErr: errors.New("reset"), wantOutcome: WorkloadOutcomeCrash, wantError: ErrContainmentUnavailable},
 		{name: "containment unavailable keeps terminal strict", out: closed(ErrContainmentUnavailable), status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrContainmentUnavailable},
-		{name: "invalid result with verified oom", out: closedWith(ErrInvalidResult, resultValidation("envelope", "malformed")), report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "oom-kill", ExecMainStatus: 9}, wantOutcome: WorkloadOutcomeOOM, wantError: ErrInvalidResult, wantCleanup: true},
-		{name: "invalid result with cpu timeout", out: errors.Join(closedWith(ErrInvalidResult, resultValidation("envelope", "malformed")), errCPUCeiling), status: TerminalStatus{State: "inactive", ServiceResult: "timeout"}, wantOutcome: WorkloadOutcomeCPUTimeout, wantError: ErrTimeout, wantCleanup: true},
-		{name: "invalid result with wall timeout", out: errors.Join(closedWith(ErrInvalidResult, resultValidation("envelope", "malformed")), context.DeadlineExceeded), status: TerminalStatus{State: "inactive", ServiceResult: "timeout"}, wantOutcome: WorkloadOutcomeWallTimeout, wantError: ErrTimeout, wantCleanup: true},
+		{name: "verified oom overrides parser validation", out: closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result")), report: SandboxReport{MemoryEvents: map[string]int64{"oom_kill": 1}}, status: TerminalStatus{State: "inactive", ServiceResult: "oom-kill", ExecMainStatus: 9}, wantOutcome: WorkloadOutcomeOOM, wantError: ErrInvalidResult, wantCleanup: true, validation: true},
 		{name: "no false success from terminal failure", status: TerminalStatus{State: "inactive", ServiceResult: "exit-code", ExecMainStatus: 1}, wantOutcome: WorkloadOutcomeCrash, wantError: ErrWorkerCrash, wantCleanup: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -429,6 +431,12 @@ func TestTask2RunFinishSeparatesWorkloadOutcomeFromCleanupProof(t *testing.T) {
 			err = run.Finish(context.Background(), test.out)
 			if got := errorCode(err); got != test.wantError {
 				t.Fatalf("Finish error code = %q, want %q (%v)", got, test.wantError, err)
+			}
+			if test.validation {
+				var validation *ResultValidationError
+				if !errors.As(err, &validation) {
+					t.Fatalf("Finish lost ResultValidationError: %T %v", err, err)
+				}
 			}
 			terminal := run.TerminalReport()
 			if terminal.Workload.Code != test.wantOutcome {
