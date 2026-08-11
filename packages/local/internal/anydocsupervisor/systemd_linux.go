@@ -598,6 +598,9 @@ func systemdProperties(spec ServiceSpec) []DBusProperty {
 }
 
 func (u *systemdUnit) VerifyAttestedProbe(ctx context.Context, want *containmentProbe) error {
+	if u.verifyProbe != nil {
+		return u.verifyProbe(ctx, want)
+	}
 	if want == nil || len(want.executableSHA) != sha256.Size*2 || ctx.Err() != nil {
 		return errors.New("missing probe attestation")
 	}
@@ -637,30 +640,33 @@ func validAbsolutePath(path string) bool {
 }
 
 type systemdUnit struct {
-	name             string
-	bus              SystemBus
-	fs               FileSystem
-	procFS           ProcRuntimeFS
-	now              Clock
-	tmp              string
-	listener         *net.UnixListener
-	socket           string
-	resultListener   *net.UnixListener
-	resultSocket     string
-	resultMu         sync.Mutex
-	resultClaimed    bool
-	writeResultACK   func(*net.UnixConn) error
-	peers            PeerVerifier
-	spec             ServiceSpec
-	reportMu         sync.Mutex
-	controlGroup     string
-	snapshotMu       sync.Mutex
-	snapshot         SandboxReport
-	snapshotCPU      time.Duration
-	snapshotSeen     bool
-	snapshotOK       bool
-	terminalProof    terminalSuccessProof
-	lifecycleWitness lifecycleWitness
+	name              string
+	bus               SystemBus
+	fs                FileSystem
+	procFS            ProcRuntimeFS
+	now               Clock
+	tmp               string
+	listener          *net.UnixListener
+	socket            string
+	resultListener    *net.UnixListener
+	resultSocket      string
+	resultMu          sync.Mutex
+	resultClaimed     bool
+	writeResultACK    func(*net.UnixConn) error
+	peers             PeerVerifier
+	authorizedRequest Request
+	authorized        bool
+	verifyProbe       func(context.Context, *containmentProbe) error
+	spec              ServiceSpec
+	reportMu          sync.Mutex
+	controlGroup      string
+	snapshotMu        sync.Mutex
+	snapshot          SandboxReport
+	snapshotCPU       time.Duration
+	snapshotSeen      bool
+	snapshotOK        bool
+	terminalProof     terminalSuccessProof
+	lifecycleWitness  lifecycleWitness
 }
 
 // terminalSuccessProof is the verified terminal-status bridge for the
@@ -679,10 +685,24 @@ type terminalSuccessProof struct {
 // The resource snapshot is copied at mint time so later accounting changes
 // cannot alter the fact cleanup evaluates.
 type lifecycleWitness struct {
-	unit, cgroup, runtimeDigest, requestDigest, nonce string
-	pid                                               int
-	snapshot                                          SandboxReport
-	snapshotCPU                                       time.Duration
+	unit, cgroup, runtimeDigest, requestDigest, nonce, probeCase string
+	kind                                                         lifecycleWitnessKind
+	pid                                                          int
+	snapshot                                                     SandboxReport
+	snapshotCPU                                                  time.Duration
+}
+
+type lifecycleWitnessKind uint8
+
+const (
+	lifecycleWitnessResult lifecycleWitnessKind = iota + 1
+	lifecycleWitnessProbe
+)
+
+type lifecycleWitnessBinding struct {
+	kind      lifecycleWitnessKind
+	request   Request
+	probeCase string
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -717,13 +737,14 @@ func (u *systemdUnit) lastLifecycleWitness() (lifecycleWitness, bool) {
 	return witness, true
 }
 
-// mintLifecycleWitness is deliberately private: receiving a result is the
-// sole authority that may create this capability, and only after host ACK.
-// snapshotMu makes the check-and-store one atomic, one-shot transition.
-func (u *systemdUnit) mintLifecycleWitness(snapshot SandboxReport, snapshotCPU time.Duration, expected Request) bool {
+// mintLifecycleWitness is deliberately private: the central verified
+// result/probe transition is the sole authority that may create this
+// capability, and only after host ACK. snapshotMu makes the check-and-store
+// one atomic, one-shot transition.
+func (u *systemdUnit) mintLifecycleWitness(snapshot SandboxReport, snapshotCPU time.Duration, binding lifecycleWitnessBinding) bool {
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	if u.lifecycleWitness.cgroup != "" {
+	if u.lifecycleWitness.cgroup != "" || !validRequest(binding.request) || (binding.kind != lifecycleWitnessResult && binding.kind != lifecycleWitnessProbe) || (binding.kind == lifecycleWitnessProbe && binding.probeCase == "") {
 		return false
 	}
 	u.lifecycleWitness = lifecycleWitness{
@@ -731,8 +752,10 @@ func (u *systemdUnit) mintLifecycleWitness(snapshot SandboxReport, snapshotCPU t
 		cgroup:        snapshot.ControlGroup,
 		runtimeDigest: snapshot.RuntimeTreeDigest,
 		pid:           snapshot.MainPID,
-		requestDigest: expected.RequestDigest,
-		nonce:         expected.Nonce,
+		requestDigest: binding.request.RequestDigest,
+		nonce:         binding.request.Nonce,
+		probeCase:     binding.probeCase,
+		kind:          binding.kind,
 		snapshot:      cloneSandboxReport(snapshot),
 		snapshotCPU:   snapshotCPU,
 	}
@@ -1126,6 +1149,10 @@ func (u *systemdUnit) AuthorizeCapability(ctx context.Context, request Request) 
 			if err != nil {
 				return containment("authorize-encode", err)
 			}
+			u.resultMu.Lock()
+			u.authorizedRequest = request
+			u.authorized = true
+			u.resultMu.Unlock()
 			return nil
 		}
 		_ = conn.Close()
@@ -1228,31 +1255,8 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 			if decodeErr == nil && !u.verifiedSnapshotMatchesPeer(report) {
 				decodeErr = resultValidation("accounting-refresh", "unavailable")
 			}
-			var refreshed SandboxReport
-			var refreshedCPU time.Duration
 			if decodeErr == nil {
-				_, err := u.RefreshAccounting(ctx)
-				if err != nil {
-					decodeErr = resultValidation("accounting-refresh", "unavailable")
-				} else {
-					var snapshotOK bool
-					refreshed, refreshedCPU, snapshotOK = u.LastVerifiedSnapshot()
-					if !snapshotOK || !lifecycleSnapshotMatchesPeer(report, refreshed) {
-						decodeErr = resultValidation("accounting-refresh", "snapshot-mismatch")
-					} else if refreshed.MemoryEvents["oom"] != 0 || refreshed.MemoryEvents["oom_kill"] != 0 || refreshed.PIDsEvents["max"] != 0 {
-						decodeErr = resultValidation("accounting-refresh", "unavailable")
-					}
-				}
-			}
-			if decodeErr == nil {
-				if err := u.writeACK(conn); err != nil {
-					decodeErr = resultValidation("ack-write", "io")
-				}
-			}
-			if decodeErr == nil {
-				if !u.mintLifecycleWitness(refreshed, refreshedCPU, expected) {
-					decodeErr = resultValidation("lifecycle-witness", "replay")
-				}
+				decodeErr = u.acknowledgeAndMint(ctx, conn, report, lifecycleWitnessBinding{kind: lifecycleWitnessResult, request: expected})
 			}
 			_ = conn.Close()
 			if decodeErr != nil {
@@ -1273,12 +1277,117 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 	}
 }
 
+// acknowledgeAndMint is the only internal capability transition shared by
+// normal results and sealed probes. The ACK is deliberately written before
+// the one-shot witness is stored.
+func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn, peer SandboxReport, binding lifecycleWitnessBinding) error {
+	_, err := u.RefreshAccounting(ctx)
+	if err != nil {
+		return resultValidation("accounting-refresh", "unavailable")
+	}
+	refreshed, refreshedCPU, snapshotOK := u.LastVerifiedSnapshot()
+	if !snapshotOK || !lifecycleSnapshotMatchesPeer(peer, refreshed) {
+		return resultValidation("accounting-refresh", "snapshot-mismatch")
+	}
+	if refreshed.MemoryEvents["oom"] != 0 || refreshed.MemoryEvents["oom_kill"] != 0 || refreshed.PIDsEvents["max"] != 0 {
+		return resultValidation("accounting-refresh", "unavailable")
+	}
+	if err := u.writeACK(conn); err != nil {
+		return resultValidation("ack-write", "io")
+	}
+	if !u.mintLifecycleWitness(refreshed, refreshedCPU, binding) {
+		return resultValidation("lifecycle-witness", "replay")
+	}
+	return nil
+}
+
 func (u *systemdUnit) writeACK(conn *net.UnixConn) error {
 	if u.writeResultACK != nil {
 		return u.writeResultACK(conn)
 	}
 	_, err := conn.Write([]byte("ACK\n"))
 	return err
+}
+
+// ReceiveSealedProbeObservation is intentionally unexported and is reachable
+// only from the sealed hostile-probe harness. A probe has no authority to
+// submit a Result or to activate normal document routing.
+func (u *systemdUnit) ReceiveSealedProbeObservation(ctx context.Context, expected Request, probe *containmentProbe) error {
+	if probe == nil || probe.caseID == "" || u.spec.probe != probe || !validRequest(expected) || u.VerifyAttestedProbe(ctx, probe) != nil {
+		u.resultMu.Lock()
+		listener := u.resultListener
+		u.resultListener = nil
+		u.resultMu.Unlock()
+		if listener != nil {
+			_ = listener.Close()
+			_ = os.Remove(u.resultSocket)
+		}
+		return closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
+	}
+	u.resultMu.Lock()
+	if u.resultClaimed {
+		u.resultMu.Unlock()
+		return closed(ErrReplay)
+	}
+	if !u.authorized || u.authorizedRequest != expected || u.resultListener == nil || u.peers == nil {
+		u.resultMu.Unlock()
+		return closedWith(ErrInvalidResult, resultValidation("request-binding", "mismatch"))
+	}
+	listener := u.resultListener
+	u.resultListener = nil
+	u.resultClaimed = true
+	u.resultMu.Unlock()
+	defer func() {
+		_ = listener.Close()
+		_ = os.Remove(u.resultSocket)
+	}()
+	stopCancel := context.AfterFunc(ctx, func() { _ = listener.SetDeadline(time.Now()) })
+	defer stopCancel()
+	for {
+		deadline := time.Now().Add(100 * time.Millisecond)
+		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+			deadline = contextDeadline
+		}
+		_ = listener.SetDeadline(deadline)
+		conn, err := listener.AcceptUnix()
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "result-receive", ReasonCode: "io"})
+		}
+		pid, uid, peerErr := u.peers.Credentials(conn)
+		report, reportErr := u.Report(ctx)
+		if peerErr != nil || reportErr != nil || pid != report.MainPID || uint64(uid) != report.UID || !contains(report.ControlGroupMembers, pid) {
+			_ = conn.Close()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-u.now.After(10 * time.Millisecond):
+			}
+			continue
+		}
+		_ = conn.SetDeadline(deadline)
+		var observation sealedProbeObservation
+		decodeErr := readFrame(conn, &observation)
+		if decodeErr != nil || !validSealedProbeObservation(observation, probe, expected) {
+			_ = conn.Close()
+			return closedWith(ErrInvalidResult, resultValidation("payload/validation", "invalid-result"))
+		}
+		if !u.verifiedSnapshotMatchesPeer(report) {
+			_ = conn.Close()
+			return closedWith(ErrInvalidResult, resultValidation("accounting-refresh", "unavailable"))
+		}
+		err = u.acknowledgeAndMint(ctx, conn, report, lifecycleWitnessBinding{kind: lifecycleWitnessProbe, request: expected, probeCase: probe.caseID})
+		_ = conn.Close()
+		if err != nil {
+			return closedWith(ErrInvalidResult, err)
+		}
+		return nil
+	}
 }
 
 func (u *systemdUnit) CPUUsage(ctx context.Context) (time.Duration, error) {

@@ -68,6 +68,13 @@ failures; reserve fixed `accounting-refresh` result-validation diagnostics for
 authenticated, decoded results whose accounting refresh fails, including when
 terminal accounting cleanup also fails.
 
+Route sealed hostile-probe observations through the same private, one-use
+lifecycle witness transition as normal results. Require the exact sealed probe,
+authorized peer capability, bounded versioned case/invocation observation,
+refreshed immutable accounting snapshot, and successful host ACK before minting
+a probe-bound witness; malformed, mismatched, resource-limited, or ACK-failed
+probes mint nothing and never enter production routing.
+
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
 

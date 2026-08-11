@@ -433,8 +433,38 @@ type containmentProbe struct {
 	hostExecutable string
 	executableSHA  string
 	action         string
+	caseID         string
 	resultPath     string
 	hostResultPath string
+}
+
+// sealedProbeObservation is deliberately separate from a worker Result. It is
+// accepted only by the test-only sealed-probe path and never enters normal
+// document routing.
+type sealedProbeObservation struct {
+	Schema     string          `json:"schema"`
+	Version    int             `json:"version"`
+	Case       string          `json:"case"`
+	Invocation string          `json:"invocation"`
+	Checks     map[string]bool `json:"checks"`
+}
+
+const (
+	sealedProbeObservationSchema  = "crux-anydoc.sealed-probe-observation"
+	sealedProbeObservationVersion = 1
+	maxProbeObservationChecks     = 16
+)
+
+func validSealedProbeObservation(value sealedProbeObservation, probe *containmentProbe, request Request) bool {
+	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case == "" || value.Case != probe.caseID || value.Invocation != request.RequestDigest || len(value.Checks) == 0 || len(value.Checks) > maxProbeObservationChecks {
+		return false
+	}
+	for name, passed := range value.Checks {
+		if name == "" || len(name) > 64 || !passed {
+			return false
+		}
+	}
+	return true
 }
 
 type LaunchDependency struct {

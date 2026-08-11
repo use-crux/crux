@@ -1858,6 +1858,85 @@ func TestTask1LifecycleWitnessRejectsDuplicateReceiver(t *testing.T) {
 	}
 }
 
+func TestTask3SealedProbeWitnessHostileCases(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		mutate      func(*systemdUnit, *fakeFS, *sealedProbeObservation)
+		wantAck     bool
+		wantWitness bool
+	}{
+		{name: "contained", wantAck: true, wantWitness: true},
+		{name: "case mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Case = "other" }},
+		{name: "invocation mismatch", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Invocation = strings.Repeat("b", 64) }},
+		{name: "invalid observation", mutate: func(_ *systemdUnit, _ *fakeFS, o *sealedProbeObservation) { o.Checks = nil }},
+		{name: "peer authentication", mutate: func(u *systemdUnit, _ *fakeFS, _ *sealedProbeObservation) { u.peers = fakePeer{pid: 41} }},
+		{name: "ack failure", mutate: func(u *systemdUnit, _ *fakeFS, _ *sealedProbeObservation) {
+			u.writeResultACK = func(*net.UnixConn) error { return errors.New("ack") }
+		}},
+		{name: "oom contradiction", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+			fs.files[cgroupFile("/crux.slice/test", "memory.events")] = []byte("low 0\nhigh 0\nmax 0\noom 1\noom_kill 0\n")
+		}},
+		{name: "pids contradiction", mutate: func(_ *systemdUnit, fs *fakeFS, _ *sealedProbeObservation) {
+			fs.files[cgroupFile("/crux.slice/test", "pids.events")] = []byte("max 1\n")
+		}},
+		{name: "snapshot mismatch", mutate: func(u *systemdUnit, _ *fakeFS, _ *sealedProbeObservation) { u.snapshot.RuntimeTreeDigest = "mismatch" }},
+		{name: "sealed executable mismatch", mutate: func(u *systemdUnit, _ *fakeFS, _ *sealedProbeObservation) {
+			u.verifyProbe = func(context.Context, *containmentProbe) error { return errors.New("seal") }
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := t.TempDir() + "/probe.sock"
+			listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fs := newFakeFS()
+			probe := &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", caseID: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
+			u := &systemdUnit{name: "crux-anydoc-task3.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}, spec: ServiceSpec{probe: probe}, verifyProbe: func(context.Context, *containmentProbe) error { return nil }}
+			first, err := u.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			u.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+			if _, err := u.Report(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			u.MarkSnapshotVerified()
+			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+			u.authorized, u.authorizedRequest = true, request
+			observation := sealedProbeObservation{Schema: sealedProbeObservationSchema, Version: sealedProbeObservationVersion, Case: probe.caseID, Invocation: request.RequestDigest, Checks: map[string]bool{"contained": true}}
+			if test.mutate != nil {
+				test.mutate(u, fs, &observation)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- u.ReceiveSealedProbeObservation(ctx, request, probe) }()
+			if test.name != "sealed executable mismatch" {
+				conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+				if dialErr == nil {
+					_ = writeFrame(conn, observation)
+					ack := make([]byte, 4)
+					_, readErr := io.ReadFull(conn, ack)
+					if (readErr == nil && string(ack) == "ACK\n") != test.wantAck {
+						t.Fatalf("ACK = %q, %v", ack, readErr)
+					}
+					_ = conn.Close()
+				}
+			}
+			err = <-done
+			_, witnessed := u.lastLifecycleWitness()
+			if (err == nil) != test.wantWitness || witnessed != test.wantWitness {
+				t.Fatalf("ReceiveSealedProbeObservation() = %v, witness=%v", err, witnessed)
+			}
+			if witnessed && u.lifecycleWitness.kind != lifecycleWitnessProbe {
+				t.Fatalf("witness kind = %d", u.lifecycleWitness.kind)
+			}
+		})
+	}
+}
+
 type fakePeer struct {
 	pid         int
 	err         error

@@ -647,7 +647,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	}
 	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
 	hostObservationPath := filepath.Join(privateTemp, "observation.json")
-	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
+	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, caseID: name, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
 	if control == "abort" {
 		return runCanceledSupervisorProbe(t, launch, probe, stagingRoot, privateTemp, name, limits)
 	}
@@ -697,6 +697,13 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 		_, _, _, _ = cleanup(unit)
 		t.Fatalf("%s probe authorization failed: %v", name, err)
 	}
+	probeReceiver, receivesProbe := unit.(*systemdUnit)
+	probeDone := make(chan error, 1)
+	if receivesProbe && (control == "result" || control == "descendant") {
+		go func() { probeDone <- probeReceiver.ReceiveSealedProbeObservation(ctx, request, probe) }()
+	} else {
+		close(probeDone)
+	}
 
 	var observation probeObservation
 	switch control {
@@ -735,6 +742,11 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	wall := time.Since(started)
 	if observationErr != nil {
 		t.Fatalf("%s probe observation lifecycle failed: stage=%s reason=%s cleanup=%s", name, observationErr.stage, observationErr.reason, cleanupReason)
+	}
+	if receivesProbe && (control == "result" || control == "descendant") {
+		if err := <-probeDone; err != nil {
+			t.Fatalf("%s probe witness failed: %v", name, err)
+		}
 	}
 	if cleanupReason != "" {
 		t.Fatalf("%s probe cleanup failed: %s", name, cleanupReason)
@@ -1008,7 +1020,8 @@ func TestContainmentProbeProcess(t *testing.T) {
 	if err != nil {
 		os.Exit(22)
 	}
-	if _, err := DecodeRequest(conn); err != nil {
+	request, err := DecodeRequest(conn)
+	if err != nil {
 		_ = conn.Close()
 		os.Exit(23)
 	}
@@ -1018,6 +1031,21 @@ func TestContainmentProbeProcess(t *testing.T) {
 		if err := writeProbeObservation(resultPath, probeCaseForAction(action), checks, pid); err != nil {
 			os.Exit(24)
 		}
+		ack, err := net.DialTimeout("unix", os.Args[separator+4], time.Second)
+		if err != nil {
+			os.Exit(25)
+		}
+		observation := sealedProbeObservation{Schema: sealedProbeObservationSchema, Version: sealedProbeObservationVersion, Case: probeCaseForAction(action), Invocation: request.RequestDigest, Checks: checks}
+		if err := writeFrame(ack, observation); err != nil {
+			_ = ack.Close()
+			os.Exit(25)
+		}
+		confirmation := make([]byte, 4)
+		if _, err := io.ReadFull(ack, confirmation); err != nil || string(confirmation) != "ACK\n" {
+			_ = ack.Close()
+			os.Exit(25)
+		}
+		_ = ack.Close()
 	}
 	if strings.HasPrefix(action, "filesystem:") {
 		token := strings.TrimPrefix(action, "filesystem:")
