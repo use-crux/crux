@@ -1479,9 +1479,14 @@ func TestSystemdResultHasExactlyOneReceiver(t *testing.T) {
 	}
 }
 
-type fakePeer struct{ pid int }
+type fakePeer struct {
+	pid int
+	err error
+}
 
-func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) { return p.pid, 1000, nil }
+func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) {
+	return p.pid, 1000, p.err
+}
 
 func TestSystemdRejectsUnsafePaths(t *testing.T) {
 	for _, path := range []string{"", "/", "relative", "/run/../etc"} {
@@ -1569,6 +1574,11 @@ type fakeSystemBus struct {
 	propGoneOnceAfterStop bool
 	propGoneConsumed      bool
 	propErrAfterGoneOnce  error
+	// postStopProperties provides deterministic status observations after the
+	// StopUnit GetUnit-gone response. It prevents WaitInactive tests from
+	// accidentally polling a synthetic active status forever.
+	postStopProperties     []fakeSystemBusProperties
+	postStopPropertiesNext int
 	// propGoneAfterStop confirms a successful terminal status once, then
 	// simulates systemd unloading the transient unit before cleanup can poll.
 	propGoneAfterStop               bool
@@ -1579,6 +1589,11 @@ type fakeSystemBus struct {
 	stopDBusErrorName               string
 	reset                           bool
 	onStop                          func()
+}
+
+type fakeSystemBusProperties struct {
+	values map[string]any
+	err    error
 }
 
 // verifiedLifecycleSystemdUnit lets this lifecycle test exercise verify's
@@ -1620,6 +1635,11 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 	}
 	if b.propGoneOnceAfterStop && b.stopped && b.propGoneConsumed && b.propErrAfterGoneOnce != nil {
 		return nil, b.propErrAfterGoneOnce
+	}
+	if b.stopped && b.postStopPropertiesNext < len(b.postStopProperties) {
+		response := b.postStopProperties[b.postStopPropertiesNext]
+		b.postStopPropertiesNext++
+		return response.values, response.err
 	}
 	if b.propGoneAfterStop && b.stopped {
 		b.propertiesAfterStop++
@@ -2683,7 +2703,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 
 	for _, test := range []struct {
 		name        string
-		receive     bool
+		receive     string
 		final       map[string]any
 		finalErr    error
 		termination string
@@ -2692,24 +2712,27 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		wantService string
 		wantClean   bool
 	}{
-		{name: "accepts exact get unit gone with empty cgroup", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
-		{name: "accepts exact get unit gone with absent cgroup", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
+		{name: "accepts exact get unit gone with empty cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
+		{name: "accepts exact get unit gone with absent cgroup", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
 		{name: "rejects no witness", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects failed status", receive: true, final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "exit-code"},
-		{name: "rejects oom", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "unknown"},
-		{name: "rejects oom kill", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
-		{name: "rejects nonzero exit", receive: true, final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
-		{name: "rejects live status", receive: true, final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects arbitrary final error", receive: true, finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
-		{name: "rejects unrecognized final error", receive: true, finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "already-gone-terminal-unit-properties-unrecognized"},
-		{name: "rejects nonexclusive termination", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "termination-evidence"},
-		{name: "rejects cgroup mismatch", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "termination-evidence"},
-		{name: "rejects runtime mismatch", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) {
+		{name: "rejects failed status", receive: "valid", final: map[string]any{"ActiveState": "failed", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "exit-code"},
+		{name: "rejects oom", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "unknown"},
+		{name: "rejects oom kill", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
+		{name: "rejects nonzero exit", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
+		{name: "rejects live status", receive: "valid", final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects arbitrary final error", receive: "valid", finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
+		{name: "rejects unrecognized final error", receive: "valid", finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "already-gone-terminal-unit-properties-unrecognized"},
+		{name: "nonexclusive termination is intercepted before composite validation", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "termination-evidence"},
+		{name: "cgroup mismatch is intercepted before composite validation", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "termination-evidence"},
+		{name: "rejects runtime mismatch", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) {
 			u.snapshotMu.Lock()
 			u.snapshot.RuntimeTreeDigest = "stale"
 			u.snapshotMu.Unlock()
 		}, wantReason: "already-gone-terminal-unavailable"},
-		{name: "rejects unverified snapshot", receive: true, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
+		{name: "rejects unverified snapshot", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", mutate: func(u *systemdUnit, _ *fakeFS) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "terminal-accounting-report-runtime-attestation-runtime-target-missing", wantService: "unknown"},
+		{name: "rejects mismatched result witness", receive: "mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects result ACK write failure", receive: "ack-write", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects unauthenticated result peer", receive: "peer-auth", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
@@ -2737,20 +2760,29 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
 			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
 			run := &Run{unit: u, nonce: request.Nonce, digest: request.RequestDigest, sourceSHA: request.SourceSHA256, format: request.Format, limits: request.Limits, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
-			if test.receive {
+			var receiveErr error
+			if test.receive != "" {
 				path := t.TempDir() + "/result.sock"
 				listener, listenErr := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 				if listenErr != nil {
 					t.Fatal(listenErr)
 				}
-				u.resultListener, u.resultSocket, u.peers = listener, path, fakePeer{pid: 42}
+				peer := fakePeer{pid: 42}
+				if test.receive == "peer-auth" {
+					peer.err = errors.New("peer credentials unavailable")
+				}
+				u.resultListener, u.resultSocket, u.peers = listener, path, peer
 				ack := make(chan error, 1)
 				go func() {
 					conn, dialErr := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
 					if dialErr == nil {
-						dialErr = EncodeResult(conn, validWireResult(request))
+						result := validWireResult(request)
+						if test.receive == "mismatch" {
+							result.Request.Nonce = strings.Repeat("b", 32)
+						}
+						dialErr = EncodeResult(conn, result)
 					}
-					if dialErr == nil {
+					if dialErr == nil && test.receive == "valid" {
 						got := make([]byte, 4)
 						if _, readErr := io.ReadFull(conn, got); readErr != nil || string(got) != "ACK\n" {
 							dialErr = errors.New("ack missing")
@@ -2761,11 +2793,39 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 					}
 					ack <- dialErr
 				}()
-				if _, receiveErr := run.ReceiveResult(context.Background()); receiveErr != nil {
+				var receiveCtx context.Context = context.Background()
+				cancelReceive := func() {}
+				if test.receive == "peer-auth" {
+					receiveCtx, cancelReceive = context.WithTimeout(context.Background(), 50*time.Millisecond)
+				}
+				_, receiveErr = run.ReceiveResult(receiveCtx)
+				cancelReceive()
+				if test.receive == "valid" && receiveErr != nil {
 					t.Fatalf("ReceiveResult() = %v", receiveErr)
+				}
+				if test.receive == "mismatch" || test.receive == "ack-write" {
+					var validation *ResultValidationError
+					if !errors.As(receiveErr, &validation) {
+						t.Fatalf("ReceiveResult() = %T %v, want result validation", receiveErr, receiveErr)
+					}
+					wantStage := "request-binding"
+					if test.receive == "ack-write" {
+						wantStage = "ack-write"
+					}
+					if validation.Stage != wantStage {
+						t.Fatalf("result validation stage = %q, want %q", validation.Stage, wantStage)
+					}
+				}
+				if test.receive == "peer-auth" && !errors.Is(receiveErr, context.DeadlineExceeded) {
+					t.Fatalf("ReceiveResult() = %T %v, want bounded peer authentication failure", receiveErr, receiveErr)
 				}
 				if ackErr := <-ack; ackErr != nil {
 					t.Fatalf("result ACK = %v", ackErr)
+				}
+				if test.receive != "valid" {
+					if _, ok := u.LastResultACK(); ok {
+						t.Fatal("failed result receive minted an ACK witness")
+					}
 				}
 			}
 
@@ -2785,6 +2845,11 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			bus.valuesAfterFirstStopProperties = strict
 			if test.final != nil {
 				bus.valuesAfterFirstStopProperties = test.final
+				if test.final["ActiveState"] == "active" {
+					gone := &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+					bus.postStopProperties = []fakeSystemBusProperties{{values: test.final}, {err: gone}, {err: gone}}
+					bus.valuesAfterFirstStopProperties = nil
+				}
 			}
 			bus.onStop = func() {
 				fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
@@ -2802,7 +2867,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 				}
 			}
 
-			finishErr := run.Finish(context.Background(), nil)
+			finishErr := run.Finish(context.Background(), receiveErr)
 			terminal := run.TerminalReport()
 			if terminal.Cleaned != test.wantClean {
 				t.Fatalf("terminal report = %#v, want cleaned=%t", terminal, test.wantClean)
