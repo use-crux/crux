@@ -115,6 +115,9 @@ Keep the fixed mounted authorization socket connectable during startup so a
 worker blocks on the centrally verified one-shot capability instead of exiting
 before attestation; the result socket stays closed and capability delivery
 continues to require exact `SO_PEERCRED` UID, MainPID, and cgroup identity.
+Discard foreign early authorization connections and continue accepting until
+the exact attested worker connects, without writing a request to any rejected
+peer.
 
 Classify exact systemd unit-unload report failures with a fixed allowlisted
 diagnostic without masking exact-cgroup ENOENT. Reuse a verified accounting

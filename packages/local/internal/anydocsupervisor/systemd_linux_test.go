@@ -1445,6 +1445,62 @@ func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	}
 }
 
+func TestSystemdAuthorizationSkipsForeignPeerBeforeAuthorizingWorker(t *testing.T) {
+	path := t.TempDir() + "/auth.sock"
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peers := fakePeer{}
+	credentialsCalls := 0
+	peers.credentials = func(*net.UnixConn) (int, uint32, error) {
+		credentialsCalls++
+		if credentialsCalls == 1 {
+			return 43, 1000, nil
+		}
+		return 42, 1000, nil
+	}
+	u := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}, listener: listener, socket: path, peers: peers}
+	request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+	request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	go func() { done <- u.AuthorizeCapability(ctx, request) }()
+
+	foreign, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = foreign.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err := foreign.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("foreign peer read = %v, want no authorization request", err)
+	}
+	_ = foreign.Close()
+
+	worker, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecodeRequest(worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = worker.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got != request {
+		t.Fatalf("authorized request = %#v, want %#v", got, request)
+	}
+	if credentialsCalls != 2 {
+		t.Fatalf("peer credential checks = %d, want foreign and worker checks", credentialsCalls)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("socket retained: %v", err)
+	}
+}
+
 func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	path := t.TempDir() + "/result.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
@@ -1630,11 +1686,15 @@ func TestSystemdResultHasExactlyOneReceiver(t *testing.T) {
 }
 
 type fakePeer struct {
-	pid int
-	err error
+	pid         int
+	err         error
+	credentials func(*net.UnixConn) (int, uint32, error)
 }
 
-func (p fakePeer) Credentials(*net.UnixConn) (int, uint32, error) {
+func (p fakePeer) Credentials(conn *net.UnixConn) (int, uint32, error) {
+	if p.credentials != nil {
+		return p.credentials(conn)
+	}
 	return p.pid, 1000, p.err
 }
 
@@ -1895,8 +1955,8 @@ func (f *fakeFS) WriteFile(path string, contents []byte) error {
 	f.writes[path] = append([]byte(nil), contents...)
 	return nil
 }
-func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return f.removeErr }
-func (f *fakeFS) Chown(string, int, int) error    { return nil }
+func (f *fakeFS) RemoveAll(path string) error  { f.removed[path] = true; return f.removeErr }
+func (f *fakeFS) Chown(string, int, int) error { return nil }
 func (f *fakeFS) Chmod(_ string, mode os.FileMode) error {
 	f.chmods = append(f.chmods, mode)
 	return nil
