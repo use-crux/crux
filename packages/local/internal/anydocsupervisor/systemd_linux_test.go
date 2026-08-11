@@ -116,23 +116,56 @@ func TestSystemdProbeUsesOneExactWritableObservationBind(t *testing.T) {
 }
 
 func TestEligibleLifecycleResourcesAllowsOnlyPositiveSealedPIDsEvidence(t *testing.T) {
+	fs := newFakeFS()
+	path := cgroupFile("/crux.slice/test", "pids.events")
 	for _, test := range []struct {
-		name    string
-		max     int64
-		binding lifecycleWitnessBinding
-		want    bool
+		name  string
+		input string
+		want  bool
 	}{
-		{name: "sealed pids one", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
-		{name: "sealed pids cumulative", max: 2, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
-		{name: "sealed pids missing", max: 0, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
-		{name: "normal result rejects pids", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
-		{name: "unsealed probe rejects pids", max: 1, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
-		{name: "normal result accepts no pids", max: 0, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
+		{name: "zero", input: "max 0\n", want: true},
+		{name: "one", input: "max 1\n", want: true},
+		{name: "greater than one", input: "max 2\n", want: true},
+		{name: "malformed line", input: "max 1 extra\n"},
+		{name: "malformed key", input: "1max 0\n"},
+		{name: "duplicate key", input: "max 0\nmax 1\n"},
+		{name: "negative", input: "max -1\n"},
+		{name: "overflow", input: "max 9223372036854775808\n"},
+		{name: "nondecimal", input: "max 1e3\n"},
+	} {
+		t.Run("cgroup events/"+test.name, func(t *testing.T) {
+			fs.files[path] = []byte(test.input)
+			got, err := cgroupEvents(fs, "/crux.slice/test", "pids.events")
+			if (err == nil) != test.want {
+				t.Fatalf("cgroupEvents(%q) error = %v, want valid = %t", test.input, err, test.want)
+			}
+			if test.want && got["max"] < 0 {
+				t.Fatalf("cgroupEvents(%q) returned unsafe max %d", test.input, got["max"])
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name       string
+		pidsEvents map[string]int64
+		binding    lifecycleWitnessBinding
+		want       bool
+	}{
+		{name: "sealed pids zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
+		{name: "sealed pids one", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
+		{name: "sealed pids greater than one", pidsEvents: map[string]int64{"max": 2}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}, want: true},
+		{name: "sealed pids missing max", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "pids"}},
+		{name: "normal result rejects pids", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
+		{name: "normal result requires explicit zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}},
+		{name: "normal result accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessResult}, want: true},
+		{name: "unsealed probe rejects pids", pidsEvents: map[string]int64{"max": 1}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
+		{name: "unsealed probe requires explicit zero", pidsEvents: map[string]int64{}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}},
+		{name: "unsealed probe accepts explicit zero", pidsEvents: map[string]int64{"max": 0}, binding: lifecycleWitnessBinding{kind: lifecycleWitnessProbe, probeCase: "network"}, want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			snapshot := SandboxReport{MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": test.max}}
+			snapshot := SandboxReport{MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: test.pidsEvents}
 			if got := eligibleLifecycleResources(snapshot, test.binding); got != test.want {
-				t.Fatalf("eligibleLifecycleResources(max=%d, binding=%#v) = %t, want %t", test.max, test.binding, got, test.want)
+				t.Fatalf("eligibleLifecycleResources(pids=%#v, binding=%#v) = %t, want %t", test.pidsEvents, test.binding, got, test.want)
 			}
 		})
 	}
@@ -152,7 +185,7 @@ func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T)
 		t.Fatal(err)
 	}
 
-	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: osFS{}, Clock: immediateClock{}})
+	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: newFakeFS(), Clock: immediateClock{}})
 	startProbe := func(name string) *systemdUnit {
 		input := filepath.Join(root, name+"-input")
 		private := filepath.Join(root, name+"-private")

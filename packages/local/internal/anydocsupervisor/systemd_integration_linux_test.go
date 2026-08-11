@@ -637,7 +637,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		bytes, err := os.ReadFile(probe.hostResultPath)
 		if err != nil {
 			_ = run.Finish(context.Background(), err)
-			t.Fatalf("%s probe observation artifact unavailable: %v", name, err)
+			t.Fatalf("%s probe observation artifact unavailable: %s", name, safeProbeFailure(err))
 		}
 		var reason string
 		observation, reason = decodeProbeObservation(bytes, name)
@@ -764,6 +764,19 @@ func safeProbeFailure(err error) string {
 	return "unknown"
 }
 
+func TestSafeProbeFailureRedactsPrivateDetails(t *testing.T) {
+	const sentinel = "/private/crux-anydoc-observation-secret"
+	for _, err := range []error{
+		errors.New(sentinel),
+		containment("start-transient-unit", errors.New(sentinel)),
+	} {
+		diagnostic := safeProbeFailure(err)
+		if strings.Contains(diagnostic, sentinel) || strings.Contains(diagnostic, "private") || strings.Contains(diagnostic, "secret") {
+			t.Fatalf("probe failure diagnostic leaked private detail: %q", diagnostic)
+		}
+	}
+}
+
 func expectedProbeOutcome(name string) ErrorCode {
 	switch name {
 	case "network", "filesystem", "privileges", "pids":
@@ -800,12 +813,12 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	defer cancel()
 	run, err := supervisor.startEvaluation(ctx, []byte("probe"), FormatDOCX, launch, privateTemp, limits)
 	if err != nil {
-		t.Fatalf("start canceled probe: %v", err)
+		t.Fatalf("start canceled probe: %s", safeProbeFailure(err))
 	}
 	run.expectSealedProbe(probe)
 	if err := run.Authorize(); err != nil {
 		_ = run.Finish(context.Background(), err)
-		t.Fatalf("authorize canceled probe: %v", err)
+		t.Fatalf("authorize canceled probe: %s", safeProbeFailure(err))
 	}
 	canceled, cancelNow := context.WithCancel(ctx)
 	cancelNow()

@@ -1319,13 +1319,16 @@ func (u *systemdUnit) acknowledgeAndMint(ctx context.Context, conn *net.UnixConn
 // never accept resource-limit evidence; only the sealed pids probe may carry
 // its expected positive, cumulative pids.max counter.
 func eligibleLifecycleResources(snapshot SandboxReport, binding lifecycleWitnessBinding) bool {
-	if snapshot.MemoryEvents["oom"] != 0 || snapshot.MemoryEvents["oom_kill"] != 0 {
+	oom, oomOK := snapshot.MemoryEvents["oom"]
+	oomKill, oomKillOK := snapshot.MemoryEvents["oom_kill"]
+	pidsMax, pidsMaxOK := snapshot.PIDsEvents["max"]
+	if !oomOK || !oomKillOK || !pidsMaxOK || oom != 0 || oomKill != 0 {
 		return false
 	}
 	if binding.kind == lifecycleWitnessProbe && binding.probeCase == "pids" {
-		return snapshot.PIDsEvents["max"] > 0
+		return pidsMax > 0
 	}
-	return snapshot.PIDsEvents["max"] == 0
+	return pidsMax == 0
 }
 
 func (u *systemdUnit) writeACK(conn *net.UnixConn) error {
@@ -1875,17 +1878,51 @@ func cgroupEvents(fs FileSystem, cgroup, file string) (map[string]int64, error) 
 	}
 	out := map[string]int64{}
 	for _, line := range strings.Split(string(b), "\n") {
-		f := strings.Fields(line)
-		if len(f) != 2 {
+		if strings.TrimSpace(line) == "" {
 			continue
+		}
+		f := strings.Fields(line)
+		if len(f) != 2 || !validCgroupEventKey(f[0]) || !decimalInt64(f[1]) {
+			return nil, errors.New("invalid cgroup events")
 		}
 		v, e := strconv.ParseInt(f[1], 10, 64)
 		if e != nil || v < 0 {
 			return nil, errors.New("invalid cgroup events")
 		}
+		if _, exists := out[f[0]]; exists {
+			return nil, errors.New("invalid cgroup events")
+		}
 		out[f[0]] = v
 	}
 	return out, nil
+}
+
+func validCgroupEventKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '_' && (c < '0' || c > '9') {
+			return false
+		}
+		if i == 0 && c >= '0' && c <= '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func decimalInt64(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i := range value {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 type cgroupEventsUnavailableError struct{}
