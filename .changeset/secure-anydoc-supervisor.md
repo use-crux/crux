@@ -68,6 +68,9 @@ exposing unit names, D-Bus bodies, or cgroup paths.
 Classify already-gone cleanup rejection using fixed, allowlisted termination
 and terminal-proof diagnostics without exposing systemd or cgroup details.
 
+Split pending `unit-properties-gone` terminal-proof rejection into fixed,
+allowlisted no-detail diagnostics for each ordered proof and snapshot check.
+
 Classify unrecognized D-Bus terminal-status failures with a fixed allowlisted
 cleanup diagnostic, without exposing D-Bus names or bodies; preserve the
 existing generic-unavailable diagnostic for non-D-Bus terminal-status errors.

@@ -1010,6 +1010,49 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 	}
 }
 
+func TestRunFinishTerminalReportSafeExecutionFailureUnitPropertiesGoneProofReasons(t *testing.T) {
+	const pinned = "/private/pinned-cgroup-secret"
+	const secret = "/private/runtime-digest-secret"
+	proof := terminalSuccessProof{
+		status:        TerminalStatus{State: "inactive", ServiceResult: "success"},
+		cgroup:        pinned,
+		snapshotPID:   42,
+		runtimeDigest: secret,
+	}
+	snapshot := SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: secret}
+	termination := TerminationEvidence{ControlGroup: pinned, Absent: true}
+
+	for _, test := range []struct {
+		name     string
+		proofOK  bool
+		proof    terminalSuccessProof
+		snapshot SandboxReport
+		want     string
+	}{
+		{name: "proof missing", want: "unit-properties-gone-proof-missing"},
+		{name: "proof cgroup mismatch", proofOK: true, proof: terminalSuccessProof{status: proof.status, cgroup: "/private/proof-cgroup-secret", snapshotPID: proof.snapshotPID, runtimeDigest: proof.runtimeDigest}, snapshot: snapshot, want: "unit-properties-gone-proof-cgroup-mismatch"},
+		{name: "proof pid invalid", proofOK: true, proof: terminalSuccessProof{status: proof.status, cgroup: proof.cgroup, runtimeDigest: proof.runtimeDigest}, snapshot: snapshot, want: "unit-properties-gone-proof-pid-invalid"},
+		{name: "snapshot cgroup mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: "/private/snapshot-cgroup-secret", MainPID: 42, RuntimeTreeDigest: secret}, want: "unit-properties-gone-snapshot-cgroup-mismatch"},
+		{name: "snapshot pid mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 43, RuntimeTreeDigest: secret}, want: "unit-properties-gone-snapshot-pid-mismatch"},
+		{name: "runtime digest missing", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 42}, want: "unit-properties-gone-runtime-digest-missing"},
+		{name: "runtime digest mismatch", proofOK: true, proof: proof, snapshot: SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: "/private/other-digest-secret"}, want: "unit-properties-gone-runtime-digest-mismatch"},
+		{name: "proof terminal not success", proofOK: true, proof: terminalSuccessProof{status: TerminalStatus{State: "failed", ServiceResult: "exit-code"}, cgroup: pinned, snapshotPID: 42, runtimeDigest: secret}, snapshot: snapshot, want: "unit-properties-gone-proof-terminal-not-success"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reason := validateUnitPropertiesGone(pinned, test.snapshot, test.proof, test.proofOK, termination, nil, TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone})
+			if reason != test.want || !validContainmentReason(reason) {
+				t.Fatalf("reason = %q, want allowlisted %q", reason, test.want)
+			}
+
+			terminal := TerminalReport{Outcome: ErrContainmentUnavailable, PreStop: SandboxReport{ServiceResult: "success"}}
+			got := safeExecutionFailure(closedWith(ErrContainmentUnavailable, &ContainmentError{Stage: "containment-cleanup", ReasonCode: reason}), terminal)
+			if !strings.Contains(got, "reason="+reason) || strings.Contains(got, "private") || strings.Contains(got, "42") || strings.Contains(got, secret) {
+				t.Fatalf("safe execution failure leaked detail: %q", got)
+			}
+		})
+	}
+}
+
 func TestValidateAlreadyGoneReasonsAreFixedAndSafe(t *testing.T) {
 	success := TerminalStatus{State: "inactive", ServiceResult: "success"}
 	secret := "/private/cgroup/tenant-123: dbus details"
