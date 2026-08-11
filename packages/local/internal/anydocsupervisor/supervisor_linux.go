@@ -1476,10 +1476,10 @@ func cleanupForOutcome(unit Unit, result error) (SandboxReport, time.Duration, T
 		}
 	}
 	if reason == "alreadyGone" {
-		if establishedWorkloadResult(result) && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
-			reason = ""
-		} else if propertiesGone != nil {
+		if propertiesGone != nil {
 			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, witness, witnessOK, termination, terminationErr, status, statusErr)
+		} else if establishedWorkloadResult(result) && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
+			reason = ""
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
 			// plus carried successful inactive terminal evidence.
