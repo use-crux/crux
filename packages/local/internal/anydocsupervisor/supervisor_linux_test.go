@@ -1109,6 +1109,7 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 		pinned    string
 		snapshot  SandboxReport
 		verified  bool
+		proof     bool
 		status    TerminalStatus
 		statusErr error
 		want      string
@@ -1118,13 +1119,13 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 		{name: "invalid snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-snapshot-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
 		{name: "mismatched snapshot cgroup", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 0, ControlGroup: snapshotCgroup, ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
 		{name: "invalid pinned cgroup", pinned: "relative-pinned-secret", snapshot: SandboxReport{MainPID: 0, ControlGroup: "relative-pinned-secret", ServiceResult: "success"}, verified: true, want: "unit-properties-gone-snapshot-cgroup"},
-		{name: "arbitrary fake terminal proof is unavailable", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, statusErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, want: "already-gone-terminal-unavailable"},
-		{name: "terminal success without final get unit gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: strictTerminal, want: "already-gone-terminal-unavailable"},
-		{name: "terminal unavailable", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, statusErr: errors.New("terminal private failure"), want: "already-gone-terminal-unavailable"},
-		{name: "terminal gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, statusErr: &terminalStatusGoneError{}, want: "already-gone-terminal-unavailable"},
-		{name: "terminal failed", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
-		{name: "terminal nonzero", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
-		{name: "terminal live", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup}, verified: true, status: TerminalStatus{State: "active", MainPID: 42, ServiceResult: "success"}, want: "already-gone-terminal-not-success"},
+		{name: "missing proof preempts terminal mapper", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, statusErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, want: "unit-properties-gone-proof-missing"},
+		{name: "terminal success without final get unit gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, status: strictTerminal, want: "already-gone-terminal-unavailable"},
+		{name: "terminal unavailable", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, statusErr: errors.New("terminal private failure"), want: "already-gone-terminal-unavailable"},
+		{name: "terminal gone", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, statusErr: &terminalStatusGoneError{}, want: "already-gone-terminal-unavailable"},
+		{name: "terminal failed", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
+		{name: "terminal nonzero", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, status: TerminalStatus{State: "inactive", ServiceResult: "success", ExecMainStatus: 1}, want: "already-gone-terminal-not-success"},
+		{name: "terminal live", pinned: pinnedCgroup, snapshot: SandboxReport{MainPID: 42, ControlGroup: pinnedCgroup, RuntimeTreeDigest: "verified"}, verified: true, proof: true, status: TerminalStatus{State: "active", MainPID: 42, ServiceResult: "success"}, want: "already-gone-terminal-not-success"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			unit := &fakeUnit{
@@ -1132,6 +1133,13 @@ func TestCleanupClassifiesUnitPropertiesGonePromotion(t *testing.T) {
 				stopErr:    &stopFailure{reason: "unit-properties-gone"},
 				snapshot:   test.snapshot,
 				snapshotOK: test.verified,
+				terminalProof: terminalSuccessProof{
+					status:        strictTerminal,
+					cgroup:        test.pinned,
+					snapshotPID:   test.snapshot.MainPID,
+					runtimeDigest: test.snapshot.RuntimeTreeDigest,
+				},
+				terminalProofOK: test.proof,
 				termination: func(context.Context, string) (TerminationEvidence, error) {
 					return TerminationEvidence{ControlGroup: test.pinned, Absent: true}, nil
 				},

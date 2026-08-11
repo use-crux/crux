@@ -271,7 +271,7 @@ func TestCaptureTerminalAccountingUsesOnlyVerifiedTerminalRuntimeSnapshot(t *tes
 			fs := unit.fs.(*fakeFS)
 			fs.runtimeRootMode = os.ModeSymlink | 0o777
 			unit.procFS = fs
-		}, failure: accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe},
+		}, failure: accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnsafe},
 		{name: "pid mismatch", apply: func(unit *systemdUnit) {
 			unit.bus.(*fakeSystemBus).values["MainPID"] = uint32(43)
 			unit.procFS = missingProcRuntimeFS{}
@@ -300,18 +300,18 @@ func TestFinishReportsTypedTerminalRuntimeAttestationDiagnostics(t *testing.T) {
 	}{
 		{name: "proc root unavailable", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return nil, errors.New("/private/proc") }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unavailable"},
 		{name: "proc root unsafe", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return fakeRuntimeInfo{mode: os.ModeDir | 0o555}, nil }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unsafe"},
-		{name: "runtime target missing without terminal proof stays rejected", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+		{name: "runtime target missing without lifecycle witness stays rejected", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
 			if strings.HasSuffix(path, "/root") {
 				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
 			}
 			return nil, os.ErrNotExist
-		}}, want: "termination-evidence"},
+		}}, want: "runtime-target-missing-ack-witness-absent"},
 		{name: "runtime tree unreadable", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
 			if strings.HasSuffix(path, "/root") {
 				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
 			}
 			return fakeRuntimeInfo{mode: os.ModeDir | 0o555}, nil
-		}, readDir: func(string) ([]os.DirEntry, error) { return nil, errors.New("/private/tree") }}, want: "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable"},
+		}, readDir: func(string) ([]os.DirEntry, error) { return nil, errors.New("/private/tree") }}, want: "runtime-target-missing-ack-witness-absent"},
 		{name: "runtime digest mismatch", mutate: func(unit *systemdUnit, _ *fakeSystemBus, fs *fakeFS) {
 			fs.runtimeContents = []byte("mutated")
 			unit.procFS = fs
@@ -337,7 +337,12 @@ func TestFinishReportsTypedTerminalRuntimeAttestationDiagnostics(t *testing.T) {
 			if test.mutate != nil {
 				test.mutate(unit, bus, fs)
 			}
-			bus.onStop = func() { bus.values["ActiveState"] = "inactive"; bus.values["MainPID"] = uint32(0) }
+			bus.onStop = func() {
+				bus.values["ActiveState"] = "inactive"
+				bus.values["MainPID"] = uint32(0)
+				fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+				fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte{}
+			}
 
 			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
 			if err != nil {
@@ -667,8 +672,15 @@ func TestUnitPropertiesGoneTerminalOperationErrorKeepsSafeDiagnosticStage(t *tes
 		return &fakeUnit{
 			rep:        SandboxReport{ControlGroup: pinned, ServiceResult: "success"},
 			stopErr:    &stopFailure{reason: "unit-properties-gone"},
-			snapshot:   SandboxReport{ControlGroup: pinned},
+			snapshot:   SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: "verified"},
 			snapshotOK: true,
+			terminalProof: terminalSuccessProof{
+				status:        TerminalStatus{State: "inactive", ServiceResult: "success"},
+				cgroup:        pinned,
+				snapshotPID:   42,
+				runtimeDigest: "verified",
+			},
+			terminalProofOK: true,
 			terminalStatus: func(context.Context) (TerminalStatus, error) {
 				return TerminalStatus{}, &terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusGeneric}
 			},
@@ -3063,7 +3075,7 @@ func TestCleanupUnitPropertiesGoneNeedsVerifiedTerminalReportProof(t *testing.T)
 	}{
 		{name: "accepts exact verified lifecycle", verify: true, terminalReport: true},
 		{name: "rejects proof before verification", terminalReport: true, want: "unit-properties-gone-no-verified-snapshot"},
-		{name: "rejects stale runtime identity", verify: true, terminalReport: true, mutateDigest: true, want: "already-gone-terminal-unavailable"},
+		{name: "rejects stale runtime identity", verify: true, terminalReport: true, mutateDigest: true, want: "unit-properties-gone-runtime-digest-mismatch"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			base := newFakeSystemBus()
