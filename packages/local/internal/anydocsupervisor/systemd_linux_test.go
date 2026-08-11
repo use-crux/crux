@@ -1563,6 +1563,7 @@ type fakeSystemBus struct {
 	// proof can be asserted independently of stop confirmation.
 	propGoneOnceAfterStop bool
 	propGoneConsumed      bool
+	propErrAfterGoneOnce  error
 	// propGoneAfterStop confirms a successful terminal status once, then
 	// simulates systemd unloading the transient unit before cleanup can poll.
 	propGoneAfterStop               bool
@@ -1603,6 +1604,9 @@ func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]
 	if b.propGoneOnceAfterStop && b.stopped && !b.propGoneConsumed {
 		b.propGoneConsumed = true
 		return nil, dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []interface{}{}}
+	}
+	if b.propGoneOnceAfterStop && b.stopped && b.propGoneConsumed && b.propErrAfterGoneOnce != nil {
+		return nil, b.propErrAfterGoneOnce
 	}
 	if b.propGoneAfterStop && b.stopped {
 		b.propertiesAfterStop++
@@ -2498,6 +2502,132 @@ func TestCleanupUnitPropertiesGoneNeedsVerifiedTerminalReportProof(t *testing.T)
 			}
 			if reason == "" && report.ControlGroup != first.ControlGroup {
 				t.Fatalf("cleanup report cgroup = %q, want %q", report.ControlGroup, first.ControlGroup)
+			}
+		})
+	}
+}
+
+func TestRunFinishSystemdUnitPropertiesGoneLifecycle(t *testing.T) {
+	const pinned = "/crux.slice/test"
+	const private = "/private/final-status-detail"
+	strict := map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(0)}
+
+	for _, test := range []struct {
+		name        string
+		terminal    map[string]any
+		final       map[string]any
+		finalErr    error
+		mutate      func(*systemdUnit)
+		termination string
+		wantReason  string
+		wantService string
+		wantClean   bool
+	}{
+		{name: "accepts bound proof with exact get unit gone and empty cgroup", terminal: strict, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "empty", wantClean: true},
+		{name: "accepts bound proof with exact get unit gone and absent cgroup", terminal: strict, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "absent", wantClean: true},
+		{name: "rejects failed result", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "exit-code", "ExecMainStatus": int32(0)}, wantReason: "already-gone-terminal-not-success", wantService: "exit-code"},
+		{name: "rejects oom kill", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
+		{name: "rejects nonzero main status", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, wantReason: "already-gone-terminal-not-success"},
+		{name: "rejects live terminal without proof", terminal: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects arbitrary final status error", terminal: strict, finalErr: errors.New(private), wantReason: "already-gone-terminal-unit-properties-unavailable"},
+		{name: "rejects unrecognized final status error", terminal: strict, finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, wantReason: "already-gone-terminal-unit-properties-unrecognized"},
+		{name: "rejects nonexclusive termination", terminal: strict, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "already-gone-termination-unavailable"},
+		{name: "rejects termination cgroup mismatch", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "mismatch", wantReason: "already-gone-termination-unavailable"},
+		{name: "rejects runtime snapshot mismatch", terminal: strict, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, mutate: func(u *systemdUnit) {
+			u.snapshotMu.Lock()
+			u.snapshot.RuntimeTreeDigest = "stale"
+			u.snapshotMu.Unlock()
+		}, wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects unverified snapshot", terminal: strict, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, mutate: func(u *systemdUnit) { u.snapshotMu.Lock(); u.snapshotOK = false; u.snapshotMu.Unlock() }, wantReason: "unit-properties-gone-no-verified-snapshot"},
+		{name: "rejects missing proof", terminal: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, wantReason: "already-gone-terminal-unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			fs := newFakeFS()
+			u := &systemdUnit{name: "crux-anydoc-lifecycle.service", bus: bus, fs: fs, now: immediateClock{}}
+			active, err := u.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			u.spec.runtimeTreeDigest = active.RuntimeTreeDigest
+			if _, err := u.Report(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := u.CPUUsage(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			u.MarkSnapshotVerified()
+
+			terminalReport := strict
+			if test.terminal != nil {
+				terminalReport = test.terminal
+			}
+			for key, value := range terminalReport {
+				bus.values[key] = value
+			}
+			if _, err := u.report(context.Background(), true); err != nil {
+				t.Fatalf("strict terminal Report() = %v", err)
+			}
+			if test.mutate != nil {
+				test.mutate(u)
+			}
+
+			bus.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+			bus.killErr = errors.New("kill " + private)
+			bus.propGoneOnceAfterStop = true
+			bus.propErrAfterGoneOnce = test.finalErr
+			bus.valuesAfterFirstStopProperties = terminalReport
+			if test.final != nil {
+				bus.valuesAfterFirstStopProperties = test.final
+			}
+			bus.onStop = func() {
+				fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
+				fs.files[cgroupFile(pinned, "cgroup.procs")] = []byte{}
+				switch test.termination {
+				case "empty":
+					fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
+					fs.files[cgroupFile(pinned, "cgroup.procs")] = []byte{}
+				case "absent":
+					delete(fs.files, cgroupFile(pinned, "cgroup.events"))
+					delete(fs.files, cgroupFile(pinned, "cgroup.procs"))
+				case "nonexclusive":
+					fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
+					fs.files[cgroupFile(pinned, "cgroup.procs")] = []byte{}
+					fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 1\n")
+				case "mismatch":
+					u.reportMu.Lock()
+					u.controlGroup = "/crux.slice/other"
+					u.reportMu.Unlock()
+				}
+			}
+
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			run := &Run{unit: u, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			finishErr := run.Finish(context.Background(), nil)
+			terminal := run.TerminalReport()
+			if terminal.Cleaned != test.wantClean || (test.wantClean && terminal.Outcome != OutcomeSuccess) || (!test.wantClean && terminal.Outcome != ErrContainmentUnavailable) {
+				t.Fatalf("terminal report = %#v, want cleaned=%t", terminal, test.wantClean)
+			}
+			if test.wantClean {
+				if terminal.PreStop.ControlGroup != pinned || terminal.Termination.ControlGroup != pinned || terminal.Termination.Empty == terminal.Termination.Absent || finishErr != nil {
+					t.Fatalf("accepted lifecycle evidence = %#v err=%v", terminal, finishErr)
+				}
+				return
+			}
+			service := test.wantService
+			if service == "" {
+				service = "success"
+			}
+			want := "error=containment-unavailable outcome=containment-unavailable service=" + service + " stage=containment-cleanup reason=" + test.wantReason + " oom-killed=false pids-limited=false"
+			if got := safeExecutionFailure(finishErr, terminal); got != want || strings.Contains(got, private) || strings.Contains(got, pinned) {
+				t.Fatalf("safe diagnostic = %q, want %q without raw detail", got, want)
 			}
 		})
 	}
