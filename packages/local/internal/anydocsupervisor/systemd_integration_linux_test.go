@@ -604,6 +604,25 @@ func TestRunContainmentProbeUsesSealedRunLifecycle(t *testing.T) {
 	if bytes.Contains(body, []byte("stopAwaitReadAndCleanupProbeObservation")) {
 		t.Fatal("runContainmentProbe retained the legacy probe cleanup path")
 	}
+	for _, diagnostic := range [][]byte{
+		[]byte("probe setup directory creation failed"),
+		[]byte("probe filesystem sentinel creation failed"),
+		[]byte("CPU probe accounting failed"),
+		[]byte("descendant cleanup failed"),
+	} {
+		if !bytes.Contains(body, diagnostic) {
+			t.Fatalf("runContainmentProbe is missing fixed hostile diagnostic %q", diagnostic)
+		}
+	}
+	for _, unsafe := range [][]byte{
+		[]byte("t.Fatal(err)"),
+		[]byte("t.Fatal(usageErr)"),
+		[]byte("t.Fatalf(\"descendant %d"),
+	} {
+		if bytes.Contains(body, unsafe) {
+			t.Fatalf("runContainmentProbe retained unsafe hostile diagnostic %q", unsafe)
+		}
+	}
 }
 
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
@@ -644,7 +663,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 	privateTemp := filepath.Join(caseRoot, "private")
 	for _, path := range []string{caseRoot, stagingRoot, privateTemp} {
 		if err := os.Mkdir(path, 0o700); err != nil {
-			t.Fatal(err)
+			t.Fatal("probe setup directory creation failed")
 		}
 	}
 	hostTemp, workerTemp := "", ""
@@ -653,7 +672,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		hostTemp = filepath.Join(os.TempDir(), "crux-anydoc-host-"+token)
 		workerTemp = filepath.Join(os.TempDir(), "crux-anydoc-worker-"+token)
 		if err := os.WriteFile(hostTemp, []byte("host-sentinel"), 0o600); err != nil {
-			t.Fatal(err)
+			t.Fatal("probe filesystem sentinel creation failed")
 		}
 		defer os.Remove(hostTemp)
 		action = "filesystem:" + token
@@ -703,7 +722,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		for {
 			usage, usageErr := run.unit.CPUUsage(ctx)
 			if usageErr != nil {
-				t.Fatal(usageErr)
+				t.Fatal("CPU probe accounting failed")
 			}
 			if usage >= 300*time.Millisecond {
 				break
@@ -795,7 +814,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 			time.Sleep(20 * time.Millisecond)
 		}
 		if processExists(observation.PID) {
-			t.Fatalf("descendant %d escaped cgroup cleanup", observation.PID)
+			t.Fatal("descendant cleanup failed")
 		}
 	}
 	return hostileEvidence{Name: name, Outcome: terminal.Outcome, WorkloadOutcome: terminal.Workload.Code, ProbeOutcome: terminal.ProbeOutcome, Observed: observation.Checks, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], ServiceResult: terminal.PreStop.ServiceResult, WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
