@@ -2105,7 +2105,11 @@ func verifyDiagnostic(ctx context.Context, u Unit, s ServiceSpec) *ContainmentEr
 		if err := verifier.VerifyAttestedProbe(ctx, s.probe); err != nil {
 			return startDiagnostic("post-start-probe-attestation", err)
 		}
-	} else if verifier, ok := u.(attestedNodeVerifier); ok {
+	} else {
+		verifier, ok := u.(attestedNodeVerifier)
+		if !ok {
+			return containmentDiagnostic("post-start-node-attestation", "unavailable")
+		}
 		if err := verifier.VerifyAttestedNode(ctx, s.Node); err != nil {
 			return startDiagnostic("post-start-node-attestation", err)
 		}

@@ -151,6 +151,7 @@ func TestPostStartVerificationDiagnosticsAreTypedAndRedactDetails(t *testing.T) 
 		{name: "missing unit", unit: nil, spec: spec, want: "containment-unavailable stage=post-start-verify reason=unavailable"},
 		{name: "report failure", unit: &fakeUnit{reportErr: errors.New(secret)}, spec: spec, want: "containment-unavailable stage=post-start-report reason=unavailable"},
 		{name: "property mismatch", unit: invalid, spec: spec, want: "containment-unavailable stage=post-start-verify reason=verification-mismatch"},
+		{name: "missing node attestation", unit: valid, spec: spec, want: "containment-unavailable stage=post-start-node-attestation reason=unavailable"},
 		{name: "node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: spec, want: "containment-unavailable stage=post-start-node-attestation reason=unavailable"},
 		{name: "typed node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: containment("start-transient-unit", errors.New(secret))}, spec: spec, want: "containment-unavailable stage=start-transient-unit reason=unknown"},
 		{name: "probe attestation", unit: &probeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: ServiceSpec{probe: &containmentProbe{}}, want: "containment-unavailable stage=post-start-probe-attestation reason=unavailable"},
