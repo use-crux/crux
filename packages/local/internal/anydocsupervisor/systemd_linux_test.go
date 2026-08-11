@@ -2721,7 +2721,7 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 		{name: "rejects oom", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "unknown"},
 		{name: "rejects oom kill", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "oom-kill", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success", wantService: "oom-kill"},
 		{name: "rejects nonzero exit", receive: "valid", final: map[string]any{"ActiveState": "inactive", "MainPID": uint32(0), "Result": "success", "ExecMainStatus": int32(76)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
-		{name: "rejects live status", receive: "valid", final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-unavailable"},
+		{name: "rejects live status", receive: "valid", final: map[string]any{"ActiveState": "active", "MainPID": uint32(42), "Result": "success", "ExecMainStatus": int32(0)}, termination: "empty", wantReason: "already-gone-terminal-not-success"},
 		{name: "rejects arbitrary final error", receive: "valid", finalErr: errors.New(private), termination: "empty", wantReason: "already-gone-terminal-unit-properties-unavailable"},
 		{name: "rejects unrecognized final error", receive: "valid", finalErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, termination: "empty", wantReason: "already-gone-terminal-unit-properties-unrecognized"},
 		{name: "nonexclusive termination is intercepted before composite validation", receive: "valid", finalErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}, termination: "nonexclusive", wantReason: "termination-evidence"},
@@ -2853,6 +2853,15 @@ func TestRunFinishRuntimeTargetMissingLifecycle(t *testing.T) {
 			bus.valuesAfterFirstStopProperties = strict
 			if test.final != nil {
 				bus.valuesAfterFirstStopProperties = test.final
+			}
+			if test.name == "rejects live status" {
+				// Let WaitInactive observe a finished unit, then ensure the final
+				// TerminalStatus that validates runtime-target disappearance sees
+				// the contradictory live status.
+				bus.postStopProperties = []fakeSystemBusProperties{
+					{values: strict},
+					{values: test.final},
+				}
 			}
 			bus.onStop = func() {
 				fs.files[cgroupFile(pinned, "cgroup.events")] = []byte("populated 0\n")
