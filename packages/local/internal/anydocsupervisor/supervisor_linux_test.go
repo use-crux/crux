@@ -113,7 +113,7 @@ func TestStartDiagnosticsAreTypedAndRedactBackendDetails(t *testing.T) {
 		err        error
 	}{
 		{name: "raw backend failure", err: errors.New(secret), want: "containment-unavailable stage=backend-start reason=unavailable"},
-		{name: "typed backend failure", err: containment("start-transient-unit", errors.New(secret)), want: "containment-unavailable stage=start-transient-unit reason=unknown"},
+		{name: "typed backend failure", err: containment("start-transient-unit", errors.New(secret)), want: "containment-unavailable stage=start-transient-unit reason=io-or-systemd"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			backend := &fakeBackend{startErr: test.err}
@@ -141,8 +141,12 @@ func TestPostStartVerificationDiagnosticsAreTypedAndRedactDetails(t *testing.T) 
 		t.Fatal(err)
 	}
 	valid := &fakeUnit{rep: harnessReport(spec)}
-	invalid := &fakeUnit{rep: harnessReport(spec)}
-	invalid.rep.MemoryMax = 1
+	invalidReport := harnessReport(spec)
+	invalidReport.MemoryMax = 1
+	invalid := &nodeAttestationFailure{fakeUnit: &fakeUnit{rep: invalidReport}}
+	probeSpec := spec
+	probeSpec.probe = &containmentProbe{}
+	validProbe := &fakeUnit{rep: harnessReport(probeSpec)}
 	for _, test := range []struct {
 		name, want string
 		unit       Unit
@@ -153,9 +157,9 @@ func TestPostStartVerificationDiagnosticsAreTypedAndRedactDetails(t *testing.T) 
 		{name: "property mismatch", unit: invalid, spec: spec, want: "containment-unavailable stage=post-start-verify reason=verification-mismatch"},
 		{name: "missing node attestation", unit: valid, spec: spec, want: "containment-unavailable stage=post-start-node-attestation reason=unavailable"},
 		{name: "node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: spec, want: "containment-unavailable stage=post-start-node-attestation reason=unavailable"},
-		{name: "typed node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: containment("start-transient-unit", errors.New(secret))}, spec: spec, want: "containment-unavailable stage=start-transient-unit reason=unknown"},
-		{name: "probe attestation", unit: &probeAttestationFailure{fakeUnit: valid, err: errors.New(secret)}, spec: ServiceSpec{probe: &containmentProbe{}}, want: "containment-unavailable stage=post-start-probe-attestation reason=unavailable"},
-		{name: "typed probe attestation", unit: &probeAttestationFailure{fakeUnit: valid, err: containment("start-transient-unit", errors.New(secret))}, spec: ServiceSpec{probe: &containmentProbe{}}, want: "containment-unavailable stage=start-transient-unit reason=unknown"},
+		{name: "typed node attestation", unit: &nodeAttestationFailure{fakeUnit: valid, err: containment("start-transient-unit", errors.New(secret))}, spec: spec, want: "containment-unavailable stage=start-transient-unit reason=io-or-systemd"},
+		{name: "probe attestation", unit: &probeAttestationFailure{fakeUnit: validProbe, err: errors.New(secret)}, spec: probeSpec, want: "containment-unavailable stage=post-start-probe-attestation reason=unavailable"},
+		{name: "typed probe attestation", unit: &probeAttestationFailure{fakeUnit: validProbe, err: containment("start-transient-unit", errors.New(secret))}, spec: probeSpec, want: "containment-unavailable stage=start-transient-unit reason=io-or-systemd"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			failure := verifyDiagnostic(context.Background(), test.unit, test.spec)
