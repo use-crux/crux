@@ -600,9 +600,17 @@ type systemdUnit struct {
 	snapshotCPU    time.Duration
 	snapshotSeen   bool
 	snapshotOK     bool
-	terminalProof  TerminalStatus
-	terminalCgroup string
-	terminalOK     bool
+	terminalProof  terminalSuccessProof
+}
+
+// terminalSuccessProof is an immutable bridge across systemd unloading. It is
+// deliberately bound to the verified live snapshot identity, rather than a
+// standalone terminal status that could have been observed before validation.
+type terminalSuccessProof struct {
+	status        TerminalStatus
+	cgroup        string
+	snapshotPID   int
+	runtimeDigest string
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -626,12 +634,15 @@ func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
 }
 
-// LastTerminalSuccess returns only a strict terminal observation captured while
-// systemd properties were available. It is never derived from an active report.
-func (u *systemdUnit) LastTerminalSuccess() (TerminalStatus, string, bool) {
+// LastTerminalSuccess returns only a strict terminal observation captured after
+// a complete successful terminal report and bound to the verified snapshot.
+func (u *systemdUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	return u.terminalProof, u.terminalCgroup, u.terminalOK
+	if u.terminalProof.cgroup == "" {
+		return terminalSuccessProof{}, false
+	}
+	return u.terminalProof, true
 }
 
 func (u *systemdUnit) snapshotMatchesPinnedControlGroup(report SandboxReport) bool {
@@ -730,11 +741,6 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	if !matchedCgroup {
 		return SandboxReport{}, newReportValidationError(reportValidationControlGroup)
 	}
-	if terminal, ok := terminalStatusFromProps(p); ok && successfulInactiveTerminal(terminal.State, terminal.MainPID, terminal.ServiceResult, terminal.ExecMainStatus) {
-		u.snapshotMu.Lock()
-		u.terminalProof, u.terminalCgroup, u.terminalOK = terminal, cgroup, true
-		u.snapshotMu.Unlock()
-	}
 	memory, err := cgroupLimit(u.fs, cgroup, "memory.max")
 	if err != nil {
 		return SandboxReport{}, newReportValidationError(reportValidationMemory)
@@ -816,6 +822,21 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 		if !u.snapshotOK {
 			u.snapshot = cloneSandboxReport(report)
 			u.snapshotSeen = true
+		}
+		u.snapshotMu.Unlock()
+	}
+	// Capture a terminal bridge only after every accounting, sandbox, and
+	// runtime-attestation check above has succeeded. The snapshot identity was
+	// already fully verified by verify(), so this cannot bless a partial or
+	// pre-verification report.
+	if terminalAccounting {
+		terminal, ok := terminalStatusFromProps(p)
+		if !ok || !successfulInactiveTerminal(terminal.State, terminal.MainPID, terminal.ServiceResult, terminal.ExecMainStatus) {
+			return report, nil
+		}
+		u.snapshotMu.Lock()
+		if u.snapshotOK && u.snapshotSeen && validCgroup(cgroup) && u.snapshot.ControlGroup == cgroup && u.snapshot.MainPID > 0 && len(u.snapshot.RuntimeTreeDigest) == sha256.Size*2 && hexOK(u.snapshot.RuntimeTreeDigest) && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
+			u.terminalProof = terminalSuccessProof{status: terminal, cgroup: cgroup, snapshotPID: u.snapshot.MainPID, runtimeDigest: u.snapshot.RuntimeTreeDigest}
 		}
 		u.snapshotMu.Unlock()
 	}
@@ -1383,20 +1404,6 @@ func (u *systemdUnit) Stop(ctx context.Context) error {
 	stopErr := u.bus.StopUnit(ctx, u.name)
 	if stopErr == nil {
 		return nil
-	}
-	if isDbusStopNoSuchUnit(stopErr) {
-		// Only a successful strict terminal snapshot is sufficient evidence.
-		// UnknownObject from StopUnit never enters this branch.
-		p, propErr := u.bus.UnitProperties(ctx, u.name)
-		proof, proofOK := terminalStatusFromProps(p)
-		if propErr == nil && proofOK && successfulInactiveTerminal(proof.State, proof.MainPID, proof.ServiceResult, proof.ExecMainStatus) {
-			u.reportMu.Lock()
-			pinnedCgroup := u.controlGroup
-			u.reportMu.Unlock()
-			if cgroup := stringValue(p, "ControlGroup"); validCgroup(pinnedCgroup) && cgroup == pinnedCgroup {
-				return &alreadyGoneError{proof: proof, cgroup: cgroup}
-			}
-		}
 	}
 	if err := u.bus.KillUnit(ctx, u.name); err == nil {
 		return nil

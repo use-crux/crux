@@ -52,10 +52,10 @@ PID/runtime-attested Reports stay live for peer authorization only, and
 RefreshAccounting updates only accounting fields on that verified base for the
 exact retained cgroup so mutated properties cannot become a cleanup fallback.
 
-Carry a strictly successful terminal status only on the typed
-`StopUnit` missing-unit confirmation error, so an immediately unloaded
-transient unit can complete cleanup only when the pinned cgroup is absent or
-empty.
+Capture an immutable terminal-success proof only after a complete successful
+terminal report, bound to the verified pinned cgroup and runtime snapshot;
+allow fully unloaded cleanup only with exclusive pinned-cgroup termination
+evidence and an exact final `GetUnit`-gone result.
 
 Classify unavailable result receipt and result-socket I/O as containment
 failures; reserve fixed `accounting-refresh` result-validation diagnostics for
@@ -88,10 +88,9 @@ Require already-gone termination evidence to name the exact pinned cgroup
 before it can clear cleanup.
 
 Promote `unit-properties-gone` to a pending already-gone validation only from
-a verified snapshot for that exact pinned cgroup. Use fresh strict post-stop
-terminal status, rather than the pre-ACK snapshot, to establish success.
-Preserve fixed sanitized terminal-status operation diagnostics on that pending
-validation path without allowing the status error to establish terminal proof.
+a verified snapshot for that exact pinned cgroup. Preserve fixed sanitized
+terminal-status operation diagnostics on that pending validation path without
+allowing a status error to establish terminal proof.
 
 For a fully unloaded unit, retain strict inactive-success service evidence only
 when it was observed from available systemd properties, and accept the pending

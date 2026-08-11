@@ -2415,6 +2415,94 @@ func TestCleanupCachesReportGoneFromDBusUnitPropertiesHelper(t *testing.T) {
 	}
 }
 
+func TestCleanupUnitPropertiesGoneNeedsVerifiedTerminalReportProof(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		verify         bool
+		terminalReport bool
+		mutateDigest   bool
+		want           string
+	}{
+		{name: "accepts exact verified lifecycle", verify: true, terminalReport: true},
+		{name: "rejects proof before verification", terminalReport: true, want: "unit-properties-gone-no-verified-snapshot"},
+		{name: "rejects stale runtime identity", verify: true, terminalReport: true, mutateDigest: true, want: "already-gone-terminal-unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base := newFakeSystemBus()
+			postStopCalls := 0
+			bus := &dbusHelperSystemBus{fakeSystemBus: base}
+			bus.unitProperties = func(ctx context.Context, name string) (map[string]any, error) {
+				if base.stopped {
+					postStopCalls++
+					if postStopCalls == 1 {
+						return nil, dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject"}
+					}
+					return nil, &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+				}
+				return base.UnitProperties(ctx, name)
+			}
+			fs := newFakeFS()
+			u := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			first, err := u.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			u.spec = ServiceSpec{
+				runtimeTreeDigest:       first.RuntimeTreeDigest,
+				MemoryMax:               first.MemoryMax,
+				MemorySwapMax:           first.MemorySwapMax,
+				TasksMax:                first.TasksMax,
+				CPUQuotaPercent:         first.CPUQuotaPercent,
+				CPUQuotaPeriodUSec:      first.CPUQuotaPeriodUSec,
+				RuntimeMax:              first.RuntimeMax,
+				KillMode:                first.KillMode,
+				ProtectSystem:           first.ProtectSystem,
+				CPUAccounting:           first.CPUAccounting,
+				NoNewPrivileges:         first.NoNewPrivileges,
+				PrivateNetwork:          first.PrivateNetwork,
+				PrivateTmp:              first.PrivateTmp,
+				ProtectHome:             first.ProtectHome,
+				ReadOnlyPaths:           first.ReadOnlyPaths,
+				InaccessiblePaths:       first.InaccessiblePaths,
+				BindReadOnlyPaths:       first.BindReadOnlyPaths,
+				ReadWritePaths:          first.ReadWritePaths,
+				RestrictAddressFamilies: first.RestrictAddressFamilies,
+			}
+			if test.verify {
+				// MarkSnapshotVerified is called only by verify after its complete
+				// sandbox and runtime validation; this fake bus has no host /proc
+				// identity for VerifyAttestedNode.
+				u.MarkSnapshotVerified()
+			}
+			base.values["ActiveState"] = "inactive"
+			base.values["MainPID"] = uint32(0)
+			base.values["Result"] = "success"
+			base.values["ExecMainStatus"] = int32(0)
+			fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+			fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte{}
+			if test.terminalReport {
+				if _, err := u.report(context.Background(), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.mutateDigest {
+				u.snapshotMu.Lock()
+				u.snapshot.RuntimeTreeDigest = "different"
+				u.snapshotMu.Unlock()
+			}
+			base.stopDBusErrorName = "org.freedesktop.systemd1.NoSuchUnit"
+			base.killErr = errors.New("kill unavailable")
+			report, _, _, reason := cleanup(u)
+			if reason != test.want {
+				t.Fatalf("cleanup reason = %q, want %q", reason, test.want)
+			}
+			if reason == "" && report.ControlGroup != first.ControlGroup {
+				t.Fatalf("cleanup report cgroup = %q, want %q", report.ControlGroup, first.ControlGroup)
+			}
+		})
+	}
+}
+
 func TestTerminalStatusFromPropsAcceptsOnlyExactWireTypes(t *testing.T) {
 	valid := map[string]any{"ActiveState": "inactive", "Result": "success", "MainPID": uint32(0), "ExecMainStatus": int32(0)}
 	if _, ok := terminalStatusFromProps(valid); !ok {

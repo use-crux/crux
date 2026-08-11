@@ -557,7 +557,7 @@ type verifiedAccountingSnapshot interface {
 	LastVerifiedSnapshot() (SandboxReport, time.Duration, bool)
 }
 type terminalSuccessSnapshot interface {
-	LastTerminalSuccess() (TerminalStatus, string, bool)
+	LastTerminalSuccess() (terminalSuccessProof, bool)
 }
 type activeAccountingCollector interface {
 	RefreshAccounting(context.Context) (time.Duration, error)
@@ -1156,9 +1156,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	var alreadyGone *alreadyGoneError
 	var propertiesGone *unitPropertiesGonePending
-	terminalProof, terminalProofCgroup, terminalProofOK := TerminalStatus{}, "", false
+	terminalProof, terminalProofOK := terminalSuccessProof{}, false
 	if snapshot, ok := unit.(terminalSuccessSnapshot); ok {
-		terminalProof, terminalProofCgroup, terminalProofOK = snapshot.LastTerminalSuccess()
+		terminalProof, terminalProofOK = snapshot.LastTerminalSuccess()
 	}
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
@@ -1208,7 +1208,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reason == "alreadyGone" {
 		if propertiesGone != nil {
-			reason = validateUnitPropertiesGone(propertiesGone.cgroup, terminalProof, terminalProofCgroup, terminalProofOK, termination, terminationErr, status, statusErr)
+			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, termination, terminationErr, status, statusErr)
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
 			// plus carried successful inactive terminal evidence.
@@ -1268,11 +1268,11 @@ func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached
 // against fresh post-stop evidence. Unlike a direct alreadyGoneError, a gone
 // terminal status cannot stand in because the pre-ACK snapshot carries no
 // terminal proof.
-func validateUnitPropertiesGone(expectedCgroup string, proof TerminalStatus, proofCgroup string, proofOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
-	if !proofOK || proofCgroup != expectedCgroup || !successfulInactiveTerminal(proof.State, proof.MainPID, proof.ServiceResult, proof.ExecMainStatus) {
+	if !proofOK || proof.cgroup != expectedCgroup || proof.snapshotPID <= 0 || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != proof.snapshotPID || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != proof.runtimeDigest || !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) {
 		return "already-gone-terminal-unavailable"
 	}
 	var operation *terminalStatusOperationError
