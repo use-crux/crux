@@ -660,7 +660,7 @@ type systemdUnit struct {
 	snapshotSeen     bool
 	snapshotOK       bool
 	terminalProof    terminalSuccessProof
-	lifecycleWitness LifecycleWitness
+	lifecycleWitness lifecycleWitness
 }
 
 // terminalSuccessProof is the verified terminal-status bridge for the
@@ -673,12 +673,12 @@ type terminalSuccessProof struct {
 	runtimeDigest string
 }
 
-// LifecycleWitness is an opaque, one-use record of the only successful result
+// lifecycleWitness is an opaque, one-use record of the only successful result
 // lifecycle. It is minted only after an exact peer, strict result/request
 // validation, refreshed verified accounting, and a successful host ACK write.
 // The resource snapshot is copied at mint time so later accounting changes
 // cannot alter the fact cleanup evaluates.
-type LifecycleWitness struct {
+type lifecycleWitness struct {
 	unit, cgroup, runtimeDigest, requestDigest, nonce string
 	pid                                               int
 	snapshot                                          SandboxReport
@@ -706,11 +706,11 @@ func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
 }
 
-func (u *systemdUnit) LastLifecycleWitness() (LifecycleWitness, bool) {
+func (u *systemdUnit) lastLifecycleWitness() (lifecycleWitness, bool) {
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
 	if u.lifecycleWitness.cgroup == "" {
-		return LifecycleWitness{}, false
+		return lifecycleWitness{}, false
 	}
 	witness := u.lifecycleWitness
 	witness.snapshot = cloneSandboxReport(witness.snapshot)
@@ -726,7 +726,7 @@ func (u *systemdUnit) mintLifecycleWitness(snapshot SandboxReport, snapshotCPU t
 	if u.lifecycleWitness.cgroup != "" {
 		return false
 	}
-	u.lifecycleWitness = LifecycleWitness{
+	u.lifecycleWitness = lifecycleWitness{
 		unit:          u.name,
 		cgroup:        snapshot.ControlGroup,
 		runtimeDigest: snapshot.RuntimeTreeDigest,
@@ -1239,6 +1239,8 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 					refreshed, refreshedCPU, snapshotOK = u.LastVerifiedSnapshot()
 					if !snapshotOK || !lifecycleSnapshotMatchesPeer(report, refreshed) {
 						decodeErr = resultValidation("accounting-refresh", "snapshot-mismatch")
+					} else if refreshed.MemoryEvents["oom"] != 0 || refreshed.MemoryEvents["oom_kill"] != 0 || refreshed.PIDsEvents["max"] != 0 {
+						decodeErr = resultValidation("accounting-refresh", "unavailable")
 					}
 				}
 			}

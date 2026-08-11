@@ -563,7 +563,7 @@ type terminalSuccessSnapshot interface {
 	LastTerminalSuccess() (terminalSuccessProof, bool)
 }
 type lifecycleWitnessSnapshot interface {
-	LastLifecycleWitness() (LifecycleWitness, bool)
+	lastLifecycleWitness() (lifecycleWitness, bool)
 }
 type activeAccountingCollector interface {
 	RefreshAccounting(context.Context) (time.Duration, error)
@@ -1169,9 +1169,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	if snapshot, ok := unit.(terminalSuccessSnapshot); ok {
 		terminalProof, terminalProofOK = snapshot.LastTerminalSuccess()
 	}
-	witness, witnessOK := LifecycleWitness{}, false
+	witness, witnessOK := lifecycleWitness{}, false
 	if snapshot, ok := unit.(lifecycleWitnessSnapshot); ok {
-		witness, witnessOK = snapshot.LastLifecycleWitness()
+		witness, witnessOK = snapshot.lastLifecycleWitness()
 	}
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
@@ -1266,7 +1266,7 @@ func terminalRuntimeDisappearing(failure accountingCaptureFailure) bool {
 // exists, so only an ordered result-ACK witness bound to the fully verified
 // immutable snapshot, plus exact GetUnit-gone and exclusive pinned-cgroup
 // termination, can establish that the worker has actually exited.
-func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness LifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if reason := runtimeTargetMissingTerminationReason(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
@@ -1299,7 +1299,7 @@ func runtimeTargetMissingTerminationReason(expectedCgroup string, termination Te
 	}
 }
 
-func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxReport, witness LifecycleWitness, witnessOK bool) string {
+func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool) string {
 	if !witnessOK {
 		return "runtime-target-missing-ack-witness-absent"
 	}
@@ -1424,7 +1424,7 @@ func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached
 // against fresh post-stop evidence. It accepts either the existing strict
 // terminal-success proof or the ordered result-ACK witness; a stop result by
 // itself is never lifecycle evidence.
-func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, witness LifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}

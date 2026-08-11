@@ -1536,7 +1536,7 @@ func TestTask1LifecycleWitnessOrdersACKAndCopiesSnapshot(t *testing.T) {
 	u.MarkSnapshotVerified()
 	witnessPresentAtACK := make(chan bool, 1)
 	u.writeResultACK = func(conn *net.UnixConn) error {
-		_, ok := u.LastLifecycleWitness()
+		_, ok := u.lastLifecycleWitness()
 		witnessPresentAtACK <- ok
 		_, err := conn.Write([]byte("ACK\n"))
 		return err
@@ -1573,7 +1573,7 @@ func TestTask1LifecycleWitnessOrdersACKAndCopiesSnapshot(t *testing.T) {
 	if <-witnessPresentAtACK {
 		t.Fatal("witness minted before ACK write")
 	}
-	witness, ok := u.LastLifecycleWitness()
+	witness, ok := u.lastLifecycleWitness()
 	if !ok || witness.unit != u.name || witness.cgroup != first.ControlGroup || witness.pid != first.MainPID || witness.runtimeDigest != first.RuntimeTreeDigest || witness.requestDigest != request.RequestDigest || witness.nonce != request.Nonce {
 		t.Fatalf("lifecycle witness = %#v, %v", witness, ok)
 	}
@@ -1583,7 +1583,7 @@ func TestTask1LifecycleWitnessOrdersACKAndCopiesSnapshot(t *testing.T) {
 	witness.snapshot.MemoryEvents["oom_kill"] = 1
 	witness.snapshot.PIDsEvents["max"] = 1
 	witness.snapshot.ControlGroupMembers[0] = 0
-	witnessAgain, ok := u.LastLifecycleWitness()
+	witnessAgain, ok := u.lastLifecycleWitness()
 	if !ok || witnessAgain.snapshot.MemoryEvents["oom_kill"] != 0 || witnessAgain.snapshot.PIDsEvents["max"] != 0 || witnessAgain.snapshot.ControlGroupMembers[0] != first.ControlGroupMembers[0] {
 		t.Fatalf("lifecycle witness was mutable: %#v", witnessAgain.snapshot)
 	}
@@ -1683,8 +1683,77 @@ func TestTask1LifecycleWitnessRejectsEarlierFailures(t *testing.T) {
 			if !errors.As(err, &validation) || validation.Stage != test.stage {
 				t.Fatalf("ReceiveResult() = %T %v, want %s validation", err, err, test.stage)
 			}
-			if _, ok := unit.LastLifecycleWitness(); ok {
+			if _, ok := unit.lastLifecycleWitness(); ok {
 				t.Fatal("failure minted a lifecycle witness")
+			}
+		})
+	}
+}
+
+func TestTask1LifecycleWitnessRejectsRefreshedResourceLimits(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		memoryEvents []byte
+		pidsEvents   []byte
+	}{
+		{name: "memory oom", memoryEvents: []byte("low 0\nhigh 0\nmax 0\noom 1\noom_kill 0\n")},
+		{name: "memory oom kill", memoryEvents: []byte("low 0\nhigh 0\nmax 0\noom 0\noom_kill 1\n")},
+		{name: "pids max", pidsEvents: []byte("max 1\n")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := t.TempDir() + "/result.sock"
+			listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fs := newFakeFS()
+			unit := &systemdUnit{name: "crux-anydoc-task1.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}, resultListener: listener, resultSocket: path, peers: fakePeer{pid: 42}}
+			first, err := unit.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			unit.spec.runtimeTreeDigest = first.RuntimeTreeDigest
+			if _, err := unit.Report(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			unit.MarkSnapshotVerified()
+			if test.memoryEvents != nil {
+				fs.files[cgroupFile(first.ControlGroup, "memory.events")] = test.memoryEvents
+			}
+			if test.pidsEvents != nil {
+				fs.files[cgroupFile(first.ControlGroup, "pids.events")] = test.pidsEvents
+			}
+			ackWritten := false
+			unit.writeResultACK = func(*net.UnixConn) error {
+				ackWritten = true
+				return nil
+			}
+			request := Request{Version: ProtocolVersion, Nonce: strings.Repeat("a", 32), SourceSHA256: strings.Repeat("c", 64), Format: FormatDOCX, Limits: testJobLimits()}
+			request.RequestDigest = requestDigest(request.Version, request.Nonce, request.Format, request.SourceSHA256, request.SourceBytes, request.Limits)
+			done := make(chan error, 1)
+			go func() { _, receiveErr := unit.ReceiveResult(context.Background(), request); done <- receiveErr }()
+			conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: path, Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := EncodeResult(conn, validWireResult(request)); err != nil {
+				t.Fatal(err)
+			}
+			ack := make([]byte, 4)
+			if _, err := io.ReadFull(conn, ack); err == nil {
+				t.Fatalf("resource-limited result was acknowledged: %q", ack)
+			}
+			_ = conn.Close()
+			err = <-done
+			var validation *ResultValidationError
+			if !errors.As(err, &validation) || validation.Stage != "accounting-refresh" || validation.ReasonCode != "unavailable" {
+				t.Fatalf("ReceiveResult() = %T %v, want unavailable accounting-refresh validation", err, err)
+			}
+			if ackWritten {
+				t.Fatal("resource-limited result wrote an ACK")
+			}
+			if _, ok := unit.lastLifecycleWitness(); ok {
+				t.Fatal("resource-limited result minted a lifecycle witness")
 			}
 		})
 	}
@@ -3360,7 +3429,7 @@ func TestRunFinishTerminalRuntimeDisappearingLifecycle(t *testing.T) {
 						}
 					}
 					if test.receive != "valid" {
-						if _, ok := u.LastLifecycleWitness(); ok {
+						if _, ok := u.lastLifecycleWitness(); ok {
 							t.Fatal("failed result receive minted an ACK witness")
 						}
 					}
