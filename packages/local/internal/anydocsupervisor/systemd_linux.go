@@ -1549,34 +1549,25 @@ func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (Ter
 }
 
 func (u *systemdUnit) Cleanup(ctx context.Context) error {
-	var failures []string
 	if u.listener != nil {
-		if err := u.listener.Close(); err != nil {
-			failures = append(failures, "unit-cleanup-authorization-socket")
-		}
+		_ = u.listener.Close()
 		u.listener = nil
 	}
 	if u.socket != "" {
-		if err := os.Remove(u.socket); err != nil && !os.IsNotExist(err) {
-			failures = append(failures, "unit-cleanup-authorization-socket")
-		}
+		_ = os.Remove(u.socket)
 	}
 	u.resultMu.Lock()
 	resultListener := u.resultListener
 	u.resultListener = nil
 	u.resultMu.Unlock()
 	if resultListener != nil {
-		if err := resultListener.Close(); err != nil {
-			failures = append(failures, "unit-cleanup-result-socket")
-		}
+		_ = resultListener.Close()
 	}
 	if u.resultSocket != "" {
-		if err := os.Remove(u.resultSocket); err != nil && !os.IsNotExist(err) {
-			failures = append(failures, "unit-cleanup-result-socket")
-		}
+		_ = os.Remove(u.resultSocket)
 	}
 	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
-		failure := &unitCleanupFailure{reasons: append(failures, "unit-cleanup-reset-failed-unit"), resetFailedUnitNoSuchUnit: isDbusStopNoSuchUnit(err)}
+		failure := &unitCleanupFailure{reasons: []string{"unit-cleanup-reset-failed-unit"}, resetFailedUnitNoSuchUnit: isDbusStopNoSuchUnit(err)}
 		if u.tmp != "" {
 			if removeErr := u.fs.RemoveAll(u.tmp); removeErr != nil {
 				failure.reasons = append(failure.reasons, "unit-cleanup-private-temp")
@@ -1586,11 +1577,8 @@ func (u *systemdUnit) Cleanup(ctx context.Context) error {
 	}
 	if u.tmp != "" {
 		if err := u.fs.RemoveAll(u.tmp); err != nil {
-			failures = append(failures, "unit-cleanup-private-temp")
+			return &unitCleanupFailure{reasons: []string{"unit-cleanup-private-temp"}}
 		}
-	}
-	if len(failures) != 0 {
-		return &unitCleanupFailure{reasons: failures}
 	}
 	return nil
 }

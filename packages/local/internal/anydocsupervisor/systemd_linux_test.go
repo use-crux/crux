@@ -1271,36 +1271,90 @@ func TestSystemdStopFallsBackToCgroupKillAndCleanup(t *testing.T) {
 func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 	const secret = "/private/reset-failed-unit-secret"
 	for _, test := range []struct {
-		name       string
-		resetErr   error
-		result     string
-		status     int32
-		wantClean  bool
-		wantReason string
+		name        string
+		resetErr    error
+		status      map[string]any
+		termination string
+		removeErr   error
+		wantClean   bool
+		wantReason  string
 	}{
-		{name: "exact no such unit after strict proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, result: "success", wantClean: true},
-		{name: "unknown object is not valid for reset", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{secret}}, result: "success", wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "access denied remains closed", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{secret}}, result: "success", wantReason: "unit-cleanup-reset-failed-unit"},
-		{name: "no such unit without successful inactive proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, result: "exit-code", status: 1, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "accepts exact no such unit with empty cgroup", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, wantClean: true},
+		{name: "accepts exact no such unit with absent cgroup", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, termination: "absent", wantClean: true},
+		{name: "rejects unknown object", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects access denied", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects invalid args", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.InvalidArgs", Body: []any{secret}}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects transport error", resetErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects failed result", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"Result": "exit-code"}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects nonzero status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ExecMainStatus": int32(1)}, wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "rejects live status", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, status: map[string]any{"ActiveState": "active", "MainPID": uint32(42)}, wantReason: "wait-inactive"},
+		{name: "rejects nonexclusive termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "nonexclusive", wantReason: "termination-evidence"},
+		{name: "rejects mismatched termination", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, termination: "mismatch", wantReason: "termination-evidence"},
+		{name: "rejects reset and private-temp failure", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit"}, removeErr: errors.New(secret), wantReason: "unit-cleanup-reset-failed-unit"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			bus := newFakeSystemBus()
 			bus.resetErr = test.resetErr
 			fs := newFakeFS()
-			u := &systemdUnit{name: "crux-anydoc-private.service", bus: bus, fs: fs, now: immediateClock{}}
+			fs.removeErr = test.removeErr
+			u := &systemdUnit{name: "crux-anydoc-private.service", bus: bus, fs: fs, now: immediateClock{}, tmp: secret}
+			active, err := u.Report(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			u.spec = ServiceSpec{
+				runtimeTreeDigest:       active.RuntimeTreeDigest,
+				MemoryMax:               active.MemoryMax,
+				MemorySwapMax:           active.MemorySwapMax,
+				TasksMax:                active.TasksMax,
+				CPUQuotaPercent:         active.CPUQuotaPercent,
+				CPUQuotaPeriodUSec:      active.CPUQuotaPeriodUSec,
+				RuntimeMax:              active.RuntimeMax,
+				KillMode:                active.KillMode,
+				ProtectSystem:           active.ProtectSystem,
+				CPUAccounting:           active.CPUAccounting,
+				NoNewPrivileges:         active.NoNewPrivileges,
+				PrivateNetwork:          active.PrivateNetwork,
+				PrivateTmp:              active.PrivateTmp,
+				ProtectHome:             active.ProtectHome,
+				ReadOnlyPaths:           active.ReadOnlyPaths,
+				InaccessiblePaths:       active.InaccessiblePaths,
+				BindReadOnlyPaths:       active.BindReadOnlyPaths,
+				ReadWritePaths:          active.ReadWritePaths,
+				RestrictAddressFamilies: active.RestrictAddressFamilies,
+			}
+			if !verify(context.Background(), &verifiedLifecycleSystemdUnit{systemdUnit: u}, u.spec) {
+				t.Fatal("production verification lifecycle rejected fake unit")
+			}
 			bus.onStop = func() {
 				bus.values["ActiveState"] = "inactive"
 				bus.values["MainPID"] = uint32(0)
-				bus.values["Result"] = test.result
-				bus.values["ExecMainStatus"] = test.status
+				bus.values["Result"] = "success"
+				bus.values["ExecMainStatus"] = int32(0)
+				for key, value := range test.status {
+					bus.values[key] = value
+				}
 				fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
 				fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte{}
+				switch test.termination {
+				case "absent":
+					delete(fs.files, cgroupFile("/crux.slice/test", "cgroup.events"))
+					delete(fs.files, cgroupFile("/crux.slice/test", "cgroup.procs"))
+				case "nonexclusive":
+					fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 1\n")
+				case "mismatch":
+					u.reportMu.Lock()
+					u.controlGroup = "/crux.slice/other"
+					u.reportMu.Unlock()
+				}
 			}
-			cleanupErr := u.Cleanup(context.Background())
-			var cleanupFailure *unitCleanupFailure
-			if !errors.As(cleanupErr, &cleanupFailure) || cleanupFailure.primaryReason() != "unit-cleanup-reset-failed-unit" || cleanupFailure.resetFailedUnitNoSuchUnit != (test.name == "exact no such unit after strict proof" || test.name == "no such unit without successful inactive proof") {
-				t.Fatalf("Cleanup() = %T %v, want sanitized reset classification", cleanupErr, cleanupErr)
+			listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: t.TempDir() + "/already-closed.sock", Net: "unix"})
+			if err != nil {
+				t.Fatal(err)
 			}
+			u.listener, u.resultListener = listener, listener
+			u.socket, u.resultSocket = t.TempDir()+"/already-removed.sock", t.TempDir()+"/already-removed-result.sock"
+			_ = listener.Close()
 			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
 			if err != nil {
 				t.Fatal(err)
@@ -1310,17 +1364,7 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer write.Close()
-			runUnit := &fakeUnit{
-				rep:        SandboxReport{ControlGroup: "/crux.slice/test"},
-				cleanupErr: cleanupErr,
-				termination: func(context.Context, string) (TerminationEvidence, error) {
-					return TerminationEvidence{ControlGroup: "/crux.slice/test", Empty: true}, nil
-				},
-				terminalStatus: func(context.Context) (TerminalStatus, error) {
-					return TerminalStatus{State: "inactive", ServiceResult: test.result, ExecMainStatus: int(test.status)}, nil
-				},
-			}
-			run := &Run{unit: runUnit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			run := &Run{unit: u, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
 			finishErr := run.Finish(context.Background(), nil)
 			terminal := run.TerminalReport()
 			if terminal.Cleaned != test.wantClean {
@@ -1330,11 +1374,17 @@ func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
 				if finishErr != nil || terminal.Outcome != OutcomeSuccess {
 					t.Fatalf("Finish() = %v, terminal = %#v", finishErr, terminal)
 				}
+				if !fs.removed[secret] || !bus.reset {
+					t.Fatalf("cleanup did not attempt private-temp removal and reset: removed=%v reset=%t", fs.removed, bus.reset)
+				}
 				return
 			}
 			got := safeExecutionFailure(finishErr, terminal)
-			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") {
+			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") || strings.Contains(got, "InvalidArgs") {
 				t.Fatalf("safe execution failure = %q", got)
+			}
+			if !fs.removed[secret] || !bus.reset {
+				t.Fatalf("cleanup did not attempt private-temp removal and reset: removed=%v reset=%t", fs.removed, bus.reset)
 			}
 		})
 	}
@@ -1758,6 +1808,7 @@ type fakeFS struct {
 	reads           map[string]int
 	failReadAt      map[string]int
 	readErr         map[string]error
+	removeErr       error
 	afterRead       func(string)
 	runtimeContents []byte
 	runtimeRootMode os.FileMode
@@ -1815,7 +1866,7 @@ func (f *fakeFS) WriteFile(path string, contents []byte) error {
 	f.writes[path] = append([]byte(nil), contents...)
 	return nil
 }
-func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return nil }
+func (f *fakeFS) RemoveAll(path string) error     { f.removed[path] = true; return f.removeErr }
 func (f *fakeFS) Chown(string, int, int) error    { return nil }
 func (f *fakeFS) Chmod(string, os.FileMode) error { return nil }
 
