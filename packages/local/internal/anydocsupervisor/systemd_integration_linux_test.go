@@ -82,17 +82,43 @@ func TestSystemdContainmentIntegration(t *testing.T) {
 		t.Fatalf("execute packaged runner: %s", safeExecutionFailure(err, run.TerminalReport()))
 	}
 	if !result.OK || result.Accounting == nil || result.Accounting.SourceBytes != int64(len(input)) || result.SourceSHA256 != sha256Hex(input) || result.Format != "docx" {
-		t.Fatalf("unbound or invalid runner result: %#v", result)
+		t.Fatal("unbound or invalid runner result")
 	}
 	assertIntegrationCleanup(t, root, stagingRoot, privateTemp, run)
 	hostile := runHostileContainmentCases(t, launch, root)
 	writeContainmentEvidence(t, result, run.TerminalReport(), hostile)
 }
 
-func safeRunnerDiagnostic(err error, terminal TerminalReport) string {
+// safeHostileTerminalDiagnostic deliberately emits a fixed, path-free summary
+// for failures from hostile integration probes. TerminalReport includes host
+// paths, runtime digests, and process identities, so it must never be formatted
+// directly in a failure message.
+func safeHostileTerminalDiagnostic(err error, terminal TerminalReport) string {
+	validation, containment := preCleanupDiagnostic(err)
+	stage, reason := safeRunnerStage(terminal.PreStop.ExecMainStatus), safeTerminalReason(err)
+	if validation != nil {
+		stage = validation.Stage
+		if !validResultValidationStage(stage) {
+			stage = "unknown"
+		}
+		reason = validation.ReasonCode
+		if !validResultValidationReason(reason) {
+			reason = "unknown"
+		}
+	} else if containment != nil {
+		stage = containment.Stage
+		if !validContainmentStage(stage) {
+			stage = "unknown"
+		}
+		reason = containment.ReasonCode
+		if !validContainmentReason(reason) {
+			reason = "unknown"
+		}
+	}
+
 	outcome := string(terminal.Outcome)
 	switch terminal.Outcome {
-	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted:
+	case OutcomeSuccess, ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
 	default:
 		outcome = "unknown"
 	}
@@ -104,21 +130,25 @@ func safeRunnerDiagnostic(err error, terminal TerminalReport) string {
 	}
 	oomKilled := terminal.PreStop.MemoryEvents["oom_kill"] > 0
 	pidsLimited := terminal.PreStop.PIDsEvents["max"] > 0
-	return "error=" + safeExecutionError(err) + " outcome=" + outcome + " service=" + serviceResult + " stage=" + safeRunnerStage(terminal.PreStop.ExecMainStatus) + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+	return "outcome=" + outcome + " service=" + serviceResult + " stage=" + stage + " reason=" + reason + " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited) + " cleaned=" + strconv.FormatBool(terminal.Cleaned) + " termination-empty=" + strconv.FormatBool(terminal.Termination.Empty) + " termination-absent=" + strconv.FormatBool(terminal.Termination.Absent)
 }
 
-func safeExecutionError(err error) string {
+func safeTerminalReason(err error) string {
+	if err == nil {
+		return string(OutcomeSuccess)
+	}
+
 	var supervisorError *SupervisorError
-	if errors.As(err, &supervisorError) {
-		switch supervisorError.Code {
-		case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted:
-			return string(supervisorError.Code)
-		}
+	if !errors.As(err, &supervisorError) {
+		return "unknown"
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return "deadline"
+
+	switch supervisorError.Code {
+	case OutcomeSuccess, ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
+		return string(supervisorError.Code)
+	default:
+		return "unknown"
 	}
-	return "unknown"
 }
 
 func safeContainmentDiagnostic(err error) string {
@@ -324,26 +354,47 @@ func TestSafeContainmentDiagnosticTraversesTypedCauseAndRedactsDetails(t *testin
 	}
 }
 
-func TestSafeRunnerDiagnosticReportsOnlyBoundedTerminalCategories(t *testing.T) {
-	unsafe := "/private/path nonce=secret input=customer.docx"
-	got := safeRunnerDiagnostic(errors.New(unsafe), TerminalReport{
+func TestSafeHostileTerminalDiagnosticRedactsHostileDetails(t *testing.T) {
+	const unsafe = "/private/path hash=private-hash-secret nonce=secret pid=999 error=customer.docx"
+	got := safeHostileTerminalDiagnostic(errors.New(unsafe), TerminalReport{
 		PreStop: SandboxReport{
-			ServiceResult: unsafe,
-			MemoryEvents:  map[string]int64{"oom_kill": 1},
-			PIDsEvents:    map[string]int64{"max": 1},
+			ControlGroup:        "/private/cgroup-secret",
+			ControlGroupMembers: []int{999},
+			ReadOnlyPaths:       []string{"/private/source-secret"},
+			InaccessiblePaths:   []string{"/private/inaccessible-secret"},
+			BindReadOnlyPaths:   []string{"/private/source-bind-secret:/runtime-secret"},
+			BindPaths:           []string{"/private/runtime-bind-secret:/runtime-secret"},
+			ReadWritePaths:      []string{"/private/write-secret"},
+			RuntimeTreeDigest:   "private-runtime-digest-secret",
+			ServiceResult:       unsafe,
+			MemoryEvents:        map[string]int64{"oom_kill": 1},
+			PIDsEvents:          map[string]int64{"max": 1},
 		},
+		Termination: TerminationEvidence{ControlGroup: "/private/termination-secret", Empty: true},
+		Outcome:     ErrWorkerCrash,
+		Cleaned:     true,
 	})
-	const want = "error=unknown outcome=unknown service=unknown stage=success oom-killed=true pids-limited=true"
+	const want = "outcome=worker-crash service=unknown stage=success reason=unknown oom-killed=true pids-limited=true cleaned=true termination-empty=true termination-absent=false"
 	if got != want {
 		t.Fatalf("diagnostic mismatch: got %q want %q", got, want)
 	}
-	if strings.Contains(got, unsafe) || strings.Contains(got, "private") || strings.Contains(got, "secret") || strings.Contains(got, "customer") {
-		t.Fatalf("diagnostic leaked unsafe details: %q", got)
+	for _, forbidden := range []string{unsafe, "private", "hash", "nonce", "secret", "pid=999", "customer", "source", "runtime", "999", "runtime-digest"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("diagnostic leaked unsafe details: %q", got)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("diagnostic length = %d, want %d", len(got), len(want))
 	}
 	for status, want := range map[int]string{70: "authorization", 71: "request-validation", 72: "source-validation", 73: "native-load", 74: "conversion-projection", 75: "result-write", 76: "acknowledgement", 77: "unknown"} {
 		if got := safeRunnerStage(status); got != want {
 			t.Fatalf("stage %d = %q, want %q", status, got, want)
 		}
+	}
+
+	validation := closedWith(ErrInvalidResult, &ResultValidationError{Stage: "request-binding", ReasonCode: "mismatch"})
+	if got := safeHostileTerminalDiagnostic(validation, TerminalReport{}); got != "outcome=success service=unknown stage=request-binding reason=mismatch oom-killed=false pids-limited=false cleaned=false termination-empty=false termination-absent=false" {
+		t.Fatalf("diagnostic leaked unsafe details: %q", got)
 	}
 }
 
@@ -695,7 +746,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		t.Fatalf("%s lacked verified termination evidence", name)
 	}
 	if terminal.PreStop.MemoryMax > 128<<20 || terminal.PreStop.MemorySwapMax != 0 || terminal.PreStop.TasksMax != limits.TasksMax {
-		t.Fatalf("%s effective limits drifted: %#v", name, terminal.PreStop)
+		t.Fatalf("%s effective limits drifted: %s", name, safeHostileTerminalDiagnostic(nil, terminal))
 	}
 	if control == "result" {
 		for check, ok := range observation.Checks {
@@ -705,7 +756,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		}
 	}
 	if terminal.Outcome == ErrContainmentUnavailable {
-		t.Fatalf("%s did not produce its expected observed closed outcome: %#v", name, terminal)
+		t.Fatalf("%s did not produce its expected observed closed outcome: %s", name, safeHostileTerminalDiagnostic(nil, terminal))
 	}
 	if terminal.ProbeOutcome != ProbeOutcomeContained {
 		t.Fatalf("%s did not retain its sealed contained probe outcome: got %q", name, terminal.ProbeOutcome)
@@ -719,21 +770,21 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, probePath,
 		t.Fatalf("%s did not retain its Task2 workload outcome: got %q, want %q", name, terminal.Workload.Code, expected)
 	}
 	if name == "memory" && terminal.PreStop.MemoryEvents["oom_kill"] < 1 && terminal.PreStop.ServiceResult != "oom-kill" {
-		t.Fatalf("memory probe lacked observed OOM evidence: events=%#v result=%q", terminal.PreStop.MemoryEvents, terminal.PreStop.ServiceResult)
+		t.Fatalf("memory probe lacked observed OOM evidence: %s", safeHostileTerminalDiagnostic(nil, terminal))
 	}
 	if name == "cpu" && (terminal.CPU < 300*time.Millisecond || terminal.CPU > 900*time.Millisecond) {
 		t.Fatalf("CPU probe exceeded bounded cumulative ceiling: %s", terminal.CPU)
 	}
 	if name == "cpu" {
 		if terminal.PreStop.CPUStats["nr_throttled"] < 1 || terminal.PreStop.CPUStats["throttled_usec"] < 1 {
-			t.Fatalf("CPU quota did not produce throttling evidence: %#v", terminal.PreStop.CPUStats)
+			t.Fatalf("CPU quota did not produce throttling evidence: %s", safeHostileTerminalDiagnostic(nil, terminal))
 		}
 		if terminal.CPU*100 > terminal.Wall*time.Duration(limits.CPUQuotaPercent+15) {
 			t.Fatalf("CPU/wall ratio exceeded quota tolerance: cpu=%s wall=%s quota=%d", terminal.CPU, terminal.Wall, limits.CPUQuotaPercent)
 		}
 	}
 	if name == "pids" && terminal.PreStop.PIDsEvents["max"] < 1 {
-		t.Fatalf("TasksMax did not increment pids.events: %#v", terminal.PreStop.PIDsEvents)
+		t.Fatalf("TasksMax did not increment pids.events: %s", safeHostileTerminalDiagnostic(nil, terminal))
 	}
 	if name == "wall" && terminal.Wall > 2*time.Second {
 		t.Fatalf("wall timeout was not prompt: %s", terminal.Wall)
@@ -828,7 +879,7 @@ func runCanceledSupervisorProbe(t *testing.T, launch LaunchDependency, probe *co
 	}
 	terminal := run.TerminalReport()
 	if terminal.Outcome != ErrAborted || !terminal.Cleaned || (!terminal.Termination.Empty && !terminal.Termination.Absent) {
-		t.Fatalf("caller cancellation lacked closed terminal evidence: %#v", terminal)
+		t.Fatalf("caller cancellation lacked closed terminal evidence: %s", safeHostileTerminalDiagnostic(err, terminal))
 	}
 	return hostileEvidence{Name: name, Outcome: terminal.Outcome, WorkloadOutcome: terminal.Workload.Code, ProbeOutcome: terminal.ProbeOutcome, MemoryEvents: terminal.PreStop.MemoryEvents, CPUUsec: terminal.CPU.Microseconds(), CPUThrottled: terminal.PreStop.CPUStats["throttled_usec"], CPUPeriods: terminal.PreStop.CPUStats["nr_throttled"], PIDsMax: terminal.PreStop.PIDsEvents["max"], WallMillis: terminal.Wall.Milliseconds(), Cleaned: terminal.Cleaned, TerminationEmpty: terminal.Termination.Empty, TerminationAbsent: terminal.Termination.Absent}
 }
