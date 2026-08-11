@@ -110,7 +110,7 @@ func TestSystemdProbeUsesOneExactWritableObservationBind(t *testing.T) {
 	spec.probe = &containmentProbe{hostExecutable: "/run/probe", executableSHA: strings.Repeat("a", 64), action: "network", resultPath: probeObservationTarget, hostResultPath: "/run/private/observation.json"}
 	properties := propertiesByName(systemdProperties(spec))
 	binds, ok := bindReadOnlyPathsValue(properties["BindPaths"])
-	if !ok || !same(binds, []string{"/run/private/observation.json:" + probeObservationTarget}) {
+	if !ok || !same(binds, []string{"/run/private:" + probeObservationDirectoryTarget}) {
 		t.Fatalf("probe writable bind = %#v", properties["BindPaths"])
 	}
 }

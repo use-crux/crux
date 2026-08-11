@@ -3,6 +3,7 @@
 package anydocsupervisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -145,9 +146,9 @@ type fakeValidationUnit struct {
 func (f *fakeValidationUnit) Report(ctx context.Context) (SandboxReport, error) {
 	return SandboxReport{ExecMainStatus: f.execMainStatus, ServiceResult: f.serviceResult}, nil
 }
-func (f *fakeValidationUnit) CPUUsage(ctx context.Context) (time.Duration, error)          { return 0, nil }
-func (f *fakeValidationUnit) Stop(ctx context.Context) error                               { return nil }
-func (f *fakeValidationUnit) WaitInactive(ctx context.Context) error                      { return nil }
+func (f *fakeValidationUnit) CPUUsage(ctx context.Context) (time.Duration, error) { return 0, nil }
+func (f *fakeValidationUnit) Stop(ctx context.Context) error                      { return nil }
+func (f *fakeValidationUnit) WaitInactive(ctx context.Context) error              { return nil }
 func (f *fakeValidationUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
 	return TerminalStatus{State: "inactive", ServiceResult: f.serviceResult, ExecMainStatus: f.execMainStatus}, nil
 }
@@ -363,8 +364,172 @@ type hostileEvidence struct {
 }
 
 type probeObservation struct {
-	Checks map[string]bool `json:"checks"`
-	PID    int             `json:"pid,omitempty"`
+	Schema  string          `json:"schema"`
+	Version int             `json:"version"`
+	Case    string          `json:"case"`
+	Checks  map[string]bool `json:"checks"`
+	PID     int             `json:"pid,omitempty"`
+}
+
+const (
+	probeObservationSchema   = "crux-anydoc.hostile-probe-observation"
+	probeObservationVersion  = 1
+	probeObservationFrame    = "crux-anydoc-probe-observation/v1\n"
+	maxProbeObservationBytes = 4 << 10
+)
+
+func writeProbeObservation(path, probeCase string, checks map[string]bool, pid int) error {
+	payload, err := json.Marshal(probeObservation{Schema: probeObservationSchema, Version: probeObservationVersion, Case: probeCase, Checks: checks, PID: pid})
+	if err != nil || len(payload)+len(probeObservationFrame) > maxProbeObservationBytes {
+		return errors.New("encode observation")
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".observation-")
+	if err != nil {
+		return err
+	}
+	temporaryName := temporary.Name()
+	defer os.Remove(temporaryName)
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := io.WriteString(temporary, probeObservationFrame); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(payload); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryName, path)
+}
+
+func decodeProbeObservation(input []byte, wantCase string) (probeObservation, string) {
+	if len(input) > maxProbeObservationBytes {
+		return probeObservation{}, "bounds"
+	}
+	if len(input) == 0 || !bytes.HasPrefix(input, []byte(probeObservationFrame)) {
+		return probeObservation{}, "frame"
+	}
+	decoder := json.NewDecoder(bytes.NewReader(input[len(probeObservationFrame):]))
+	decoder.DisallowUnknownFields()
+	var value probeObservation
+	if err := decoder.Decode(&value); err != nil {
+		if strings.HasPrefix(err.Error(), "json: unknown field ") {
+			return probeObservation{}, "fields"
+		}
+		return probeObservation{}, "json"
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return probeObservation{}, "json"
+	}
+	if value.Schema != probeObservationSchema {
+		return probeObservation{}, "schema"
+	}
+	if value.Version != probeObservationVersion {
+		return probeObservation{}, "version"
+	}
+	if value.Case != wantCase {
+		return probeObservation{}, "case"
+	}
+	wantChecks, known := probeObservationChecks(wantCase)
+	if !known || value.Checks == nil || len(value.Checks) != len(wantChecks) {
+		return probeObservation{}, "fields"
+	}
+	for key := range wantChecks {
+		if _, ok := value.Checks[key]; !ok {
+			return probeObservation{}, "fields"
+		}
+	}
+	if value.PID < 0 || value.PID > 1<<22 || (wantCase == "descendants") != (value.PID > 0) {
+		return probeObservation{}, "bounds"
+	}
+	return value, ""
+}
+
+func probeObservationChecks(probeCase string) (map[string]struct{}, bool) {
+	switch probeCase {
+	case "network":
+		return map[string]struct{}{"ipv4Denied": {}, "ipv6Denied": {}, "dnsDenied": {}}, true
+	case "filesystem":
+		return map[string]struct{}{"homeReadDenied": {}, "projectReadDenied": {}, "hostReadDenied": {}, "hostWriteDenied": {}, "hostTempInvisible": {}, "privateTempWritable": {}}, true
+	case "privileges":
+		return map[string]struct{}{"noNewPrivileges": {}, "capabilitiesEmpty": {}, "setuidDenied": {}}, true
+	case "pids":
+		return map[string]struct{}{"tasksLimitEnforced": {}}, true
+	case "descendants":
+		return map[string]struct{}{}, true
+	}
+	return nil, false
+}
+
+func TestProbeObservationCodecRejectsHostileInput(t *testing.T) {
+	valid := func(probeCase string, pid int) []byte {
+		keys, ok := probeObservationChecks(probeCase)
+		if !ok {
+			t.Fatal("missing test schema")
+		}
+		checks := make(map[string]bool, len(keys))
+		for key := range keys {
+			checks[key] = true
+		}
+		payload, err := json.Marshal(probeObservation{Schema: probeObservationSchema, Version: probeObservationVersion, Case: probeCase, Checks: checks, PID: pid})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return append([]byte(probeObservationFrame), payload...)
+	}
+
+	for _, probeCase := range []string{"network", "filesystem", "privileges", "pids", "descendants"} {
+		pid := 0
+		if probeCase == "descendants" {
+			pid = 42
+		}
+		if _, reason := decodeProbeObservation(valid(probeCase, pid), probeCase); reason != "" {
+			t.Fatalf("%s valid observation rejected: %s", probeCase, reason)
+		}
+	}
+
+	for _, test := range []struct {
+		name, wantCase, wantReason string
+		input                      []byte
+	}{
+		{"partial", "network", "frame", []byte(probeObservationFrame[:8])},
+		{"malformed", "network", "json", append([]byte(probeObservationFrame), []byte("{")...)},
+		{"unknown", "network", "fields", append([]byte(probeObservationFrame), []byte(`{"schema":"crux-anydoc.hostile-probe-observation","version":1,"case":"network","checks":{"ipv4Denied":true,"ipv6Denied":true,"dnsDenied":true},"extra":true}`)...)},
+		{"schema", "network", "schema", bytes.Replace(valid("network", 0), []byte(probeObservationSchema), []byte("other"), 1)},
+		{"version", "network", "version", bytes.Replace(valid("network", 0), []byte(`"version":1`), []byte(`"version":2`), 1)},
+		{"case", "network", "case", valid("pids", 0)},
+		{"fields", "network", "fields", append([]byte(probeObservationFrame), []byte(`{"schema":"crux-anydoc.hostile-probe-observation","version":1,"case":"network","checks":{}}`)...)},
+		{"bounds", "descendants", "bounds", valid("descendants", 1<<22+1)},
+		{"oversized", "network", "bounds", make([]byte, maxProbeObservationBytes+1)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, reason := decodeProbeObservation(test.input, test.wantCase); reason != test.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, test.wantReason)
+			}
+		})
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "observation.json")
+	if err := writeProbeObservation(path, "network", map[string]bool{"ipv4Denied": true, "ipv6Denied": true, "dnsDenied": true}, 0); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, reason := decodeProbeObservation(encoded, "network"); reason != "" {
+		t.Fatalf("encoded observation rejected: %s", reason)
+	}
 }
 
 func runHostileContainmentCases(t *testing.T, launch LaunchDependency, root string) []hostileEvidence {
@@ -420,7 +585,7 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	}
 	probePath, probeSHA := stageProbeExecutable(t, caseRoot)
 	hostObservationPath := filepath.Join(privateTemp, "observation.json")
-	if err := os.WriteFile(hostObservationPath, nil, 0o666); err != nil {
+	if err := os.Mkdir(filepath.Dir(hostObservationPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	probe := &containmentProbe{hostExecutable: probePath, executableSHA: probeSHA, action: action, resultPath: probeObservationTarget, hostResultPath: hostObservationPath}
@@ -477,16 +642,6 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	var observation probeObservation
 	switch control {
 	case "result", "descendant":
-		observation = awaitProbeObservation(t, ctx, resultPath)
-		if name == "filesystem" {
-			_, hostErr := os.Stat(workerTemp)
-			observation.Checks["workerTempInvisibleOutside"] = os.IsNotExist(hostErr)
-			if bytes, err := os.ReadFile(hostTemp); err != nil || string(bytes) != "host-sentinel" {
-				observation.Checks["hostTempUnchanged"] = false
-			} else {
-				observation.Checks["hostTempUnchanged"] = true
-			}
-		}
 	case "cpu":
 		for {
 			usage, usageErr := unit.CPUUsage(ctx)
@@ -510,6 +665,18 @@ func runContainmentProbe(t *testing.T, launch LaunchDependency, root, name, acti
 	report, cpu, termination, cleanupReason := cleanup(unit)
 	cleaned := cleanupReason == ""
 	wall := time.Since(started)
+	if control == "result" || control == "descendant" {
+		observation = awaitProbeObservation(t, resultPath, name)
+		if name == "filesystem" {
+			_, hostErr := os.Stat(workerTemp)
+			observation.Checks["workerTempInvisibleOutside"] = os.IsNotExist(hostErr)
+			if bytes, err := os.ReadFile(hostTemp); err != nil || string(bytes) != "host-sentinel" {
+				observation.Checks["hostTempUnchanged"] = false
+			} else {
+				observation.Checks["hostTempUnchanged"] = true
+			}
+		}
+	}
 	outcome := observedProbeOutcome(name, observation, report, cpu, wall)
 	if outcome != expectedProbeOutcome(name) {
 		t.Fatalf("%s observed unexpected outcome %q", name, outcome)
@@ -687,23 +854,17 @@ func observedProbeOutcome(name string, observation probeObservation, report Sand
 	return ErrContainmentUnavailable
 }
 
-func awaitProbeObservation(t *testing.T, ctx context.Context, path string) probeObservation {
+func awaitProbeObservation(t *testing.T, path, wantCase string) probeObservation {
 	t.Helper()
-	for {
-		bytes, err := os.ReadFile(path)
-		if err == nil {
-			var value probeObservation
-			if json.Unmarshal(bytes, &value) != nil {
-				t.Fatal("invalid probe observation")
-			}
-			return value
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("probe observation unavailable: %v", err)
-		case <-time.After(20 * time.Millisecond):
-		}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("probe observation unavailable")
 	}
+	value, reason := decodeProbeObservation(bytes, wantCase)
+	if reason != "" {
+		t.Fatalf("invalid probe observation: %s", reason)
+	}
+	return value
 }
 
 func awaitUnitInactive(t *testing.T, ctx context.Context, unit Unit) {
@@ -749,8 +910,9 @@ func TestContainmentProbeProcess(t *testing.T) {
 	_ = conn.Close()
 	checks := map[string]bool{}
 	write := func(pid int) {
-		bytes, _ := json.Marshal(probeObservation{Checks: checks, PID: pid})
-		_ = os.WriteFile(resultPath, bytes, 0o600)
+		if err := writeProbeObservation(resultPath, probeCaseForAction(action), checks, pid); err != nil {
+			os.Exit(24)
+		}
 	}
 	if strings.HasPrefix(action, "filesystem:") {
 		token := strings.TrimPrefix(action, "filesystem:")
@@ -829,6 +991,16 @@ func TestContainmentProbeProcess(t *testing.T) {
 		os.Exit(21)
 	}
 	time.Sleep(300 * time.Millisecond)
+}
+
+func probeCaseForAction(action string) string {
+	if strings.HasPrefix(action, "filesystem:") {
+		return "filesystem"
+	}
+	if action == "descendant" {
+		return "descendants"
+	}
+	return action
 }
 
 func TestContainmentProbeChild(t *testing.T) {

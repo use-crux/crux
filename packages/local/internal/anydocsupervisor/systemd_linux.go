@@ -524,9 +524,10 @@ type restrictAddressFamilies struct {
 }
 
 const (
-	authorizationSocketTarget = "/run/crux-anydoc/authorize.sock"
-	resultSocketTarget        = "/run/crux-anydoc/result.sock"
-	probeObservationTarget    = "/run/crux-anydoc/observation.json"
+	authorizationSocketTarget       = "/run/crux-anydoc/authorize.sock"
+	resultSocketTarget              = "/run/crux-anydoc/result.sock"
+	probeObservationDirectoryTarget = "/run/crux-anydoc/probe-observation"
+	probeObservationTarget          = probeObservationDirectoryTarget + "/observation.json"
 )
 
 // bindReadOnlyPath matches systemd's a(ssbt) BindReadOnlyPaths wire contract.
@@ -550,7 +551,7 @@ func bindPathsForSpec(spec ServiceSpec) []string {
 	if spec.probe == nil {
 		return nil
 	}
-	return []string{spec.probe.hostResultPath + ":" + probeObservationTarget}
+	return []string{filepath.Dir(spec.probe.hostResultPath) + ":" + probeObservationDirectoryTarget}
 }
 
 func systemdProperties(spec ServiceSpec) []DBusProperty {
