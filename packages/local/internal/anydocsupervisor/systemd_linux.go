@@ -894,6 +894,9 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 			if operation.dbusClass == terminalStatusDBusGone {
 				return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, operation)
 			}
+			if !terminalAccounting {
+				return SandboxReport{}, operation
+			}
 			return SandboxReport{}, terminalAccountingError(accountingCaptureReportValidationDBusFetch, operation)
 		}
 		if isDbusUnitPropertiesGone(err) {

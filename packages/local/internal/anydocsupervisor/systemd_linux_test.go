@@ -675,6 +675,40 @@ func TestSystemdReportClassifiesOnlyExactUnitPropertiesGoneErrors(t *testing.T) 
 	}
 }
 
+func TestSystemdReportPreservesNonGoneOperationErrorsOutsideTerminalAccounting(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		class terminalStatusDBusClass
+	}{
+		{name: "unrecognized", class: terminalStatusDBusUnrecognized},
+		{name: "transport", class: terminalStatusDBusGeneric},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			operation := &terminalStatusOperationError{
+				stage:     terminalStatusUnitProperties,
+				dbusClass: test.class,
+			}
+			bus := newFakeSystemBus()
+			bus.propErr = operation
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}}
+
+			_, reportErr := unit.Report(context.Background())
+			var reportOperation *terminalStatusOperationError
+			var reportCapture *terminalAccountingCaptureError
+			if !errors.As(reportErr, &reportOperation) || reportOperation != operation || errors.As(reportErr, &reportCapture) {
+				t.Fatalf("Report() = %T %v, want direct sanitized operation error", reportErr, reportErr)
+			}
+
+			_, _, failure, captureErr := unit.CaptureTerminalAccounting(context.Background())
+			var capture *terminalAccountingCaptureError
+			var captureOperation *terminalStatusOperationError
+			if failure != accountingCaptureReportValidationDBusFetch || !errors.As(captureErr, &capture) || capture.err != operation || !errors.As(captureErr, &captureOperation) || captureOperation != operation {
+				t.Fatalf("CaptureTerminalAccounting() = failure %v err %T %v, want wrapped sanitized operation error", failure, captureErr, captureErr)
+			}
+		})
+	}
+}
+
 func TestCaptureTerminalAccountingPrefersExactCgroupENOENTOverReportGone(t *testing.T) {
 	bus := newFakeSystemBus()
 	fs := newFakeFS()
