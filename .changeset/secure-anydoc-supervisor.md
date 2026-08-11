@@ -65,6 +65,11 @@ terminal accounting cleanup also fails.
 Classify systemd stop fallback failures with fixed cleanup diagnostics without
 exposing unit names, D-Bus bodies, or cgroup paths.
 
+Treat only an exact typed `ResetFailedUnit` `NoSuchUnit` as idempotent after
+strict inactive-success and exclusive pinned-cgroup termination proof; retain
+fixed operation-specific cleanup failures for every other reset, socket, and
+private-temp cleanup error.
+
 Classify already-gone cleanup rejection using fixed, allowlisted termination
 and terminal-proof diagnostics without exposing systemd or cgroup details.
 

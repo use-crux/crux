@@ -1268,6 +1268,78 @@ func TestSystemdStopFallsBackToCgroupKillAndCleanup(t *testing.T) {
 	}
 }
 
+func TestRunFinishAcceptsOnlyProvenResetFailedUnitNoSuchUnit(t *testing.T) {
+	const secret = "/private/reset-failed-unit-secret"
+	for _, test := range []struct {
+		name       string
+		resetErr   error
+		result     string
+		status     int32
+		wantClean  bool
+		wantReason string
+	}{
+		{name: "exact no such unit after strict proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, result: "success", wantClean: true},
+		{name: "unknown object is not valid for reset", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{secret}}, result: "success", wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "access denied remains closed", resetErr: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{secret}}, result: "success", wantReason: "unit-cleanup-reset-failed-unit"},
+		{name: "no such unit without successful inactive proof", resetErr: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{secret}}, result: "exit-code", status: 1, wantReason: "unit-cleanup-reset-failed-unit"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bus := newFakeSystemBus()
+			bus.resetErr = test.resetErr
+			fs := newFakeFS()
+			u := &systemdUnit{name: "crux-anydoc-private.service", bus: bus, fs: fs, now: immediateClock{}}
+			bus.onStop = func() {
+				bus.values["ActiveState"] = "inactive"
+				bus.values["MainPID"] = uint32(0)
+				bus.values["Result"] = test.result
+				bus.values["ExecMainStatus"] = test.status
+				fs.files[cgroupFile("/crux.slice/test", "cgroup.events")] = []byte("populated 0\n")
+				fs.files[cgroupFile("/crux.slice/test", "cgroup.procs")] = []byte{}
+			}
+			cleanupErr := u.Cleanup(context.Background())
+			var cleanupFailure *unitCleanupFailure
+			if !errors.As(cleanupErr, &cleanupFailure) || cleanupFailure.primaryReason() != "unit-cleanup-reset-failed-unit" || cleanupFailure.resetFailedUnitNoSuchUnit != (test.name == "exact no such unit after strict proof" || test.name == "no such unit without successful inactive proof") {
+				t.Fatalf("Cleanup() = %T %v, want sanitized reset classification", cleanupErr, cleanupErr)
+			}
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer write.Close()
+			runUnit := &fakeUnit{
+				rep:        SandboxReport{ControlGroup: "/crux.slice/test"},
+				cleanupErr: cleanupErr,
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return TerminationEvidence{ControlGroup: "/crux.slice/test", Empty: true}, nil
+				},
+				terminalStatus: func(context.Context) (TerminalStatus, error) {
+					return TerminalStatus{State: "inactive", ServiceResult: test.result, ExecMainStatus: int(test.status)}, nil
+				},
+			}
+			run := &Run{unit: runUnit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now()}
+			finishErr := run.Finish(context.Background(), nil)
+			terminal := run.TerminalReport()
+			if terminal.Cleaned != test.wantClean {
+				t.Fatalf("terminal cleaned = %t, want %t", terminal.Cleaned, test.wantClean)
+			}
+			if test.wantClean {
+				if finishErr != nil || terminal.Outcome != OutcomeSuccess {
+					t.Fatalf("Finish() = %v, terminal = %#v", finishErr, terminal)
+				}
+				return
+			}
+			got := safeExecutionFailure(finishErr, terminal)
+			if !strings.Contains(got, "reason="+test.wantReason) || strings.Contains(got, secret) || strings.Contains(got, "AccessDenied") || strings.Contains(got, "UnknownObject") {
+				t.Fatalf("safe execution failure = %q", got)
+			}
+		})
+	}
+}
+
 func TestSystemdAuthorizationRejectsForeignPeerAndUnlinksSocket(t *testing.T) {
 	path := t.TempDir() + "/auth.sock"
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
@@ -1587,6 +1659,7 @@ type fakeSystemBus struct {
 	propErrAfterFirstStopProperties error
 	stopped                         bool
 	stopDBusErrorName               string
+	resetErr                        error
 	reset                           bool
 	onStop                          func()
 }
@@ -1674,7 +1747,7 @@ func (b *fakeSystemBus) StopUnit(_ context.Context, _ string) error {
 func (b *fakeSystemBus) KillUnit(_ context.Context, _ string) error { return b.killErr }
 func (b *fakeSystemBus) ResetFailedUnit(_ context.Context, _ string) error {
 	b.reset = true
-	return nil
+	return b.resetErr
 }
 
 type fakeFS struct {

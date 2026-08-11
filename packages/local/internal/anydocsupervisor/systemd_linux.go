@@ -113,6 +113,22 @@ type stopFailure struct{ reason string }
 
 func (e *stopFailure) Error() string { return "unit stop unavailable: " + e.reason }
 
+// unitCleanupFailure carries only fixed operation identifiers. It never
+// retains D-Bus bodies, socket paths, or filesystem errors.
+type unitCleanupFailure struct {
+	reasons                   []string
+	resetFailedUnitNoSuchUnit bool
+}
+
+func (*unitCleanupFailure) Error() string { return "unit cleanup unavailable" }
+
+func (e *unitCleanupFailure) primaryReason() string {
+	if e == nil || len(e.reasons) == 0 {
+		return "unit-cleanup"
+	}
+	return e.reasons[0]
+}
+
 // UnknownObject from StopUnit must remain a failure because the unit path may
 // still exist.
 func isDbusStopNoSuchUnit(err error) bool {
@@ -1533,30 +1549,48 @@ func (u *systemdUnit) TerminationEvidence(_ context.Context, cgroup string) (Ter
 }
 
 func (u *systemdUnit) Cleanup(ctx context.Context) error {
+	var failures []string
 	if u.listener != nil {
-		_ = u.listener.Close()
+		if err := u.listener.Close(); err != nil {
+			failures = append(failures, "unit-cleanup-authorization-socket")
+		}
 		u.listener = nil
 	}
 	if u.socket != "" {
-		_ = os.Remove(u.socket)
+		if err := os.Remove(u.socket); err != nil && !os.IsNotExist(err) {
+			failures = append(failures, "unit-cleanup-authorization-socket")
+		}
 	}
 	u.resultMu.Lock()
 	resultListener := u.resultListener
 	u.resultListener = nil
 	u.resultMu.Unlock()
 	if resultListener != nil {
-		_ = resultListener.Close()
+		if err := resultListener.Close(); err != nil {
+			failures = append(failures, "unit-cleanup-result-socket")
+		}
 	}
 	if u.resultSocket != "" {
-		_ = os.Remove(u.resultSocket)
+		if err := os.Remove(u.resultSocket); err != nil && !os.IsNotExist(err) {
+			failures = append(failures, "unit-cleanup-result-socket")
+		}
 	}
 	if err := u.bus.ResetFailedUnit(ctx, u.name); err != nil {
-		return errors.New("unit cleanup unavailable")
+		failure := &unitCleanupFailure{reasons: append(failures, "unit-cleanup-reset-failed-unit"), resetFailedUnitNoSuchUnit: isDbusStopNoSuchUnit(err)}
+		if u.tmp != "" {
+			if removeErr := u.fs.RemoveAll(u.tmp); removeErr != nil {
+				failure.reasons = append(failure.reasons, "unit-cleanup-private-temp")
+			}
+		}
+		return failure
 	}
 	if u.tmp != "" {
 		if err := u.fs.RemoveAll(u.tmp); err != nil {
-			return errors.New("private temp cleanup unavailable")
+			failures = append(failures, "unit-cleanup-private-temp")
 		}
+	}
+	if len(failures) != 0 {
+		return &unitCleanupFailure{reasons: failures}
 	}
 	return nil
 }
