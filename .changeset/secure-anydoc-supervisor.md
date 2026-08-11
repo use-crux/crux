@@ -135,5 +135,5 @@ or snapshot values.
 
 When runtime-target accounting falls back to that witness, available terminal
 status remains authoritative: inactive failed/nonzero/OOM states fail with the
-fixed `already-gone-terminal-not-success` reason. Both `memory.events` `oom`
+fixed `runtime-target-missing-terminal-status-not-success` reason. Both `memory.events` `oom`
 and `oom_kill` reject the witness route.
