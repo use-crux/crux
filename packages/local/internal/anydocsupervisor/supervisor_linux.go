@@ -556,8 +556,8 @@ type verifiedAccountingSnapshot interface {
 	MarkSnapshotVerified()
 	LastVerifiedSnapshot() (SandboxReport, time.Duration, bool)
 }
-type terminalSuccessSnapshot interface {
-	LastTerminalSuccess() (terminalSuccessProof, bool)
+type resultACKSnapshot interface {
+	LastResultACK() (resultACKWitness, bool)
 }
 type activeAccountingCollector interface {
 	RefreshAccounting(context.Context) (time.Duration, error)
@@ -1158,9 +1158,9 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	var alreadyGone *alreadyGoneError
 	var propertiesGone *unitPropertiesGonePending
-	terminalProof, terminalProofOK := terminalSuccessProof{}, false
-	if snapshot, ok := unit.(terminalSuccessSnapshot); ok {
-		terminalProof, terminalProofOK = snapshot.LastTerminalSuccess()
+	witness, witnessOK := resultACKWitness{}, false
+	if snapshot, ok := unit.(resultACKSnapshot); ok {
+		witness, witnessOK = snapshot.LastResultACK()
 	}
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
@@ -1210,7 +1210,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reason == "alreadyGone" {
 		if propertiesGone != nil {
-			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, termination, terminationErr, status, statusErr)
+			reason = validateUnitPropertiesGone(propertiesGone.cgroup, termination, terminationErr)
 		} else {
 			// Absent cgroup alone is insufficient: require pinned Absent/Empty
 			// plus carried successful inactive terminal evidence.
@@ -1220,7 +1220,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	if reportGoneAccounting && reason == "" {
 		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
 	} else if runtimeTargetMissingAccounting && reason == "" {
-		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, terminalProof, terminalProofOK, termination, terminationErr, statusErr)
+		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, witness, witnessOK, termination, terminationErr, statusErr)
 	} else if usedCachedAccounting && !termination.Absent && reason == "" {
 		reason = "used-cached-accounting"
 	}
@@ -1234,14 +1234,14 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 
 // validateRuntimeTargetMissing permits the one deferred bridge for a vanished
 // systemd namespace bind. The target may disappear while /proc/<pid>/root still
-// exists, so only a fully verified immutable snapshot plus an independent,
-// exact GetUnit-gone observation and exclusive pinned-cgroup termination can
-// establish that the worker has actually exited.
-func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, termination TerminationEvidence, terminationErr error, statusErr error) string {
+// exists, so only an ordered result-ACK witness bound to the fully verified
+// immutable snapshot, plus exact GetUnit-gone and exclusive pinned-cgroup
+// termination, can establish that the worker has actually exited.
+func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness resultACKWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, statusErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
 	}
-	if !proofOK || proof.cgroup != expectedCgroup || proof.snapshotPID <= 0 || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != proof.snapshotPID || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != proof.runtimeDigest || !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) || snapshot.MemoryEvents["oom"] != 0 || snapshot.PIDsEvents["max"] != 0 {
+	if !witnessOK || witness.cgroup != expectedCgroup || witness.pid <= 0 || witness.requestDigest == "" || witness.nonce == "" || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != witness.pid || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != witness.runtimeDigest || snapshot.MemoryEvents["oom"] != 0 || snapshot.PIDsEvents["max"] != 0 {
 		return "already-gone-terminal-unavailable"
 	}
 	var operation *terminalStatusOperationError
@@ -1294,28 +1294,11 @@ func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached
 }
 
 // validateUnitPropertiesGone validates the pending UnitProperties-gone path
-// against fresh post-stop evidence. Unlike a direct alreadyGoneError, a gone
-// terminal status cannot stand in because the pre-ACK snapshot carries no
-// terminal proof.
-func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+// against fresh post-stop evidence. It cannot clear cleanup because a
+// UnitProperties-gone stop result is not result-ACK lifecycle evidence.
+func validateUnitPropertiesGone(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {
 	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
 		return reason
-	}
-	if !proofOK || proof.cgroup != expectedCgroup || proof.snapshotPID <= 0 || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != proof.snapshotPID || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != proof.runtimeDigest || !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) {
-		return "already-gone-terminal-unavailable"
-	}
-	var operation *terminalStatusOperationError
-	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
-		return ""
-	}
-	if statusErr != nil {
-		if reason, ok := terminalStatusFailureReason(statusErr); ok {
-			return reason
-		}
-		return "already-gone-terminal-unavailable"
-	}
-	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
-		return "already-gone-terminal-not-success"
 	}
 	return "already-gone-terminal-unavailable"
 }

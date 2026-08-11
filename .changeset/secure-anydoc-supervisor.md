@@ -120,7 +120,9 @@ fallback and never include paths, process IDs, digests, D-Bus data, or source
 error values.
 
 When the systemd namespace runtime bind is missing while `/proc/<pid>/root`
-still exists, defer any immutable accounting-snapshot reuse until cleanup has
-independently observed exact typed `GetUnit` disappearance, exclusive pinned
-cgroup termination, and the retained verified terminal-success proof. Reject
-live, unavailable, stale, OOM, pids-limited, mismatched, or malformed evidence.
+still exists, defer immutable accounting-snapshot reuse until an ordered,
+immutable result-ACK witness proves the authenticated, request-bound result
+was decoded, exact-snapshot accounting refreshed, and acknowledged. Cleanup
+also requires exact typed `GetUnit` disappearance and exclusive pinned-cgroup
+termination; it rejects live, unavailable, stale, OOM, pids-limited,
+mismatched, malformed, failed, and nonzero-exit evidence.

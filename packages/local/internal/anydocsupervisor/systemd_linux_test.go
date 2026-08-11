@@ -1340,6 +1340,10 @@ func TestSystemdResultAcceptsOnlyExactWorkerAndAcknowledges(t *testing.T) {
 	if got.err != nil || !bytes.Equal(got.result.Payload, validWireResult(request).Payload) {
 		t.Fatalf("result = %#v, %v", got.result, got.err)
 	}
+	witness, ok := u.LastResultACK()
+	if !ok || witness.cgroup != first.ControlGroup || witness.pid != first.MainPID || witness.runtimeDigest != first.RuntimeTreeDigest || witness.requestDigest != request.RequestDigest || witness.nonce != request.Nonce {
+		t.Fatalf("result ACK witness = %#v, %v", witness, ok)
+	}
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
 		t.Fatalf("socket retained: %v", err)
 	}

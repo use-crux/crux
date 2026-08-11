@@ -600,17 +600,15 @@ type systemdUnit struct {
 	snapshotCPU    time.Duration
 	snapshotSeen   bool
 	snapshotOK     bool
-	terminalProof  terminalSuccessProof
+	resultACKed    resultACKWitness
 }
 
-// terminalSuccessProof is an immutable bridge across systemd unloading. It is
-// deliberately bound to the verified live snapshot identity, rather than a
-// standalone terminal status that could have been observed before validation.
-type terminalSuccessProof struct {
-	status        TerminalStatus
-	cgroup        string
-	snapshotPID   int
-	runtimeDigest string
+// resultACKWitness records the only successful result lifecycle: a verified
+// snapshot, request-bound authenticated result, refreshed accounting, and ACK.
+// It is immutable once set and remains meaningful only for that exact identity.
+type resultACKWitness struct {
+	cgroup, runtimeDigest, requestDigest, nonce string
+	pid                                      int
 }
 
 func (u *systemdUnit) VerifiedServiceSpec(_ ServiceSpec) ServiceSpec { return u.spec }
@@ -634,15 +632,13 @@ func (u *systemdUnit) LastVerifiedSnapshot() (SandboxReport, time.Duration, bool
 	return cloneSandboxReport(u.snapshot), u.snapshotCPU, true
 }
 
-// LastTerminalSuccess returns only a strict terminal observation captured after
-// a complete successful terminal report and bound to the verified snapshot.
-func (u *systemdUnit) LastTerminalSuccess() (terminalSuccessProof, bool) {
+func (u *systemdUnit) LastResultACK() (resultACKWitness, bool) {
 	u.snapshotMu.Lock()
 	defer u.snapshotMu.Unlock()
-	if u.terminalProof.cgroup == "" {
-		return terminalSuccessProof{}, false
+	if u.resultACKed.cgroup == "" {
+		return resultACKWitness{}, false
 	}
-	return u.terminalProof, true
+	return u.resultACKed, true
 }
 
 func (u *systemdUnit) snapshotMatchesPinnedControlGroup(report SandboxReport) bool {
@@ -822,21 +818,6 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 		if !u.snapshotOK {
 			u.snapshot = cloneSandboxReport(report)
 			u.snapshotSeen = true
-		}
-		u.snapshotMu.Unlock()
-	}
-	// Capture a terminal bridge only after every accounting, sandbox, and
-	// runtime-attestation check above has succeeded. The snapshot identity was
-	// already fully verified by verify(), so this cannot bless a partial or
-	// pre-verification report.
-	if terminalAccounting {
-		terminal, ok := terminalStatusFromProps(p)
-		if !ok || !successfulInactiveTerminal(terminal.State, terminal.MainPID, terminal.ServiceResult, terminal.ExecMainStatus) {
-			return report, nil
-		}
-		u.snapshotMu.Lock()
-		if u.snapshotOK && u.snapshotSeen && validCgroup(cgroup) && u.snapshot.ControlGroup == cgroup && u.snapshot.MainPID > 0 && len(u.snapshot.RuntimeTreeDigest) == sha256.Size*2 && hexOK(u.snapshot.RuntimeTreeDigest) && u.snapshot.RuntimeTreeDigest == u.spec.runtimeTreeDigest {
-			u.terminalProof = terminalSuccessProof{status: terminal, cgroup: cgroup, snapshotPID: u.snapshot.MainPID, runtimeDigest: u.snapshot.RuntimeTreeDigest}
 		}
 		u.snapshotMu.Unlock()
 	}
@@ -1112,6 +1093,15 @@ func (u *systemdUnit) ReceiveResult(ctx context.Context, expected Request) (Resu
 				if err != nil {
 					decodeErr = resultValidation("ack-write", "io")
 				}
+			}
+			if decodeErr == nil {
+				u.snapshotMu.Lock()
+				if u.snapshotOK && u.snapshotSeen && u.snapshot.ControlGroup == report.ControlGroup && u.snapshot.MainPID == report.MainPID && u.snapshot.RuntimeTreeDigest == report.RuntimeTreeDigest && u.resultACKed.cgroup == "" {
+					u.resultACKed = resultACKWitness{cgroup: report.ControlGroup, runtimeDigest: report.RuntimeTreeDigest, pid: report.MainPID, requestDigest: expected.RequestDigest, nonce: expected.Nonce}
+				} else {
+					decodeErr = resultValidation("ack-witness", "snapshot-mismatch")
+				}
+				u.snapshotMu.Unlock()
 			}
 			_ = conn.Close()
 			if decodeErr != nil {
