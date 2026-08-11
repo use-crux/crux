@@ -2316,27 +2316,47 @@ func TestSystemdReportAndVerifyBindPaths(t *testing.T) {
 func TestPostStartReportDiagnosticsPreserveSanitizedGodbusClass(t *testing.T) {
 	private := "/private/post-start-report-secret"
 	for _, test := range []struct {
-		name string
-		err  error
-		want string
+		name  string
+		stage terminalStatusUnavailableStage
+		err   error
+		want  string
 	}{
-		{name: "gone value", err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
-		{name: "gone pointer", err: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
-		{name: "gone wrapped value", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
-		{name: "gone wrapped pointer", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
-		{name: "unrecognized value", err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
-		{name: "unrecognized pointer", err: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
-		{name: "unrecognized wrapped value", err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
-		{name: "unrecognized wrapped pointer", err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
-		{name: "transport remains generic", err: errors.New(private), want: "report-get-unit-unavailable"},
+		{name: "get unit gone value", stage: terminalStatusGetUnit, err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
+		{name: "get unit gone pointer", stage: terminalStatusGetUnit, err: &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-get-unit-gone"},
+		{name: "get unit gone wrapped value", stage: terminalStatusGetUnit, err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
+		{name: "get unit gone wrapped pointer", stage: terminalStatusGetUnit, err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}), want: "report-get-unit-gone"},
+		{name: "get unit unrecognized value", stage: terminalStatusGetUnit, err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
+		{name: "get unit unrecognized pointer", stage: terminalStatusGetUnit, err: &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-get-unit-unrecognized-dbus"},
+		{name: "get unit unrecognized wrapped value", stage: terminalStatusGetUnit, err: fmt.Errorf("wrapped: %w", dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
+		{name: "get unit unrecognized wrapped pointer", stage: terminalStatusGetUnit, err: fmt.Errorf("wrapped: %w", &dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}), want: "report-get-unit-unrecognized-dbus"},
+		{name: "get unit transport", stage: terminalStatusGetUnit, err: errors.New(private), want: "report-get-unit-unavailable"},
+		{name: "unit properties gone", stage: terminalStatusUnitProperties, err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-unit-properties-gone"},
+		{name: "unit properties unrecognized", stage: terminalStatusUnitProperties, err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-unit-properties-unrecognized-dbus"},
+		{name: "unit properties transport", stage: terminalStatusUnitProperties, err: errors.New(private), want: "report-unit-properties-unavailable"},
+		{name: "service properties gone", stage: terminalStatusServiceProperties, err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}, want: "report-service-properties-gone"},
+		{name: "service properties unrecognized", stage: terminalStatusServiceProperties, err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}, want: "report-service-properties-unrecognized-dbus"},
+		{name: "service properties transport", stage: terminalStatusServiceProperties, err: errors.New(private), want: "report-service-properties-unavailable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			object := &fakeDBusObject{calls: []*dbus.Call{{Err: test.err}}}
+			calls := []*dbus.Call{{Err: test.err}}
+			switch test.stage {
+			case terminalStatusUnitProperties:
+				calls = append([]*dbus.Call{{Body: []any{dbus.ObjectPath("/private/unit/path")}}}, calls...)
+			case terminalStatusServiceProperties:
+				calls = append([]*dbus.Call{
+					{Body: []any{dbus.ObjectPath("/private/unit/path")}},
+					{Body: []any{map[string]dbus.Variant{}}},
+				}, calls...)
+			}
+			object := &fakeDBusObject{calls: calls}
 			bus := &dbusHelperSystemBus{fakeSystemBus: newFakeSystemBus(), unitProperties: func(context.Context, string) (map[string]any, error) {
 				return dbusUnitProperties(context.Background(), object, func(dbus.ObjectPath) dbus.BusObject { return object }, "crux-anydoc-test.service")
 			}}
 			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}}
 			_, err := unit.Report(context.Background())
+			if len(object.calls) != 0 {
+				t.Fatalf("Report() stopped before %s stage; %d fake calls remain", test.stage, len(object.calls))
+			}
 			diagnostic := startDiagnostic("post-start-report", err)
 			if diagnostic.ReasonCode != test.want || strings.Contains(diagnostic.Error(), "private") || strings.Contains(diagnostic.Error(), "/") {
 				t.Fatalf("post-start report diagnostic = %q, want reason %q", diagnostic.Error(), test.want)
