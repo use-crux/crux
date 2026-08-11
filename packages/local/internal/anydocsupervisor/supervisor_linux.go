@@ -1116,6 +1116,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	var reason string
 	usedCachedAccounting := false
 	reportGoneAccounting := false
+	runtimeTargetMissingAccounting := false
 	captureFailure := accountingCaptureInvalid
 	var report SandboxReport
 	var cpu time.Duration
@@ -1143,10 +1144,11 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		// A verified snapshot may bridge only disappearance of the exact pinned
 		// cgroup (ENOENT) or systemd unloading that exact unit. All malformed or
 		// unavailable accounting remains fail-closed.
-		if cachedAccountingSnapshotMatchesUnit(unit, cachedReport, cached) && (captureFailure == accountingCaptureExactCgroupAbsent || captureFailure == accountingCaptureReportGone) {
+		if cachedAccountingSnapshotMatchesUnit(unit, cachedReport, cached) && (captureFailure == accountingCaptureExactCgroupAbsent || captureFailure == accountingCaptureReportGone || captureFailure == accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing) {
 			report, cpu = cachedReport, cachedCPU
 			usedCachedAccounting = true
 			reportGoneAccounting = captureFailure == accountingCaptureReportGone
+			runtimeTargetMissingAccounting = captureFailure == accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing
 		} else if reason == "" {
 			reason = captureFailure.reason()
 			if reason == "" {
@@ -1163,7 +1165,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	if stopErr := unit.Stop(ctx); stopErr != nil {
 		errors.As(stopErr, &alreadyGone)
 		// Never overwrite an earlier reason.
-		if reason == "" {
+		if reason == "" && !runtimeTargetMissingAccounting {
 			if alreadyGone != nil {
 				reason = "alreadyGone"
 			} else {
@@ -1186,7 +1188,7 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	if unit.WaitInactive(ctx) != nil {
-		if reason == "" {
+		if reason == "" && !runtimeTargetMissingAccounting {
 			reason = "wait-inactive"
 		}
 	}
@@ -1217,6 +1219,8 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 	}
 	if reportGoneAccounting && reason == "" {
 		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
+	} else if runtimeTargetMissingAccounting && reason == "" {
+		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, terminalProof, terminalProofOK, termination, terminationErr, statusErr)
 	} else if usedCachedAccounting && !termination.Absent && reason == "" {
 		reason = "used-cached-accounting"
 	}
@@ -1226,6 +1230,31 @@ func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, stri
 		}
 	}
 	return report, cpu, termination, reason
+}
+
+// validateRuntimeTargetMissing permits the one deferred bridge for a vanished
+// systemd namespace bind. The target may disappear while /proc/<pid>/root still
+// exists, so only a fully verified immutable snapshot plus an independent,
+// exact GetUnit-gone observation and exclusive pinned-cgroup termination can
+// establish that the worker has actually exited.
+func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, termination TerminationEvidence, terminationErr error, statusErr error) string {
+	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if !proofOK || proof.cgroup != expectedCgroup || proof.snapshotPID <= 0 || snapshot.ControlGroup != expectedCgroup || snapshot.MainPID != proof.snapshotPID || snapshot.RuntimeTreeDigest == "" || snapshot.RuntimeTreeDigest != proof.runtimeDigest || !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) || snapshot.MemoryEvents["oom"] != 0 || snapshot.PIDsEvents["max"] != 0 {
+		return "already-gone-terminal-unavailable"
+	}
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
+		return ""
+	}
+	if statusErr == nil {
+		return "already-gone-terminal-unavailable"
+	}
+	if reason, ok := terminalStatusFailureReason(statusErr); ok {
+		return reason
+	}
+	return "already-gone-terminal-unavailable"
 }
 
 // validateReportGone permits cached accounting only after systemd has reported

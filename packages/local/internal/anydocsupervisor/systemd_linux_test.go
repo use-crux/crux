@@ -281,12 +281,12 @@ func TestFinishReportsTypedTerminalRuntimeAttestationDiagnostics(t *testing.T) {
 	}{
 		{name: "proc root unavailable", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return nil, errors.New("/private/proc") }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unavailable"},
 		{name: "proc root unsafe", procFS: procRuntimeFSFunc{lstat: func(string) (os.FileInfo, error) { return fakeRuntimeInfo{mode: os.ModeDir | 0o555}, nil }}, want: "terminal-accounting-report-runtime-attestation-proc-root-unsafe"},
-		{name: "runtime target missing", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
+		{name: "runtime target missing without terminal proof stays rejected", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
 			if strings.HasSuffix(path, "/root") {
 				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil
 			}
 			return nil, os.ErrNotExist
-		}}, want: "terminal-accounting-report-runtime-attestation-runtime-target-missing"},
+		}}, want: "termination-evidence"},
 		{name: "runtime tree unreadable", procFS: procRuntimeFSFunc{lstat: func(path string) (os.FileInfo, error) {
 			if strings.HasSuffix(path, "/root") {
 				return fakeRuntimeInfo{mode: os.ModeSymlink | 0o777}, nil

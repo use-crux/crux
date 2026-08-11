@@ -118,3 +118,9 @@ unreadable runtime tree, runtime digest mismatch, and failed verified-snapshot
 identity reuse. These diagnostics preserve the exact proc-root disappearance
 fallback and never include paths, process IDs, digests, D-Bus data, or source
 error values.
+
+When the systemd namespace runtime bind is missing while `/proc/<pid>/root`
+still exists, defer any immutable accounting-snapshot reuse until cleanup has
+independently observed exact typed `GetUnit` disappearance, exclusive pinned
+cgroup termination, and the retained verified terminal-success proof. Reject
+live, unavailable, stale, OOM, pids-limited, mismatched, or malformed evidence.
