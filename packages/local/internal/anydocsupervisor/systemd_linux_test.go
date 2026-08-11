@@ -2298,10 +2298,49 @@ func TestSystemdReportAndVerifyBindPaths(t *testing.T) {
 		})
 	}
 
-	ordinary := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: newFakeFS(), now: immediateClock{}}
+	ordinarySpec, err := newTestServiceSpec("/run/input", "/run/runtime", "/run/private", Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordinaryBus := newFakeSystemBus()
+	if err := ordinaryBus.StartTransientUnit(context.Background(), "crux-anydoc-test.service", systemdProperties(ordinarySpec)); err != nil {
+		t.Fatal(err)
+	}
+	ordinary := &systemdUnit{name: "crux-anydoc-test.service", bus: ordinaryBus, fs: newFakeFS(), now: immediateClock{}, spec: ordinarySpec}
 	report, err := ordinary.Report(context.Background())
-	if err != nil || len(report.BindPaths) != 0 {
+	if err != nil || !same(report.BindPaths, bindPathsForSpec(ordinarySpec)) {
 		t.Fatalf("ordinary BindPaths = %#v, err = %v", report.BindPaths, err)
+	}
+}
+
+func TestPostStartReportDiagnosticsPreserveSanitizedGodbusClass(t *testing.T) {
+	private := "/private/post-start-report-secret"
+	for _, test := range []struct {
+		name  string
+		calls []*dbus.Call
+		want  string
+	}{
+		{name: "GetUnit no such unit", calls: []*dbus.Call{{Err: dbus.Error{Name: "org.freedesktop.systemd1.NoSuchUnit", Body: []any{private}}}}, want: "report-get-unit-gone"},
+		{name: "Unit properties unknown object", calls: []*dbus.Call{{Body: []any{dbus.ObjectPath("/private/unit")}}, {Err: dbus.Error{Name: "org.freedesktop.DBus.Error.UnknownObject", Body: []any{private}}}}, want: "report-unit-properties-gone"},
+		{name: "Service properties unrecognized D-Bus", calls: []*dbus.Call{{Body: []any{dbus.ObjectPath("/private/unit")}}, {Body: []any{map[string]dbus.Variant{}}}, {Err: dbus.Error{Name: "org.freedesktop.DBus.Error.AccessDenied", Body: []any{private}}}}, want: "report-service-properties-unrecognized-dbus"},
+		{name: "GetUnit unavailable transport", calls: []*dbus.Call{{Err: errors.New(private)}}, want: "report-get-unit-unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			object := &fakeDBusObject{calls: test.calls}
+			bus := &dbusHelperSystemBus{fakeSystemBus: newFakeSystemBus(), unitProperties: func(context.Context, string) (map[string]any, error) {
+				return dbusUnitProperties(context.Background(), object, func(dbus.ObjectPath) dbus.BusObject { return object }, "crux-anydoc-test.service")
+			}}
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: newFakeFS(), now: immediateClock{}}
+			_, err := unit.Report(context.Background())
+			diagnostic := startDiagnostic("post-start-report", err)
+			if diagnostic.ReasonCode != test.want || strings.Contains(diagnostic.Error(), "private") || strings.Contains(diagnostic.Error(), "/") {
+				t.Fatalf("post-start report diagnostic = %q, want reason %q", diagnostic.Error(), test.want)
+			}
+		})
+	}
+
+	if got := postStartReportReason(newReportValidationError(reportValidationSandboxProperties)); got != "report-sandbox-properties" {
+		t.Fatalf("validation reason = %q", got)
 	}
 }
 

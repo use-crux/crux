@@ -178,6 +178,11 @@ identity reuse. These diagnostics preserve the exact proc-root disappearance
 fallback and never include paths, process IDs, digests, D-Bus data, or source
 error values.
 
+Classify post-start systemd report failures with fixed sanitized subreasons for
+the exact operation stage, unit-gone, unrecognized D-Bus, unavailable transport,
+and existing report-validation codes; no raw unit, D-Bus, path, or error detail
+is retained.
+
 When the systemd namespace runtime bind is missing while `/proc/<pid>/root`
 still exists, defer immutable accounting-snapshot reuse until an ordered,
 immutable result-ACK witness proves the authenticated, request-bound result

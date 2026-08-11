@@ -863,8 +863,15 @@ func (u *systemdUnit) Report(ctx context.Context) (SandboxReport, error) {
 func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (SandboxReport, error) {
 	p, err := u.bus.UnitProperties(ctx, u.name)
 	if err != nil {
+		var operation *terminalStatusOperationError
+		if errors.As(err, &operation) {
+			if operation.dbusClass == terminalStatusDBusGone {
+				return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, operation)
+			}
+			return SandboxReport{}, terminalAccountingError(accountingCaptureReportValidationDBusFetch, operation)
+		}
 		if isDbusUnitPropertiesGone(err) {
-			return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, errors.New("unit properties gone"))
+			return SandboxReport{}, terminalAccountingError(accountingCaptureReportGone, &terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusGone})
 		}
 		return SandboxReport{}, newReportValidationError(reportValidationDBusFetch)
 	}
