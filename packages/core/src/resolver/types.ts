@@ -42,6 +42,7 @@ import type { HistoryProjection } from "../request/history/source";
 import type { ResolvedRepresentationPolicy } from "../request/representation/ladder-types";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
+import type { WorkTreePolicy } from "../work/policy";
 
 // ─────────────────────────────────────────────────────────────────
 // System Blocks
@@ -79,6 +80,26 @@ export interface SystemBlock {
 // ─────────────────────────────────────────────────────────────────
 
 /**
+ * Merged, deeply frozen Work execution policy carried out of prompt
+ * resolution.
+ *
+ * Produced from every active `workPolicy` contribution in the `use` graph.
+ * When multiple contributions author the same limit, the strictest
+ * (minimum) value wins; limits authored by a single contribution are kept
+ * verbatim. The policy is execution metadata, never model-facing content.
+ *
+ * @internal
+ */
+export interface ResolvedWorkPolicy {
+  /** Maximum concurrently executing Work occurrences. */
+  readonly concurrency?: number;
+  /** Maximum queued-plus-active Work occurrences awaiting a concurrency slot. */
+  readonly maxOutstanding?: number;
+  /** Tree-shaped fan-out limits. */
+  readonly tree?: Readonly<WorkTreePolicy>;
+}
+
+/**
  * SDK-agnostic resolved prompt data — the output of `.resolve()`.
  *
  * Contains everything needed to make an SDK call: assembled system message,
@@ -97,6 +118,14 @@ export interface ResolvedPrompt {
   historyProjection?: HistoryProjection;
   /** Resolved representation policy consumed by managed request planning. @internal */
   representations?: readonly ResolvedRepresentationPolicy[];
+  /**
+   * Merged Work execution policy consumed by managed Work hosts. @internal
+   *
+   * Protected execution metadata: resolved from the `use` graph and carried
+   * outside the mutable request-amendment surface, so `prepareStep` cannot
+   * remove or weaken it.
+   */
+  workPolicy?: ResolvedWorkPolicy;
   /** The assembled system message (own system + context contributions + adaptations). */
   system?: string;
   /** The user prompt text (if using system+prompt mode). */

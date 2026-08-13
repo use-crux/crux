@@ -2,6 +2,7 @@
 
 export { getWork } from "./get-work";
 export { spawn } from "./spawn";
+export { workPolicy } from "./policy";
 export { createWorkHost } from "./internal/durable-host-context";
 export { createAgentWorkHost } from "./agent-host";
 export type {
@@ -13,6 +14,11 @@ export type {
   CancelOptions,
   CancelReceipt,
 } from "./cancellation";
+export type {
+  WorkPolicy,
+  WorkPolicyOptions,
+  WorkTreePolicy,
+} from "./policy";
 export type { DetachReceipt } from "./detachment";
 export type { WorkEvent, WorkStreamOptions } from "./events";
 export {

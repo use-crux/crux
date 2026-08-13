@@ -118,6 +118,7 @@ export function collectSchemaContributions(
       entry._tag === 'Memory' ||
       entry._tag === 'Thread' ||
       entry._tag === 'Blackboard' ||
+      entry._tag === 'WorkPolicy' ||
       entry._tag === 'HistoryRecent' ||
       entry._tag === 'HistoryManaged'
     ) {

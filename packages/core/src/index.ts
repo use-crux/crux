@@ -411,7 +411,13 @@ export type {
   FlowSignalSpec,
   NoPayloadSignal,
 } from "./flow";
-export { createAgentWorkHost, createWorkHost, getWork, spawn } from "./work";
+export {
+  createAgentWorkHost,
+  createWorkHost,
+  getWork,
+  spawn,
+  workPolicy,
+} from "./work";
 export {
   getSession,
   session,
@@ -496,12 +502,15 @@ export type {
   CreateWorkHostOptions,
   WorkEvent,
   WorkHandle,
+  WorkHost,
+  WorkPolicy,
+  WorkPolicyOptions,
   WorkProgress,
   WorkStatus,
   WorkStreamOptions,
   WorkSteeringCursor,
   WorkSteeringReceipt,
-  WorkHost,
+  WorkTreePolicy,
 } from "./work";
 export {
   CruxEffectError,

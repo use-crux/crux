@@ -55,6 +55,7 @@ import type { CruxContextInjectableKind, CruxContextInjects } from '../observabi
 import { isInternalInjectableEntry } from '../prompt/internal-injection'
 import { isContributorEntry } from '../prompt/contributor'
 import { isToolSource, type ToolSource } from '../tools/tool-source'
+import type { WorkPolicy } from '../work/policy'
 import {
   CONTRIBUTOR,
   type GateResult,
@@ -375,6 +376,18 @@ function lowerThread(
   }
 }
 
+function lowerWorkPolicy(entry: WorkPolicy, index: number): LoweredContributor {
+  return {
+    [CONTRIBUTOR]: true,
+    id: undefined,
+    family: 'work-policy',
+    index,
+    mergeSourceId: `work-policy[${index}]`,
+    toolOwnerLabel: undefined,
+    contribute: () => ({ workPolicy: entry }),
+  }
+}
+
 function lowerBlackboard(entry: BlackboardEntry, index: number): LoweredContributor {
   return {
     [CONTRIBUTOR]: true,
@@ -486,6 +499,7 @@ function lowerContributorEntry(entry: ContributorEntry<z.ZodType>, index: number
         toolMiddleware: result.toolMiddleware,
         constraints: result.constraints,
         guardrails: result.guardrails,
+        workPolicy: result.workPolicy,
         metadata: result.metadata,
         facts: {
           sourceId: `contributor:${entry.id}`,
@@ -557,6 +571,8 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
       return lowerMatch(entry as MatchSpec, index)
     case 'ConditionalContext':
       return lowerConditional(entry as ConditionalContext<Context<z.ZodType>>, index)
+    case 'WorkPolicy':
+      return lowerWorkPolicy(entry as WorkPolicy, index)
     default:
       return lowerContext(entry as Context<z.ZodType>, index)
   }

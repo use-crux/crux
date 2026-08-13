@@ -40,6 +40,7 @@ import {
 import { lowerContext, lowerEntry } from './lower'
 import type { ResolverPorts } from './ports'
 import { mergeOwnedToolSet, mergeToolSet } from './tool-merge'
+import type { ResolvedWorkPolicy } from './types'
 
 const INCLUDED: GateResult = Object.freeze({ include: true })
 
@@ -108,7 +109,105 @@ function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.toolMiddleware.push(...nested.toolMiddleware)
   out.constraints.push(...nested.constraints)
   out.guardrails.push(...nested.guardrails)
+  out.workPolicy = mergeWorkPolicies(out.workPolicy, nested.workPolicy)
   out.metadata = { ...out.metadata, ...nested.metadata }
+}
+
+/**
+ * Merge two resolved Work policies by strictest intersection.
+ *
+ * A limit authored by only one policy is kept verbatim; a limit authored by
+ * both is the minimum (the stricter bound). Fields never widen and never
+ * follow last-wins: removing a limit from one contribution cannot raise it.
+ * The result is always a clean frozen {@link ResolvedWorkPolicy} — the
+ * contribution discriminant is never carried into resolved metadata.
+ */
+function mergeWorkPolicies(
+  left: ResolvedWorkPolicy | undefined,
+  right: ResolvedWorkPolicy | undefined,
+): ResolvedWorkPolicy | undefined {
+  if (left !== undefined && right !== undefined) {
+    const concurrency = minLimit(left.concurrency, right.concurrency)
+    const maxOutstanding = minLimit(left.maxOutstanding, right.maxOutstanding)
+    const tree = mergeWorkTreePolicies(left.tree, right.tree)
+
+    return Object.freeze({
+      ...(concurrency !== undefined ? { concurrency } : {}),
+      ...(maxOutstanding !== undefined ? { maxOutstanding } : {}),
+      ...(tree ? { tree } : {}),
+    })
+  }
+
+  const single = left ?? right
+  if (single === undefined) {
+    return undefined
+  }
+
+  return normalizeWorkPolicy(single)
+}
+
+function minLimit(
+  a: number | undefined,
+  b: number | undefined,
+): number | undefined {
+  if (a === undefined) {
+    return b
+  }
+  if (b === undefined) {
+    return a
+  }
+  return Math.min(a, b)
+}
+
+function normalizeWorkPolicy(policy: ResolvedWorkPolicy): ResolvedWorkPolicy {
+  const tree = normalizeWorkTreePolicy(policy.tree)
+  return Object.freeze({
+    ...(policy.concurrency !== undefined
+      ? { concurrency: policy.concurrency }
+      : {}),
+    ...(policy.maxOutstanding !== undefined
+      ? { maxOutstanding: policy.maxOutstanding }
+      : {}),
+    ...(tree ? { tree } : {}),
+  })
+}
+
+function mergeWorkTreePolicies(
+  left: ResolvedWorkPolicy["tree"],
+  right: ResolvedWorkPolicy["tree"],
+): ResolvedWorkPolicy["tree"] | undefined {
+  if (left === undefined && right === undefined) {
+    return undefined
+  }
+  if (left === undefined || right === undefined) {
+    return normalizeWorkTreePolicy(left ?? right)
+  }
+
+  return normalizeWorkTreePolicy({
+    ...(left.maxDepth !== undefined || right.maxDepth !== undefined
+      ? { maxDepth: minLimit(left.maxDepth, right.maxDepth) }
+      : {}),
+    ...(left.maxStarts !== undefined || right.maxStarts !== undefined
+      ? { maxStarts: minLimit(left.maxStarts, right.maxStarts) }
+      : {}),
+    ...(left.maxActive !== undefined || right.maxActive !== undefined
+      ? { maxActive: minLimit(left.maxActive, right.maxActive) }
+      : {}),
+  })
+}
+
+function normalizeWorkTreePolicy(
+  tree: ResolvedWorkPolicy["tree"],
+): ResolvedWorkPolicy["tree"] | undefined {
+  if (!tree) {
+    return undefined
+  }
+  const normalized = {
+    ...(tree.maxDepth !== undefined ? { maxDepth: tree.maxDepth } : {}),
+    ...(tree.maxStarts !== undefined ? { maxStarts: tree.maxStarts } : {}),
+    ...(tree.maxActive !== undefined ? { maxActive: tree.maxActive } : {}),
+  }
+  return Object.keys(normalized).length > 0 ? Object.freeze(normalized) : undefined
 }
 
 /**
@@ -288,6 +387,9 @@ async function runContributor(
   if (contribution.toolMiddleware) out.toolMiddleware.push(...normalizeToolMiddleware(contribution.toolMiddleware))
   if (contribution.constraints) out.constraints.push(...contribution.constraints)
   if (contribution.guardrails) out.guardrails.push(...contribution.guardrails)
+  if (contribution.workPolicy) {
+    out.workPolicy = mergeWorkPolicies(out.workPolicy, contribution.workPolicy)
+  }
   if (contribution.metadata) out.metadata = { ...out.metadata, ...contribution.metadata }
 
   if (contribution.facts) emitFacts(ports, contribution.facts)
