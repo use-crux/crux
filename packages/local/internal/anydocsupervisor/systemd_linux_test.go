@@ -823,6 +823,30 @@ func TestSystemdReportRetriesOnlyPinnedMissingCPUStat(t *testing.T) {
 	})
 }
 
+func TestParseCgroupEventsAcceptsModernCPUStatAndRejectsInvalidRecords(t *testing.T) {
+	// Linux kernel kernel/sched/core.c emits core_sched.force_idle_usec in cpu.stat.
+	stats, err := parseCgroupEvents([]byte("usage_usec 12\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\ncore_sched.force_idle_usec 3\n"))
+	if err != nil || stats["core_sched.force_idle_usec"] != 3 {
+		t.Fatalf("parseCgroupEvents() = %#v, %v", stats, err)
+	}
+
+	for _, input := range []string{
+		".core_sched 1\n",
+		"core_sched. 1\n",
+		"core..sched 1\n",
+		"core/sched 1\n",
+		"core sched 1\n",
+		"core-sched 1\n",
+		"usage_usec 1\nusage_usec 2\n",
+		"usage_usec -1\n",
+		"usage_usec 9223372036854775808\n",
+	} {
+		if _, err := parseCgroupEvents([]byte(input)); err == nil || err.Error() != "invalid cgroup events" {
+			t.Fatalf("parseCgroupEvents(%q) = %v, want fixed invalid record error", input, err)
+		}
+	}
+}
+
 func TestSystemdReportClassifiesOnlyExactUnitPropertiesGoneErrors(t *testing.T) {
 	for _, test := range []struct {
 		name string

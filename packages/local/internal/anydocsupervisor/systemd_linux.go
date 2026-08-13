@@ -2075,16 +2075,28 @@ func validCgroupEventKey(key string) bool {
 	if key == "" {
 		return false
 	}
+	segmentStart := true
 	for i := 0; i < len(key); i++ {
 		c := key[i]
+		if c == '.' {
+			if segmentStart {
+				return false
+			}
+			segmentStart = true
+			continue
+		}
 		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '_' && (c < '0' || c > '9') {
 			return false
 		}
-		if i == 0 && c >= '0' && c <= '9' {
+		if segmentStart && c >= '0' && c <= '9' {
 			return false
 		}
+		segmentStart = false
 	}
-	return true
+	// Dotted flat keys keep cpu.stat, memory.events, and pids.events forward-compatible;
+	// callers independently enforce required known keys where security-relevant.
+	// Linux kernel kernel/sched/core.c emits core_sched.force_idle_usec in cpu.stat.
+	return !segmentStart
 }
 
 func decimalInt64(value string) bool {

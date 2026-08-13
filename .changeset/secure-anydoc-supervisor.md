@@ -79,6 +79,9 @@ unavailable and never exposing raw attestation details.
 Bound post-start `cpu.stat` availability checks to the pinned systemd cgroup,
 with fixed safe diagnostics for missing, unreadable, malformed, or incomplete
 CPU accounting rather than accepting absent counters or exposing host details.
+Accept forward-compatible dotted flat cgroup accounting keys, including modern
+`cpu.stat` `core_sched.force_idle_usec`, while preserving strict record,
+numeric, duplicate, and required-counter validation.
 
 Route sealed hostile-probe observations through the same private, one-use
 lifecycle witness transition as normal results. Require the exact sealed probe,
