@@ -1644,8 +1644,12 @@ func cleanupForOutcome(unit Unit, result error, probe *containmentProbe, observe
 			}
 		}
 	}
-	if unit.WaitInactive(ctx) != nil {
-		if reason == "" && !terminalRuntimeDisappearingAccounting {
+	waitErr := unit.WaitInactive(ctx)
+	if waitErr != nil {
+		// An exact typed unit disappearance is not a wait failure: Stop has
+		// already been attempted, and the ordered final GetUnit/cgroup proof
+		// below is the authority for accepting or rejecting it.
+		if (reason == "" || propertiesGone != nil) && !terminalRuntimeDisappearingAccounting && !terminalStatusWaitExactlyGone(waitErr) {
 			reason = "wait-inactive"
 		}
 	} else {
@@ -1733,6 +1737,11 @@ func cleanupForOutcome(unit Unit, result error, probe *containmentProbe, observe
 func terminalStatusExactlyGone(err error) bool {
 	var operation *terminalStatusOperationError
 	return errors.As(err, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone
+}
+
+func terminalStatusWaitExactlyGone(err error) bool {
+	var operation *terminalStatusOperationError
+	return errors.As(err, &operation) && operation.dbusClass == terminalStatusDBusGone && (operation.stage == terminalStatusGetUnit || operation.stage == terminalStatusUnitProperties)
 }
 
 // terminalRuntimeDisappearing is the narrow deferred-proof eligibility for a

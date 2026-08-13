@@ -216,6 +216,10 @@ func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T)
 	nodeDigest := fmt.Sprintf("%x", sha256.Sum256(nodeContents))
 	runtimeDigest := fmt.Sprintf("%x", sha256.Sum256(runnerContents))
 	probePath, probeDigest := stageProbeExecutable(t, sharedProbe)
+	hostSentinel := filepath.Join(root, "host-sentinel")
+	if err := os.WriteFile(hostSentinel, []byte("shared host sentinel"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	backend := NewSystemdBackendWith(SystemdBackendOptions{Bus: newFakeSystemBus(), FileSystem: osFS{}, Clock: immediateClock{}})
 	startProbe := func(name string) (*systemdUnit, string) {
@@ -242,26 +246,27 @@ func TestSystemdProbeCleanupKeepsSharedStageAvailableForLaterStart(t *testing.T)
 		return unit.(*systemdUnit), private
 	}
 
-	first, firstPrivate := startProbe("first")
-	if err := first.Cleanup(context.Background()); err != nil {
-		t.Fatalf("cleanup first probe: %s", safeContainmentDiagnostic(err))
-	}
-	if _, err := os.Lstat(firstPrivate); !os.IsNotExist(err) {
-		t.Fatalf("first probe private directory retained: %v", err)
-	}
-	if info, err := os.Lstat(probePath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 {
-		t.Fatalf("shared probe executable removed by first cleanup: %v", err)
-	}
-	if info, err := os.Lstat(sharedProbe); err != nil || !info.IsDir() {
-		t.Fatalf("shared integration stage removed by first cleanup: %v", err)
-	}
-
-	second, secondPrivate := startProbe("second")
-	if err := second.Cleanup(context.Background()); err != nil {
-		t.Fatalf("cleanup second probe: %s", safeContainmentDiagnostic(err))
-	}
-	if _, err := os.Lstat(secondPrivate); !os.IsNotExist(err) {
-		t.Fatalf("second probe private directory retained: %v", err)
+	for i := 0; i < 6; i++ {
+		name := fmt.Sprintf("probe-%d", i)
+		unit, private := startProbe(name)
+		if err := unit.Cleanup(context.Background()); err != nil {
+			t.Fatalf("cleanup %s: %s", name, safeContainmentDiagnostic(err))
+		}
+		if _, err := os.Lstat(private); !os.IsNotExist(err) {
+			t.Fatalf("%s private directory retained: %v", name, err)
+		}
+		if info, err := os.Lstat(probePath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 {
+			t.Fatalf("shared probe executable removed by %s cleanup: %v", name, err)
+		}
+		if info, err := os.Lstat(sharedProbe); err != nil || !info.IsDir() {
+			t.Fatalf("shared integration stage removed by %s cleanup: %v", name, err)
+		}
+		if info, err := os.Lstat(root); err != nil || !info.IsDir() {
+			t.Fatalf("shared suite root removed by %s cleanup: %v", name, err)
+		}
+		if bytes, err := os.ReadFile(hostSentinel); err != nil || string(bytes) != "shared host sentinel" {
+			t.Fatalf("shared host sentinel changed by %s cleanup: %v", name, err)
+		}
 	}
 }
 

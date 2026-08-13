@@ -1306,6 +1306,109 @@ func TestRunFinishTerminalReportSafeExecutionFailureUnitPropertiesGoneProofReaso
 	}
 }
 
+func TestRunFinishAcceptsWitnessAfterExactWaitInactiveGone(t *testing.T) {
+	const pinned = "/crux.slice/pinned"
+	const digest = "verified-runtime-digest"
+	statusGone := &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+	for _, waitErr := range []error{
+		statusGone,
+		&terminalStatusOperationError{stage: terminalStatusUnitProperties, dbusClass: terminalStatusDBusGone},
+	} {
+		unit := &fakeUnit{
+			rep:              SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: digest, MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": 0}},
+			stopErr:          &stopFailure{reason: "unit-properties-gone"},
+			waitErr:          waitErr,
+			snapshot:         SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: digest, MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": 0}},
+			snapshotOK:       true,
+			lifecycleWitness: lifecycleWitness{kind: lifecycleWitnessProbe, probeCase: "network", cgroup: pinned, pid: 42, requestDigest: strings.Repeat("a", 64), nonce: strings.Repeat("b", 32), runtimeDigest: digest},
+			lifecycleOK:      true,
+			termination: func(context.Context, string) (TerminationEvidence, error) {
+				return TerminationEvidence{ControlGroup: pinned, Absent: true}, nil
+			},
+			terminalStatus: func(context.Context) (TerminalStatus, error) {
+				return TerminalStatus{}, statusGone
+			},
+		}
+		staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read, write, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer read.Close()
+		defer write.Close()
+		run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbe: &containmentProbe{caseID: "network"}, sealedProbeObserved: true}
+		if err := run.Finish(context.Background(), nil); err != nil {
+			t.Fatalf("Finish() = %v, want witness-backed exact-gone cleanup acceptance", err)
+		}
+		if terminal := run.TerminalReport(); !terminal.Cleaned || !terminal.Cleanup.Accepted {
+			t.Fatalf("terminal cleanup = %#v, want accepted", terminal.Cleanup)
+		}
+	}
+}
+
+func TestRunFinishRejectsUnprovenWaitInactiveDisappearance(t *testing.T) {
+	const pinned = "/crux.slice/pinned"
+	const digest = "verified-runtime-digest"
+	exactGone := &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusGone}
+	for _, test := range []struct {
+		name      string
+		waitErr   error
+		status    TerminalStatus
+		statusErr error
+	}{
+		{name: "arbitrary wait failure", waitErr: errors.New("wait unavailable"), statusErr: exactGone},
+		{name: "unrecognized wait failure", waitErr: &terminalStatusOperationError{stage: terminalStatusGetUnit, dbusClass: terminalStatusDBusUnrecognized}, statusErr: exactGone},
+		{name: "failed terminal status", waitErr: exactGone, status: TerminalStatus{State: "failed", ServiceResult: "exit-code", ExecMainStatus: 1}},
+		{name: "live terminal status", waitErr: exactGone, status: TerminalStatus{State: "active", MainPID: 42, ServiceResult: "success"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			unit := &fakeUnit{
+				rep:        SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: digest, MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": 0}},
+				stopErr:    &stopFailure{reason: "unit-properties-gone"},
+				waitErr:    test.waitErr,
+				snapshot:   SandboxReport{ControlGroup: pinned, MainPID: 42, RuntimeTreeDigest: digest, MemoryEvents: map[string]int64{"oom": 0, "oom_kill": 0}, PIDsEvents: map[string]int64{"max": 0}},
+				snapshotOK: true,
+				lifecycleWitness: lifecycleWitness{
+					kind:          lifecycleWitnessProbe,
+					probeCase:     "network",
+					cgroup:        pinned,
+					pid:           42,
+					requestDigest: strings.Repeat("a", 64),
+					nonce:         strings.Repeat("b", 32),
+					runtimeDigest: digest,
+				},
+				lifecycleOK: true,
+				termination: func(context.Context, string) (TerminationEvidence, error) {
+					return TerminationEvidence{ControlGroup: pinned, Absent: true}, nil
+				},
+				terminalStatus: func(context.Context) (TerminalStatus, error) {
+					return test.status, test.statusErr
+				},
+			}
+			staged, err := NewStager(t.TempDir()).Stage([]byte("x"), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer read.Close()
+			defer write.Close()
+			run := &Run{unit: unit, write: write, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: time.Now(), sealedProbe: &containmentProbe{caseID: "network"}, sealedProbeObserved: true}
+			if got := errorCode(run.Finish(context.Background(), nil)); got != ErrContainmentUnavailable {
+				t.Fatalf("Finish() error code = %q, want %q", got, ErrContainmentUnavailable)
+			}
+			if terminal := run.TerminalReport(); terminal.Cleaned || terminal.Cleanup.Accepted {
+				t.Fatalf("terminal cleanup = %#v, want rejected", terminal.Cleanup)
+			}
+		})
+	}
+}
+
 func TestRunFinishUnitPropertiesGoneSnapshotCgroupMismatchPreemptsProofMapper(t *testing.T) {
 	const pinned = "/crux.slice/pinned"
 	unit := &fakeUnit{
@@ -1521,6 +1624,7 @@ type fakeUnit struct {
 	receive          func(context.Context, Request) (Result, error)
 	cleanupErr       error
 	stopErr          error
+	waitErr          error
 	termination      func(context.Context, string) (TerminationEvidence, error)
 	terminalStatus   func(context.Context) (TerminalStatus, error)
 	snapshot         SandboxReport
@@ -1582,7 +1686,7 @@ func (u *fakeUnit) Stop(context.Context) error {
 	u.rep.Populated = false
 	return u.stopErr
 }
-func (u *fakeUnit) WaitInactive(context.Context) error { return nil }
+func (u *fakeUnit) WaitInactive(context.Context) error { return u.waitErr }
 func (u *fakeUnit) TerminalStatus(ctx context.Context) (TerminalStatus, error) {
 	if u.terminalStatus != nil {
 		return u.terminalStatus(ctx)

@@ -146,6 +146,11 @@ a verified snapshot for that exact pinned cgroup. Preserve fixed sanitized
 terminal-status operation diagnostics on that pending validation path without
 allowing a status error to establish terminal proof.
 
+Preserve an exact typed `UnitProperties` or `GetUnit` disappearance from
+`WaitInactive` so the pending verified-witness path reaches its required final
+exact `GetUnit` and pinned-cgroup termination proof; arbitrary, unrecognized,
+failed, and live states remain fail-closed.
+
 For the existing `unit-properties-gone` path, retain strict inactive-success
 service evidence only when it was observed from available systemd properties.
 Accept that pending path only when either the retained terminal-success proof

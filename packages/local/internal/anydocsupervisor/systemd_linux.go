@@ -1805,7 +1805,10 @@ func (u *systemdUnit) WaitInactive(ctx context.Context) error {
 	for {
 		status, err := u.TerminalStatus(ctx)
 		if err != nil {
-			return errors.New("unit status unavailable")
+			// Preserve the sanitized typed operation error so cleanup can accept
+			// only the exact final GetUnit-gone proof. Other errors stay
+			// fail-closed in the cleanup coordinator.
+			return err
 		}
 		if (status.State == "inactive" || status.State == "failed") && status.MainPID == 0 {
 			return nil
