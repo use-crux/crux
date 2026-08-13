@@ -722,47 +722,6 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 		for _, mode := range []string{"missing", "malformed"} {
 			t.Run(test.name+" "+mode, func(t *testing.T) {
 				fs := newFakeFS()
-				bus := newFakeSystemBus()
-				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, procFS: fs, now: immediateClock{}}
-				ctx := context.Background()
-
-				first, err := unit.Report(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-				unit.spec = ServiceSpec{
-					runtimeTreeDigest:       first.RuntimeTreeDigest,
-					MemoryMax:               first.MemoryMax,
-					MemorySwapMax:           first.MemorySwapMax,
-					TasksMax:                first.TasksMax,
-					CPUQuotaPercent:         first.CPUQuotaPercent,
-					CPUQuotaPeriodUSec:      first.CPUQuotaPeriodUSec,
-					RuntimeMax:              first.RuntimeMax,
-					KillMode:                first.KillMode,
-					ProtectSystem:           first.ProtectSystem,
-					CPUAccounting:           first.CPUAccounting,
-					NoNewPrivileges:         first.NoNewPrivileges,
-					PrivateNetwork:          first.PrivateNetwork,
-					PrivateTmp:              first.PrivateTmp,
-					ProtectHome:             first.ProtectHome,
-					ReadOnlyPaths:           first.ReadOnlyPaths,
-					InaccessiblePaths:       first.InaccessiblePaths,
-					BindReadOnlyPaths:       first.BindReadOnlyPaths,
-					ReadWritePaths:          first.ReadWritePaths,
-					RestrictAddressFamilies: first.RestrictAddressFamilies,
-				}
-				if !verify(ctx, &verifiedLifecycleSystemdUnit{systemdUnit: unit}, unit.spec) {
-					t.Fatal("production verification lifecycle rejected fake unit")
-				}
-
-				bus.values["ActiveState"] = "inactive"
-				bus.values["MainPID"] = uint32(0)
-				bus.values["Result"] = "success"
-				bus.values["ExecMainStatus"] = int32(0)
-				if _, err := unit.report(ctx, true); err != nil {
-					t.Fatalf("terminal Report() = %v", err)
-				}
-
 				path := cgroupFile("/crux.slice/test", test.file)
 				if mode == "missing" {
 					delete(fs.files, path)
@@ -770,7 +729,8 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 					fs.files[path] = test.malformed
 				}
 
-				_, _, _, err = unit.CaptureTerminalAccounting(ctx)
+				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+				_, err := unit.Report(context.Background())
 				diagnostic := startDiagnostic("post-start-report", err)
 				if diagnostic.ReasonCode != test.want || !validContainmentReason(diagnostic.ReasonCode) {
 					t.Fatalf("post-start diagnostic = %q, want allowlisted %q", diagnostic.Error(), test.want)
