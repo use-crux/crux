@@ -76,6 +76,10 @@ Preserve allowlisted typed containment diagnostics returned by post-start Node
 and probe attestations, while keeping absent attestators classified as
 unavailable and never exposing raw attestation details.
 
+Bound post-start `cpu.stat` availability checks to the pinned systemd cgroup,
+with fixed safe diagnostics for missing, unreadable, malformed, or incomplete
+CPU accounting rather than accepting absent counters or exposing host details.
+
 Route sealed hostile-probe observations through the same private, one-use
 lifecycle witness transition as normal results. Require the exact sealed probe,
 authorized peer capability, bounded versioned case/invocation observation,

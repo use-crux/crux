@@ -933,9 +933,18 @@ func (u *systemdUnit) report(ctx context.Context, terminalAccounting bool) (Sand
 	if err != nil {
 		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationMemoryEvents))
 	}
-	cpuStats, err := cgroupEvents(u.fs, cgroup, "cpu.stat")
+	var cpuStats map[string]int64
+	if terminalAccounting {
+		cpuStats, err = cgroupEvents(u.fs, cgroup, "cpu.stat")
+	} else {
+		cpuStats, err = u.cpuStats(ctx, cgroup)
+	}
 	if err != nil {
-		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportValidationCPUStat))
+		var validation *ReportValidationError
+		if errors.As(err, &validation) {
+			return SandboxReport{}, validation
+		}
+		return SandboxReport{}, newReportValidationError(reportCgroupAccountingValidation(terminalAccounting, reportCPUStatValidation(err)))
 	}
 	pidsEvents, err := cgroupEvents(u.fs, cgroup, "pids.events")
 	if err != nil {
@@ -1600,6 +1609,10 @@ const (
 	reportValidationCgroupAccounting                           ReportValidationCode = "cgroup-accounting"
 	reportValidationMemoryEvents                               ReportValidationCode = "memory-events"
 	reportValidationCPUStat                                    ReportValidationCode = "cpu-stat"
+	reportValidationCPUStatMissing                             ReportValidationCode = "cpu-stat-missing"
+	reportValidationCPUStatUnreadable                          ReportValidationCode = "cpu-stat-unreadable"
+	reportValidationCPUStatMalformed                           ReportValidationCode = "cpu-stat-malformed"
+	reportValidationCPUStatRequiredKeys                        ReportValidationCode = "cpu-stat-required-keys"
 	reportValidationPIDsEvents                                 ReportValidationCode = "pids-events"
 	reportValidationCgroupProcs                                ReportValidationCode = "cgroup-procs"
 	reportValidationCgroupEvents                               ReportValidationCode = "cgroup-events"
@@ -1939,11 +1952,85 @@ func validCgroup(path string) bool {
 	return strings.HasPrefix(path, "/") && filepath.Clean(path) == path && !strings.Contains(path, "..")
 }
 func cgroupFile(cgroup, file string) string { return filepath.Join("/sys/fs/cgroup", cgroup, file) }
+
+const (
+	cpuStatRetryAttempts = 3
+	cpuStatRetryDelay    = 5 * time.Millisecond
+	cpuStatRetryWindow   = 20 * time.Millisecond
+)
+
+type cpuStatFailure uint8
+
+const (
+	cpuStatMissing cpuStatFailure = iota + 1
+	cpuStatUnreadable
+	cpuStatMalformed
+	cpuStatRequiredKeys
+)
+
+type cpuStatError struct{ failure cpuStatFailure }
+
+func (e *cpuStatError) Error() string { return "cpu stat unavailable" }
+
+// cpuStats reads only the cgroup pinned by the initial unit-properties
+// observation. systemd can expose that cgroup before cpu.stat exists, so a
+// missing file gets a short, bounded retry. No other I/O or parser error is
+// retried, and every retry rechecks the unit's cgroup identity.
+func (u *systemdUnit) cpuStats(ctx context.Context, cgroup string) (map[string]int64, error) {
+	deadline := u.now.Now().Add(cpuStatRetryWindow)
+	for attempt := 0; attempt < cpuStatRetryAttempts; attempt++ {
+		stats, err := readCPUStat(u.fs, cgroup)
+		if err == nil {
+			return stats, nil
+		}
+		var cpuErr *cpuStatError
+		if !errors.As(err, &cpuErr) || cpuErr.failure != cpuStatMissing || attempt+1 == cpuStatRetryAttempts || ctx.Err() != nil || !u.now.Now().Before(deadline) {
+			return nil, err
+		}
+
+		properties, propertiesErr := u.bus.UnitProperties(ctx, u.name)
+		if propertiesErr != nil {
+			return nil, newReportValidationError(reportValidationDBusFetch)
+		}
+		if stringValue(properties, "ControlGroup") != cgroup {
+			return nil, newReportValidationError(reportValidationControlGroup)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-u.now.After(cpuStatRetryDelay):
+		}
+	}
+	return nil, &cpuStatError{failure: cpuStatMissing}
+}
+
+func readCPUStat(fs FileSystem, cgroup string) (map[string]int64, error) {
+	b, err := fs.ReadFile(cgroupFile(cgroup, "cpu.stat"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, &cpuStatError{failure: cpuStatMissing}
+		}
+		return nil, &cpuStatError{failure: cpuStatUnreadable}
+	}
+	stats, err := parseCgroupEvents(b)
+	if err != nil {
+		return nil, &cpuStatError{failure: cpuStatMalformed}
+	}
+	if _, ok := stats["usage_usec"]; !ok {
+		return nil, &cpuStatError{failure: cpuStatRequiredKeys}
+	}
+	return stats, nil
+}
+
 func cgroupEvents(fs FileSystem, cgroup, file string) (map[string]int64, error) {
 	b, err := fs.ReadFile(cgroupFile(cgroup, file))
 	if err != nil {
 		return nil, err
 	}
+	return parseCgroupEvents(b)
+}
+
+func parseCgroupEvents(b []byte) (map[string]int64, error) {
 	out := map[string]int64{}
 	for _, line := range strings.Split(string(b), "\n") {
 		if strings.TrimSpace(line) == "" {
@@ -1963,6 +2050,25 @@ func cgroupEvents(fs FileSystem, cgroup, file string) (map[string]int64, error) 
 		out[f[0]] = v
 	}
 	return out, nil
+}
+
+func reportCPUStatValidation(err error) ReportValidationCode {
+	var cpuErr *cpuStatError
+	if !errors.As(err, &cpuErr) {
+		return reportValidationCPUStat
+	}
+	switch cpuErr.failure {
+	case cpuStatMissing:
+		return reportValidationCPUStatMissing
+	case cpuStatUnreadable:
+		return reportValidationCPUStatUnreadable
+	case cpuStatMalformed:
+		return reportValidationCPUStatMalformed
+	case cpuStatRequiredKeys:
+		return reportValidationCPUStatRequiredKeys
+	default:
+		return reportValidationCPUStat
+	}
 }
 
 func validCgroupEventKey(key string) bool {

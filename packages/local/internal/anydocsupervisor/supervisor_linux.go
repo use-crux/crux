@@ -169,7 +169,7 @@ func validContainmentReason(reason string) bool {
 
 func validPostStartReportReason(reason string) bool {
 	switch reason {
-	case "report-memory-events", "report-cpu-stat", "report-pids-events", "report-cgroup-procs", "report-cgroup-events":
+	case "report-memory-events", "report-cpu-stat", "report-cpu-stat-missing", "report-cpu-stat-unreadable", "report-cpu-stat-malformed", "report-cpu-stat-required-keys", "report-pids-events", "report-cgroup-procs", "report-cgroup-events":
 		return true
 	}
 	switch reason {

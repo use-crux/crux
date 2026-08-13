@@ -732,8 +732,12 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
 				_, err := unit.Report(context.Background())
 				diagnostic := startDiagnostic("post-start-report", err)
-				if diagnostic.ReasonCode != test.want || !validContainmentReason(diagnostic.ReasonCode) {
-					t.Fatalf("post-start diagnostic = %q, want allowlisted %q", diagnostic.Error(), test.want)
+				want := test.want
+				if test.file == "cpu.stat" {
+					want += "-" + mode
+				}
+				if diagnostic.ReasonCode != want || !validContainmentReason(diagnostic.ReasonCode) {
+					t.Fatalf("post-start diagnostic = %q, want allowlisted %q", diagnostic.Error(), want)
 				}
 				if strings.Contains(diagnostic.Error(), "private") || strings.Contains(diagnostic.Error(), "/") {
 					t.Fatalf("post-start diagnostic leaked fake source: %q", diagnostic.Error())
@@ -741,6 +745,82 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 			})
 		}
 	}
+}
+
+func TestSystemdReportRetriesOnlyPinnedMissingCPUStat(t *testing.T) {
+	t.Run("eventual success", func(t *testing.T) {
+		fs := newFakeFS()
+		path := cgroupFile("/crux.slice/test", "cpu.stat")
+		delete(fs.files, path)
+		fs.afterReadError = func(readPath string) {
+			if readPath == path && fs.reads[path] == 1 {
+				fs.files[path] = []byte("usage_usec 12\nnr_periods 1\nnr_throttled 0\nthrottled_usec 0\n")
+			}
+		}
+
+		unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+		report, err := unit.Report(context.Background())
+		if err != nil || report.CPUStats["usage_usec"] != 12 || fs.reads[path] != 2 {
+			t.Fatalf("Report() = %#v, %v; cpu.stat reads = %d", report, err, fs.reads[path])
+		}
+	})
+
+	for _, test := range []struct {
+		name  string
+		apply func(*fakeFS, string)
+		want  string
+	}{
+		{name: "permanent missing", apply: func(fs *fakeFS, path string) { delete(fs.files, path) }, want: "report-cpu-stat-missing"},
+		{name: "unreadable", apply: func(fs *fakeFS, path string) { fs.readErr[path] = errors.New("/private/cpu.stat") }, want: "report-cpu-stat-unreadable"},
+		{name: "malformed", apply: func(fs *fakeFS, path string) { fs.files[path] = []byte("usage_usec private-value\n") }, want: "report-cpu-stat-malformed"},
+		{name: "missing required usage", apply: func(fs *fakeFS, path string) { fs.files[path] = []byte("nr_periods 1\n") }, want: "report-cpu-stat-required-keys"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fs := newFakeFS()
+			path := cgroupFile("/crux.slice/test", "cpu.stat")
+			test.apply(fs, path)
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+			_, err := unit.Report(context.Background())
+			diagnostic := startDiagnostic("post-start-report", err)
+			if diagnostic.ReasonCode != test.want || strings.Contains(diagnostic.Error(), "private") || strings.Contains(diagnostic.Error(), "/") {
+				t.Fatalf("post-start diagnostic = %q, want safe %q", diagnostic.Error(), test.want)
+			}
+			if test.name != "permanent missing" && fs.reads[path] != 1 {
+				t.Fatalf("%s cpu.stat reads = %d, want 1", test.name, fs.reads[path])
+			}
+		})
+	}
+
+	t.Run("cgroup changes during retry", func(t *testing.T) {
+		fs := newFakeFS()
+		delete(fs.files, cgroupFile("/crux.slice/test", "cpu.stat"))
+		bus := newFakeSystemBus()
+		properties := 0
+		bus.onProperties = func() {
+			properties++
+			if properties == 2 {
+				bus.values["ControlGroup"] = "/crux.slice/other"
+			}
+		}
+		unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+		_, err := unit.Report(context.Background())
+		if got := startDiagnostic("post-start-report", err).ReasonCode; got != "report-control-group" {
+			t.Fatalf("cgroup change diagnostic = %q", got)
+		}
+	})
+
+	t.Run("context deadline", func(t *testing.T) {
+		fs := newFakeFS()
+		path := cgroupFile("/crux.slice/test", "cpu.stat")
+		delete(fs.files, path)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
+		_, err := unit.Report(ctx)
+		if got := startDiagnostic("post-start-report", err).ReasonCode; got != "report-cpu-stat-missing" || fs.reads[path] != 1 {
+			t.Fatalf("deadline diagnostic = %q, cpu.stat reads = %d", got, fs.reads[path])
+		}
+	})
 }
 
 func TestSystemdReportClassifiesOnlyExactUnitPropertiesGoneErrors(t *testing.T) {
@@ -2528,6 +2608,7 @@ type fakeSystemBus struct {
 	resetErr                        error
 	reset                           bool
 	onStop                          func()
+	onProperties                    func()
 }
 
 type fakeSystemBusProperties struct {
@@ -2569,6 +2650,9 @@ func (b *fakeSystemBus) StartTransientUnit(_ context.Context, name string, props
 	return b.startErr
 }
 func (b *fakeSystemBus) UnitProperties(_ context.Context, _ string) (map[string]any, error) {
+	if b.onProperties != nil {
+		b.onProperties()
+	}
 	if b.propErr != nil {
 		return nil, b.propErr
 	}
@@ -2637,6 +2721,7 @@ type fakeFS struct {
 	readErr         map[string]error
 	removeErr       error
 	afterRead       func(string)
+	afterReadError  func(string)
 	runtimeContents []byte
 	runtimeRootMode os.FileMode
 	chmods          []os.FileMode
@@ -2651,13 +2736,22 @@ func (f *fakeFS) ReadFile(path string) ([]byte, error) {
 	}
 	f.reads[path]++
 	if failAt := f.failReadAt[path]; failAt > 0 && f.reads[path] >= failAt {
+		if f.afterReadError != nil {
+			f.afterReadError(path)
+		}
 		return nil, os.ErrNotExist
 	}
 	if err := f.readErr[path]; err != nil {
+		if f.afterReadError != nil {
+			f.afterReadError(path)
+		}
 		return nil, err
 	}
 	v, ok := f.files[path]
 	if !ok {
+		if f.afterReadError != nil {
+			f.afterReadError(path)
+		}
 		return nil, os.ErrNotExist
 	}
 	if f.afterRead != nil {
