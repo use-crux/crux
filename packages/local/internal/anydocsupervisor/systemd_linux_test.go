@@ -355,11 +355,45 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 			name: "cpu unavailable",
 			prepareCPUError: func(t *testing.T, unit *systemdUnit, fs *fakeFS) {
 				t.Helper()
-				if _, err := unit.Report(context.Background()); err != nil {
+				ctx := context.Background()
+				active, err := unit.Report(ctx)
+				if err != nil {
 					t.Fatal(err)
 				}
-				// A successful Report establishes runtime prerequisites; CPUUsage
-				// classification is independent of verified-cache fallback.
+				unit.spec = ServiceSpec{
+					runtimeTreeDigest:       active.RuntimeTreeDigest,
+					MemoryMax:               active.MemoryMax,
+					MemorySwapMax:           active.MemorySwapMax,
+					TasksMax:                active.TasksMax,
+					CPUQuotaPercent:         active.CPUQuotaPercent,
+					CPUQuotaPeriodUSec:      active.CPUQuotaPeriodUSec,
+					RuntimeMax:              active.RuntimeMax,
+					KillMode:                active.KillMode,
+					ProtectSystem:           active.ProtectSystem,
+					CPUAccounting:           active.CPUAccounting,
+					NoNewPrivileges:         active.NoNewPrivileges,
+					PrivateNetwork:          active.PrivateNetwork,
+					PrivateTmp:              active.PrivateTmp,
+					ProtectHome:             active.ProtectHome,
+					ReadOnlyPaths:           active.ReadOnlyPaths,
+					InaccessiblePaths:       active.InaccessiblePaths,
+					BindReadOnlyPaths:       active.BindReadOnlyPaths,
+					ReadWritePaths:          active.ReadWritePaths,
+					RestrictAddressFamilies: active.RestrictAddressFamilies,
+				}
+				if !verify(ctx, &verifiedLifecycleSystemdUnit{systemdUnit: unit}, unit.spec) {
+					t.Fatal("production verification lifecycle rejected fake unit")
+				}
+
+				bus := unit.bus.(*fakeSystemBus)
+				bus.values["ActiveState"] = "inactive"
+				bus.values["MainPID"] = uint32(0)
+				bus.values["Result"] = "success"
+				bus.values["ExecMainStatus"] = int32(0)
+				if _, err := unit.Report(ctx); err != nil {
+					t.Fatal(err)
+				}
+
 				fs.failReadAt[cgroupFile("/crux.slice/test", "cpu.stat")] = fs.reads[cgroupFile("/crux.slice/test", "cpu.stat")] + 2
 			},
 			want: accountingCaptureCPUUnavailable,
@@ -371,7 +405,7 @@ func TestCaptureTerminalAccountingClassifiesReportValidationSources(t *testing.T
 			if test.apply != nil {
 				test.apply(bus, fs)
 			}
-			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, procFS: fs, now: immediateClock{}}
 			if test.prepareCPUError != nil {
 				test.prepareCPUError(t, unit, fs)
 			}
@@ -659,7 +693,7 @@ func TestSystemdReportValidationErrorsDoNotLeakFakeSources(t *testing.T) {
 			bus := newFakeSystemBus()
 			fs := newFakeFS()
 			test.apply(bus, fs)
-			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, now: immediateClock{}}
+			unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, procFS: fs, now: immediateClock{}}
 			_, err := unit.Report(context.Background())
 			var validation *ReportValidationError
 			if !errors.As(err, &validation) || validation.Code != test.want {
@@ -688,6 +722,47 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 		for _, mode := range []string{"missing", "malformed"} {
 			t.Run(test.name+" "+mode, func(t *testing.T) {
 				fs := newFakeFS()
+				bus := newFakeSystemBus()
+				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: bus, fs: fs, procFS: fs, now: immediateClock{}}
+				ctx := context.Background()
+
+				first, err := unit.Report(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				unit.spec = ServiceSpec{
+					runtimeTreeDigest:       first.RuntimeTreeDigest,
+					MemoryMax:               first.MemoryMax,
+					MemorySwapMax:           first.MemorySwapMax,
+					TasksMax:                first.TasksMax,
+					CPUQuotaPercent:         first.CPUQuotaPercent,
+					CPUQuotaPeriodUSec:      first.CPUQuotaPeriodUSec,
+					RuntimeMax:              first.RuntimeMax,
+					KillMode:                first.KillMode,
+					ProtectSystem:           first.ProtectSystem,
+					CPUAccounting:           first.CPUAccounting,
+					NoNewPrivileges:         first.NoNewPrivileges,
+					PrivateNetwork:          first.PrivateNetwork,
+					PrivateTmp:              first.PrivateTmp,
+					ProtectHome:             first.ProtectHome,
+					ReadOnlyPaths:           first.ReadOnlyPaths,
+					InaccessiblePaths:       first.InaccessiblePaths,
+					BindReadOnlyPaths:       first.BindReadOnlyPaths,
+					ReadWritePaths:          first.ReadWritePaths,
+					RestrictAddressFamilies: first.RestrictAddressFamilies,
+				}
+				if !verify(ctx, &verifiedLifecycleSystemdUnit{systemdUnit: unit}, unit.spec) {
+					t.Fatal("production verification lifecycle rejected fake unit")
+				}
+
+				bus.values["ActiveState"] = "inactive"
+				bus.values["MainPID"] = uint32(0)
+				bus.values["Result"] = "success"
+				bus.values["ExecMainStatus"] = int32(0)
+				if _, err := unit.report(ctx, true); err != nil {
+					t.Fatalf("terminal Report() = %v", err)
+				}
+
 				path := cgroupFile("/crux.slice/test", test.file)
 				if mode == "missing" {
 					delete(fs.files, path)
@@ -695,8 +770,7 @@ func TestPostStartReportCgroupAccountingDiagnosticsAreGranularAndSafe(t *testing
 					fs.files[path] = test.malformed
 				}
 
-				unit := &systemdUnit{name: "crux-anydoc-test.service", bus: newFakeSystemBus(), fs: fs, now: immediateClock{}}
-				_, err := unit.Report(context.Background())
+				_, _, _, err = unit.CaptureTerminalAccounting(ctx)
 				diagnostic := startDiagnostic("post-start-report", err)
 				if diagnostic.ReasonCode != test.want || !validContainmentReason(diagnostic.ReasonCode) {
 					t.Fatalf("post-start diagnostic = %q, want allowlisted %q", diagnostic.Error(), test.want)
