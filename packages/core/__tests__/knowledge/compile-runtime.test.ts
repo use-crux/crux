@@ -6,6 +6,7 @@ import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { expandRelations, knowledgeBase, retrieve } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('knowledgeBase connected knowledge compile path', () => {
   it('runs derive and compile from index() and expands graph-provenance hits', async () => {
@@ -67,7 +68,7 @@ function relation(
 }
 
 function chunk(sourceId: string, chunkId: string, content: string): CruxChunk {
-  return { namespace: 'kb', sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace: 'kb', sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }
 
 function chunkRef(sourceId: string, chunkId: string): KnowledgeRef {

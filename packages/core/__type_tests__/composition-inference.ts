@@ -6,6 +6,7 @@ import { prompt } from '../src/prompt/prompt'
 import { embedding, embeddingCache, normalizeText } from '../src/embedding'
 import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../src/retrieval'
 import { inMemoryRecordStore } from '../src/storage'
+import { createStoredEvidence } from '../src/indexing'
 import type { RetrievalToolDef, RetrieverTools } from '../src/retrieval'
 
 const localeContext = context({
@@ -14,6 +15,22 @@ const localeContext = context({
     locale: z.enum(['en', 'nl']),
   }),
   system: ({ input }) => `Answer in ${input.locale}.`,
+})
+
+const evidence = createStoredEvidence({
+  document: {
+    documentSha256: 'a'.repeat(64),
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    normalizationVersion: 'test',
+  },
+  origin: {
+    coordinate: { kind: 'document', documentSha256: 'a'.repeat(64) },
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    blockIds: ['block'],
+  },
+  chunkId: 'chunk-1',
+  normalizedContent: 'evidence',
+  chunkerVersion: 'test',
 })
 
 const docs = retriever({
@@ -28,6 +45,7 @@ const docs = retriever({
         content: query,
         metadata: {},
         score: 1,
+        evidence,
       },
     ]
   },

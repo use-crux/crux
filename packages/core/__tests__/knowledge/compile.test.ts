@@ -8,6 +8,7 @@ import { knowledgeClaimsKey } from '../../src/knowledge/keys'
 import { relate } from '../../src/knowledge/relate/relate'
 import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'kb'
 const namespace = 'kb'
@@ -224,14 +225,14 @@ function chunk(
   content: string,
   metadata: Record<string, unknown> = {},
 ): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace,
     sourceId,
     chunkId,
     ordinal: 0,
     content,
     metadata,
-  }
+  })
 }
 
 function documentRef(sourceId: string): KnowledgeRef {

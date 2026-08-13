@@ -34,6 +34,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
     }),
   )
   const tables = parts.filter((part) => part.kind === 'table').map((part) => part.id)
+  const spreadsheets = parts.flatMap((part) => part.kind === 'table' && part.spreadsheet ? [part.spreadsheet] : [])
   const sourceLocations = uniqueSourceLocations(parts.flatMap((part) => part.sourceLocation ? [part.sourceLocation] : []))
 
   return {
@@ -42,6 +43,7 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
     ...(pages.length ? { pages } : {}),
     ...(sheets.length ? { sheets } : {}),
     ...(tables.length ? { tables } : {}),
+    ...(spreadsheets.length ? { spreadsheets } : {}),
     ...(sourceLocations.length ? { sourceLocations } : {}),
     confidence: 'exact',
   }
@@ -112,6 +114,7 @@ function uniqueContentStart(documentContent: string | undefined, content: string
 export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | undefined {
   if (!items.length) return undefined
   const blockIds = unique(items.flatMap((item) => item.blockIds ?? []))
+  const spreadsheets = uniqueSpreadsheets(items.flatMap((item) => item.spreadsheets ?? []))
   return {
     partIds: unique(items.flatMap((item) => item.partIds ?? [])),
     ...(blockIds.length ? { blockIds } : {}),
@@ -120,9 +123,38 @@ export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | und
     tables: unique(items.flatMap((item) => item.tables ?? [])),
     jsonPaths: unique(items.flatMap((item) => item.jsonPaths ?? [])),
     sourceLocations: uniqueSourceLocations(items.flatMap((item) => item.sourceLocations ?? [])),
+    ...(spreadsheets.length ? { spreadsheets } : {}),
     sourceSpans: items.flatMap((item) => item.sourceSpans ?? []),
     confidence: items.some((item) => item.confidence === 'derived') ? 'derived' : 'exact',
   }
+}
+
+function uniqueSpreadsheets(items: readonly import('./types').SpreadsheetProvenance[]): import('./types').SpreadsheetProvenance[] {
+  const accumulators = new Map<string, {
+    readonly spreadsheet: import('./types').SpreadsheetProvenance
+    readonly cells: Map<string, import('./types').SpreadsheetCellProvenance>
+  }>()
+  for (const item of items) {
+    const key = `${item.index}:${item.sheetBlockId}:${item.tableBlockId}:${item.range}`
+    const accumulator = accumulators.get(key) ?? createSpreadsheetAccumulator(item)
+    accumulators.set(key, accumulator)
+    for (const cell of item.cells) {
+      if (!accumulator.cells.has(cell.id)) {
+        accumulator.cells.set(cell.id, cell)
+      }
+    }
+  }
+  return [...accumulators.values()].map(({ spreadsheet, cells }) => ({
+    ...spreadsheet,
+    cells: [...cells.values()],
+  }))
+}
+
+function createSpreadsheetAccumulator(spreadsheet: import('./types').SpreadsheetProvenance): {
+  readonly spreadsheet: import('./types').SpreadsheetProvenance
+  readonly cells: Map<string, import('./types').SpreadsheetCellProvenance>
+} {
+  return { spreadsheet, cells: new Map() }
 }
 
 function uniqueSourceLocations(locations: readonly CruxSourceLocation[]): CruxSourceLocation[] {

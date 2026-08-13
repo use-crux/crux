@@ -5,6 +5,7 @@ import type { DeriveStage } from '../../src/knowledge'
 import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 function createTopicEmbedding() {
   return embedding({
@@ -45,11 +46,11 @@ describe('knowledge base surface', () => {
   it('indexes and retrieves with pipeline chunking equivalently to the chunking shorthand', async () => {
     const embeddings = createTopicEmbedding()
     const input = [
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'guide',
         content: 'Pricing plans.\n\nPricing billing.',
-      },
+      }),
     ]
     const shorthand = knowledgeBase({
       id: 'docs',

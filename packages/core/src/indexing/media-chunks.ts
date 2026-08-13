@@ -1,6 +1,7 @@
 /** Media-part to transient-chunk projection. @module */
 
 import { createStableId } from './hash'
+import { createStoredEvidence } from './stored-evidence'
 import { mediaPartSourceFacts } from './media'
 import { provenanceForPart } from './provenance'
 import { sourceFactsWithLocations } from './source-facts'
@@ -25,23 +26,27 @@ export function createMediaPartChunk(
   )
   const sha256 = part.asset.type === 'data' ? part.asset.sha256 : undefined
 
+  const chunkId = createStableId('chunk', {
+    sourceId: document.sourceId,
+    partId: part.id,
+    ordinal,
+    modality: part.modality,
+    media: mediaIdentity(part),
+    content,
+  })
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
-    chunkId: createStableId('chunk', {
-      sourceId: document.sourceId,
-      partId: part.id,
-      ordinal,
-      modality: part.modality,
-      media: mediaIdentity(part),
-      content,
-    }),
+    chunkId,
     ordinal,
     content,
     metadata: { ...(document.metadata ?? {}), ...(part.metadata ?? {}) },
     ...(source ? { source } : {}),
     ...(document.title ? { parent: { title: document.title } } : {}),
     ...(provenance ? { provenance } : {}),
+    ...(document.evidence && part.evidence
+      ? { evidence: createStoredEvidence({ document: document.evidence, origin: part.evidence, chunkId, normalizedContent: content, chunkerVersion: 'media:2' }) }
+      : {}),
     media: {
       asset: part.asset,
       modality: part.modality,

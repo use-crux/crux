@@ -482,7 +482,7 @@
   },
   "scripts": {
     "generate:evidence-coverage": "node ./scripts/generate-primitive-evidence-coverage.mjs",
-    "test": "vitest run",
+    "test": "node ./scripts/run-tests.mjs",
     "test:observability:serverless": "vitest run __tests__/observability/serverless-freeze.test.ts",
     "typecheck": "node ./scripts/check-no-explicit-any.mjs && tsc -p tsconfig.json --noEmit",
     "typecheck:any:update": "node ./scripts/check-no-explicit-any.mjs --update-baseline"

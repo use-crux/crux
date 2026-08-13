@@ -5,6 +5,7 @@ import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { knowledgeBase, retriever as makeRetriever, retrievalRecipe, retrievalStep } from '../../src/retrieval'
 import type { RetrieverHit } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('recipe knowledge binding', () => {
   it('binds graph reading and hit hydration inside knowledge-base recipes', async () => {
@@ -176,14 +177,14 @@ function chunk(input: {
   readonly metadata?: Record<string, unknown>
   readonly ordinal?: number
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: input.namespace,
     sourceId: input.sourceId,
     chunkId: input.chunkId,
     ordinal: input.ordinal ?? 1,
     content: input.content,
     metadata: input.metadata ?? {},
-  }
+  })
 }
 
 function documentRef(sourceId: string): KnowledgeRef {

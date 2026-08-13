@@ -4,6 +4,7 @@ import { inMemoryAssetStore } from '../../src/asset'
 import { embedding, embeddingSpaceDigest } from '../../src/embedding'
 import { indexer, indexingPipeline, transform } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
+import { schema2MediaDocument, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 describe('multimodal indexing storage', () => {
   it('materializes before embedding, bypasses pipeline caches, and persists no media payload', async () => {
@@ -44,16 +45,18 @@ describe('multimodal indexing storage', () => {
         documents: [transform.document({ name: 'identity', version: '1', run: runTransform })],
       }),
     })
-    const input = [{
-      namespace: 'products',
-      sourceId: 'rex',
-      asset: {
-        type: 'data' as const,
-        data: new Uint8Array([82, 69, 88]),
-        mediaType: 'image/png',
-        filename: 'private-dog.png',
-      },
-    }]
+    const input = [
+      schema2MediaDocument({
+        namespace: 'products',
+        sourceId: 'rex',
+        asset: {
+          type: 'data' as const,
+          data: new Uint8Array([82, 69, 88]),
+          mediaType: 'image/png',
+          filename: 'private-dog.png',
+        },
+      }),
+    ]
 
     await docs.indexDocuments(input)
     const second = await docs.indexDocuments(input)
@@ -72,7 +75,7 @@ describe('multimodal indexing storage', () => {
       mediaType: 'image/png',
     })
     const stored = await assets.get((entry.value.source as { assetRef: { uri: string } }).assetRef)
-    expect([...((stored as { data: Uint8Array }).data)]).toEqual([82, 69, 88])
+    expect([...(stored as { data: Uint8Array }).data]).toEqual([82, 69, 88])
 
     const digest = embeddingSpaceDigest(dense.space.fingerprint)
     await expect(records.get('indexer-namespace:products:embedding-space')).resolves.toMatchObject({
@@ -98,23 +101,27 @@ describe('multimodal indexing storage', () => {
         assets: { put, get: vi.fn(), delete: vi.fn() },
       },
       pipeline: indexingPipeline({
-        documents: [transform.document({
-          name: 'capture-warnings',
-          version: '1',
-          run(document) {
-            seenWarnings.push(document.warnings)
-            return document
-          },
-        })],
+        documents: [
+          transform.document({
+            name: 'capture-warnings',
+            version: '1',
+            run(document) {
+              seenWarnings.push(document.warnings)
+              return document
+            },
+          }),
+        ],
       }),
     })
 
-    await docs.indexDocuments([{
-      namespace: 'kb',
-      sourceId: 'owned',
-      source: { assetRef: { uri: 'asset://caller-owned' } },
-      asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' },
-    }])
+    await docs.indexDocuments([
+      schema2MediaDocument({
+        namespace: 'kb',
+        sourceId: 'owned',
+        source: { assetRef: { uri: 'asset://caller-owned' } },
+        asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' },
+      }),
+    ])
 
     expect(put).not.toHaveBeenCalled()
     const [owned] = (await records.list('indexer:media:namespace:kb:source:owned:')).entries
@@ -126,29 +133,32 @@ describe('multimodal indexing storage', () => {
       namespace: 'kb',
       records: inMemoryRecordStore(),
       pipeline: indexingPipeline({
-        documents: [transform.document({
-          name: 'capture-warnings',
-          version: '1',
-          run(document) {
-            noStoreWarnings.push(document.warnings)
-            return document
-          },
-        })],
+        documents: [
+          transform.document({
+            name: 'capture-warnings',
+            version: '1',
+            run(document) {
+              noStoreWarnings.push(document.warnings)
+              return document
+            },
+          }),
+        ],
       }),
     })
-    await noStore.indexDocuments([{
-      namespace: 'kb',
-      sourceId: 'loose',
-      parts: [
-        { id: 'one', kind: 'media', asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' } },
-        { id: 'two', kind: 'media', asset: { type: 'data', data: new Uint8Array([2]), mediaType: 'image/png' } },
-      ],
-    }])
+    await noStore.indexDocuments([
+      schema2MediaDocument({
+        namespace: 'kb',
+        sourceId: 'loose',
+        asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' },
+        mediaPartId: 'one',
+        additionalMediaParts: [
+          { id: 'two', asset: { type: 'data', data: new Uint8Array([2]), mediaType: 'image/png' } },
+        ],
+      }),
+    ])
 
     expect(seenWarnings[0]).toBeUndefined()
-    expect(noStoreWarnings[0]).toEqual([
-      expect.objectContaining({ code: 'media-unattributed' }),
-    ])
+    expect(noStoreWarnings[0]).toEqual([expect.objectContaining({ code: 'media-unattributed' })])
   })
 
   it('keeps dry-runs free of asset, record, vector, and cache writes', async () => {
@@ -157,11 +167,19 @@ describe('multimodal indexing storage', () => {
     const upsert = vi.fn(searchBase.upsert.bind(searchBase))
     const put = vi.fn()
     const dense = embedding({
-      kind: 'dense', name: 'media', dimensions: 2, maxInputTokens: 100,
-      modalities: ['image'], batch: { maxSize: 8 }, embed: async () => [[1, 0]],
+      kind: 'dense',
+      name: 'media',
+      dimensions: 2,
+      maxInputTokens: 100,
+      modalities: ['image'],
+      batch: { maxSize: 8 },
+      embed: async () => [[1, 0]],
     })
     const docs = indexer({
-      id: 'dry', namespace: 'kb', dense, cache: true,
+      id: 'dry',
+      namespace: 'kb',
+      dense,
+      cache: true,
       storage: {
         records,
         search: { ...searchBase, upsert },
@@ -169,10 +187,16 @@ describe('multimodal indexing storage', () => {
       },
     })
 
-    const result = await docs.indexDocuments([{
-      namespace: 'kb', sourceId: 'photo',
-      asset: { type: 'data', data: new Uint8Array([1, 2]), mediaType: 'image/png' },
-    }], { dryRun: true })
+    const result = await docs.indexDocuments(
+      [
+        {
+          namespace: 'kb',
+          sourceId: 'photo',
+          asset: { type: 'data', data: new Uint8Array([1, 2]), mediaType: 'image/png' },
+        },
+      ],
+      { dryRun: true },
+    )
 
     expect(result.dryRun).toBe(true)
     expect(result.chunks[0].source?.assetRef).toBeUndefined()
@@ -185,26 +209,39 @@ describe('multimodal indexing storage', () => {
     const provider = vi.fn(async () => [[1, 0]])
     const records = inMemoryRecordStore()
     const docs = indexer({
-      id: 'failed-put', namespace: 'kb',
+      id: 'failed-put',
+      namespace: 'kb',
       storage: {
         records,
         search: inMemorySearchStore(),
         assets: {
-          put: vi.fn(async () => { throw new Error('asset backend unavailable') }),
+          put: vi.fn(async () => {
+            throw new Error('asset backend unavailable')
+          }),
           get: vi.fn(),
           delete: vi.fn(),
         },
       },
       dense: embedding({
-        kind: 'dense', name: 'media', dimensions: 2, maxInputTokens: 100,
-        modalities: ['image'], batch: { maxSize: 8 }, embed: provider,
+        kind: 'dense',
+        name: 'media',
+        dimensions: 2,
+        maxInputTokens: 100,
+        modalities: ['image'],
+        batch: { maxSize: 8 },
+        embed: provider,
       }),
     })
 
-    await expect(docs.indexDocuments([{
-      namespace: 'kb', sourceId: 'photo',
-      asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' },
-    }])).rejects.toThrow('asset backend unavailable')
+    await expect(
+      docs.indexDocuments([
+        {
+          namespace: 'kb',
+          sourceId: 'photo',
+          asset: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' },
+        },
+      ]),
+    ).rejects.toThrow('asset backend unavailable')
 
     expect(provider).not.toHaveBeenCalled()
     expect((await records.list('indexer:failed-put:namespace:kb:source:')).entries).toEqual([])
@@ -215,19 +252,25 @@ describe('multimodal indexing storage', () => {
     const introduceMedia = vi.fn((document) => ({
       ...document,
       content: undefined,
-      parts: [{
-        id: 'generated-media',
-        kind: 'media' as const,
-        asset: { type: 'data' as const, data: new Uint8Array([7, 8]), mediaType: 'image/png' },
-      }],
+      parts: [
+        {
+          id: 'generated-media',
+          kind: 'media' as const,
+          asset: { type: 'data' as const, data: new Uint8Array([7, 8]), mediaType: 'image/png' },
+          evidence: document.parts?.[0]?.evidence,
+        },
+      ],
     }))
     const docs = indexer({
-      id: 'introduced', namespace: 'kb', records, cache: true,
+      id: 'introduced',
+      namespace: 'kb',
+      records,
+      cache: true,
       pipeline: indexingPipeline({
         documents: [transform.document({ name: 'introduce-media', version: '1', run: introduceMedia })],
       }),
     })
-    const input = [{ namespace: 'kb', sourceId: 'generated', content: 'replace me' }]
+    const input = [schema2TextDocument({ namespace: 'kb', sourceId: 'generated', content: 'replace me' })]
 
     await docs.indexDocuments(input)
     await docs.indexDocuments(input)

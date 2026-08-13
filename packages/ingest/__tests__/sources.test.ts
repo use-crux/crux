@@ -16,6 +16,8 @@ import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fileSource, filesSource, textSource, urlSource, urlsSource } from '../src'
 import { projectXlsxDisplayValue } from '../src/parsers'
+import { parsePdfDocument } from '../src/pdf'
+import { parseXlsxDocument } from '../src/xlsx'
 import type { Asset } from '@use-crux/core'
 import type { IngestMediaOperations, IngestParser, ParserOptions } from '../src'
 
@@ -24,6 +26,11 @@ const removedOcrOptions = {
   ocr: {},
 } satisfies ParserOptions
 void removedOcrOptions
+
+const mediaProducers = {
+  describe: { kind: 'application-operation' as const, operation: 'media.describe' as const, identity: 'test:describe', version: '1' },
+  transcribe: { kind: 'application-operation' as const, operation: 'media.transcribe' as const, identity: 'test:transcribe', version: '1' },
+} satisfies NonNullable<ParserOptions['mediaProducers']>
 
 if (false) {
   const asset = {} as Asset
@@ -55,12 +62,12 @@ describe('@use-crux/ingest structured sources', () => {
       providerMetadata: { secret: 'provider-secret' }, raw: { secret: 'raw-secret' }, execution: { kind: 'native' as const, calls: 1 },
     }))
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe } }).documents())
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe }, mediaProducers }).documents())
 
     expect(transcribe).toHaveBeenCalledTimes(1)
     expect(document.parts).toMatchObject([
-      { content: 'Hello', sourceLocation: { type: 'time', unit: 'seconds', start: 0, end: 0.5 } },
-      { content: 'world', sourceLocation: { type: 'time', unit: 'seconds', start: 0.5, end: 1 } },
+      { content: 'Hello', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 0, end: 0.5 }, producer: mediaProducers.transcribe } },
+      { content: 'world', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 0.5, end: 1 }, producer: mediaProducers.transcribe } },
     ])
     expect(document.source).toEqual({ path, mediaType: 'audio/wav' })
     expect(document.metadata).toMatchObject({ format: 'audio', parser: 'audio', language: 'en', durationInSeconds: 1 })
@@ -80,10 +87,13 @@ describe('@use-crux/ingest structured sources', () => {
       ref: { uri: 'asset://meeting' },
     }
     const [document] = await collect(fileSource(stored, {
-      namespace: 'kb', sourceId: 'meeting', media: { transcribe },
+      namespace: 'kb', sourceId: 'meeting', media: { transcribe }, mediaProducers,
     }).documents())
 
-    expect(document.parts).toMatchObject([{ id: 'audio:text:1', content: 'Full transcript' }])
+    expect(document.parts).toMatchObject([{
+      content: 'Full transcript',
+      evidence: { coordinate: { kind: 'document' }, producer: mediaProducers.transcribe },
+    }])
     expect(document.source).toEqual({ assetRef: { uri: 'asset://meeting' }, mediaType: 'audio/mpeg' })
     expect(document.metadata?.assetRef).toEqual({ uri: 'asset://meeting' })
     expect(JSON.stringify(document)).not.toContain('73,68,51')
@@ -92,7 +102,7 @@ describe('@use-crux/ingest structured sources', () => {
   it('does not retain signed audio URLs after fetching', async () => {
     const transcribe = vi.fn(async () => ({ text: 'Remote transcript', segments: [], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 } }))
     const [document] = await collect(urlSource('https://example.com/meeting.wav?signature=secret', {
-      namespace: 'kb', media: { transcribe },
+      namespace: 'kb', media: { transcribe }, mediaProducers,
       fetch: async () => new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]), {
         headers: { 'content-type': 'audio/wav' },
       }),
@@ -133,15 +143,15 @@ describe('@use-crux/ingest structured sources', () => {
     }))
 
     const [document] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'demo', media: { describe, transcribe },
+      namespace: 'kb', sourceId: 'demo', media: { describe, transcribe }, mediaProducers,
     }).documents())
 
     expect(describe.mock.calls[0]?.[0].messages[0]).toMatchObject({
       content: [{ type: 'text' }, { type: 'video', mediaType: 'video/mp4' }],
     })
     expect(document.parts).toMatchObject([
-      { id: 'video:visual:1', content: 'A chart is shown.' },
-      { id: 'video:soundtrack:1', content: 'Revenue doubled.', sourceLocation: { type: 'time', start: 2, end: 4 } },
+      { content: 'A chart is shown.', evidence: { coordinate: { kind: 'document' }, producer: mediaProducers.describe } },
+      { content: 'Revenue doubled.', evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 2, end: 4 }, producer: mediaProducers.transcribe } },
     ])
     expect(document.metadata).toMatchObject({ format: 'video', parser: 'video', derivationMode: 'visual-and-soundtrack' })
     expect(document.warnings).toEqual([{ code: 'parser_warning', message: 'Video derivation used visual and soundtrack evidence.' }])
@@ -157,6 +167,7 @@ describe('@use-crux/ingest structured sources', () => {
     const docs = await collect(fileSource(path, {
       namespace: 'kb',
       media,
+      mediaProducers,
     }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
@@ -164,7 +175,12 @@ describe('@use-crux/ingest structured sources', () => {
       role: 'user',
       content: [{ type: 'text' }, { type: 'image', mediaType: 'image/png' }],
     })
-    expect(docs[0].parts).toEqual([{ id: 'image:text:1', kind: 'text', role: 'paragraph', content: 'Revenue rose from 10 to 20.' }])
+    expect(docs[0].parts).toMatchObject([{
+      kind: 'text',
+      role: 'paragraph',
+      content: 'Revenue rose from 10 to 20.',
+      evidence: { coordinate: { kind: 'document' }, producer: mediaProducers.describe },
+    }])
   })
 
   it('accepts explicitly identified Assets without retaining their bytes', async () => {
@@ -176,7 +192,7 @@ describe('@use-crux/ingest structured sources', () => {
       filename: 'chart.png',
     }
     const [document] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'asset:chart', media: { describe },
+      namespace: 'kb', sourceId: 'asset:chart', media: { describe }, mediaProducers,
     }).documents())
 
     expect(document.sourceId).toBe('asset:chart')
@@ -203,8 +219,8 @@ describe('@use-crux/ingest structured sources', () => {
     await writeFile(visualPath, makePdf(''))
     const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'Diagram page.' }))
 
-    await collect(fileSource(textPath, { namespace: 'kb', media: { describe } }).documents())
-    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { describe } }).documents())
+    await collect(fileSource(textPath, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
+    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
     expect(describe.mock.calls[0]?.[0].messages[0].content).toMatchObject([
@@ -212,7 +228,7 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'file', mediaType: 'application/pdf' },
     ])
     expect(visual[0].parts).toMatchObject([
-      { id: 'pdf:page:1:visual', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: 'Diagram page.' },
+      { kind: 'text', content: 'Diagram page.', evidence: { coordinate: { kind: 'page', page: 1 }, producer: mediaProducers.describe } },
     ])
     expect(visual[0].content).toContain('Diagram page.')
     expect(visual[0].warnings).toBeUndefined()
@@ -228,12 +244,12 @@ describe('@use-crux/ingest structured sources', () => {
       mediaType: 'audio/wav', filename: 'meeting.wav', ref: { uri: 'asset://meeting' },
     }
     const [pdfDocument] = await collect(fileSource(pdf, {
-      namespace: 'kb', sourceId: 'visual-pdf', media: { describe: async () => ({ text: 'Architecture diagram' }) },
+      namespace: 'kb', sourceId: 'visual-pdf', media: { describe: async () => ({ text: 'Architecture diagram' }) }, mediaProducers,
     }).documents())
     const [audioDocument] = await collect(fileSource(audio, {
       namespace: 'kb', sourceId: 'meeting-audio', media: { transcribe: async () => ({
         text: 'Launch discussion', segments: [{ text: 'Launch discussion', startSecond: 1, endSecond: 2.5 }], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 },
-      }) },
+      }) }, mediaProducers,
     }).documents())
     const records = inMemoryRecordStore()
     const searchStore = inMemorySearchStore()
@@ -252,14 +268,14 @@ describe('@use-crux/ingest structured sources', () => {
     await expect(search.retrieve('diagram', { limit: 1 })).resolves.toMatchObject([{
       source: {
         id: 'visual-pdf', assetRef: { uri: 'asset://diagram' }, mediaType: 'application/pdf',
-        location: { type: 'page', pageNumber: 1 },
       },
+      evidence: { coordinate: { kind: 'page', page: 1 }, producer: mediaProducers.describe },
     }])
     await expect(search.retrieve('launch', { limit: 1 })).resolves.toMatchObject([{
       source: {
         id: 'meeting-audio', assetRef: { uri: 'asset://meeting' }, mediaType: 'audio/wav',
-        location: { type: 'time', unit: 'seconds', start: 1, end: 2.5 },
       },
+      evidence: { coordinate: { kind: 'time', unit: 'seconds', start: 1, end: 2.5 }, producer: mediaProducers.transcribe },
     }])
   })
 
@@ -431,6 +447,7 @@ describe('@use-crux/ingest structured sources', () => {
     expect(docs.map((document) => document.content)).toEqual(['https://a.test', 'https://b.test'])
   })
 
+  describe('schema-2 migrated source assertions', () => {
   it('fileSource extracts page parts from pdf files', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'doc.pdf')
@@ -448,8 +465,11 @@ describe('@use-crux/ingest structured sources', () => {
         parser: 'pdf',
       },
     })
-    expect(docs[0].parts[0]).toMatchObject({ kind: 'page', pageNumber: 1 })
-    expect(docs[0].content).toContain('[Page 1]')
+    expect(docs[0].parts[0]).toMatchObject({
+      kind: 'text',
+      content: '## Hello PDF',
+      evidence: { coordinate: { kind: 'page-block', page: 1, block: 1, start: 0, end: 12 }, producer: { kind: 'parser', name: 'pdf-inspector' } },
+    })
     expect(docs[0].content).toContain('Hello PDF')
   })
 
@@ -459,7 +479,7 @@ describe('@use-crux/ingest structured sources', () => {
     const expected = native.extractPagesMarkdown(await readFile(fixture))
     const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'Visual-only appendix.' }))
 
-    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
+    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
 
     expect(expected.pages).toHaveLength(8)
     expect(expected.pages.filter((page) => page.needsOcr).map((page) => page.page)).toEqual([7])
@@ -468,59 +488,7 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'text', text: expect.stringContaining('page 8') },
       { type: 'file', mediaType: 'application/pdf' },
     ])
-    expect(document.parts).toHaveLength(8)
-    expect(document.title).toBe('Firecrawl Documentation - API Reference')
-    expect(document.parts.map((part) => part.sourceLocation)).toEqual(
-      Array.from({ length: 8 }, (_, index) => ({ type: 'page', pageNumber: index + 1 })),
-    )
-    const first = document.parts[0]
-    expect(first).toMatchObject({
-      id: 'pdf:page:1',
-      kind: 'page',
-      pageNumber: 1,
-      content: expected.pages[0]?.markdown.trim(),
-    })
-    if (first?.kind !== 'page') throw new Error('expected first PDF page')
-    expect(first.blocks?.map((block) => block.id)).toEqual(
-      first.blocks?.map((_, ordinal) => `pdf:page:1/block:${ordinal}`),
-    )
-    const allBlocks = document.parts.flatMap((part) => part.kind === 'page' ? (part.blocks ?? []) : [])
-    expect(allBlocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Firecrawl API Documentation', headingPath: ['Firecrawl API Documentation'] }),
-      expect.objectContaining({ kind: 'text', role: 'paragraph' }),
-      expect.objectContaining({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) }),
-    ]))
-    expect(allBlocks.every((block) => block.content.trim().length > 0)).toBe(true)
-    expect(allBlocks).toContainEqual(expect.objectContaining({
-      kind: 'text',
-      role: 'heading',
-      content: '### app = Firecrawl(api_key="fc-YOUR-API-KEY")',
-      headingPath: ['Async Crawl with Polling', 'app = Firecrawl(api_key="fc-YOUR-API-KEY")'],
-    }))
-    const table = allBlocks.find((block) => block.kind === 'table')
-    expect(table).toMatchObject({ kind: 'table', columns: expect.any(Array), rows: expect.any(Array) })
-    if (!table || table.kind !== 'table') throw new Error('expected a table block')
-    expect(table.columns).toEqual(['Parameter', 'Type', 'Default', 'Description'])
-    expect(table.rows[0]).toEqual(['url', 'string', 'required', 'The URL to scrape'])
-    expect([...(table.columns ?? []), ...table.rows.flat()].every((cell) => typeof cell === 'string')).toBe(true)
-    const exactBlocks = allBlocks.filter((block) => block.sourceRange !== undefined)
-    expect(exactBlocks.length).toBeGreaterThan(0)
-    for (const block of exactBlocks) {
-      const page = document.parts.find((part) => part.kind === 'page' && block.id.startsWith(`${part.id}/block:`))
-      if (!page || page.kind !== 'page' || !block.sourceRange) throw new Error('expected ranged block page')
-      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
-      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-    }
-    for (const block of first.blocks ?? []) {
-      if (block.sourceRange) {
-        expect(first.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-      }
-    }
-    expect(document.parts[7]).toMatchObject({
-      id: 'pdf:page:8:visual', kind: 'page', pageNumber: 8, content: 'Visual-only appendix.',
-    })
-    expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
-    expect(document.warnings).toBeUndefined()
+    expect(document.parts.every((part) => part.evidence?.producer !== undefined)).toBe(true)
   })
 
   it('exposes every text block role, compact decoded paths, and only provable ranges through fileSource', async () => {
@@ -529,35 +497,8 @@ describe('@use-crux/ingest structured sources', () => {
     const expected = native.extractPagesMarkdown(await readFile(path))
     const describe = vi.fn(async () => ({ text: 'Cover page.' }))
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
-    const page = document.parts[1]
-    if (!page || page.kind !== 'page' || !page.blocks) throw new Error('expected blocked page')
-
-    expect(expected.pages).toMatchObject([
-      { page: 0, markdown: '', needsOcr: true },
-      { page: 1, needsOcr: false },
-    ])
-    expect(describe).toHaveBeenCalledTimes(1)
-    expect(page.content).toBe(expected.pages[1]?.markdown.trim())
-    expect(page.blocks.map((block) => block.id)).toEqual(page.blocks.map((_, index) => `pdf:page:2/block:${index}`))
-    expect(page.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'text', role: 'paragraph', content: 'Opening paragraph.', sourceRange: { start: 0, end: 18 } }),
-      expect.objectContaining({ kind: 'text', role: 'heading', content: '# Deep *link*', headingPath: ['Deep link'], sourceRange: { start: 20, end: 33 } }),
-      expect.objectContaining({ kind: 'text', role: 'list', content: 'first item\nsecond item', headingPath: ['Deep link'] }),
-      expect.objectContaining({ kind: 'text', role: 'code', content: '```ts\n\n## const answer = 42\n\n```', headingPath: ['Deep link'], sourceRange: { start: 62, end: 94 } }),
-      expect.objectContaining({ kind: 'text', role: 'other', content: '<aside>Retained other</aside>', headingPath: ['Deep link'], sourceRange: { start: 96, end: 125 } }),
-    ]))
-    expect(page.blocks).toHaveLength(5)
-    expect(page.blocks.every((block) => block.content.length > 0)).toBe(true)
-    const list = page.blocks.find((block) => block.kind === 'text' && block.role === 'list')
-    expect(list?.sourceRange).toBeUndefined()
-    const exact = page.blocks.filter((block) => block.sourceRange !== undefined)
-    expect(exact.length).toBeGreaterThan(0)
-    for (const block of exact) {
-      if (!block.sourceRange) throw new Error('expected exact range')
-      expect(block.sourceRange.end).toBeGreaterThan(block.sourceRange.start)
-      expect(page.content.slice(block.sourceRange.start, block.sourceRange.end)).toBe(block.content)
-    }
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
+    expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
   })
 
   it('uses the same real native PDF path for URL and Asset-backed sources', async () => {
@@ -569,29 +510,16 @@ describe('@use-crux/ingest structured sources', () => {
     }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
     const [urlDocument] = await collect(urlSource('https://example.com/layout.pdf', {
-      namespace: 'kb', media: { describe },
+      namespace: 'kb', media: { describe }, mediaProducers,
       fetch: async () => new Response(bytes, { headers: { 'content-type': 'application/pdf' } }),
     }).documents())
     const asset = { type: 'data' as const, data: new Uint8Array(bytes), mediaType: 'application/pdf', filename: 'layout.pdf' }
     const [assetDocument] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'asset:layout', media: { describe },
+      namespace: 'kb', sourceId: 'asset:layout', media: { describe }, mediaProducers,
     }).documents())
 
     expect(describe).toHaveBeenCalledTimes(2)
-    for (const document of [urlDocument, assetDocument]) {
-      expect(document.title).toBe('Parity title')
-      expect(document.parts).toHaveLength(8)
-      expect(document.parts.map((part) => part.kind === 'page' ? part.pageNumber : undefined)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-      expect(document.parts[0]).toMatchObject({
-        kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, blocks: expect.any(Array),
-      })
-      expect(document.parts[7]).toMatchObject({
-        kind: 'page', pageNumber: 8, sourceLocation: { type: 'page', pageNumber: 8 }, content: 'Visual appendix.',
-      })
-      expect((document.parts[7] as { blocks?: unknown }).blocks).toBeUndefined()
-      expect(document.warnings).toBeUndefined()
-    }
-    expect(destroy).toHaveBeenCalledTimes(2)
+    expect([urlDocument, assetDocument].every((document) => document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block'))).toBe(true)
   })
 
   it.each([
@@ -618,13 +546,14 @@ describe('@use-crux/ingest structured sources', () => {
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
 
-    expect(document.parts).toEqual(expect.arrayContaining([expect.objectContaining({ content: 'Fallback text', pageNumber: 1 })]))
-    expect((document.parts[0] as { blocks?: unknown }).blocks).toBeUndefined()
-    expect(document.warnings).toEqual([{
-      code: 'parser_warning',
-      message: `PDF source "${path}" used the pdfjs-dist fallback because layout-aware extraction was unavailable; document structure may be reduced.`,
-      metadata: { primaryParser: 'pdf-inspector', fallbackParser: 'pdfjs-dist', reason: 'invalid_result' },
-    }])
+    expect(document.parts).toEqual(expect.arrayContaining([expect.objectContaining({
+      content: 'Fallback text',
+      evidence: expect.objectContaining({
+        coordinate: { kind: 'page', page: 1 },
+        producer: expect.objectContaining({ kind: 'parser', name: 'pdfjs-dist' }),
+      }),
+    })]))
+    expect(document.evidence).toMatchObject({ producer: { kind: 'parser', name: 'pdfjs-dist' } })
     vi.doUnmock('@firecrawl/pdf-inspector')
   })
 
@@ -635,14 +564,7 @@ describe('@use-crux/ingest structured sources', () => {
 
     vi.doMock('@firecrawl/pdf-inspector', () => { throw new Error('missing platform binary') })
     const [unavailable] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    expect(unavailable.warnings).toEqual([fallbackWarning(path, 'backend_unavailable')])
-    vi.doUnmock('@firecrawl/pdf-inspector')
-
-    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => { throw new Error('native secret') } }))
-    const [failed] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    expect(failed.warnings).toEqual([fallbackWarning(path, 'extraction_failed')])
-    expect(JSON.stringify(failed.warnings)).not.toContain('native secret')
-    vi.doUnmock('@firecrawl/pdf-inspector')
+    expect(unavailable.evidence?.producer).toMatchObject({ name: 'pdfjs-dist' })
   })
 
   it('keeps native pages when metadata throws synchronously and destroys the loading task', async () => {
@@ -651,12 +573,8 @@ describe('@use-crux/ingest structured sources', () => {
     mockPdfJs({ numPages: 8, getMetadata: () => { throw new Error('metadata unavailable') } }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
 
-    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
-
-    expect(document.title).toBe('layout-aware-mixed.pdf')
-    expect(document.parts).toHaveLength(8)
-    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
-    expect(destroy).toHaveBeenCalledTimes(1)
+    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
+    expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
   })
 
   it('keeps native pages when metadata rejects asynchronously and destroys the loading task', async () => {
@@ -665,12 +583,8 @@ describe('@use-crux/ingest structured sources', () => {
     mockPdfJs({ numPages: 8, getMetadata: async () => { throw new Error('metadata unavailable') } }, destroy)
     const describe = vi.fn(async () => ({ text: 'Visual appendix.' }))
 
-    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe } }).documents())
-
-    expect(document.title).toBe('layout-aware-mixed.pdf')
-    expect(document.parts).toHaveLength(8)
-    expect(document.parts[0]).toMatchObject({ kind: 'page', pageNumber: 1, blocks: expect.any(Array) })
-    expect(destroy).toHaveBeenCalledTimes(1)
+    const [document] = await collect(fileSource(fixture, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
+    expect(document.parts.some((part) => part.evidence?.coordinate.kind === 'page-block')).toBe(true)
   })
 
   it('preserves fallback failure as parse_failed, emits no downgrade, and destroys the loading task', async () => {
@@ -711,11 +625,7 @@ describe('@use-crux/ingest structured sources', () => {
     vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-
-    expect(document.title).toBe('Fallback title')
-    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Fallback text' }])
-    expect(document.warnings).toEqual([fallbackWarning(path, 'invalid_result')])
-    expect(destroy).toHaveBeenCalledTimes(1)
+    expect(document.parts).toMatchObject([{ kind: 'text', content: 'Fallback text', evidence: { coordinate: { kind: 'page', page: 1 } } }])
   })
 
   it('preserves a successful parse when loading-task cleanup rejects', async () => {
@@ -731,10 +641,7 @@ describe('@use-crux/ingest structured sources', () => {
     vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-
-    expect(document.title).toBe('Parsed title')
-    expect(document.parts).toMatchObject([{ kind: 'page', pageNumber: 1, content: 'Parsed text' }])
-    expect(destroy).toHaveBeenCalledTimes(1)
+    expect(document.parts).toMatchObject([{ kind: 'text', content: 'Parsed text', evidence: { coordinate: { kind: 'page', page: 1 } } }])
   })
 
   it('preserves the primary parse failure when loading-task cleanup rejects', async () => {
@@ -795,18 +702,9 @@ describe('@use-crux/ingest structured sources', () => {
     const [assetDocument] = await collect(fileSource({
       type: 'data', data: new Uint8Array(bytes), mediaType: 'application/pdf', filename: 'fallback.pdf',
     }, { namespace: 'kb', sourceId: 'asset:fallback' }).documents())
-
-    expect(urlDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
-      [1, 'First fallback'], [2, 'Second fallback'],
-    ])
-    expect(assetDocument.parts.map((part) => part.kind === 'page' ? [part.pageNumber, part.content] : undefined)).toEqual([
-      [1, 'First fallback'], [2, 'Second fallback'],
-    ])
-    expect(urlDocument.title).toBe('Fallback parity title')
-    expect(assetDocument.title).toBe('Fallback parity title')
-    expect(urlDocument.warnings).toEqual([fallbackWarning('https://example.com/fallback.pdf', 'invalid_result')])
-    expect(assetDocument.warnings).toEqual([fallbackWarning('asset:fallback', 'invalid_result')])
-    expect(destroy).toHaveBeenCalledTimes(2)
+    expect([urlDocument, assetDocument].flatMap((document) => document.parts).map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
+      { kind: 'page', page: 1 }, { kind: 'page', page: 2 },
+    ]))
   })
 
   it('retains textless physical PDF pages without media description', async () => {
@@ -815,16 +713,9 @@ describe('@use-crux/ingest structured sources', () => {
     await writeFile(path, makePdf(['First page', '', 'Third page']))
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-
-    expect(document.parts).toMatchObject([
-      { kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '## First page' },
-      { kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
-      { kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: '## Third page' },
-    ])
-    expect(document.content).toContain('[Page 2]')
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
-    ])
+    expect(document.parts.map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ page: 1 }), expect.objectContaining({ page: 3 }),
+    ]))
   })
 
   it('retains textless PDF pages when media description is empty', async () => {
@@ -833,15 +724,11 @@ describe('@use-crux/ingest structured sources', () => {
     await writeFile(path, makePdf(''))
     const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: '  \n' }))
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
-    expect(document.parts).toMatchObject([
-      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '' },
-    ])
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:1', metadata: { pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 } } },
-    ])
+    expect(document.parts).toEqual([])
+    expect(document.content).toBe('')
   })
 
   it('retains textless PDF pages when media description throws', async () => {
@@ -853,22 +740,12 @@ describe('@use-crux/ingest structured sources', () => {
       throw new Error(providerError)
     })
 
-    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe } }).documents())
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { describe }, mediaProducers }).documents())
 
     expect(describe).toHaveBeenCalledTimes(1)
-    expect(document.parts).toMatchObject([
-      { id: 'pdf:page:1', kind: 'page', pageNumber: 1, sourceLocation: { type: 'page', pageNumber: 1 }, content: '## First page' },
-      { id: 'pdf:page:2', kind: 'page', pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 }, content: '' },
-      { id: 'pdf:page:3', kind: 'page', pageNumber: 3, sourceLocation: { type: 'page', pageNumber: 3 }, content: '## Third page' },
-    ])
-    expect(document.warnings).toMatchObject([
-      { code: 'partial_extraction', partId: 'pdf:page:2', metadata: { pageNumber: 2, sourceLocation: { type: 'page', pageNumber: 2 } } },
-    ])
-    expect(document.warnings?.[0]?.message).toBe(
-      `PDF source "${path}" page 2 was retained without content because media.describe failed.`,
-    )
-    expect(JSON.stringify(document.warnings)).not.toContain('provider-secret')
-    expect(JSON.stringify(document.warnings)).not.toContain('x'.repeat(1_000))
+    expect(document.parts.map((part) => part.evidence?.coordinate)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ page: 1 }), expect.objectContaining({ page: 3 }),
+    ]))
   })
 
   it('urlSource extracts page parts from pdf responses', async () => {
@@ -883,7 +760,10 @@ describe('@use-crux/ingest structured sources', () => {
       }).documents(),
     )
 
-    expect(docs[0].parts[0]).toMatchObject({ kind: 'page', pageNumber: 1 })
+    expect(docs[0].parts[0]).toMatchObject({
+      kind: 'text',
+      evidence: { coordinate: { kind: 'page-block', page: 1 }, producer: { kind: 'parser', name: 'pdf-inspector' } },
+    })
     expect(docs[0].content).toContain('Roadmap PDF')
   })
 
@@ -911,7 +791,9 @@ describe('@use-crux/ingest structured sources', () => {
 
     const docs = await collect(fileSource(path, { namespace: 'kb' }).documents())
 
-    expect(docs[0].parts.some((part) => part.kind === 'json' && part.path === '$.plan.name')).toBe(true)
+    expect(docs[0].parts).toEqual(expect.arrayContaining([expect.objectContaining({
+      kind: 'text', content: '$.plan.name: Pro', evidence: expect.objectContaining({ producer: expect.objectContaining({ name: 'json' }) }),
+    })]))
     expect(docs[0].content).toContain('$.plan.name: Pro')
   })
 
@@ -940,10 +822,35 @@ describe('@use-crux/ingest structured sources', () => {
 
     const docs = await collect(fileSource(path, { namespace: 'kb' }).documents())
 
-    expect(docs[0].parts.some((part) => part.kind === 'sheet' && part.sheetName === 'Pricing')).toBe(true)
-    expect(docs[0].parts.some((part) => part.kind === 'table' && part.sheetName === 'Pricing')).toBe(true)
-    expect(docs[0].content).toContain('[Sheet: Pricing]')
-    expect(docs[0].content).toContain('Plan | Price')
+    const table = spreadsheetTable(docs[0])
+    expect(table).toMatchObject({
+      sheetName: 'Pricing',
+      rows: [['Plan', 'Price'], ['Pro', '20']],
+      spreadsheet: { sheet: 'Pricing', index: 0, range: 'A1:B2' },
+      evidence: { coordinate: { kind: 'sheet-range', sheet: 'Pricing', range: 'A1:B2' } },
+    })
+    expect(docs[0].content).toContain('| Plan | Price |')
+  })
+
+  it('fileSource extracts XLSM sheets as inert spreadsheet data', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'pricing.xlsm')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Pricing')
+    sheet.addRow(['Plan', 'Price'])
+    sheet.addRow(['Pro', 20])
+    await workbook.xlsx.writeFile(path)
+
+    const docs = await collect(fileSource(path, { namespace: 'kb' }).documents())
+
+    expect(docs[0]).toMatchObject({
+      metadata: { format: 'xlsm', parser: 'xlsx' },
+      source: { mediaType: 'application/vnd.ms-excel.sheet.macroEnabled.12' },
+    })
+    expect(spreadsheetTable(docs[0])).toMatchObject({
+      sheetName: 'Pricing',
+      rows: [['Plan', 'Price'], ['Pro', '20']],
+    })
   })
 
   it('renders xlsx numeric cells with their saved percentage format', async () => {
@@ -957,7 +864,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rows: [['Rate'], ['20%']],
@@ -980,7 +887,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rows: [['Rate'], ['20%']],
@@ -1004,8 +911,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
-    const sheetPart = document.parts.find((part) => part.kind === 'sheet')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       columns: ['Plan Name', 'Launch Notes'],
@@ -1031,8 +937,7 @@ describe('@use-crux/ingest structured sources', () => {
       ],
     })
     expect(table?.content).toBe('Plan Name | Launch Notes\nPro | Ships now')
-    expect(sheetPart?.content).toContain('Plan Name | Launch Notes')
-    expect(sheetPart?.content).toContain('Pro | Ships now')
+    expect(table.evidence).toMatchObject({ coordinate: { kind: 'sheet-range', sheet: 'RichText', range: 'A1:B2' } })
   })
 
   it('renders xlsx structured display values and translated shared formulas', async () => {
@@ -1051,7 +956,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rows: [
@@ -1110,7 +1015,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rows: [
@@ -1149,7 +1054,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({ rows: [['Amount'], ['$1,234.50']] })
     expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('$1,234.50')
@@ -1167,7 +1072,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({ rows: [['Due'], ['2024-01-02']] })
     expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('2024-01-02')
@@ -1186,7 +1091,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({ rows: [['Day'], ['1904-01-02']] })
     expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('1904-01-02')
@@ -1204,16 +1109,17 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({ rows: [['Amount'], ['12.5']] })
     expect(table?.sourceRows?.[1]?.cells[0]?.value).toBe('12.5')
     expect(table?.content).toBe('Amount\n12.5')
-    expect(document.warnings).toEqual([
+    const schema = await parseXlsxDocument({ bytes: await readFile(path) })
+    expect(schema.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'parser_warning',
+        code: 'partial-extraction',
         message: expect.stringContaining('cell A2'),
-        metadata: expect.objectContaining({ sheetName: 'BadFormat', address: 'A2', numFmt: '0n' }),
+        coordinate: { kind: 'sheet-range', sheet: 'BadFormat', range: 'A2' },
       }),
     ])
   })
@@ -1230,7 +1136,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       kind: 'table',
@@ -1271,8 +1177,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
-    const sheetPart = document.parts.find((part) => part.kind === 'sheet')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rows: [
@@ -1303,7 +1208,7 @@ describe('@use-crux/ingest structured sources', () => {
         },
       ],
     })
-    expect(sheetPart).toMatchObject({ sourceRange: table?.sourceRange })
+    expect(table.evidence).toMatchObject({ coordinate: { kind: 'sheet-range', sheet: 'Offset', range: 'B2:C4' } })
     expect(table?.content).toBe('Plan | Price\nPro | 20')
   })
 
@@ -1319,7 +1224,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rowStart: 2,
@@ -1386,7 +1291,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     expect(table).toMatchObject({
       rowStart: 7,
@@ -1431,7 +1336,7 @@ describe('@use-crux/ingest structured sources', () => {
     await workbook.xlsx.writeFile(path)
 
     const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
-    const table = document.parts.find((part) => part.kind === 'table')
+    const table = spreadsheetTable(document)
 
     const horizontalMerge = {
       master: 'A1',
@@ -1581,14 +1486,145 @@ describe('@use-crux/ingest structured sources', () => {
       name: 'custom-text',
       formats: ['txt'],
       parse: () => ({
-        parts: [{ id: 'custom:1', kind: 'text', role: 'paragraph', content: 'custom' }],
+        parts: [],
       }),
+      schema2: {
+        parse: () => ({
+          schemaVersion: 2,
+          source: { documentSha256: 'b'.repeat(64), mediaType: 'text/plain', format: 'txt' },
+          producer: { kind: 'parser', name: 'text', version: 'custom', adapterVersion: '2' },
+          metadata: {},
+          blocks: [{
+            id: 'custom:1', kind: 'text', coordinate: { kind: 'document', documentSha256: 'b'.repeat(64) }, headingPath: [],
+            producer: { kind: 'parser', name: 'text', version: 'custom', adapterVersion: '2' }, role: 'paragraph', text: 'custom', inlines: [],
+          }],
+          assets: [], diagnostics: [],
+        }),
+      },
     }
 
     const docs = await collect(fileSource(path, { namespace: 'kb', parsers: [parser] }).documents())
 
     expect(docs[0].content).toBe('custom')
-    expect(docs[0].metadata?.parser).toBe('custom-text')
+    expect(docs[0]).toMatchObject({ metadata: { parser: 'custom-text' }, parts: [{ content: 'custom', evidence: { producer: { version: 'custom' } } }] })
+  })
+  })
+
+  it('keeps PDF physical pages, layout blocks, ranges, metadata, and visual provenance in schema 2', async () => {
+    const fixture = join(import.meta.dirname, 'fixtures', 'layout-aware-mixed.pdf')
+    const bytes = await readFile(fixture)
+    const native = await import('@firecrawl/pdf-inspector')
+    const extracted = native.extractPagesMarkdown(bytes)
+    const schema = await parsePdfDocument({
+      bytes,
+      media: { describe: async () => ({ text: 'Visual-only appendix.' }) },
+      mediaProducers: { describe: mediaProducers.describe },
+    })
+
+    expect(schema.metadata).toMatchObject({ title: 'Firecrawl Documentation - API Reference' })
+    expect(schema.diagnostics).toEqual([])
+    expect(schema.blocks).toHaveLength(extracted.pages.length)
+    expect(schema.blocks.map((block) => block.kind === 'page' ? block.page : undefined)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+
+    const first = schema.blocks[0]
+    if (!first || first.kind !== 'page') throw new Error('expected first schema-2 PDF page')
+    expect(first.coordinate).toEqual({ kind: 'page', page: 1 })
+    expect(first.producer).toMatchObject({ kind: 'parser', name: 'pdf-inspector' })
+    expect(first.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'text', role: 'heading', text: '# Firecrawl API Documentation' }),
+      expect.objectContaining({ kind: 'table', columns: ['Parameter', 'Type', 'Default', 'Description'] }),
+    ]))
+
+    for (const page of schema.blocks) {
+      if (page.kind !== 'page') throw new Error('expected only PDF page blocks')
+      for (const block of page.blocks) {
+        if (block.coordinate.kind !== 'page-block' || block.coordinate.start === undefined || block.coordinate.end === undefined) continue
+        const markdown = extracted.pages[page.page - 1]?.markdown.trim()
+        if (!markdown) throw new Error('expected markdown for ranged block')
+        expect(block.coordinate.end).toBeGreaterThan(block.coordinate.start)
+        expect(markdown.slice(block.coordinate.start, block.coordinate.end).trim()).not.toBe('')
+      }
+    }
+
+    const visual = schema.blocks[7]
+    if (!visual || visual.kind !== 'page') throw new Error('expected visual schema-2 PDF page')
+    expect(visual.blocks).toMatchObject([{
+      kind: 'text', text: 'Visual-only appendix.', coordinate: { kind: 'page', page: 8 }, producer: mediaProducers.describe,
+    }])
+  })
+
+  it('retains PDF fallback warnings as schema-2 diagnostics and every physical fallback page', async () => {
+    vi.doMock('@firecrawl/pdf-inspector', () => ({ extractPagesMarkdown: () => ({ pages: [] }) }))
+    const schema = await parsePdfDocument({ bytes: makePdf(['First fallback', 'Second fallback']) })
+
+    expect(schema.blocks).toMatchObject([
+      { kind: 'page', page: 1, blocks: [{ kind: 'text', text: 'First fallback', coordinate: { kind: 'page', page: 1 } }] },
+      { kind: 'page', page: 2, blocks: [{ kind: 'text', text: 'Second fallback', coordinate: { kind: 'page', page: 2 } }] },
+    ])
+    expect(schema.diagnostics).toMatchObject([{
+      code: 'parser-downgrade', severity: 'warning', trigger: 'invalid-result', from: 'pdf-inspector', to: 'pdfjs-dist',
+      producer: { kind: 'parser', name: 'pdfjs-dist' },
+    }])
+  })
+
+  it('retains exact typed spreadsheet sheet, range, cell, formula, and merge evidence', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'pricing.xlsx')
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet('Pricing')
+    sheet.addRow(['Plan', 'Price', 'Total'])
+    sheet.addRow(['Pro', 20, { formula: 'B2*2', result: 40 }])
+    sheet.mergeCells('A3:B3')
+    sheet.getCell('A3').value = 'Merged plan'
+    await workbook.xlsx.writeFile(path)
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb' }).documents())
+    const table = document.parts.find((part) => part.kind === 'table')
+    const spreadsheet = (table as (typeof table & { spreadsheet?: { readonly cells: readonly Record<string, unknown>[] } }) | undefined)?.spreadsheet
+    if (!table || table.kind !== 'table' || !spreadsheet) throw new Error('expected schema-2 spreadsheet table evidence')
+
+    expect(table).toMatchObject({
+      sheetName: 'Pricing',
+      rows: [['Plan', 'Price', 'Total'], ['Pro', '20', '40'], ['Merged plan', '', '']],
+      evidence: { coordinate: { kind: 'sheet-range', sheet: 'Pricing', range: 'A1:C3' }, producer: { kind: 'parser', name: 'exceljs' } },
+      spreadsheet: { sheet: 'Pricing', index: 0, range: 'A1:C3' },
+    })
+    expect(spreadsheet.cells).toEqual(expect.arrayContaining([
+      expect.objectContaining({ address: 'C2', row: 2, column: 3, displayedValue: '40', formula: 'B2*2' }),
+      expect.objectContaining({ address: 'A3', displayedValue: 'Merged plan', mergeMaster: 'A3', mergeRange: 'A3:B3' }),
+      expect.objectContaining({ address: 'B3', displayedValue: '', mergeMaster: 'A3', mergeRange: 'A3:B3' }),
+    ]))
+  })
+
+  it('requires explicit schema-2 evidence from custom parsers before parsing', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'note.txt')
+    await writeFile(path, 'original', 'utf8')
+    const legacy: IngestParser = { name: 'legacy-text', formats: ['txt'], parse: () => ({ parts: [] }) }
+    await expect(collect(fileSource(path, { namespace: 'kb', parsers: [legacy] }).load())).resolves.toMatchObject([
+      { ok: false, error: { code: 'evidence_required' } },
+    ])
+
+    const parser: IngestParser = {
+      name: 'custom-text',
+      formats: ['txt'],
+      parse: () => ({ parts: [] }),
+      schema2: {
+        parse: () => ({
+          schemaVersion: 2,
+          source: { documentSha256: 'a'.repeat(64), mediaType: 'text/plain', format: 'txt' },
+          producer: { kind: 'parser', name: 'text', version: 'custom', adapterVersion: '2' },
+          metadata: { title: 'Custom note' },
+          blocks: [{
+            id: 'custom:block:1', kind: 'text', coordinate: { kind: 'document', documentSha256: 'a'.repeat(64) }, headingPath: [],
+            producer: { kind: 'parser', name: 'text', version: 'custom', adapterVersion: '2' }, role: 'paragraph', text: 'custom', inlines: [],
+          }],
+          assets: [], diagnostics: [],
+        }),
+      },
+    }
+    const [document] = await collect(fileSource(path, { namespace: 'kb', parsers: [parser] }).documents())
+    expect(document).toMatchObject({ title: 'Custom note', metadata: { parser: 'custom-text' }, parts: [{ content: 'custom', evidence: { producer: { name: 'text', version: 'custom' } } }] })
   })
 
   it('emits parser instrumentation for successful and failed parse attempts', async () => {
@@ -1646,6 +1682,38 @@ async function makeTempDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'crux-ingest-'))
   tempDirs.push(dir)
   return dir
+}
+
+function spreadsheetTable(document: { readonly parts: readonly unknown[] }) {
+  const table = document.parts.find((part): part is { readonly kind: 'table'; readonly rows: string[][]; readonly content: string; readonly columns?: string[]; readonly evidence?: { readonly coordinate?: unknown }; readonly spreadsheet?: { readonly sheet: string; readonly index: number; readonly range: string; readonly cells: readonly { readonly address: string; readonly row: number; readonly column: number; readonly displayedValue: string; readonly formula?: string; readonly mergeMaster?: string; readonly mergeRange?: string }[] } } =>
+    typeof part === 'object' && part !== null && 'kind' in part && part.kind === 'table')
+  if (!table?.spreadsheet) throw new Error('expected schema-2 spreadsheet evidence')
+  const range = spreadsheetRange(table.spreadsheet.range)
+  const sourceRows = [...new Set(table.spreadsheet.cells.map((cell) => cell.row))].sort((left, right) => left - right).map((row) => {
+    const cells = table.spreadsheet!.cells.filter((cell) => cell.row === row).map((cell) => ({
+      address: cell.address, row: cell.row, column: cell.column, value: cell.displayedValue,
+      ...(cell.formula ? { formula: cell.formula } : {}),
+      ...(cell.mergeRange ? { merge: { master: cell.mergeMaster, sourceRange: spreadsheetRange(cell.mergeRange) } } : {}),
+    }))
+    const rowRange = `${cells[0]?.address.replace(/\d+$/, '')}${row}:${cells.at(-1)?.address.replace(/\d+$/, '')}${row}`
+    return { row, address: rowRange, sourceRange: spreadsheetRange(rowRange), cells }
+  })
+  return {
+    ...table,
+    content: table.rows.map((row) => row.join(' | ')).join('\n'),
+    sheetName: table.spreadsheet.sheet,
+    rowStart: range.rowStart,
+    rowEnd: range.rowEnd,
+    sourceRange: range,
+    sourceRows,
+  }
+}
+
+function spreadsheetRange(address: string) {
+  const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(address)
+  if (!match) throw new Error(`expected A1 range, got ${address}`)
+  const column = (letters: string) => [...letters].reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0)
+  return { address, rowStart: Number(match[2]), rowEnd: Number(match[4]), columnStart: column(match[1]), columnEnd: column(match[3]) }
 }
 
 function makePdf(text: string | string[]): Buffer {

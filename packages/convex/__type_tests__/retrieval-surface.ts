@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { embedding } from '@use-crux/core/embedding'
+import { createStoredEvidence } from '@use-crux/core/indexing'
 import {
   knowledgeBase,
   retrievalRecipe,
@@ -40,6 +41,22 @@ const storeBacked = retriever({
 
 const typedStoreBacked: Retriever = storeBacked
 
+const evidence = createStoredEvidence({
+  document: {
+    documentSha256: 'a'.repeat(64),
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    normalizationVersion: 'test',
+  },
+  origin: {
+    coordinate: { kind: 'document', documentSha256: 'a'.repeat(64) },
+    producer: { kind: 'parser', name: 'text', version: 'test', adapterVersion: 'test' },
+    blockIds: ['block-1'],
+  },
+  chunkId: 'a',
+  normalizedContent: 'Guide',
+  chunkerVersion: 'test',
+})
+
 const custom = retriever({
   id: 'custom-docs',
   namespace: 'tenant-a',
@@ -51,6 +68,7 @@ const custom = retriever({
       content: 'Guide',
       metadata: {},
       score: 1,
+      evidence,
     },
   ],
 })

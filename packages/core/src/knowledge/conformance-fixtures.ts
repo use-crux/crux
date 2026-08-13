@@ -4,7 +4,8 @@
  * @module
  */
 
-import type { CruxChunk } from '../indexing'
+import { sha256Hex } from '../content/sha256'
+import { createStoredEvidence, type CruxChunk, type StoredEvidenceDocument } from '../indexing'
 import type { JsonObject, RecordPage, RecordStore } from '../storage'
 import { createCommunityReportRecord, type CommunityReport, type CommunityReportLineage } from './communities/records'
 import { createCommunityStore } from './communities/store'
@@ -23,6 +24,13 @@ export const indexerId = 'docs'
 export const namespace = 'kb'
 export const viewId = 'active'
 export const communityScopeKey = 'scope'
+const encoder = new TextEncoder()
+const fixtureProducer = Object.freeze({
+  kind: 'parser' as const,
+  name: 'text',
+  version: 'test:conformance-parser:2',
+  adapterVersion: 'test:conformance-adapter:2',
+})
 export const where: NormalizedViewWhere = {
   any: [
     [{ field: 'status', values: ['open'] }],
@@ -120,6 +128,8 @@ export function chunk(
   content: string,
   metadata: Record<string, unknown> = {},
 ): CruxChunk {
+  const document = documentEvidence(content)
+
   return {
     namespace,
     sourceId,
@@ -127,6 +137,25 @@ export function chunk(
     ordinal: 0,
     content,
     metadata,
+    evidence: createStoredEvidence({
+      document,
+      origin: {
+        coordinate: { kind: 'document', documentSha256: document.documentSha256 },
+        producer: fixtureProducer,
+        blockIds: [`text:${sourceId}`],
+      },
+      chunkId,
+      normalizedContent: content,
+      chunkerVersion: 'test:conformance-chunker:2',
+    }),
+  }
+}
+
+function documentEvidence(content: string): StoredEvidenceDocument {
+  return {
+    documentSha256: sha256Hex(encoder.encode(content)),
+    producer: fixtureProducer,
+    normalizationVersion: 'test:conformance-normalization:2',
   }
 }
 

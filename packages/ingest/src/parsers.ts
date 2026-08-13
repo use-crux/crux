@@ -1,4 +1,3 @@
-import { parse as parseCsv } from 'csv-parse/sync'
 import ExcelJS from 'exceljs'
 import { load as loadHtml } from 'cheerio'
 import mammoth from 'mammoth'
@@ -9,11 +8,18 @@ import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
+import { normalizeIngestedDocument, validateIngestedDocument } from '@use-crux/core/indexing'
+import { parseCsvRows } from './csv'
+import { parseCsvDocument } from './csv'
+import { parseDocxDocument } from './docx'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
+import { parsePdfDocument } from './pdf'
+import { parseXlsxDocument } from './xlsx'
 import { imageParser } from './visual-image'
 import { audioParser } from './audio'
 import { videoParser } from './video'
+import { adaptBuiltInParseResult, IngestEvidenceRequiredError } from './parse-result-schema-2'
 import type {
   IngestDocument,
   IngestError,
@@ -57,6 +63,28 @@ export async function parseDocument(input: {
 
   return await parseObservation.withContext(async () => {
     try {
+      const schema2Result = await parseSchema2Document(input, parser, warnings)
+      if (schema2Result) {
+        const metadata = {
+          ...(input.metadata ?? {}),
+          ...schema2Result.document.metadata,
+          format: input.format,
+          parser: parser.name,
+        }
+        const title = schema2Result.title ?? schema2Title(schema2Result.document.metadata) ?? input.title
+        const document = normalizeIngestedDocument(schema2Result.document, {
+          namespace: input.namespace,
+          sourceId: input.sourceId,
+          ...(input.source ? { source: input.source } : {}),
+          ...(title ? { title } : {}),
+        })
+        parseObservation.end({ partCount: document.parts?.length ?? 0, warningCount: schema2Result.document.diagnostics.length })
+        return {
+          ...document,
+          metadata,
+          ...(warnings.length ? { warnings } : {}),
+        } as IngestDocument
+      }
       const parsed = await parser.parse(
         {
           bytes: input.bytes,
@@ -105,6 +133,82 @@ export async function parseDocument(input: {
       throw parsedError
     }
   })
+}
+
+function schema2Title(metadata: Readonly<Record<string, string | number | boolean>>): string | undefined {
+  return typeof metadata.title === 'string' && metadata.title.trim() ? metadata.title : undefined
+}
+
+async function parseSchema2Document(
+  input: Parameters<typeof parseDocument>[0],
+  parser: IngestParser,
+  warnings: IngestWarning[],
+) {
+  const custom = input.options?.parsers?.some((candidate) => candidate === parser)
+  if (custom) {
+    if (!parser.schema2) {
+      throw new IngestEvidenceRequiredError(parser.name)
+    }
+    return {
+      document: validateIngestedDocument(await parser.schema2.parse(
+        parseInput(input),
+        { media: input.options?.media, warn: (warning) => warnings.push(warning) },
+      )),
+    }
+  }
+  const mediaType = input.contentType?.split(';', 1)[0] ?? input.source?.mediaType
+  if (input.format === 'csv') {
+    return { document: await parseCsvDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
+  }
+  if (input.format === 'docx') {
+    return { document: await parseDocxDocument({ bytes: input.bytes, ...(mediaType ? { mediaType } : {}) }) }
+  }
+  if (input.format === 'xlsx' || input.format === 'xlsm') {
+    return {
+      document: await parseXlsxDocument({
+        bytes: input.bytes,
+        format: input.format,
+        ...(mediaType ? { mediaType } : {}),
+      }),
+    }
+  }
+  if (input.format === 'pdf') {
+    return {
+      document: await parsePdfDocument({
+        bytes: input.bytes,
+        ...(mediaType ? { mediaType } : {}),
+        media: input.options?.media,
+        ...(input.options?.mediaProducers ? { mediaProducers: input.options.mediaProducers } : {}),
+      }),
+    }
+  }
+  const parsed = await parser.parse(parseInput(input), { media: input.options?.media, warn: (warning) => warnings.push(warning) })
+  warnings.push(...(parsed.warnings ?? []))
+  return {
+    document: adaptBuiltInParseResult({
+      bytes: input.bytes,
+      format: input.format,
+      result: parsed,
+      ...(mediaType ? { mediaType } : {}),
+      options: input.options,
+    }),
+    ...(parsed.title ? { title: parsed.title } : {}),
+  }
+}
+
+function parseInput(input: Parameters<typeof parseDocument>[0]): ParseInput {
+  const text = isTextLike(input.format) ? new TextDecoder('utf-8').decode(input.bytes) : undefined
+  return {
+    bytes: input.bytes,
+    ...(input.asset ? { asset: input.asset } : {}),
+    ...(text !== undefined ? { text } : {}),
+    format: input.format,
+    sourceId: input.sourceId,
+    source: input.source,
+    namespace: input.namespace,
+    title: input.title,
+    metadata: input.metadata,
+  }
 }
 
 export function resolveParser(format: IngestFormat, options?: ParserOptions): IngestParser {
@@ -217,8 +321,7 @@ export const csvParser: IngestParser = {
   formats: ['csv'],
   parse(input) {
     const text = input.text ?? new TextDecoder('utf-8').decode(input.bytes)
-    const records = parseCsv(text, { relax_column_count: true, skip_empty_lines: true }) as string[][]
-    const rows = records.map((row) => row.map((cell) => String(cell ?? '')))
+    const rows = parseCsvRows(text)
     const table: IngestTablePart = {
       id: 'csv:table:1',
       kind: 'table',
@@ -262,7 +365,7 @@ export const docxParser: IngestParser = {
 
 export const xlsxParser: IngestParser = {
   name: 'xlsx',
-  formats: ['xlsx'],
+  formats: ['xlsx', 'xlsm'],
   async parse(input, ctx) {
     const workbook = new ExcelJS.Workbook()
     const workbookBytes = input.bytes.buffer.slice(

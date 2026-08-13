@@ -6,6 +6,7 @@ import { assertions, knowledgeBase } from '../../src/knowledge'
 import { expandRelations, retrieve } from '../../src/retrieval'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const types = {
   fact: z.object({ id: z.string(), text: z.string() }).describe('A fact'),
@@ -146,7 +147,7 @@ function assertionStage() {
 }
 
 function chunk(sourceId: string, content: string, metadata: Record<string, unknown> = {}): CruxChunk {
-  return { namespace: 'docs', sourceId, chunkId: 'main', ordinal: 0, content, metadata }
+  return schema2TextChunk({ namespace: 'docs', sourceId, chunkId: 'main', ordinal: 0, content, metadata })
 }
 
 function countLists(records: RecordStore): { readonly records: RecordStore; readonly prefixes: string[] } {

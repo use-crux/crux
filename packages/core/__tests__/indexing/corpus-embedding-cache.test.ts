@@ -3,8 +3,9 @@ import { embedding } from '../../src/embedding'
 import { corpus, indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
-const document = { namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }
+const document = schema2TextDocument({ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' })
 
 describe('corpus embedding-stage cache integration', () => {
   it('reuses vectors when only indexVersion triggers a reindex', async () => {

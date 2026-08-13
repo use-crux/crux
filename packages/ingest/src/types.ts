@@ -1,7 +1,8 @@
 import type { Asset, AssetRef, AudioSource, Message } from '@use-crux/core'
+import type { ApplicationOperationProducer, IngestedDocument, StoredEvidenceDocument, StoredEvidenceOrigin } from '@use-crux/core/indexing'
 import type { TranscriptionPayload } from '@use-crux/core/adapter'
 
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'xlsm' | 'unknown'
 
 /** Explicit source coordinates retained by derived ingest parts. */
 export type IngestSourceLocation =
@@ -38,6 +39,7 @@ export interface IngestError {
     | 'invalid_document'
     | 'empty_namespace'
     | 'empty_source_id'
+    | 'evidence_required'
   message: string
   stack?: string
   parser?: string
@@ -50,6 +52,8 @@ export interface IngestPartBase {
   metadata?: Record<string, unknown>
   warnings?: IngestWarning[]
   sourceLocation?: IngestSourceLocation
+  /** Immutable schema-2 ownership retained for persistable chunks. */
+  evidence?: StoredEvidenceOrigin
 }
 
 export interface IngestTextPart extends IngestPartBase {
@@ -172,6 +176,8 @@ export interface IngestDocument {
   content: string
   metadata?: Record<string, unknown>
   warnings?: IngestWarning[]
+  /** Schema-2 document facts retained by Core normalization. */
+  evidence?: StoredEvidenceDocument
 }
 
 export type IngestLoadResult =
@@ -216,6 +222,10 @@ export interface IngestParser {
   readonly name: string
   readonly formats: readonly IngestFormat[]
   parse(input: ParseInput, ctx: ParseContext): Promise<ParseResult> | ParseResult
+  /** Explicit schema-2 contract required for custom parser output. */
+  readonly schema2?: {
+    parse(input: ParseInput, ctx: ParseContext): Promise<IngestedDocument> | IngestedDocument
+  }
 }
 
 export interface ParseInput {
@@ -245,4 +255,11 @@ export interface ParseResult {
 export interface ParserOptions {
   readonly parsers?: readonly IngestParser[]
   readonly media?: Readonly<IngestMediaOperations>
+  /** @deprecated Use mediaProducers. PDF visual ingestion never reads this ambiguous identity. */
+  readonly mediaProducer?: ApplicationOperationProducer
+  /** Use separate identities when video description and transcription are both enabled. */
+  readonly mediaProducers?: Readonly<{
+    readonly describe?: ApplicationOperationProducer
+    readonly transcribe?: ApplicationOperationProducer
+  }>
 }

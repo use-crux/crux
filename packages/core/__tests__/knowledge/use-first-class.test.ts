@@ -16,6 +16,7 @@ import { compilePrompt } from '../../src/resolver/compile'
 import { createResolverFakes } from '../../src/resolver/fakes'
 import type { CruxChunk } from '../../src/indexing'
 import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('first-class connected knowledge use entries', () => {
   it('injects bare knowledge-base retrieval context from prompt input', async () => {
@@ -240,12 +241,12 @@ function chunk(input: {
   readonly content: string
   readonly metadata?: Record<string, unknown>
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: 'docs',
     sourceId: input.sourceId,
     chunkId: 'main',
     ordinal: 0,
     content: input.content,
     metadata: input.metadata ?? {},
-  }
+  })
 }

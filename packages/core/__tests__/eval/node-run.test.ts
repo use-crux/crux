@@ -1,7 +1,18 @@
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { evaluate } from "../../src/eval";
 import { runEval } from "../../src/eval/node";
 import { runDiscoveredEval } from "../../src/eval/node/runner";
@@ -12,26 +23,41 @@ import {
 } from "../../src/eval/internal/redact";
 
 const originalCwd = process.cwd();
-const projectRoot = dirname(
+const fixtureProjectRoot = dirname(
   fileURLToPath(
     new URL("./fixtures/node-run-project/package.json", import.meta.url),
   ),
 );
-const duplicateRoot = dirname(
+const fixtureDuplicateRoot = dirname(
   fileURLToPath(
     new URL("./fixtures/node-run-duplicate/package.json", import.meta.url),
   ),
 );
+const coreSourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
+let projectRoot: string;
+let duplicateRoot: string;
+let temporaryRoot: string | undefined;
 
 describe.sequential("runEval", () => {
-  beforeAll(async () => {
+  beforeEach(async () => {
+    temporaryRoot = await mkdtemp(join(tmpdir(), "crux-node-run-"));
+    projectRoot = await copyFixture(
+      fixtureProjectRoot,
+      join(temporaryRoot, "project"),
+    );
+    duplicateRoot = await copyFixture(
+      fixtureDuplicateRoot,
+      join(temporaryRoot, "duplicate"),
+    );
     process.chdir(projectRoot);
-    await rm(join(projectRoot, ".crux"), { recursive: true, force: true });
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     process.chdir(originalCwd);
-    await rm(join(projectRoot, ".crux"), { recursive: true, force: true });
+    if (temporaryRoot) {
+      await rm(temporaryRoot, { recursive: true, force: true });
+      temporaryRoot = undefined;
+    }
   });
 
   it("rejects an unbranded value and an Eval without an explicit id before discovery", async () => {
@@ -135,9 +161,7 @@ describe.sequential("runEval", () => {
   });
 
   it("terminalizes an Eval-owned in-memory Knowledge Base on success and failure", async () => {
-    const fixture = await import(
-      "./fixtures/node-run-project/evals/knowledge-lifecycle.eval"
-    );
+    const fixture = await importFixture("evals/knowledge-lifecycle.eval");
     const success = await runDiscoveredEval(
       "knowledge-lifecycle",
       { case: "success", confirmUnknownCost: true, fresh: true },
@@ -400,10 +424,8 @@ describe.sequential("runEval", () => {
   });
 
   it("accepts only the exact discovered default export and its re-export", async () => {
-    const imported =
-      await import("./fixtures/node-run-project/evals/object.eval");
-    const reexport =
-      await import("./fixtures/node-run-project/object-reexport");
+    const imported = await importFixture("evals/object.eval");
+    const reexport = await importFixture("object-reexport");
     expect(Object.is(imported.default, reexport.default)).toBe(true);
 
     const byObject = await runEval(imported.default, { plan: true });
@@ -417,7 +439,7 @@ describe.sequential("runEval", () => {
   }, 20_000);
 
   it("rejects a separately constructed same-id Eval before hydration or planning", async () => {
-    const { task } = await import("./fixtures/node-run-project/task");
+    const { task } = await importFixture("task");
     const lookalike = evaluate({
       id: "object",
       task,
@@ -433,7 +455,7 @@ describe.sequential("runEval", () => {
   });
 
   it("applies the exact identity gate before Case hydration", async () => {
-    const { task } = await import("./fixtures/node-run-project/task");
+    const { task } = await importFixture("task");
     const lookalike = evaluate({
       id: "guard",
       task,
@@ -451,8 +473,7 @@ describe.sequential("runEval", () => {
   it("preserves duplicate-discovery errors ahead of object identity", async () => {
     process.chdir(duplicateRoot);
     try {
-      const imported =
-        await import("./fixtures/node-run-duplicate/evals/a.eval");
+      const imported = await importFixture("evals/a.eval", duplicateRoot);
       await expect(runEval(imported.default, { plan: true })).rejects.toThrow(
         /Duplicate Eval id 'duplicate'.*a\.eval\.ts.*b\.eval\.ts/is,
       );
@@ -461,3 +482,37 @@ describe.sequential("runEval", () => {
     }
   });
 });
+
+async function copyFixture(source: string, destination: string): Promise<string> {
+  await cp(source, destination, { recursive: true });
+  await symlink(
+    join(dirname(coreSourceRoot), "node_modules"),
+    join(destination, "node_modules"),
+    "dir",
+  );
+  await relocateCoreImports(destination);
+  return destination;
+}
+
+async function relocateCoreImports(directory: string): Promise<void> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await relocateCoreImports(path);
+      } else if (entry.isFile() && path.endsWith(".ts")) {
+        const source = await readFile(path, "utf8");
+        await writeFile(
+          path,
+          source.replace(/(["'])(?:\.\.\/)+src\//g, `$1${coreSourceRoot}/`),
+          "utf8",
+        );
+      }
+    }),
+  );
+}
+
+function importFixture(relativePath: string, root = projectRoot) {
+  return import(pathToFileURL(join(root, relativePath)).href);
+}

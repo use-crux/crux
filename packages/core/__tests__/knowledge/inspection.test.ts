@@ -7,6 +7,7 @@ import type { KnowledgeGraphReader, KnowledgeNeighbor } from '../../src/knowledg
 import type { KnowledgeRef } from '../../src/knowledge/refs'
 import type { CruxChunk, CruxParentChunk } from '../../src/indexing/types'
 import type { RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'docs'
 const namespace = 'kb'
@@ -145,7 +146,7 @@ function chunk(input: {
   readonly ordinal: number
   readonly parentId?: string
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace,
     sourceId: input.sourceId,
     chunkId: input.chunkId,
@@ -153,7 +154,7 @@ function chunk(input: {
     content: input.chunkId,
     metadata: {},
     ...(input.parentId ? { parent: { parentId: input.parentId } } : {}),
-  }
+  })
 }
 
 function parent(input: {

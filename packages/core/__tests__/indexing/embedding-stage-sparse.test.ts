@@ -3,6 +3,11 @@ import { embedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
+
+function documents(input: Parameters<typeof schema2TextDocument>[0][]) {
+  return input.map(schema2TextDocument)
+}
 
 describe('indexer sparse embedding-stage cache', () => {
   it('reuses sparse vectors as validated source bundles', async () => {
@@ -24,7 +29,7 @@ describe('indexer sparse embedding-stage cache', () => {
       }),
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const first = await docs.indexDocuments(input)
     const second = await docs.indexDocuments(input)
@@ -60,7 +65,7 @@ describe('indexer sparse embedding-stage cache', () => {
     })
 
     await expect(
-      docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]),
+      docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])),
     ).rejects.toThrow('Sparse embedding output does not match the expected count and shape.')
     await expect(records.list('indexer:docs:namespace:kb:embedding-cache:')).resolves.toMatchObject({
       entries: [],
@@ -73,10 +78,10 @@ describe('indexer sparse embedding-stage cache', () => {
   it('preserves hybrid ordering when sparse changes and rejects a dense space change', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
-    const input = [
+    const input = documents([
       { namespace: 'kb', sourceId: 'source-z', content: 'z' },
       { namespace: 'kb', sourceId: 'source-alpha', content: 'alpha' },
-    ]
+    ])
     const denseV1 = denseEmbedding('dense-v1')
     const sparseV1 = sparseEmbedding('sparse-v1')
 

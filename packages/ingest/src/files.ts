@@ -174,6 +174,8 @@ function normalizeExtension(extension: string): IngestFormat {
       return 'docx'
     case '.xlsx':
       return 'xlsx'
+    case '.xlsm':
+      return 'xlsm'
     default:
       return 'unknown'
   }
@@ -226,7 +228,9 @@ function mediaTypeFor(format: IngestFormat, contentType: string | undefined, tit
     txt: 'text/plain', md: 'text/markdown', html: 'text/html', pdf: 'application/pdf',
     image: undefined, audio: undefined, video: undefined, csv: 'text/csv', json: 'application/json',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', unknown: undefined,
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+    unknown: undefined,
   }[format]
 }
 

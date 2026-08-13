@@ -3,11 +3,44 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '@use-crux/core'
+import { createHash } from 'node:crypto'
+import { createStoredEvidence, prompt as makePrompt } from '@use-crux/core'
+import type { RetrieverHit } from '@use-crux/core'
 import { z } from 'zod'
 import { aiSdkProviderRuntime } from '../src/profile'
 import { emissionModel } from './mock-model'
 import { scriptedGateway } from './scripted-gateway'
+
+const producer = {
+  kind: 'parser' as const,
+  name: 'text' as const,
+  version: 'test:text-parser:2',
+  adapterVersion: 'test:text-adapter:2',
+}
+
+function retrievalHit(sourceId: string, chunkId: string, content: string, score: number): RetrieverHit {
+  const documentSha256 = createHash('sha256').update(content).digest('hex')
+
+  return {
+    namespace: 'n',
+    source: { id: sourceId },
+    chunkId,
+    content,
+    metadata: {},
+    score,
+    evidence: createStoredEvidence({
+      document: { documentSha256, producer, normalizationVersion: 'test:text-normalization:2' },
+      origin: {
+        coordinate: { kind: 'document', documentSha256 },
+        producer,
+        blockIds: [`block:${sourceId}`],
+      },
+      chunkId,
+      normalizedContent: content,
+      chunkerVersion: 'test:text-chunker:2',
+    }),
+  }
+}
 
 describe('aiSdkProviderRuntime', () => {
   it('exposes the AI SDK as a provider runtime peer', async () => {
@@ -48,6 +81,7 @@ describe('aiSdkProviderRuntime', () => {
     })
     const reranker = runtime.reranker({ name: 'runtime-rerank', model: 'rerank-model' as never })
     const retrieval = runtime.retrievalModel({ model: 'language-model' as never })
+    const hits = [retrievalHit('a', 'a1', 'first', 0.1), retrievalHit('b', 'b1', 'second', 0.2)]
 
     await expect(dense.embedMany(['hello'])).resolves.toEqual([[0.5, 0.5]])
     await expect(retrieval.generateText({ prompt: 'retrieve text' })).resolves.toEqual({ text: 'retrieval text' })
@@ -60,14 +94,9 @@ describe('aiSdkProviderRuntime', () => {
     await expect(
       reranker.rerank({
         query: 'needle',
-        hits: [
-          { namespace: 'n', source: { id: 'a' }, chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
-          { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
-        ],
+        hits,
       }),
-    ).resolves.toEqual([
-      { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.9 },
-    ])
+    ).resolves.toEqual([{ ...hits[1], score: 0.9 }])
     expect(scripted.calls.embedMany[0]?.values).toEqual(['hello'])
     expect(scripted.calls.generateText[0]?.model).toBe('language-model')
     expect(scripted.calls.generateObject[0]?.model).toBe('language-model')

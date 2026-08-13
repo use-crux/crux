@@ -10,6 +10,7 @@ import { runDeriveStages } from '../../src/knowledge/derive/runner'
 import { knowledgeAssertionsItemKey, knowledgeClaimsKey } from '../../src/knowledge/keys'
 import { knowledgeModel, type KnowledgeModel } from '../../src/knowledge/model'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'kb'
 const namespace = 'ns'
@@ -314,5 +315,5 @@ function document(sourceId: string): CruxDocument {
 }
 
 function chunk(sourceId: string, chunkId: string, content: string): CruxChunk {
-  return { namespace, sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace, sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }

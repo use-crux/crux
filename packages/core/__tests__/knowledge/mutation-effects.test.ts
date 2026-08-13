@@ -10,6 +10,7 @@ import { relate } from '../../src/knowledge/relate/relate'
 import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { inMemoryStorage } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 import type { EffectReceipt } from '../../src/effect'
 
 describe('knowledgeBase mutation effects', () => {
@@ -166,11 +167,11 @@ function receiptRef(receipt: EffectReceipt) {
 }
 
 function doc(sourceId: string, content: string): CruxDocument {
-  return { namespace: 'corpus-effects', sourceId, content, metadata: {} }
+  return schema2TextDocument({ namespace: 'corpus-effects', sourceId, content, metadata: {} })
 }
 
 function chunk(sourceId: string, chunkId: string, content: string, namespace = 'docs-effects'): CruxChunk {
-  return { namespace, sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace, sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }
 
 function throwingRelationStage() {

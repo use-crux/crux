@@ -5,6 +5,7 @@ import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } 
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { JsonObject, RecordPage, RecordStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk, schema2TextDocument, schema2TextRecord } from '../fixtures/schema2-stored-evidence'
 
 describe('indexer', () => {
   it('uses indexingPipeline() document transforms before structured default chunking', async () => {
@@ -47,7 +48,7 @@ describe('indexer', () => {
     expect(chunks[0].metadata).toMatchObject({ normalized: true })
   })
 
-    it('structured default chunking preserves table rows, json paths, and source spans', async () => {
+  it('structured default chunking preserves table rows, json paths, and source spans', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -102,7 +103,7 @@ describe('indexer', () => {
     expect(chunks.some((item) => item.provenance?.jsonPaths?.includes('$.plans[0]'))).toBe(true)
   })
 
-    it('parent-child chunking stores parent records and searchable active child chunks', async () => {
+  it('parent-child chunking stores parent records and searchable active child chunks', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const dense = makeEmbedding({
@@ -125,12 +126,12 @@ describe('indexer', () => {
     })
 
     await indexer.indexDocuments([
-      {
+      schema2TextDocument({
         namespace: 'kb',
         sourceId: 'doc-parent',
         title: 'Parent Doc',
         content: 'Alpha beta gamma delta epsilon zeta eta theta.',
-      },
+      }),
     ])
 
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, search, dense })
@@ -149,7 +150,7 @@ describe('indexer', () => {
     })
   })
 
-    it('stage-level cache reuses document transform output and supports bypass', async () => {
+  it('stage-level cache reuses document transform output and supports bypass', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const run = vi.fn(async (document: { content: string }) => ({ ...document, content: `${document.content}!` }))
@@ -171,7 +172,7 @@ describe('indexer', () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 
-    it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
+  it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     let shouldFail = false
@@ -203,11 +204,15 @@ describe('indexer', () => {
       }),
     })
 
-    await indexer.indexDocuments([{ namespace: 'kb', sourceId: 'doc-gen', content: 'First version' }])
+    await indexer.indexDocuments([
+      schema2TextDocument({ namespace: 'kb', sourceId: 'doc-gen', content: 'First version' }),
+    ])
     shouldFail = true
 
     await expect(
-      indexer.indexDocuments([{ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' }]),
+      indexer.indexDocuments([
+        schema2TextDocument({ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' }),
+      ]),
     ).rejects.toThrow('pipeline failed')
 
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, search, dense })
@@ -215,7 +220,7 @@ describe('indexer', () => {
     expect(hits.map((hit) => hit.content)).toEqual(['First version'])
   })
 
-    it('chunks documents with stable source and chunk metadata', async () => {
+  it('chunks documents with stable source and chunk metadata', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -250,7 +255,7 @@ describe('indexer', () => {
     expect(new Set(chunks.map((chunk) => chunk.chunkId)).size).toBe(chunks.length)
   })
 
-    it('preserves coarse structured part provenance on default chunks', async () => {
+  it('preserves coarse structured part provenance on default chunks', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -293,7 +298,7 @@ describe('indexer', () => {
     expect(tableChunk?.provenance?.sourceSpans).toBeUndefined()
   })
 
-    it('applies overlap between adjacent chunks', async () => {
+  it('applies overlap between adjacent chunks', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -319,24 +324,31 @@ describe('indexer', () => {
     expect(chunks[1].content.startsWith('hij')).toBe(true)
   })
 
-    it('uses a custom chunker when provided', async () => {
+  it('uses a custom chunker when provided', async () => {
     const customChunker = {
       _tag: 'Chunker' as const,
       name: 'custom',
       version: '1',
       fingerprint: () => 'custom:1',
-      chunkDocument: vi.fn(async (document: { namespace: string; sourceId: string; content: string; metadata?: Record<string, unknown> }) => ({
-        chunks: [
-          {
-            namespace: document.namespace,
-            sourceId: document.sourceId,
-            chunkId: 'custom-0',
-            ordinal: 0,
-            content: document.content.toUpperCase(),
-            metadata: document.metadata ?? {},
-          },
-        ],
-      })),
+      chunkDocument: vi.fn(
+        async (document: {
+          namespace: string
+          sourceId: string
+          content: string
+          metadata?: Record<string, unknown>
+        }) => ({
+          chunks: [
+            {
+              namespace: document.namespace,
+              sourceId: document.sourceId,
+              chunkId: 'custom-0',
+              ordinal: 0,
+              content: document.content.toUpperCase(),
+              metadata: document.metadata ?? {},
+            },
+          ],
+        }),
+      ),
     }
     const indexer = makeIndexer({
       id: 'docs',
@@ -359,7 +371,7 @@ describe('indexer', () => {
     expect(chunks[0].content).toBe('HELLO')
   })
 
-    it('indexes documents with dense embeddings and replace-by-source semantics', async () => {
+  it('indexes documents with dense embeddings and replace-by-source semantics', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const dense = makeEmbedding({
@@ -379,11 +391,11 @@ describe('indexer', () => {
     })
 
     await indexer.indexDocuments([
-      {
+      schema2TextDocument({
         namespace: 'kb',
         sourceId: 'doc-1',
         content: 'first version',
-      },
+      }),
     ])
 
     const firstPass = await listAll(records, 'indexer:docs:namespace:kb:source:doc-1:')
@@ -395,11 +407,11 @@ describe('indexer', () => {
 
     await indexer.indexDocuments(
       [
-        {
+        schema2TextDocument({
           namespace: 'kb',
           sourceId: 'doc-1',
           content: 'updated version with more text',
-        },
+        }),
       ],
       {
         chunking: { maxChars: 12, overlapChars: 0 },
@@ -411,7 +423,7 @@ describe('indexer', () => {
     expect(secondPass.entries.every((entry) => entry.value.sourceId === 'doc-1')).toBe(true)
   })
 
-    it('indexes documents from an AsyncIterable source', async () => {
+  it('indexes documents from an AsyncIterable source', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const dense = makeEmbedding({
@@ -431,11 +443,11 @@ describe('indexer', () => {
     })
 
     async function* documents() {
-      yield {
+      yield schema2TextDocument({
         namespace: 'kb' as const,
         sourceId: 'doc-async',
         content: 'hello from async iterable',
-      }
+      })
     }
 
     const result = await indexer.indexDocuments(documents())
@@ -449,7 +461,7 @@ describe('indexer', () => {
     ])
   })
 
-    it('dry-runs document indexing without mutating the store', async () => {
+  it('dry-runs document indexing without mutating the store', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const embed = vi.fn(async (inputs) => inputs.map((input) => [textOf(input).length, 1]))
@@ -495,7 +507,7 @@ describe('indexer', () => {
     expect((await listAll(records, 'indexer:docs:namespace:kb:source:doc-dry:')).entries).toHaveLength(0)
   })
 
-    it('indexes chunks with sparse embeddings', async () => {
+  it('indexes chunks with sparse embeddings', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const sparse = makeEmbedding({
@@ -518,14 +530,14 @@ describe('indexer', () => {
     })
 
     const result = await indexer.indexChunks([
-      {
+      schema2TextChunk({
         namespace: 'kb',
         sourceId: 'doc-1',
         chunkId: 'a',
         ordinal: 0,
         content: 'hello',
         metadata: {},
-      },
+      }),
     ])
 
     expect(result.chunkCount).toBe(1)
@@ -542,7 +554,7 @@ describe('indexer', () => {
     ])
   })
 
-    it('indexes chunks with dense and sparse embeddings together', async () => {
+  it('indexes chunks with dense and sparse embeddings together', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
     const dense = makeEmbedding({
@@ -574,14 +586,14 @@ describe('indexer', () => {
     })
 
     await indexer.indexChunks([
-      {
+      schema2TextChunk({
         namespace: 'kb',
         sourceId: 'doc-1',
         chunkId: 'a',
         ordinal: 0,
         content: 'hello',
         metadata: {},
-      },
+      }),
     ])
 
     const docs = makeRetriever({
@@ -598,33 +610,51 @@ describe('indexer', () => {
     ])
   })
 
-    it('deleteSource removes only matching namespace/source entries', async () => {
+  it('deleteSource removes only matching namespace/source entries', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
-    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
-      namespace: 'kb',
-      sourceId: 'doc-1',
-      chunkId: '0',
-      ordinal: 0,
-      content: 'a',
-      metadata: {},
-    })
-    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:1', {
-      namespace: 'kb',
-      sourceId: 'doc-1',
-      chunkId: '1',
-      ordinal: 1,
-      content: 'b',
-      metadata: {},
-    })
-    await records.put('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
-      namespace: 'kb',
-      sourceId: 'doc-2',
-      chunkId: '0',
-      ordinal: 0,
-      content: 'c',
-      metadata: {},
-    })
+    await records.put(
+      'indexer:docs:namespace:kb:source:doc-1:chunk:0',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'kb',
+          sourceId: 'doc-1',
+          chunkId: '0',
+          ordinal: 0,
+          content: 'a',
+          metadata: {},
+        },
+      }),
+    )
+    await records.put(
+      'indexer:docs:namespace:kb:source:doc-1:chunk:1',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'kb',
+          sourceId: 'doc-1',
+          chunkId: '1',
+          ordinal: 1,
+          content: 'b',
+          metadata: {},
+        },
+      }),
+    )
+    await records.put(
+      'indexer:docs:namespace:kb:source:doc-2:chunk:0',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'kb',
+          sourceId: 'doc-2',
+          chunkId: '0',
+          ordinal: 0,
+          content: 'c',
+          metadata: {},
+        },
+      }),
+    )
 
     const indexer = makeIndexer({
       id: 'docs',
@@ -639,33 +669,51 @@ describe('indexer', () => {
     expect(await records.get('indexer:docs:namespace:kb:source:doc-2:chunk:0')).not.toBeNull()
   })
 
-    it('clear removes all entries for the indexer namespace', async () => {
+  it('clear removes all entries for the indexer namespace', async () => {
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()
-    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
-      namespace: 'kb',
-      sourceId: 'doc-1',
-      chunkId: '0',
-      ordinal: 0,
-      content: 'a',
-      metadata: {},
-    })
-    await records.put('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
-      namespace: 'kb',
-      sourceId: 'doc-2',
-      chunkId: '0',
-      ordinal: 0,
-      content: 'b',
-      metadata: {},
-    })
-    await records.put('indexer:docs:namespace:other:source:doc-3:chunk:0', {
-      namespace: 'other',
-      sourceId: 'doc-3',
-      chunkId: '0',
-      ordinal: 0,
-      content: 'c',
-      metadata: {},
-    })
+    await records.put(
+      'indexer:docs:namespace:kb:source:doc-1:chunk:0',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'kb',
+          sourceId: 'doc-1',
+          chunkId: '0',
+          ordinal: 0,
+          content: 'a',
+          metadata: {},
+        },
+      }),
+    )
+    await records.put(
+      'indexer:docs:namespace:kb:source:doc-2:chunk:0',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'kb',
+          sourceId: 'doc-2',
+          chunkId: '0',
+          ordinal: 0,
+          content: 'b',
+          metadata: {},
+        },
+      }),
+    )
+    await records.put(
+      'indexer:docs:namespace:other:source:doc-3:chunk:0',
+      schema2TextRecord({
+        indexerId: 'docs',
+        chunk: {
+          namespace: 'other',
+          sourceId: 'doc-3',
+          chunkId: '0',
+          ordinal: 0,
+          content: 'c',
+          metadata: {},
+        },
+      }),
+    )
 
     const indexer = makeIndexer({
       id: 'docs',

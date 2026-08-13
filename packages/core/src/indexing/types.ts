@@ -14,6 +14,7 @@ import type { Asset, AssetRef } from '../asset'
 import type { OperationResultMeta } from '../observability'
 import type { JsonObject, RecordStore, SearchStore, Storage } from '../storage'
 import type { DeriveStage } from '../knowledge/derive/stage'
+import type { StoredEvidence, StoredEvidenceDocument, StoredEvidenceOrigin } from './stored-evidence'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
@@ -29,9 +30,15 @@ export interface CruxDocument {
   metadata?: Record<string, unknown>
   parts?: CruxIngestPart[]
   warnings?: CruxIngestWarning[]
+  /** Schema-2 document facts used to derive immutable stored evidence. */
+  evidence?: StoredEvidenceDocument
 }
 
-/** An indexed content chunk. */
+/**
+ * An in-memory content chunk. Chunks without evidence are non-persistable
+ * intermediates for custom or mixed-origin pipelines; stored/retrieved chunks
+ * always require immutable evidence.
+ */
 export interface CruxChunk {
   namespace: string
   sourceId: string
@@ -50,6 +57,8 @@ export interface CruxChunk {
     readonly sha256?: string
   }
   metadata: Record<string, unknown>
+  /** Immutable schema-2 evidence required before persistence and retrieval. */
+  evidence?: StoredEvidence
   parent?: {
     parentId?: string
     key?: string
@@ -123,6 +132,31 @@ export interface CruxIngestPageTableBlock {
   readonly sourceRange?: CruxIngestPageBlockSourceRange
 }
 
+/** Exact spreadsheet cell facts owned by a structured table chunk. */
+export interface SpreadsheetCellProvenance {
+  /** Stable schema-2 TableCell ID. */
+  readonly id: string
+  readonly address: string
+  readonly row: number
+  readonly column: number
+  readonly displayedValue: string
+  readonly formula?: string
+  readonly mergeMaster?: string
+  readonly mergeRange?: string
+}
+
+/** Exact worksheet ownership retained through chunking and retrieval. */
+export interface SpreadsheetProvenance {
+  /** Stable schema-2 SheetBlock ID. */
+  readonly sheetBlockId: string
+  /** Stable schema-2 TableBlock ID. */
+  readonly tableBlockId: string
+  readonly sheet: string
+  readonly index: number
+  readonly range: string
+  readonly cells: readonly SpreadsheetCellProvenance[]
+}
+
 /** Typed content block nested beneath a page part. */
 export type CruxIngestPageBlock = CruxIngestPageTextBlock | CruxIngestPageTableBlock
 
@@ -156,6 +190,8 @@ export type CruxIngestPart = (
       sheetName?: string
       rowStart?: number
       rowEnd?: number
+      /** Schema-2 worksheet coordinate ownership for this logical table. */
+      spreadsheet?: SpreadsheetProvenance
       metadata?: Record<string, unknown>
     }
   | {
@@ -185,7 +221,11 @@ export type CruxIngestPart = (
       caption?: string
       metadata?: Record<string, unknown>
     }
-) & { readonly sourceLocation?: CruxSourceLocation }
+) & {
+  readonly sourceLocation?: CruxSourceLocation
+  /** Schema-2 source block facts used to derive immutable stored evidence. */
+  readonly evidence?: StoredEvidenceOrigin
+}
 
 /** Where a chunk's content came from in its source document. */
 export interface ChunkProvenance {
@@ -196,6 +236,8 @@ export interface ChunkProvenance {
   tables?: string[]
   jsonPaths?: string[]
   sourceLocations?: CruxSourceLocation[]
+  /** Exact worksheet/range/cell ownership, never inferred from rendered text. */
+  spreadsheets?: readonly SpreadsheetProvenance[]
   sourceSpans?: Array<{
     start: number
     end: number

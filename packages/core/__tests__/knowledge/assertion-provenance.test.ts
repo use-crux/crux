@@ -17,6 +17,7 @@ import { knowledgeAdjacencyOutKey } from '../../src/knowledge/keys'
 import { createKnowledgeEdgeRecord, type KnowledgeEdgeRecord } from '../../src/knowledge/records'
 import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { inMemoryStorage, type JsonObject, type RecordStore } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'docs'
 const namespace = 'docs'
@@ -203,11 +204,11 @@ function semanticEdge(generationId: string): KnowledgeEdgeRecord {
 }
 
 function chunk(sourceId: string, content: string, metadata: Record<string, unknown> = {}): CruxChunk {
-  return { namespace, sourceId, chunkId: 'main', ordinal: 0, content, metadata }
+  return schema2TextChunk({ namespace, sourceId, chunkId: 'main', ordinal: 0, content, metadata })
 }
 
 function indexedChunk(sourceId: string, chunkId: string): CruxChunk {
-  return { namespace, sourceId, chunkId, ordinal: 0, content: chunkId, metadata: {} }
+  return schema2TextChunk({ namespace, sourceId, chunkId, ordinal: 0, content: chunkId, metadata: {} })
 }
 
 function documentRef(sourceId: string): KnowledgeRef {

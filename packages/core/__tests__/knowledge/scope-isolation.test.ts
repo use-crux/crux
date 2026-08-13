@@ -6,6 +6,7 @@ import { knowledgeBase, relate, type KnowledgeRef } from '../../src/knowledge'
 import { expandRelations, retrieve, retrievalStep, type RetrieverHit } from '../../src/retrieval'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const schema = z.object({
   status: z.enum(['open', 'closed']),
@@ -123,14 +124,14 @@ function testEmbedding() {
 }
 
 function chunk(namespace: string, sourceId: string, chunkId: string, content: string): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace,
     sourceId,
     chunkId,
     ordinal: chunkId === 'seed' ? 0 : 1,
     content,
     metadata: { status: 'open', team: namespace },
-  }
+  })
 }
 
 async function observeGraph(

@@ -17,6 +17,9 @@ describe('multimodal ingest product journey', () => {
     }))
     const [document] = await collect(fileSource(video, {
       namespace: 'kb', sourceId: 'demo-video', media: { transcribe },
+      mediaProducers: {
+        transcribe: { kind: 'application-operation', operation: 'media.transcribe', identity: 'journey:transcribe', version: '1' },
+      },
     }).documents())
     const records = inMemoryRecordStore()
     const search = inMemorySearchStore()

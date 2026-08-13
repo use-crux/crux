@@ -17,6 +17,8 @@ import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveInput, RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
 import type { CruxSourceFacts } from '../indexing'
+import type { StoredEvidence } from '../indexing'
+import type { SpreadsheetProvenance } from '../indexing'
 import type { AssetRef } from '../asset'
 import type { KnowledgeRef } from '../knowledge/refs'
 
@@ -80,6 +82,10 @@ export interface EvidenceHit {
   content: string
   metadata: Record<string, unknown>
   score: number
+  /** Immutable schema-2 evidence hydrated from the indexed record. */
+  evidence: StoredEvidence
+  /** Typed source facts retained for retrieval display; never scoring metadata. */
+  structuredSource?: RetrievedStructuredSource
   parent?: {
     parentId?: string
     key?: string
@@ -124,6 +130,11 @@ export interface HitProvenance {
   rerankScore?: number
   decay?: { field: string; factor: number }
   compression?: { originalLength: number; compressedLength: number }
+}
+
+/** Non-identity structured source facts retained with a retrieval hit. */
+export interface RetrievedStructuredSource {
+  readonly spreadsheets: readonly SpreadsheetProvenance[]
 }
 
 /** A modality-aware retrieval call retained as bivariant for legacy handle assignment. */

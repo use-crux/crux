@@ -1013,7 +1013,19 @@ export type {
 } from "./citations";
 
 // Indexing
-export { corpus, indexer } from "./indexing";
+export {
+  corpus,
+  indexer,
+  IngestedDocumentContractError,
+  normalizeIngestedDocument,
+  normalizeXlsxDocument,
+  StoredEvidenceContractError,
+  createStoredEvidence,
+  deserializeStoredEvidence,
+  serializeStoredEvidence,
+  validateIngestedDocument,
+  validateStoredEvidence,
+} from "./indexing";
 export type {
   Corpus,
   CorpusConfig,
@@ -1023,6 +1035,18 @@ export type {
   CorpusSyncResult,
   CruxDocument,
   CruxChunk,
+  ChunkProvenance,
+  IngestedDocument,
+  DocumentBlock,
+  SourceCoordinate,
+  StoredEvidence,
+  StoredEvidenceDocument,
+  StoredEvidenceOrigin,
+  ParserIdentity,
+  SpreadsheetCellProvenance,
+  SpreadsheetProvenance,
+  ApplicationOperationProducer,
+  DocumentProducer,
   CruxIngestPageBlock,
   CruxIngestPageBlockSourceRange,
   CruxIngestPageTableBlock,

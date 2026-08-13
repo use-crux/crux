@@ -234,5 +234,6 @@ function toolHitToRetrieverHit(hit: RetrievalToolHit): RetrieverHit[] {
     content: hit.content,
     metadata: {},
     score: hit.score,
+    evidence: hit.evidence,
   }]
 }

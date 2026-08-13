@@ -1,0 +1,2207 @@
+//go:build linux
+
+package anydocsupervisor
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/assets"
+)
+
+const (
+	OutcomeSuccess         ErrorCode = "success"
+	ProtocolVersion                  = 2
+	MaxFrameBytes                    = 8 << 20
+	SourceCeiling                    = 32 << 20
+	ExpandedCeiling                  = 256 << 20
+	AssetCountCeiling                = 128
+	AssetBytesCeiling                = 64 << 20
+	DiagnosticBytesCeiling           = 64 << 10
+	MemoryCeiling                    = 512 << 20
+	TasksCeiling                     = 32
+	// This caps aggregate cgroup CPU at 18 seconds during RuntimeCeiling.
+	CPUQuotaPercent = 60
+	CPUPeriodUSec   = 1_000_000
+	RuntimeCeiling  = 30 * time.Second
+	CPUCeiling      = 20 * time.Second
+	usageTimeout    = 100 * time.Millisecond
+	runtimeTarget   = "/run/crux-anydoc/runtime"
+	probeTarget     = "/run/crux-anydoc/probe"
+)
+
+type ErrorCode string
+
+const (
+	ErrContainmentUnavailable ErrorCode = "containment-unavailable"
+	ErrInvalidFrame           ErrorCode = "invalid-frame"
+	ErrInvalidRequest         ErrorCode = "invalid-request"
+	ErrReplay                 ErrorCode = "replay"
+	ErrWorkerCrash            ErrorCode = "worker-crash"
+	ErrTimeout                ErrorCode = "timeout"
+	ErrAborted                ErrorCode = "aborted"
+	ErrInvalidResult          ErrorCode = "invalid-result"
+	ErrEncrypted              ErrorCode = "encrypted"
+	ErrExpandedTooLarge       ErrorCode = "expanded-too-large"
+	ErrUnsupportedFormat      ErrorCode = "unsupported-format"
+)
+
+type Format string
+
+const (
+	FormatDOC  Format = "doc"
+	FormatDOCM Format = "docm"
+	FormatDOCX Format = "docx"
+	FormatRTF  Format = "rtf"
+	FormatODT  Format = "odt"
+	FormatEPUB Format = "epub"
+	FormatPPT  Format = "ppt"
+	FormatPPS  Format = "pps"
+	FormatPOT  Format = "pot"
+	FormatPPTX Format = "pptx"
+	FormatPPTM Format = "pptm"
+	FormatPPSX Format = "ppsx"
+	FormatPPSM Format = "ppsm"
+	FormatODP  Format = "odp"
+	FormatXLS  Format = "xls"
+	FormatXLSB Format = "xlsb"
+	FormatXLSX Format = "xlsx"
+	FormatXLSM Format = "xlsm"
+	FormatODS  Format = "ods"
+	FormatCSV  Format = "csv"
+	FormatPDF  Format = "pdf"
+)
+
+type SupervisorError struct {
+	Code  ErrorCode
+	cause error
+}
+
+func (e *SupervisorError) Error() string           { return string(e.Code) }
+func closed(code ErrorCode) error                  { return &SupervisorError{Code: code} }
+func closedWith(code ErrorCode, cause error) error { return &SupervisorError{Code: code, cause: cause} }
+func (e *SupervisorError) Unwrap() error           { return e.cause }
+
+// containmentCleanupChain records that cleanup failed after an earlier
+// execution failure. It keeps cleanup provenance separate from the cause that
+// safe diagnostics are allowed to report.
+type containmentCleanupChain struct {
+	prior   error
+	cleanup *ContainmentError
+}
+
+func (e *containmentCleanupChain) Error() string { return "containment cleanup failure" }
+func (e *containmentCleanupChain) Unwrap() error { return e.prior }
+
+type ResultValidationError struct {
+	Stage      string
+	ReasonCode string
+}
+
+func (e *ResultValidationError) Error() string {
+	return "result-validation " + e.Stage + ":" + e.ReasonCode
+}
+
+func resultValidation(stage, reason string) error {
+	if !validResultValidationStage(stage) {
+		stage = "unknown"
+	}
+	if !validResultValidationReason(reason) {
+		reason = "unknown"
+	}
+	return &ResultValidationError{Stage: stage, ReasonCode: reason}
+}
+
+func validResultValidationStage(stage string) bool {
+	switch stage {
+	case "decode/frame-json", "request-binding", "payload/validation", "accounting-refresh", "ack-write", "lifecycle-witness":
+		return true
+	}
+	return false
+}
+
+func validResultValidationReason(reason string) bool {
+	switch reason {
+	case "mismatch", "snapshot-mismatch", "invalid-frame", "invalid-result", "io", "unavailable", "replay":
+		return true
+	}
+	return false
+}
+
+// validContainmentStage is the single allowlist for ContainmentError stages
+// (runtime + cleanup diagnosis). Keep in sync with every stage site.
+func validContainmentStage(stage string) bool {
+	switch stage {
+	case "preflight", "transient-unit-name", "authorization-socket", "authorization-socket-chmod", "result-socket", "result-socket-chmod", "start-transient-unit", "close-stdin", "wait-active", "backend-start", "post-start-report", "post-start-node-attestation", "post-start-probe-attestation", "post-start-verify", "authorize-accept", "authorize-peer-credentials", "authorize-report", "authorize-peer-identity", "authorize-encode", "result-receive", "containment-cleanup":
+		return true
+	}
+	return false
+}
+
+// validContainmentReason is the single allowlist for ContainmentError reasons,
+// including peer-mismatch and Finish cleanup diagnoses.
+func validContainmentReason(reason string) bool {
+	if validPostStartReportReason(reason) {
+		return true
+	}
+	switch reason {
+	case "unknown", "dbus-invalid-args", "dbus-access-denied", "dbus-no-such-unit", "dbus-other", "deadline", "io", "io-or-systemd", "unavailable", "verification-mismatch", "peer-mismatch", "accounting-evidence", "terminal-accounting-report-gone", "terminal-accounting-report-unavailable", "terminal-accounting-report-invalid", "terminal-accounting-report-dbus-fetch", "terminal-accounting-report-control-group", "terminal-accounting-report-memory", "terminal-accounting-report-cgroup-accounting", "terminal-accounting-report-swap", "terminal-accounting-report-tasks", "terminal-accounting-report-cpu", "terminal-accounting-report-sandbox-properties", "terminal-accounting-report-runtime-attestation-proc-root-unavailable", "terminal-accounting-report-runtime-attestation-proc-root-unsafe", "terminal-accounting-report-runtime-attestation-runtime-target-missing", "terminal-accounting-report-runtime-attestation-runtime-tree-unsafe", "terminal-accounting-report-runtime-attestation-runtime-tree-unreadable", "terminal-accounting-report-runtime-attestation-runtime-digest-mismatch", "terminal-accounting-report-runtime-attestation-snapshot-identity-mismatch", "terminal-accounting-cpu-unavailable", "terminal-accounting-cgroup-events-unavailable", "terminal-accounting-cgroup-events-malformed", "terminal-accounting-memory-current", "terminal-accounting-memory-peak", "terminal-accounting-memory-events", "terminal-accounting-cpu-stat", "terminal-accounting-pids-events", "terminal-accounting-cgroup-procs", "stop-unit", "unit-properties-gone", "unit-properties-gone-no-verified-snapshot", "unit-properties-gone-snapshot-cgroup", "unit-properties-gone-proof-missing", "unit-properties-gone-proof-cgroup-mismatch", "unit-properties-gone-proof-pid-invalid", "unit-properties-gone-snapshot-cgroup-mismatch", "unit-properties-gone-snapshot-pid-mismatch", "unit-properties-gone-runtime-digest-missing", "unit-properties-gone-runtime-digest-mismatch", "unit-properties-gone-proof-terminal-not-success", "unit-properties-unavailable", "unit-properties-invalid-cgroup", "cgroup-kill-unavailable", "wait-inactive", "terminal-status", "termination-evidence", "already-gone-termination-unavailable", "already-gone-termination-mismatch", "already-gone-termination-not-exclusive", "already-gone-terminal-unavailable", "already-gone-terminal-unrecognized-dbus", "already-gone-terminal-not-success", "already-gone-terminal-get-unit", "already-gone-terminal-unit-properties", "already-gone-terminal-service-properties", "already-gone-terminal-get-unit-gone", "already-gone-terminal-get-unit-unrecognized", "already-gone-terminal-get-unit-unavailable", "already-gone-terminal-unit-properties-gone", "already-gone-terminal-unit-properties-unrecognized", "already-gone-terminal-unit-properties-unavailable", "already-gone-terminal-service-properties-gone", "already-gone-terminal-service-properties-unrecognized", "already-gone-terminal-service-properties-unavailable", "already-gone-terminal-decode-unavailable", "runtime-target-missing-termination-unavailable", "runtime-target-missing-termination-mismatch", "runtime-target-missing-termination-not-exclusive", "runtime-target-missing-ack-witness-absent", "runtime-target-missing-ack-witness-cgroup-mismatch", "runtime-target-missing-ack-witness-pid-invalid", "runtime-target-missing-snapshot-cgroup-mismatch", "runtime-target-missing-snapshot-pid-mismatch", "runtime-target-missing-snapshot-runtime-digest-missing", "runtime-target-missing-snapshot-runtime-digest-mismatch", "runtime-target-missing-snapshot-oom", "runtime-target-missing-snapshot-oom-kill", "runtime-target-missing-snapshot-pids-max", "runtime-target-missing-terminal-status-not-success", "runtime-target-missing-terminal-status-not-gone", "runtime-target-missing-terminal-status-carried-gone", "runtime-target-missing-terminal-status-unrecognized", "runtime-target-missing-terminal-status-unavailable", "runtime-target-missing-terminal-status-decode-unavailable", "runtime-target-missing-terminal-status-get-unit-unrecognized", "runtime-target-missing-terminal-status-get-unit-unavailable", "runtime-target-missing-terminal-status-unit-properties-gone", "runtime-target-missing-terminal-status-unit-properties-unrecognized", "runtime-target-missing-terminal-status-unit-properties-unavailable", "runtime-target-missing-terminal-status-service-properties-gone", "runtime-target-missing-terminal-status-service-properties-unrecognized", "runtime-target-missing-terminal-status-service-properties-unavailable", "used-cached-accounting", "unit-cleanup", "unit-cleanup-authorization-socket", "unit-cleanup-result-socket", "unit-cleanup-reset-failed-unit", "unit-cleanup-reset-failed-unit-no-such-unit", "unit-cleanup-reset-failed-unit-unknown-object", "unit-cleanup-reset-failed-unit-access-denied", "unit-cleanup-reset-failed-unit-invalid-args", "unit-cleanup-reset-failed-unit-dbus-other", "unit-cleanup-reset-failed-unit-unavailable", "unit-cleanup-private-temp", "staged-cleanup":
+		return true
+	case "runtime-target-missing-ack-witness-request-digest-missing", "runtime-target-missing-ack-witness-nonce-missing":
+		return true
+	case "terminal-accounting-report-memory-events", "terminal-accounting-report-cpu-stat", "terminal-accounting-report-pids-events", "terminal-accounting-report-cgroup-procs", "terminal-accounting-report-cgroup-events":
+		return true
+	}
+	return false
+}
+
+func validPostStartReportReason(reason string) bool {
+	switch reason {
+	case "report-memory-events", "report-cpu-stat", "report-cpu-stat-missing", "report-cpu-stat-unreadable", "report-cpu-stat-malformed", "report-cpu-stat-required-keys", "report-pids-events", "report-cgroup-procs", "report-cgroup-events":
+		return true
+	}
+	switch reason {
+	case "report-get-unit-gone", "report-unit-properties-gone", "report-service-properties-gone", "report-get-unit-unrecognized-dbus", "report-unit-properties-unrecognized-dbus", "report-service-properties-unrecognized-dbus", "report-get-unit-unavailable", "report-unit-properties-unavailable", "report-service-properties-unavailable", "report-dbus-fetch", "report-control-group", "report-memory", "report-cgroup-accounting", "report-swap", "report-tasks", "report-cpu", "report-sandbox-properties", "report-runtime-attestation-proc-root-unavailable", "report-runtime-attestation-proc-root-unsafe", "report-runtime-attestation-runtime-target-missing", "report-runtime-attestation-runtime-tree-unsafe", "report-runtime-attestation-runtime-tree-unreadable", "report-runtime-attestation-runtime-digest-mismatch", "report-runtime-attestation-snapshot-identity-mismatch":
+		return true
+	}
+	return false
+}
+
+func containmentDiagnostic(stage, reason string) *ContainmentError {
+	if !validContainmentStage(stage) {
+		stage = "unknown"
+	}
+	if !validContainmentReason(reason) {
+		reason = "unknown"
+	}
+	return &ContainmentError{Stage: stage, ReasonCode: reason}
+}
+
+var (
+	errCPUAccounting = errors.New("cpu accounting unavailable")
+	errCPUCeiling    = errors.New("cpu ceiling exceeded")
+)
+
+type Request struct {
+	Version       int       `json:"version"`
+	Nonce         string    `json:"nonce"`
+	RequestDigest string    `json:"requestDigest"`
+	Format        Format    `json:"format"`
+	SourceSHA256  string    `json:"sourceSha256"`
+	SourceBytes   int64     `json:"sourceBytes"`
+	Limits        JobLimits `json:"limits"`
+}
+type JobLimits struct {
+	SourceBytes      int64 `json:"sourceBytes"`
+	ResultBytes      int64 `json:"resultBytes"`
+	ExpandedBytes    int64 `json:"expandedBytes"`
+	AssetCount       int64 `json:"assetCount"`
+	AssetBytes       int64 `json:"assetBytes"`
+	DiagnosticBytes  int64 `json:"diagnosticBytes"`
+	MemoryBytes      int64 `json:"memoryBytes"`
+	CPUMilliseconds  int64 `json:"cpuMilliseconds"`
+	WallMilliseconds int64 `json:"wallMilliseconds"`
+	PIDs             int64 `json:"pids"`
+}
+type Result struct {
+	Request
+	OK          bool              `json:"ok"`
+	FailureKind FailureKind       `json:"failureKind,omitempty"`
+	Error       ErrorCode         `json:"error,omitempty"`
+	Payload     []byte            `json:"payload,omitempty"`
+	Accounting  *ResultAccounting `json:"accounting,omitempty"`
+}
+
+type FailureKind string
+
+const (
+	FailureParser         FailureKind = "parser"
+	FailureInfrastructure FailureKind = "infrastructure"
+)
+
+type ResultAccounting struct {
+	SourceBytes     int64 `json:"sourceBytes"`
+	RawBytes        int64 `json:"rawBytes"`
+	ExpandedBytes   int64 `json:"expandedBytes"`
+	AssetCount      int64 `json:"assetCount"`
+	AssetBytes      int64 `json:"assetBytes"`
+	DiagnosticCount int64 `json:"diagnosticCount"`
+	DiagnosticBytes int64 `json:"diagnosticBytes"`
+}
+
+func validRequest(v Request) bool {
+	return v.Version == ProtocolVersion && len(v.Nonce) == 32 && len(v.RequestDigest) == 64 && len(v.SourceSHA256) == 64 && hexOK(v.Nonce) && hexOK(v.RequestDigest) && hexOK(v.SourceSHA256) && validFormat(v.Format) && v.SourceBytes >= 0 && v.Limits.SourceBytes >= v.SourceBytes && v.Limits.SourceBytes <= SourceCeiling && v.Limits.ResultBytes > 0 && v.Limits.ResultBytes <= MaxFrameBytes && v.Limits.ExpandedBytes > 0 && v.Limits.ExpandedBytes <= ExpandedCeiling && v.Limits.AssetCount > 0 && v.Limits.AssetCount <= AssetCountCeiling && v.Limits.AssetBytes > 0 && v.Limits.AssetBytes <= AssetBytesCeiling && v.Limits.DiagnosticBytes > 0 && v.Limits.DiagnosticBytes <= DiagnosticBytesCeiling && v.Limits.MemoryBytes > 0 && v.Limits.MemoryBytes <= MemoryCeiling && v.Limits.CPUMilliseconds > 0 && v.Limits.CPUMilliseconds <= CPUCeiling.Milliseconds() && v.Limits.WallMilliseconds > 0 && v.Limits.WallMilliseconds <= RuntimeCeiling.Milliseconds() && v.Limits.PIDs > 0 && v.Limits.PIDs <= TasksCeiling && v.RequestDigest == requestDigest(v.Version, v.Nonce, v.Format, v.SourceSHA256, v.SourceBytes, v.Limits)
+}
+
+// requestDigest is SHA-256 over this language-independent encoding:
+// "crux-anydoc-job-digest-v2\\x00", u32be(version), u32be(len(nonce)), nonce,
+// u32be(len(format)), format, u32be(len(sourceSha256)), sourceSha256,
+// u64be(sourceBytes), followed by every JobLimits field in declaration order.
+func requestDigest(version int, nonce string, format Format, sourceSHA256 string, sourceBytes int64, limits JobLimits) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte("crux-anydoc-job-digest-v2\x00"))
+	var word [8]byte
+	binary.BigEndian.PutUint32(word[:4], uint32(version))
+	_, _ = h.Write(word[:4])
+	for _, field := range []string{nonce, string(format), sourceSHA256} {
+		binary.BigEndian.PutUint32(word[:4], uint32(len(field)))
+		_, _ = h.Write(word[:4])
+		_, _ = h.Write([]byte(field))
+	}
+	for _, value := range []int64{sourceBytes, limits.SourceBytes, limits.ResultBytes, limits.ExpandedBytes, limits.AssetCount, limits.AssetBytes, limits.DiagnosticBytes, limits.MemoryBytes, limits.CPUMilliseconds, limits.WallMilliseconds, limits.PIDs} {
+		binary.BigEndian.PutUint64(word[:], uint64(value))
+		_, _ = h.Write(word[:])
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+func validFormat(format Format) bool {
+	switch format {
+	case FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatXLSX, FormatXLSM, FormatODS, FormatCSV, FormatPDF:
+		return true
+	}
+	return false
+}
+func hexOK(s string) bool { _, e := hex.DecodeString(s); return e == nil }
+func writeFull(w io.Writer, p []byte) error {
+	for len(p) > 0 {
+		n, e := w.Write(p)
+		if e != nil {
+			return e
+		}
+		if n <= 0 {
+			return io.ErrShortWrite
+		}
+		p = p[n:]
+	}
+	return nil
+}
+func writeFrame(w io.Writer, value any) error {
+	p, e := json.Marshal(value)
+	if e != nil || len(p) == 0 || len(p) > MaxFrameBytes {
+		return closed(ErrInvalidFrame)
+	}
+	var h [4]byte
+	binary.BigEndian.PutUint32(h[:], uint32(len(p)))
+	if e = writeFull(w, h[:]); e != nil {
+		return e
+	}
+	return writeFull(w, p)
+}
+func readFrame(r io.Reader, dst any) error {
+	var h [4]byte
+	if _, e := io.ReadFull(r, h[:]); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	n := binary.BigEndian.Uint32(h[:])
+	if n == 0 || n > MaxFrameBytes {
+		return closed(ErrInvalidFrame)
+	}
+	p := make([]byte, n)
+	if _, e := io.ReadFull(r, p); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	d := json.NewDecoder(bytes.NewReader(p))
+	d.DisallowUnknownFields()
+	if e := d.Decode(dst); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return closed(ErrInvalidFrame)
+	}
+	return nil
+}
+func EncodeRequest(w io.Writer, v Request) error {
+	if !validRequest(v) {
+		return closed(ErrInvalidRequest)
+	}
+	e := writeFrame(w, v)
+	if e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	return nil
+}
+func DecodeRequest(r io.Reader) (Request, error) {
+	var v Request
+	e := readFrame(r, &v)
+	if e != nil {
+		return v, e
+	}
+	if !validRequest(v) {
+		return v, closed(ErrInvalidRequest)
+	}
+	return v, nil
+}
+func EncodeResult(w io.Writer, v Result) error {
+	if !validResult(v) {
+		return closed(ErrInvalidRequest)
+	}
+	if e := writeFrame(w, v); e != nil {
+		return closed(ErrInvalidFrame)
+	}
+	return nil
+}
+func DecodeResult(r io.Reader) (Result, error) {
+	var v Result
+	e := readFrame(r, &v)
+	if e != nil {
+		return v, e
+	}
+	if !validResult(v) {
+		return v, closed(ErrInvalidRequest)
+	}
+	return v, nil
+}
+func validResult(v Result) bool {
+	if !validRequest(v.Request) {
+		return false
+	}
+	if v.OK {
+		if v.FailureKind != "" || v.Error != "" || len(v.Payload) == 0 || int64(len(v.Payload)) > v.Limits.ResultBytes || v.Accounting == nil {
+			return false
+		}
+		accounting, err := recomputePayloadAccounting(v.Request, v.Payload)
+		return err == nil && accounting == *v.Accounting
+	}
+	return v.Error != "" && validFailure(v.FailureKind, v.Error) && len(v.Payload) == 0 && v.Accounting == nil
+}
+func validFailure(kind FailureKind, code ErrorCode) bool {
+	if kind == FailureParser {
+		switch code {
+		case ErrInvalidResult, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat:
+			return true
+		}
+	}
+	if kind == FailureInfrastructure {
+		return knownInfrastructure(code)
+	}
+	return false
+}
+
+func knownInfrastructure(c ErrorCode) bool {
+	switch c {
+	case ErrContainmentUnavailable, ErrInvalidFrame, ErrInvalidRequest, ErrReplay, ErrWorkerCrash, ErrTimeout, ErrAborted:
+		return true
+	}
+	return false
+}
+
+type Limits struct {
+	MemoryMax                 int64
+	TasksMax, CPUQuotaPercent int
+	RuntimeMax                time.Duration
+}
+
+func (l Limits) Clamp() Limits {
+	if l.MemoryMax <= 0 || l.MemoryMax > MemoryCeiling {
+		l.MemoryMax = MemoryCeiling
+	}
+	if l.TasksMax <= 0 || l.TasksMax > TasksCeiling {
+		l.TasksMax = TasksCeiling
+	}
+	if l.CPUQuotaPercent <= 0 || l.CPUQuotaPercent > CPUQuotaPercent {
+		l.CPUQuotaPercent = CPUQuotaPercent
+	}
+	if l.RuntimeMax <= 0 || l.RuntimeMax > RuntimeCeiling {
+		l.RuntimeMax = RuntimeCeiling
+	}
+	return l
+}
+
+func jobLimits(l Limits) JobLimits {
+	l = l.Clamp()
+	cpuMilliseconds := l.RuntimeMax.Milliseconds() * int64(l.CPUQuotaPercent) / 100
+	if cpuMilliseconds > CPUCeiling.Milliseconds() {
+		cpuMilliseconds = CPUCeiling.Milliseconds()
+	}
+
+	return JobLimits{
+		SourceBytes:      SourceCeiling,
+		ResultBytes:      MaxFrameBytes,
+		ExpandedBytes:    ExpandedCeiling,
+		AssetCount:       AssetCountCeiling,
+		AssetBytes:       AssetBytesCeiling,
+		DiagnosticBytes:  DiagnosticBytesCeiling,
+		MemoryBytes:      l.MemoryMax,
+		CPUMilliseconds:  cpuMilliseconds,
+		WallMilliseconds: l.RuntimeMax.Milliseconds(),
+		PIDs:             int64(l.TasksMax),
+	}
+}
+
+type ServiceSpec struct {
+	Command, Environment, ReadOnlyPaths, InaccessiblePaths, BindReadOnlyPaths, ReadWritePaths, RestrictAddressFamilies []string
+	MemoryMax, MemorySwapMax                                                                                           int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                                                      int
+	RuntimeMax                                                                                                         time.Duration
+	KillMode, ProtectSystem                                                                                            string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome                                            bool
+	NodeSHA256                                                                                                         string
+	Node                                                                                                               assets.AttestedNode
+	runtimeTreeDigest                                                                                                  string
+	probe                                                                                                              *containmentProbe
+}
+
+// containmentProbe is an unexported, process-local seal for the host integration
+// executable. It cannot be constructed through the public ingestion or backend
+// APIs and is never present in production service specifications.
+type containmentProbe struct {
+	hostExecutable string
+	executableSHA  string
+	action         string
+	caseID         string
+	resultPath     string
+	hostResultPath string
+}
+
+// probeContainmentViolation marks a structurally valid sealed observation
+// whose check explicitly reports that containment failed. It is distinct from
+// malformed or missing observations, which remain unverified.
+type probeContainmentViolation struct{}
+
+func (*probeContainmentViolation) Error() string { return "sealed probe containment violation" }
+
+// sealedProbeObservation is deliberately separate from a worker Result. It is
+// accepted only by the test-only sealed-probe path and never enters normal
+// document routing.
+type sealedProbeObservation struct {
+	Schema     string          `json:"schema"`
+	Version    int             `json:"version"`
+	Case       string          `json:"case"`
+	Invocation string          `json:"invocation"`
+	Checks     map[string]bool `json:"checks"`
+}
+
+const (
+	sealedProbeObservationSchema  = "crux-anydoc.sealed-probe-observation"
+	sealedProbeObservationVersion = 1
+	maxProbeObservationChecks     = 16
+)
+
+func validSealedProbeObservation(value sealedProbeObservation, probe *containmentProbe, request Request) bool {
+	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case == "" || value.Case != probe.caseID || value.Invocation != request.RequestDigest || len(value.Checks) > maxProbeObservationChecks {
+		return false
+	}
+	want, ok := sealedProbeObservationChecks(probe.caseID)
+	if !ok || len(value.Checks) != len(want) {
+		return false
+	}
+	for name, passed := range value.Checks {
+		if _, ok := want[name]; !ok || !passed {
+			return false
+		}
+	}
+	return true
+}
+
+func observedSealedProbeViolation(value sealedProbeObservation, probe *containmentProbe, request Request) bool {
+	if probe == nil || !validRequest(request) || value.Schema != sealedProbeObservationSchema || value.Version != sealedProbeObservationVersion || value.Case != probe.caseID || value.Invocation != request.RequestDigest {
+		return false
+	}
+	want, ok := sealedProbeObservationChecks(probe.caseID)
+	if !ok || len(value.Checks) != len(want) {
+		return false
+	}
+	for name := range want {
+		passed, present := value.Checks[name]
+		if !present {
+			return false
+		}
+		if !passed {
+			return true
+		}
+	}
+	return false
+}
+
+// sealedProbeObservationChecks is the single exact, versioned observation
+// contract accepted by the sealed integration receiver.
+func sealedProbeObservationChecks(probeCase string) (map[string]struct{}, bool) {
+	switch probeCase {
+	case "network":
+		return map[string]struct{}{"ipv4Denied": {}, "ipv6Denied": {}, "dnsDenied": {}}, true
+	case "filesystem":
+		return map[string]struct{}{"homeReadDenied": {}, "projectReadDenied": {}, "hostReadDenied": {}, "hostWriteDenied": {}, "hostTempInvisible": {}, "privateTempWritable": {}}, true
+	case "privileges":
+		return map[string]struct{}{"noNewPrivileges": {}, "capabilitiesEmpty": {}, "setuidDenied": {}}, true
+	case "pids":
+		return map[string]struct{}{"tasksLimitEnforced": {}}, true
+	case "descendants":
+		return map[string]struct{}{}, true
+	default:
+		return nil, false
+	}
+}
+
+func validSealedProbeCase(probeCase string) bool {
+	_, ok := sealedProbeObservationChecks(probeCase)
+	return ok
+}
+
+type LaunchDependency struct {
+	runtimeRoot, runtimeRunner, runtimeTreeDigest string
+	node                                          assets.AttestedNode
+	nodePath, nodeSHA256                          string
+}
+
+// PrepareLocalHost materializes and attests the dormant Anydoc launch inputs.
+// It intentionally does not register a route or enable any document format.
+func PrepareLocalHost() (LaunchDependency, error) {
+	runtime, err := assets.ExtractEmbeddedAnydocRuntime()
+	if err != nil {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	node, err := assets.ResolveAnydocNode()
+	if err != nil {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	return newLaunchDependency(runtime, node)
+}
+
+func newLaunchDependency(runtime assets.InstalledAnydocRuntime, node assets.AttestedNode) (LaunchDependency, error) {
+	if runtime.Root() == "" || runtime.Runner() != filepath.Join(runtime.Root(), "runner.mjs") || len(runtime.Digest()) != sha256.Size*2 || node.Path() == "" || len(node.SHA256()) != sha256.Size*2 {
+		return LaunchDependency{}, closed(ErrContainmentUnavailable)
+	}
+	return LaunchDependency{runtimeRoot: runtime.Root(), runtimeRunner: runtime.Runner(), runtimeTreeDigest: runtime.Digest(), node: node, nodePath: node.Path(), nodeSHA256: node.SHA256()}, nil
+}
+
+func newServiceSpec(hostSource, runtime, tmp, nodePath, nodeSHA256 string, node assets.AttestedNode, digest string, l Limits) (ServiceSpec, error) {
+	paths := []string{hostSource, runtime, tmp}
+	for _, p := range paths {
+		if !filepath.IsAbs(p) || filepath.Clean(p) != p {
+			return ServiceSpec{}, closed(ErrInvalidRequest)
+		}
+	}
+	for i, p := range paths {
+		for j, q := range paths {
+			if i != j && (p == q || len(p) < len(q) && q[:len(p)+1] == p+"/") {
+				return ServiceSpec{}, closed(ErrInvalidRequest)
+			}
+		}
+	}
+	l = l.Clamp()
+	runner := filepath.Join(runtimeTarget, "runner.mjs")
+	return ServiceSpec{Command: []string{nodePath, runner}, NodeSHA256: nodeSHA256, Node: node, runtimeTreeDigest: digest, Environment: []string{"LANG=C", "PATH=/usr/bin:/bin"}, InaccessiblePaths: []string{"/opt", "/srv", "/var/lib"}, BindReadOnlyPaths: []string{runtime + ":" + runtimeTarget, hostSource + ":" + stagedSourceTarget}, ReadWritePaths: []string{tmp}, RestrictAddressFamilies: []string{"AF_UNIX"}, MemoryMax: l.MemoryMax, MemorySwapMax: 0, TasksMax: l.TasksMax, CPUQuotaPercent: l.CPUQuotaPercent, CPUQuotaPeriodUSec: CPUPeriodUSec, RuntimeMax: l.RuntimeMax, KillMode: "control-group", ProtectSystem: "strict", CPUAccounting: true, NoNewPrivileges: true, PrivateNetwork: true, PrivateTmp: true, ProtectHome: true}, nil
+}
+
+// NewInstalledServiceSpec binds containment to a runtime minted by assets,
+// rather than accepting a caller-controlled runner path.
+func NewInstalledServiceSpec(hostSource string, runtime assets.InstalledAnydocRuntime, node assets.AttestedNode, tmp string, l Limits) (ServiceSpec, error) {
+	launch, err := newLaunchDependency(runtime, node)
+	if err != nil {
+		return ServiceSpec{}, err
+	}
+	return serviceSpec(hostSource, launch, tmp, l)
+}
+
+func serviceSpec(hostSource string, launch LaunchDependency, tmp string, l Limits) (ServiceSpec, error) {
+	if launch.runtimeRoot == "" || launch.runtimeRunner != filepath.Join(launch.runtimeRoot, "runner.mjs") || launch.nodePath == "" || len(launch.nodeSHA256) != sha256.Size*2 || len(launch.runtimeTreeDigest) != sha256.Size*2 {
+		return ServiceSpec{}, closed(ErrContainmentUnavailable)
+	}
+	return newServiceSpec(hostSource, launch.runtimeRoot, tmp, launch.nodePath, launch.nodeSHA256, launch.node, launch.runtimeTreeDigest, l)
+}
+
+type SandboxReport struct {
+	MainPID                                                                              int
+	ControlGroup                                                                         string
+	ControlGroupMembers                                                                  []int
+	MemoryMax, MemorySwapMax                                                             int64
+	TasksMax, CPUQuotaPercent, CPUQuotaPeriodUSec                                        int
+	RuntimeMax                                                                           time.Duration
+	KillMode, ProtectSystem                                                              string
+	CPUAccounting, NoNewPrivileges, PrivateNetwork, PrivateTmp, ProtectHome              bool
+	ReadOnlyPaths, BindReadOnlyPaths, BindPaths, ReadWritePaths, RestrictAddressFamilies []string
+	InaccessiblePaths                                                                    []string
+	CapabilityBoundingSet, AmbientCapabilities                                           uint64
+	RestrictAddressFamiliesAllow                                                         bool
+	DynamicUser                                                                          bool
+	UID                                                                                  uint64
+	PrivateUsers                                                                         bool
+	ProtectProc, ProcSubset                                                              string
+	ServiceResult                                                                        string
+	ExecMainStatus                                                                       int
+	Populated                                                                            bool
+	MemoryCurrent                                                                        int64
+	MemoryPeak                                                                           int64
+	MemoryEvents                                                                         map[string]int64
+	CPUStats, PIDsEvents                                                                 map[string]int64
+	RuntimeTreeDigest                                                                    string
+}
+
+// TerminationEvidence is gathered after the unit is inactive and before it is
+// unloaded. It is intentionally independent from the pre-stop snapshot.
+type TerminationEvidence struct {
+	ControlGroup string
+	Empty        bool
+	Absent       bool
+}
+type TerminalStatus struct {
+	MainPID        int
+	State          string
+	ServiceResult  string
+	ExecMainStatus int
+}
+
+// WorkloadOutcome is the independently classified result of the worker's
+// execution. Cleanup evidence may contain that execution, but never changes it.
+type WorkloadOutcomeCode string
+
+const (
+	WorkloadOutcomeSuccess       WorkloadOutcomeCode = "success"
+	WorkloadOutcomeInvalidResult WorkloadOutcomeCode = "invalid-result"
+	WorkloadOutcomeOOM           WorkloadOutcomeCode = "oom"
+	WorkloadOutcomeCrash         WorkloadOutcomeCode = "crash"
+	WorkloadOutcomeCPUTimeout    WorkloadOutcomeCode = "cpu-timeout"
+	WorkloadOutcomeWallTimeout   WorkloadOutcomeCode = "wall-timeout"
+	WorkloadOutcomeAborted       WorkloadOutcomeCode = "aborted"
+	WorkloadOutcomeUnverified    WorkloadOutcomeCode = "unverified"
+)
+
+type WorkloadOutcome struct {
+	Code WorkloadOutcomeCode
+}
+
+// ProbeOutcome records the closed result of a sealed containment probe.
+// It is deliberately independent from worker execution classification.
+type ProbeOutcome string
+
+const (
+	ProbeOutcomeContained  ProbeOutcome = "contained"
+	ProbeOutcomeBreach     ProbeOutcome = "breach"
+	ProbeOutcomeUnverified ProbeOutcome = "unverified"
+)
+
+// CleanupProof records only lifecycle containment facts. It deliberately does
+// not assert that the workload itself succeeded.
+type CleanupProof struct {
+	AccountingAvailable bool
+	VerifiedSnapshot    bool
+	UnitTerminal        bool
+	Termination         TerminationEvidence
+	StopAttempted       bool
+	WaitedInactive      bool
+	Reset               bool
+	Staged              bool
+	Accepted            bool
+}
+
+type TerminalReport struct {
+	PreStop      SandboxReport
+	Termination  TerminationEvidence
+	CPU          time.Duration
+	Wall         time.Duration
+	Workload     WorkloadOutcome
+	ProbeOutcome ProbeOutcome
+	Cleanup      CleanupProof
+	// Outcome and Cleaned are retained for existing local diagnostics.
+	Outcome ErrorCode
+	Cleaned bool
+}
+type Unit interface {
+	Report(context.Context) (SandboxReport, error)
+	CPUUsage(context.Context) (time.Duration, error)
+	Stop(context.Context) error
+	WaitInactive(context.Context) error
+	TerminalStatus(context.Context) (TerminalStatus, error)
+	TerminationEvidence(context.Context, string) (TerminationEvidence, error)
+	Cleanup(context.Context) error
+}
+type verifiedAccountingSnapshot interface {
+	MarkSnapshotVerified()
+	LastVerifiedSnapshot() (SandboxReport, time.Duration, bool)
+}
+type terminalSuccessSnapshot interface {
+	LastTerminalSuccess() (terminalSuccessProof, bool)
+}
+type lifecycleWitnessSnapshot interface {
+	lastLifecycleWitness() (lifecycleWitness, bool)
+}
+type activeAccountingCollector interface {
+	RefreshAccounting(context.Context) (time.Duration, error)
+}
+type accountingCaptureFailure uint8
+
+const (
+	accountingCaptureOK accountingCaptureFailure = iota
+	accountingCaptureExactCgroupAbsent
+	accountingCaptureInvalid
+	accountingCaptureReportGone
+	accountingCaptureReportUnavailable
+	accountingCaptureReportInvalid
+	accountingCaptureCPUUnavailable
+	accountingCaptureCgroupEventsUnavailable
+	accountingCaptureCgroupEventsMalformed
+	accountingCaptureMemoryCurrent
+	accountingCaptureMemoryPeak
+	accountingCaptureMemoryEvents
+	accountingCaptureCPUStat
+	accountingCapturePIDsEvents
+	accountingCaptureCgroupProcs
+	accountingCaptureReportValidationDBusFetch
+	accountingCaptureReportValidationControlGroup
+	accountingCaptureReportValidationMemory
+	accountingCaptureReportValidationCgroupAccounting
+	accountingCaptureReportValidationMemoryEvents
+	accountingCaptureReportValidationCPUStat
+	accountingCaptureReportValidationPIDsEvents
+	accountingCaptureReportValidationCgroupProcs
+	accountingCaptureReportValidationCgroupEvents
+	accountingCaptureReportValidationSwap
+	accountingCaptureReportValidationTasks
+	accountingCaptureReportValidationCPU
+	accountingCaptureReportValidationSandboxProperties
+	accountingCaptureReportValidationRuntimeAttestationProcRootUnavailable
+	accountingCaptureReportValidationRuntimeAttestationProcRootUnsafe
+	accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing
+	accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnsafe
+	accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnreadable
+	accountingCaptureReportValidationRuntimeAttestationRuntimeDigestMismatch
+	accountingCaptureReportValidationRuntimeAttestationSnapshotIdentityMismatch
+)
+
+func (f accountingCaptureFailure) reason() string {
+	switch f {
+	case accountingCaptureReportGone:
+		return "terminal-accounting-report-gone"
+	case accountingCaptureReportUnavailable:
+		return "terminal-accounting-report-unavailable"
+	case accountingCaptureReportInvalid:
+		return "terminal-accounting-report-invalid"
+	case accountingCaptureCPUUnavailable:
+		return "terminal-accounting-cpu-unavailable"
+	case accountingCaptureCgroupEventsUnavailable:
+		return "terminal-accounting-cgroup-events-unavailable"
+	case accountingCaptureCgroupEventsMalformed:
+		return "terminal-accounting-cgroup-events-malformed"
+	case accountingCaptureMemoryCurrent:
+		return "terminal-accounting-memory-current"
+	case accountingCaptureMemoryPeak:
+		return "terminal-accounting-memory-peak"
+	case accountingCaptureMemoryEvents:
+		return "terminal-accounting-memory-events"
+	case accountingCaptureCPUStat:
+		return "terminal-accounting-cpu-stat"
+	case accountingCapturePIDsEvents:
+		return "terminal-accounting-pids-events"
+	case accountingCaptureCgroupProcs:
+		return "terminal-accounting-cgroup-procs"
+	default:
+		if code, ok := reportValidationCodeForCaptureFailure(f); ok {
+			return "terminal-accounting-report-" + string(code)
+		}
+		return ""
+	}
+}
+
+type terminalAccountingCapture interface {
+	CaptureTerminalAccounting(context.Context) (SandboxReport, time.Duration, accountingCaptureFailure, error)
+}
+type Backend interface {
+	Start(context.Context, ServiceSpec, *os.File) (Unit, error)
+}
+type capabilityAuthorizer interface {
+	AuthorizeCapability(context.Context, Request) error
+}
+type resultReceiver interface {
+	ReceiveResult(context.Context, Request) (Result, error)
+}
+type sealedProbeReceiver interface {
+	receiveSealedProbeObservation(context.Context, Request, *containmentProbe) error
+}
+type authorizationPreparer interface{ PrepareAuthorization(context.Context) error }
+type verifiedServiceSpec interface {
+	VerifiedServiceSpec(ServiceSpec) ServiceSpec
+}
+type attestedNodeVerifier interface {
+	VerifyAttestedNode(context.Context, assets.AttestedNode) error
+}
+type attestedProbeVerifier interface {
+	VerifyAttestedProbe(context.Context, *containmentProbe) error
+}
+type PipeFactory func() (*os.File, *os.File, error)
+type Supervisor struct {
+	backend Backend
+	stager  *Stager
+	pipe    PipeFactory
+	now     func() time.Time
+}
+
+func New(b Backend) *Supervisor { return NewWithStager(b, NewStager("/run/crux-anydoc/input")) }
+func NewWithStager(b Backend, stager *Stager) *Supervisor {
+	return &Supervisor{backend: b, stager: stager, pipe: os.Pipe, now: time.Now}
+}
+
+type Run struct {
+	unit                Unit
+	write               *os.File
+	nonce, digest       string
+	sourceSHA           string
+	sourceBytes         int64
+	format              Format
+	limits              JobLimits
+	staged              *StagedSource
+	mu                  sync.Mutex
+	stopOnce            sync.Once
+	finishOnce          sync.Once
+	finished            chan struct{}
+	result              error
+	receivedFailure     error
+	sealedProbe         *containmentProbe
+	sealedProbeObserved bool
+	sealedProbeBreach   bool
+	terminal            TerminalReport
+	started             time.Time
+	done                bool
+	stop                chan struct{}
+}
+
+func (s *Supervisor) Start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+	if !admittedFormat(format) {
+		return nil, closed(ErrInvalidRequest)
+	}
+	return s.start(ctx, input, format, launch, tmp, l)
+}
+
+// startEvaluation is reachable only by same-package evidence tests. Production
+// callers can use only Start, which rejects every format until admission.
+func (s *Supervisor) startEvaluation(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+	return s.start(ctx, input, format, launch, tmp, l)
+}
+
+func (s *Supervisor) start(ctx context.Context, input []byte, format Format, launch LaunchDependency, tmp string, l Limits) (*Run, error) {
+	if s == nil || s.backend == nil || s.stager == nil {
+		return nil, closed(ErrContainmentUnavailable)
+	}
+	if !validFormat(format) {
+		return nil, closed(ErrInvalidRequest)
+	}
+	l = l.Clamp()
+	limits := jobLimits(l)
+	staged, e := s.stager.Stage(input, limits.SourceBytes)
+	if e != nil {
+		return nil, closed(ErrInvalidRequest)
+	}
+	spec, e := serviceSpec(staged.HostPath, launch, tmp, l)
+	if e != nil {
+		_ = staged.Cleanup()
+		return nil, e
+	}
+	read, write, e := s.pipe()
+	if e != nil {
+		_ = staged.Cleanup()
+		return nil, closed(ErrContainmentUnavailable)
+	}
+	unit, e := s.backend.Start(ctx, spec, read)
+	if e != nil {
+		read.Close()
+		write.Close()
+		_ = staged.Cleanup()
+		return nil, closedWith(ErrContainmentUnavailable, startDiagnostic("backend-start", e))
+	}
+	if adjusted, ok := unit.(verifiedServiceSpec); ok {
+		spec = adjusted.VerifiedServiceSpec(spec)
+	}
+	if verification := verifyDiagnostic(ctx, unit, spec); verification != nil {
+		write.Close()
+		_ = staged.Cleanup()
+		_, _, _, _ = cleanup(unit)
+		return nil, closedWith(ErrContainmentUnavailable, verification)
+	}
+	if preparer, ok := unit.(authorizationPreparer); ok {
+		if preparer.PrepareAuthorization(ctx) != nil {
+			write.Close()
+			_ = staged.Cleanup()
+			_, _, _, _ = cleanup(unit)
+			return nil, closed(ErrContainmentUnavailable)
+		}
+	}
+	// After full unit/cgroup/runtime verification and DynamicUser preparation,
+	// hand the exact staged source inode to the verified worker UID at 0400.
+	if e = grantVerifiedSourceAccess(ctx, unit, staged); e != nil {
+		write.Close()
+		_ = staged.Cleanup()
+		_, _, _, _ = cleanup(unit)
+		return nil, closedWith(ErrContainmentUnavailable, e)
+	}
+	var n [16]byte
+	if _, e = rand.Read(n[:]); e != nil {
+		write.Close()
+		_ = staged.Cleanup()
+		_, _, _, _ = cleanup(unit)
+		return nil, closed(ErrContainmentUnavailable)
+	}
+	d := sha256.Sum256(input)
+	nonce := hex.EncodeToString(n[:])
+	sourceSHA := hex.EncodeToString(d[:])
+	r := &Run{unit: unit, write: write, nonce: nonce, digest: requestDigest(ProtocolVersion, nonce, format, sourceSHA, int64(len(input)), limits), sourceSHA: sourceSHA, sourceBytes: int64(len(input)), format: format, limits: limits, staged: staged, stop: make(chan struct{}), finished: make(chan struct{}), started: s.now()}
+	go r.monitor()
+	return r, nil
+}
+
+func admissionCandidateFormat(format Format) bool {
+	switch format {
+	case FormatDOC, FormatDOCM, FormatDOCX, FormatRTF, FormatODT, FormatEPUB, FormatPPT, FormatPPS, FormatPOT, FormatPPTX, FormatPPTM, FormatPPSX, FormatPPSM, FormatODP, FormatXLS, FormatXLSB, FormatODS:
+		return true
+	}
+	return false
+}
+
+func admittedFormat(Format) bool {
+	// The Phase 2 ADR currently admits no Anydoc primary.
+	return false
+}
+
+func (r *Run) Authorize() error {
+	if r == nil {
+		return closed(ErrReplay)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
+		return closed(ErrReplay)
+	}
+	r.done = true
+	v := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, SourceSHA256: r.sourceSHA, Format: r.format, SourceBytes: r.sourceBytes, Limits: r.limits}
+	var e error
+	if authorizer, ok := r.unit.(capabilityAuthorizer); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e = authorizer.AuthorizeCapability(ctx, v)
+		cancel()
+	} else {
+		e = EncodeRequest(r.write, v)
+	}
+	closeErr := r.write.Close()
+	if e != nil || closeErr != nil {
+		if e != nil {
+			return closedWith(ErrContainmentUnavailable, e)
+		}
+		return closedWith(ErrContainmentUnavailable, containment("authorize-encode", closeErr))
+	}
+	return nil
+}
+
+// ReceiveResult accepts exactly one authenticated worker result, acknowledges
+// it, and leaves lifecycle cleanup to Finish.
+func (r *Run) ReceiveResult(ctx context.Context) (Result, error) {
+	if r == nil {
+		return Result{}, closed(ErrReplay)
+	}
+	receiver, ok := r.unit.(resultReceiver)
+	if !ok {
+		return Result{}, closed(ErrContainmentUnavailable)
+	}
+	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	result, err := receiver.ReceiveResult(ctx, expected)
+	if err != nil {
+		var sup *SupervisorError
+		if errors.As(err, &sup) {
+			return Result{}, err
+		}
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
+		}
+		return Result{}, closed(ErrWorkerCrash)
+	}
+	if result.Request != expected {
+		return Result{}, closed(ErrReplay)
+	}
+	r.mu.Lock()
+	r.receivedFailure = parserResultFailure(result)
+	r.mu.Unlock()
+	return result, nil
+}
+
+// receiveSealedProbeObservation is the integration-only counterpart to
+// ReceiveResult. It stays unexported so a sealed hostile probe cannot expose
+// or activate production document routing.
+func (r *Run) receiveSealedProbeObservation(ctx context.Context, probe *containmentProbe) error {
+	if r == nil || probe == nil {
+		return closed(ErrReplay)
+	}
+	receiver, ok := r.unit.(sealedProbeReceiver)
+	if !ok {
+		return closed(ErrContainmentUnavailable)
+	}
+	expected := Request{Version: ProtocolVersion, Nonce: r.nonce, RequestDigest: r.digest, Format: r.format, SourceSHA256: r.sourceSHA, SourceBytes: r.sourceBytes, Limits: r.limits}
+	r.mu.Lock()
+	r.sealedProbe = probe
+	r.mu.Unlock()
+	err := receiver.receiveSealedProbeObservation(ctx, expected, probe)
+	if err == nil {
+		r.mu.Lock()
+		r.sealedProbeObserved = true
+		r.mu.Unlock()
+	} else {
+		var violation *probeContainmentViolation
+		if errors.As(err, &violation) {
+			r.mu.Lock()
+			r.sealedProbeBreach = true
+			r.mu.Unlock()
+		}
+	}
+	return err
+}
+
+// expectSealedProbe records the integration-only probe contract before a
+// resource, cancellation, or crash probe runs. It remains unexported so it
+// cannot influence ordinary document execution.
+func (r *Run) expectSealedProbe(probe *containmentProbe) {
+	if r == nil || probe == nil {
+		return
+	}
+	r.mu.Lock()
+	r.sealedProbe = probe
+	r.mu.Unlock()
+}
+
+// Execute receives the one permitted result and always tears down its unit.
+func (r *Run) Execute(ctx context.Context) (Result, error) {
+	result, err := r.ReceiveResult(ctx)
+	finishErr := r.Finish(ctx, err)
+	if finishErr != nil {
+		return Result{}, finishErr
+	}
+	return result, err
+}
+func (r *Run) Finish(_ context.Context, out error) error {
+	if r == nil {
+		return closed(ErrReplay)
+	}
+	r.finishOnce.Do(func() {
+		r.mu.Lock()
+		r.done = true
+		_ = r.write.Close()
+		r.stopOnce.Do(func() { close(r.stop) })
+		receivedFailure := r.receivedFailure
+		sealedProbe := r.sealedProbe
+		sealedProbeObserved := r.sealedProbeObserved
+		sealedProbeBreach := r.sealedProbeBreach
+		r.mu.Unlock()
+		if out == nil {
+			out = receivedFailure
+		}
+		result := outcomeCode(out)
+		report, cpu, termination, proof, classified, cleanupReason := cleanupForOutcome(r.unit, result, sealedProbe, sealedProbeObserved, sealedProbeBreach)
+		result = classified
+		hadPreCleanup := result != nil
+		unitCleaned := cleanupReason == ""
+		if !unitCleaned {
+			result = chainContainment(result, hadPreCleanup, "containment-cleanup", cleanupReason)
+		}
+		stagedCleaned := r.staged != nil && r.staged.Cleanup() == nil
+		proof.Staged = stagedCleaned
+		proof.Accepted = unitCleaned && stagedCleaned
+		if !stagedCleaned {
+			result = chainContainment(result, hadPreCleanup, "containment-cleanup", "staged-cleanup")
+		}
+		r.mu.Lock()
+		workload := workloadOutcomeForSealedProbe(out, classified, report, sealedProbe, sealedProbeObserved, sealedProbeBreach)
+		probeOutcome := classifyProbeOutcome(sealedProbe, sealedProbeObserved, sealedProbeBreach, workload, report, proof)
+		r.terminal = TerminalReport{PreStop: cloneSandboxReport(report), Termination: termination, CPU: cpu, Wall: time.Since(r.started), Workload: workload, ProbeOutcome: probeOutcome, Cleanup: proof, Outcome: errorCode(result), Cleaned: proof.Accepted}
+		r.result = result
+		r.mu.Unlock()
+		close(r.finished)
+	})
+	<-r.finished
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.result
+}
+
+func classifyProbeOutcome(probe *containmentProbe, observed, breach bool, workload WorkloadOutcome, report SandboxReport, cleanup CleanupProof) ProbeOutcome {
+	if probe == nil {
+		return ""
+	}
+	if breach {
+		return ProbeOutcomeBreach
+	}
+	if !cleanup.Accepted {
+		return ProbeOutcomeUnverified
+	}
+	switch probe.caseID {
+	case "network", "filesystem", "privileges", "pids":
+		if observed && workload.Code == WorkloadOutcomeSuccess {
+			return ProbeOutcomeContained
+		}
+	case "memory":
+		if workload.Code == WorkloadOutcomeOOM && (report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill") {
+			return ProbeOutcomeContained
+		}
+	case "cpu":
+		if workload.Code == WorkloadOutcomeCPUTimeout && report.CPUStats["nr_throttled"] > 0 && report.CPUStats["throttled_usec"] > 0 {
+			return ProbeOutcomeContained
+		}
+	case "wall":
+		if workload.Code == WorkloadOutcomeWallTimeout && report.ServiceResult == "timeout" {
+			return ProbeOutcomeContained
+		}
+	case "crash":
+		if workload.Code == WorkloadOutcomeCrash && report.ServiceResult != "success" && report.ExecMainStatus != 0 {
+			return ProbeOutcomeContained
+		}
+	case "abort":
+		if workload.Code == WorkloadOutcomeAborted {
+			return ProbeOutcomeContained
+		}
+	case "descendants":
+		if observed && workload.Code == WorkloadOutcomeAborted {
+			return ProbeOutcomeContained
+		}
+	}
+	return ProbeOutcomeUnverified
+}
+func (r *Run) TerminalReport() TerminalReport {
+	if r == nil {
+		return TerminalReport{}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return TerminalReport{PreStop: cloneSandboxReport(r.terminal.PreStop), Termination: r.terminal.Termination, CPU: r.terminal.CPU, Wall: r.terminal.Wall, Workload: r.terminal.Workload, ProbeOutcome: r.terminal.ProbeOutcome, Cleanup: r.terminal.Cleanup, Outcome: r.terminal.Outcome, Cleaned: r.terminal.Cleaned}
+}
+func cloneSandboxReport(in SandboxReport) SandboxReport {
+	out := in
+	out.ControlGroupMembers = append([]int(nil), in.ControlGroupMembers...)
+	out.ReadOnlyPaths = append([]string(nil), in.ReadOnlyPaths...)
+	out.InaccessiblePaths = append([]string(nil), in.InaccessiblePaths...)
+	out.BindReadOnlyPaths = append([]string(nil), in.BindReadOnlyPaths...)
+	out.BindPaths = append([]string(nil), in.BindPaths...)
+	out.ReadWritePaths = append([]string(nil), in.ReadWritePaths...)
+	out.RestrictAddressFamilies = append([]string(nil), in.RestrictAddressFamilies...)
+	if in.MemoryEvents != nil {
+		out.MemoryEvents = make(map[string]int64, len(in.MemoryEvents))
+		for k, v := range in.MemoryEvents {
+			out.MemoryEvents[k] = v
+		}
+	}
+	if in.CPUStats != nil {
+		out.CPUStats = make(map[string]int64, len(in.CPUStats))
+		for k, v := range in.CPUStats {
+			out.CPUStats[k] = v
+		}
+	}
+	if in.PIDsEvents != nil {
+		out.PIDsEvents = make(map[string]int64, len(in.PIDsEvents))
+		for k, v := range in.PIDsEvents {
+			out.PIDsEvents[k] = v
+		}
+	}
+	return out
+}
+func errorCode(err error) ErrorCode {
+	var e *SupervisorError
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return OutcomeSuccess
+}
+func safeExecutionFailure(err error, terminal TerminalReport) string {
+	validation, containment := preCleanupDiagnostic(err)
+	hasValidation := validation != nil
+	hasContainment := containment != nil
+
+	var errorStr string
+	code := errorCode(err)
+	if hasValidation {
+		code = ErrInvalidResult
+	}
+	switch code {
+	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
+		errorStr = string(code)
+	default:
+		errorStr = "unknown"
+	}
+
+	outcome := string(terminal.Outcome)
+	switch terminal.Outcome {
+	case ErrTimeout, ErrWorkerCrash, ErrContainmentUnavailable, ErrAborted, ErrInvalidResult:
+	default:
+		outcome = "unknown"
+	}
+
+	serviceResult := terminal.PreStop.ServiceResult
+	switch serviceResult {
+	case "success", "timeout", "oom-kill", "signal", "exit-code", "core-dump", "resources":
+	default:
+		serviceResult = "unknown"
+	}
+
+	oomKilled := terminal.PreStop.MemoryEvents["oom_kill"] > 0
+	pidsLimited := terminal.PreStop.PIDsEvents["max"] > 0
+
+	var stage, reason string
+	if hasValidation {
+		stage = validation.Stage
+		if !validResultValidationStage(stage) {
+			stage = "unknown"
+		}
+		reason = validation.ReasonCode
+		if !validResultValidationReason(reason) {
+			reason = "unknown"
+		}
+	} else if hasContainment {
+		stage = containment.Stage
+		if !validContainmentStage(stage) {
+			stage = "unknown"
+		}
+		reason = containment.ReasonCode
+		if !validContainmentReason(reason) {
+			reason = "unknown"
+		}
+	} else {
+		stage = safeRunnerStage(terminal.PreStop.ExecMainStatus)
+		reason = ""
+	}
+
+	out := "error=" + errorStr + " outcome=" + outcome + " service=" + serviceResult + " stage=" + stage
+	if hasValidation || hasContainment {
+		out += " reason=" + reason
+	}
+	out += " oom-killed=" + strconv.FormatBool(oomKilled) + " pids-limited=" + strconv.FormatBool(pidsLimited)
+	return out
+}
+func safeRunnerStage(status int) string {
+	switch status {
+	case 0:
+		return "success"
+	case 70:
+		return "authorization"
+	case 71:
+		return "request-validation"
+	case 72:
+		return "source-validation"
+	case 73:
+		return "native-load"
+	case 74:
+		return "conversion-projection"
+	case 75:
+		return "result-write"
+	case 76:
+		return "acknowledgement"
+	default:
+		return "unknown"
+	}
+}
+func outcomeCode(out error) error {
+	if errors.Is(out, errCPUAccounting) {
+		return closed(ErrContainmentUnavailable)
+	}
+	if errors.Is(out, errCPUCeiling) {
+		return closed(ErrTimeout)
+	}
+	if errorCode(out) == ErrContainmentUnavailable {
+		return out
+	}
+	if errors.Is(out, context.DeadlineExceeded) {
+		return closed(ErrTimeout)
+	}
+	if errors.Is(out, context.Canceled) {
+		return closed(ErrAborted)
+	}
+	var validation *ResultValidationError
+	if errors.As(out, &validation) {
+		return closedWith(ErrInvalidResult, validation)
+	}
+	var containment *ContainmentError
+	if errors.As(out, &containment) {
+		return closedWith(ErrContainmentUnavailable, containment)
+	}
+	if parserFailureError(out) {
+		return out
+	}
+	if out != nil {
+		return closed(ErrWorkerCrash)
+	}
+	return nil
+}
+
+func workloadOutcome(out, result error, report SandboxReport) WorkloadOutcome {
+	return workloadOutcomeForSealedProbe(out, result, report, nil, false, false)
+}
+
+// workloadOutcomeForSealedProbe keeps a successful, attested pids containment
+// probe from treating its expected cumulative TasksMax event as a worker crash.
+// All other pids-limit observations retain the ordinary crash classification.
+func workloadOutcomeForSealedProbe(out, result error, report SandboxReport, probe *containmentProbe, observed, breach bool) WorkloadOutcome {
+	// Host-established terminal evidence has priority over a peer result
+	// candidate. Keep the original cause so CPU accounting is never confused
+	// with an ordinary context deadline.
+	if errors.Is(out, context.Canceled) {
+		return WorkloadOutcome{Code: WorkloadOutcomeAborted}
+	}
+	if errors.Is(out, context.DeadlineExceeded) {
+		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
+	}
+	if errors.Is(out, errCPUCeiling) {
+		return WorkloadOutcome{Code: WorkloadOutcomeCPUTimeout}
+	}
+	if report.MemoryEvents["oom"] > 0 || report.MemoryEvents["oom_kill"] > 0 || report.ServiceResult == "oom" || report.ServiceResult == "oom-kill" {
+		return WorkloadOutcome{Code: WorkloadOutcomeOOM}
+	}
+	if report.PIDsEvents["max"] > 0 && !expectedSealedPIDsProbe(probe, observed, breach, report) {
+		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+	}
+	if report.ServiceResult == "timeout" {
+		return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
+	}
+	if establishedInvalidResult(result) {
+		return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+	}
+	if parserFailureError(result) {
+		return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+	}
+	if ordinaryTerminalCrashCanDetermine(result) && (report.ServiceResult == "exit-code" || report.ServiceResult == "core-dump" || report.ServiceResult == "signal" || report.ExecMainStatus != 0) {
+		return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+	}
+	if result != nil {
+		switch errorCode(result) {
+		case ErrInvalidResult:
+			return WorkloadOutcome{Code: WorkloadOutcomeInvalidResult}
+		case ErrTimeout:
+			return WorkloadOutcome{Code: WorkloadOutcomeWallTimeout}
+		case ErrAborted:
+			return WorkloadOutcome{Code: WorkloadOutcomeAborted}
+		case ErrWorkerCrash:
+			return WorkloadOutcome{Code: WorkloadOutcomeCrash}
+		default:
+			return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+		}
+	}
+	if report.ServiceResult == "success" && report.ExecMainStatus == 0 {
+		return WorkloadOutcome{Code: WorkloadOutcomeSuccess}
+	}
+	return WorkloadOutcome{Code: WorkloadOutcomeUnverified}
+}
+
+func expectedSealedPIDsProbe(probe *containmentProbe, observed, breach bool, report SandboxReport) bool {
+	return probe != nil && probe.caseID == "pids" && observed && !breach && report.PIDsEvents["max"] > 0 && report.ServiceResult == "success" && report.ExecMainStatus == 0
+}
+
+// establishedInvalidResult is a parser-result classification that terminal
+// crash evidence cannot replace. Host cancellation and resource evidence are
+// handled first in workloadOutcome.
+func establishedInvalidResult(result error) bool {
+	var validation *ResultValidationError
+	return errors.As(result, &validation) || errorCode(result) == ErrInvalidResult
+}
+
+// ordinaryTerminalCrashCanDetermine limits exit-code, core-dump, and signal
+// evidence to outcomes that have not established a more specific result.
+func ordinaryTerminalCrashCanDetermine(result error) bool {
+	if result == nil {
+		return true
+	}
+	switch errorCode(result) {
+	case ErrWorkerCrash, ErrContainmentUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+func workloadError(outcome WorkloadOutcome) error {
+	switch outcome.Code {
+	case WorkloadOutcomeSuccess:
+		return nil
+	case WorkloadOutcomeInvalidResult:
+		return closed(ErrInvalidResult)
+	case WorkloadOutcomeCPUTimeout, WorkloadOutcomeWallTimeout:
+		return closed(ErrTimeout)
+	case WorkloadOutcomeAborted:
+		return closed(ErrAborted)
+	case WorkloadOutcomeOOM, WorkloadOutcomeCrash:
+		return closed(ErrWorkerCrash)
+	default:
+		return closed(ErrContainmentUnavailable)
+	}
+}
+
+// establishedWorkloadResult identifies outcomes for which a failed service
+// terminal status is expected. Containment failures and unverified outcomes
+// remain strict so cleanup cannot accept an unproven failed terminal state.
+func establishedWorkloadResult(result error) bool {
+	switch errorCode(result) {
+	case ErrInvalidResult, ErrTimeout, ErrAborted, ErrWorkerCrash:
+		return true
+	default:
+		return false
+	}
+}
+
+// parserResultFailure converts an authenticated parser-failure envelope into
+// the terminal workload error without treating the envelope as invalid.
+func parserResultFailure(result Result) error {
+	if result.OK || result.FailureKind != FailureParser || !validParserFailure(result.Error) {
+		return nil
+	}
+	return closed(result.Error)
+}
+
+func parserFailureError(err error) bool {
+	return validParserFailure(errorCode(err))
+}
+
+func validParserFailure(code ErrorCode) bool {
+	switch code {
+	case ErrInvalidResult, ErrEncrypted, ErrExpandedTooLarge, ErrUnsupportedFormat:
+		return true
+	default:
+		return false
+	}
+}
+
+// chainContainment preserves a prior execution failure separately from a
+// synthetic cleanup diagnosis. Pure cleanup remains a ContainmentError.
+func chainContainment(result error, hadPreCleanup bool, stage, reason string) error {
+	cleanup := containmentDiagnostic(stage, reason)
+	if hadPreCleanup {
+		return closedWith(ErrContainmentUnavailable, &containmentCleanupChain{prior: result, cleanup: cleanup})
+	}
+	if result != nil {
+		return result
+	}
+	return closedWith(ErrContainmentUnavailable, cleanup)
+}
+
+func preCleanupDiagnostic(err error) (*ResultValidationError, *ContainmentError) {
+	var cleanup *containmentCleanupChain
+	if errors.As(err, &cleanup) {
+		var validation *ResultValidationError
+		if errors.As(cleanup.prior, &validation) {
+			return validation, nil
+		}
+		var containment *ContainmentError
+		if errors.As(cleanup.prior, &containment) {
+			return nil, containment
+		}
+		return nil, cleanup.cleanup
+	}
+	var validation *ResultValidationError
+	if errors.As(err, &validation) {
+		return validation, nil
+	}
+	var containment *ContainmentError
+	if errors.As(err, &containment) {
+		return nil, containment
+	}
+	return nil, nil
+}
+func (r *Run) monitor() {
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-r.stop:
+			return
+		case <-tick.C:
+			ctx, cancel := context.WithTimeout(context.Background(), usageTimeout)
+			var u time.Duration
+			var reportErr, cpuErr error
+			if collector, ok := r.unit.(activeAccountingCollector); ok {
+				u, reportErr = collector.RefreshAccounting(ctx)
+				cpuErr = reportErr
+			} else {
+				_, reportErr = r.unit.Report(ctx)
+				u, cpuErr = r.unit.CPUUsage(ctx)
+			}
+			if reportErr != nil || cpuErr != nil {
+				status, statusErr := r.unit.TerminalStatus(ctx)
+				cancel()
+				cached := false
+				if snapshots, ok := r.unit.(verifiedAccountingSnapshot); ok {
+					_, _, cached = snapshots.LastVerifiedSnapshot()
+				}
+				if cached && statusErr == nil && status.MainPID == 0 && (status.State == "inactive" || status.State == "failed") {
+					return
+				}
+				r.Finish(context.Background(), errCPUAccounting)
+				return
+			}
+			cancel()
+			if u >= CPUCeiling {
+				r.Finish(context.Background(), errCPUCeiling)
+				return
+			}
+		}
+	}
+}
+func cleanup(unit Unit) (SandboxReport, time.Duration, TerminationEvidence, string) {
+	report, cpu, termination, _, _, reason := cleanupForOutcome(unit, nil, nil, false, false)
+	return report, cpu, termination, reason
+}
+
+// cleanupForOutcome establishes cleanup facts independently from a known
+// workload outcome. A failed workload may legitimately have failed service
+// status; only an otherwise claimed success needs successful terminal status.
+func cleanupForOutcome(unit Unit, result error, probe *containmentProbe, observed, breach bool) (SandboxReport, time.Duration, TerminationEvidence, CleanupProof, error, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if unit == nil {
+		return SandboxReport{}, 0, TerminationEvidence{}, CleanupProof{}, result, "unit-cleanup"
+	}
+	proof := CleanupProof{}
+	var reason string
+	usedCachedAccounting := false
+	reportGoneAccounting := false
+	terminalRuntimeDisappearingAccounting := false
+	captureFailure := accountingCaptureInvalid
+	var report SandboxReport
+	var cpu time.Duration
+	var captureErr error
+	cachedReport, cachedCPU, cached := SandboxReport{}, time.Duration(0), false
+	if snapshots, ok := unit.(verifiedAccountingSnapshot); ok {
+		cachedReport, cachedCPU, cached = snapshots.LastVerifiedSnapshot()
+	}
+	if capture, supported := unit.(terminalAccountingCapture); supported {
+		report, cpu, captureFailure, captureErr = capture.CaptureTerminalAccounting(ctx)
+	} else {
+		var reportErr, cpuErr error
+		report, reportErr = unit.Report(ctx)
+		cpu, cpuErr = unit.CPUUsage(ctx)
+		if reportErr != nil {
+			captureErr = reportErr
+		} else {
+			captureErr = cpuErr
+		}
+		if captureErr == nil {
+			captureFailure = accountingCaptureOK
+		}
+	}
+	if captureErr != nil {
+		// A verified snapshot may bridge only disappearance of the exact pinned
+		// cgroup (ENOENT) or systemd unloading that exact unit. All malformed or
+		// unavailable accounting remains fail-closed.
+		if cachedAccountingSnapshotMatchesUnit(unit, cachedReport, cached) && (captureFailure == accountingCaptureExactCgroupAbsent || captureFailure == accountingCaptureReportGone || terminalRuntimeDisappearing(captureFailure)) {
+			report, cpu = cachedReport, cachedCPU
+			usedCachedAccounting = true
+			proof.AccountingAvailable = true
+			proof.VerifiedSnapshot = true
+			reportGoneAccounting = captureFailure == accountingCaptureReportGone
+			terminalRuntimeDisappearingAccounting = terminalRuntimeDisappearing(captureFailure)
+		} else if reason == "" {
+			reason = captureFailure.reason()
+			if reason == "" {
+				reason = "accounting-evidence"
+			}
+		}
+	} else {
+		proof.AccountingAvailable = true
+		// Accounting is captured from the unit that was verified at launch; a
+		// retained verified snapshot is additionally required only on fallback.
+		proof.VerifiedSnapshot = true
+	}
+	if result == nil {
+		derived := workloadOutcomeForSealedProbe(nil, nil, report, probe, observed, breach)
+		// PID-limit classification needs the terminal status below: the sealed
+		// pids exception is valid only for a successfully terminated unit.
+		if derived.Code != WorkloadOutcomeSuccess && derived.Code != WorkloadOutcomeUnverified && !(derived.Code == WorkloadOutcomeCrash && report.PIDsEvents["max"] > 0) {
+			result = workloadError(derived)
+		}
+	}
+	var alreadyGone *alreadyGoneError
+	var propertiesGone *unitPropertiesGonePending
+	terminalProof, terminalProofOK := terminalSuccessProof{}, false
+	if snapshot, ok := unit.(terminalSuccessSnapshot); ok {
+		terminalProof, terminalProofOK = snapshot.LastTerminalSuccess()
+	}
+	witness, witnessOK := lifecycleWitness{}, false
+	if snapshot, ok := unit.(lifecycleWitnessSnapshot); ok {
+		witness, witnessOK = snapshot.lastLifecycleWitness()
+	}
+	proof.StopAttempted = true
+	if stopErr := unit.Stop(ctx); stopErr != nil {
+		errors.As(stopErr, &alreadyGone)
+		// Never overwrite an earlier reason.
+		if reason == "" && !terminalRuntimeDisappearingAccounting {
+			if alreadyGone != nil {
+				reason = "alreadyGone"
+			} else {
+				var failure *stopFailure
+				if errors.As(stopErr, &failure) {
+					if failure.reason == "unit-properties-gone" {
+						if pending, promotionReason := unitPropertiesGonePromotion(report.ControlGroup, cachedReport, cached); pending != nil {
+							propertiesGone = pending
+							reason = "alreadyGone"
+						} else {
+							reason = promotionReason
+						}
+					} else {
+						reason = failure.reason
+					}
+				} else {
+					reason = "stop-unit"
+				}
+			}
+		}
+	}
+	waitErr := unit.WaitInactive(ctx)
+	if waitErr != nil {
+		// An exact typed unit disappearance is not a wait failure: Stop has
+		// already been attempted, and the ordered final GetUnit/cgroup proof
+		// below is the authority for accepting or rejecting it.
+		if (reason == "" || propertiesGone != nil) && !terminalRuntimeDisappearingAccounting && !terminalStatusWaitExactlyGone(waitErr) {
+			reason = "wait-inactive"
+		}
+	} else {
+		proof.WaitedInactive = true
+	}
+	status, statusErr := unit.TerminalStatus(ctx)
+	if statusErr == nil {
+		report.MainPID = status.MainPID
+		report.ServiceResult = status.ServiceResult
+		report.ExecMainStatus = status.ExecMainStatus
+		if result == nil {
+			derived := workloadOutcomeForSealedProbe(nil, nil, report, probe, observed, breach)
+			if derived.Code != WorkloadOutcomeSuccess {
+				result = workloadError(derived)
+			}
+		}
+	}
+	unitTerminal := statusErr == nil && status.MainPID == 0 && status.State == "inactive"
+	lifecycleProof := statusErr == nil && successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)
+	// A terminal failure can establish the workload outcome after its status is
+	// read. Recompute strictness here so that cleanup proof remains independent
+	// of a truthful failed outcome, while a claimed success still needs strict
+	// successful terminal status.
+	strictSuccess := !establishedWorkloadResult(result)
+	statusGone := terminalStatusExactlyGone(statusErr)
+	if (statusErr != nil && (strictSuccess || !statusGone)) || (strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus)) || (!strictSuccess && !unitTerminal && !statusGone) {
+		// Runtime-target disappearance has one composite proof. Its final
+		// terminal status (including an exact GetUnit-gone error) must reach
+		// that validator before generic status handling assigns a reason.
+		if reason == "" && !reportGoneAccounting && !terminalRuntimeDisappearingAccounting {
+			reason = "terminal-status"
+		}
+	}
+	proof.UnitTerminal = unitTerminal || statusGone
+	termination, terminationErr := unit.TerminationEvidence(ctx, report.ControlGroup)
+	proof.Termination = termination
+	if terminationErr != nil || termination.ControlGroup != report.ControlGroup || (!termination.Empty && !termination.Absent) || (termination.Empty && termination.Absent) {
+		if reason == "" && !terminalRuntimeDisappearingAccounting {
+			reason = "termination-evidence"
+		}
+	}
+	if reason == "alreadyGone" {
+		if propertiesGone != nil {
+			reason = validateUnitPropertiesGone(propertiesGone.cgroup, cachedReport, terminalProof, terminalProofOK, witness, witnessOK, termination, terminationErr, status, statusErr)
+		} else if establishedWorkloadResult(result) && statusGone && validateAlreadyGoneTermination(report.ControlGroup, termination, terminationErr) == "" {
+			reason = ""
+		} else {
+			// Absent cgroup alone is insufficient: require pinned Absent/Empty
+			// plus carried successful inactive terminal evidence.
+			reason = validateAlreadyGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
+		}
+	}
+	if propertiesGone != nil && reason == "" {
+		lifecycleProof = true
+	}
+	if reportGoneAccounting && reason == "" {
+		reason = validateReportGone(report.ControlGroup, termination, terminationErr, status, statusErr, alreadyGone)
+	} else if terminalRuntimeDisappearingAccounting && reason == "" {
+		reason = validateRuntimeTargetMissing(report.ControlGroup, cachedReport, witness, witnessOK, termination, terminationErr, status, statusErr, strictSuccess)
+		if reason == "" {
+			lifecycleProof = true
+		}
+	} else if usedCachedAccounting && !termination.Absent && reason == "" {
+		reason = "used-cached-accounting"
+	}
+	if cleanupErr := unit.Cleanup(ctx); cleanupErr != nil {
+		var failure *unitCleanupFailure
+		// All lifecycle proof has already been ordered above. ResetFailedUnit
+		// is idempotent only when that proof left no prior cleanup reason.
+		idempotentResetGone := reason == "" && lifecycleProof && errors.As(cleanupErr, &failure) && failure.resetFailedUnitNoSuchUnit && len(failure.reasons) == 1 && failure.primaryReason() == "unit-cleanup-reset-failed-unit-no-such-unit"
+		if reason == "" && !idempotentResetGone {
+			if errors.As(cleanupErr, &failure) {
+				reason = failure.primaryReason()
+			} else {
+				reason = "unit-cleanup"
+			}
+		}
+	} else {
+		proof.Reset = true
+	}
+	proof.Accepted = reason == ""
+	return report, cpu, termination, proof, result, reason
+}
+
+func terminalStatusExactlyGone(err error) bool {
+	var operation *terminalStatusOperationError
+	return errors.As(err, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone
+}
+
+func terminalStatusWaitExactlyGone(err error) bool {
+	var operation *terminalStatusOperationError
+	return errors.As(err, &operation) && operation.dbusClass == terminalStatusDBusGone && (operation.stage == terminalStatusGetUnit || operation.stage == terminalStatusUnitProperties)
+}
+
+// terminalRuntimeDisappearing is the narrow deferred-proof eligibility for a
+// teardown capture that cannot re-attest the exited worker's runtime tree.
+// All other attestation failures remain fail-closed.
+func terminalRuntimeDisappearing(failure accountingCaptureFailure) bool {
+	return failure == accountingCaptureReportValidationRuntimeAttestationRuntimeTargetMissing || failure == accountingCaptureReportValidationRuntimeAttestationRuntimeTreeUnreadable
+}
+
+// validateRuntimeTargetMissing permits the one deferred bridge for a vanished
+// systemd namespace bind. The target may disappear while /proc/<pid>/root still
+// exists, so only an ordered result-ACK witness bound to the fully verified
+// immutable snapshot, plus exact GetUnit-gone and exclusive pinned-cgroup
+// termination, can establish that the worker has actually exited.
+func validateRuntimeTargetMissing(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, strictSuccess bool) string {
+	if reason := runtimeTargetMissingTerminationReason(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if reason := runtimeTargetMissingWitnessReason(expectedCgroup, snapshot, witness, witnessOK); reason != "" {
+		return reason
+	}
+	if statusErr == nil {
+		if strictSuccess && !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+			return "runtime-target-missing-terminal-status-not-success"
+		}
+		if status.MainPID == 0 && (status.State == "inactive" || (!strictSuccess && status.State == "failed")) {
+			return ""
+		}
+		return "runtime-target-missing-terminal-status-not-gone"
+	}
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
+		return ""
+	}
+	return runtimeTargetMissingTerminalStatusReason(statusErr)
+}
+
+func runtimeTargetMissingTerminationReason(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {
+	switch validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr) {
+	case "":
+		return ""
+	case "already-gone-termination-mismatch":
+		return "runtime-target-missing-termination-mismatch"
+	case "already-gone-termination-not-exclusive":
+		return "runtime-target-missing-termination-not-exclusive"
+	default:
+		return "runtime-target-missing-termination-unavailable"
+	}
+}
+
+func runtimeTargetMissingWitnessReason(expectedCgroup string, snapshot SandboxReport, witness lifecycleWitness, witnessOK bool) string {
+	if !witnessOK {
+		return "runtime-target-missing-ack-witness-absent"
+	}
+	if !validLifecycleWitnessBinding(witness) {
+		return "runtime-target-missing-ack-witness-absent"
+	}
+	if witness.cgroup != expectedCgroup {
+		return "runtime-target-missing-ack-witness-cgroup-mismatch"
+	}
+	if witness.pid <= 0 {
+		return "runtime-target-missing-ack-witness-pid-invalid"
+	}
+	if witness.requestDigest == "" {
+		return "runtime-target-missing-ack-witness-request-digest-missing"
+	}
+	if witness.nonce == "" {
+		return "runtime-target-missing-ack-witness-nonce-missing"
+	}
+	if snapshot.ControlGroup != expectedCgroup {
+		return "runtime-target-missing-snapshot-cgroup-mismatch"
+	}
+	if snapshot.MainPID != witness.pid {
+		return "runtime-target-missing-snapshot-pid-mismatch"
+	}
+	if snapshot.RuntimeTreeDigest == "" {
+		return "runtime-target-missing-snapshot-runtime-digest-missing"
+	}
+	if snapshot.RuntimeTreeDigest != witness.runtimeDigest {
+		return "runtime-target-missing-snapshot-runtime-digest-mismatch"
+	}
+	binding := lifecycleWitnessBinding{kind: witness.kind, probeCase: witness.probeCase}
+	if !eligibleLifecycleResources(snapshot, binding) {
+		if snapshot.MemoryEvents["oom"] != 0 {
+			return "runtime-target-missing-snapshot-oom"
+		}
+		if snapshot.MemoryEvents["oom_kill"] != 0 {
+			return "runtime-target-missing-snapshot-oom-kill"
+		}
+		return "runtime-target-missing-snapshot-pids-max"
+	}
+	return ""
+}
+
+func validLifecycleWitnessBinding(witness lifecycleWitness) bool {
+	switch witness.kind {
+	case lifecycleWitnessResult:
+		return witness.probeCase == ""
+	case lifecycleWitnessProbe:
+		switch witness.probeCase {
+		case "network", "filesystem", "privileges", "pids", "descendants":
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+func runtimeTargetMissingTerminalStatusReason(statusErr error) string {
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		switch operation.stage {
+		case terminalStatusGetUnit:
+			switch operation.dbusClass {
+			case terminalStatusDBusUnrecognized:
+				return "runtime-target-missing-terminal-status-get-unit-unrecognized"
+			case terminalStatusDBusGeneric:
+				return "runtime-target-missing-terminal-status-get-unit-unavailable"
+			}
+		case terminalStatusUnitProperties:
+			return runtimeTargetMissingTerminalStatusOperationReason("unit-properties", operation.dbusClass)
+		case terminalStatusServiceProperties:
+			return runtimeTargetMissingTerminalStatusOperationReason("service-properties", operation.dbusClass)
+		case terminalStatusDecode:
+			return "runtime-target-missing-terminal-status-decode-unavailable"
+		}
+	}
+	var gone *terminalStatusGoneError
+	if errors.As(statusErr, &gone) {
+		return "runtime-target-missing-terminal-status-carried-gone"
+	}
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) && unavailable.stage == terminalStatusDecode {
+		return "runtime-target-missing-terminal-status-decode-unavailable"
+	}
+	var unrecognized *terminalStatusUnrecognizedDBusError
+	if errors.As(statusErr, &unrecognized) {
+		return "runtime-target-missing-terminal-status-unrecognized"
+	}
+	return "runtime-target-missing-terminal-status-unavailable"
+}
+
+func runtimeTargetMissingTerminalStatusOperationReason(stage string, class terminalStatusDBusClass) string {
+	switch class {
+	case terminalStatusDBusGone:
+		return "runtime-target-missing-terminal-status-" + stage + "-gone"
+	case terminalStatusDBusUnrecognized:
+		return "runtime-target-missing-terminal-status-" + stage + "-unrecognized"
+	default:
+		return "runtime-target-missing-terminal-status-" + stage + "-unavailable"
+	}
+}
+
+// validateReportGone permits cached accounting only after systemd has reported
+// the unit gone. The cache establishes the pinned cgroup, not terminal state:
+// success still needs fresh strict status or an exact carried Stop proof.
+func validateReportGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, carried *alreadyGoneError) string {
+	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if statusErr == nil {
+		if successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+			return ""
+		}
+		return "already-gone-terminal-not-success"
+	}
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		if reason, ok := terminalStatusOperationReason(operation); ok {
+			return reason
+		}
+	}
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) && unavailable.stage == terminalStatusDecode {
+		return "already-gone-terminal-decode-unavailable"
+	}
+	return validateAlreadyGone(expectedCgroup, termination, terminationErr, status, statusErr, carried)
+}
+
+func cachedAccountingSnapshotMatchesUnit(unit Unit, report SandboxReport, cached bool) bool {
+	if !cached || !validCgroup(report.ControlGroup) {
+		return false
+	}
+	if systemd, ok := unit.(*systemdUnit); ok {
+		return systemd.snapshotMatchesPinnedControlGroup(report)
+	}
+	return true
+}
+
+// validateUnitPropertiesGone validates the pending UnitProperties-gone path
+// against fresh post-stop evidence. It accepts either the existing strict
+// terminal-success proof or the ordered result-ACK witness; a stop result by
+// itself is never lifecycle evidence.
+func validateUnitPropertiesGone(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, proofOK bool, witness lifecycleWitness, witnessOK bool, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error) string {
+	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if proofOK {
+		if reason := validateUnitPropertiesGoneProof(expectedCgroup, snapshot, proof, status, statusErr); reason == "" {
+			return ""
+		} else {
+			return reason
+		}
+	}
+	if witnessOK {
+		if reason := runtimeTargetMissingWitnessReason(expectedCgroup, snapshot, witness, witnessOK); reason != "" {
+			return reason
+		}
+		return validateUnitPropertiesGoneFinalStatus(status, statusErr)
+	}
+	return "unit-properties-gone-proof-missing"
+}
+
+func validateUnitPropertiesGoneProof(expectedCgroup string, snapshot SandboxReport, proof terminalSuccessProof, status TerminalStatus, statusErr error) string {
+	if proof.cgroup != expectedCgroup {
+		return "unit-properties-gone-proof-cgroup-mismatch"
+	}
+	if proof.snapshotPID <= 0 {
+		return "unit-properties-gone-proof-pid-invalid"
+	}
+	if snapshot.ControlGroup != expectedCgroup {
+		return "unit-properties-gone-snapshot-cgroup-mismatch"
+	}
+	if snapshot.MainPID != proof.snapshotPID {
+		return "unit-properties-gone-snapshot-pid-mismatch"
+	}
+	if snapshot.RuntimeTreeDigest == "" {
+		return "unit-properties-gone-runtime-digest-missing"
+	}
+	if snapshot.RuntimeTreeDigest != proof.runtimeDigest {
+		return "unit-properties-gone-runtime-digest-mismatch"
+	}
+	if !successfulInactiveTerminal(proof.status.State, proof.status.MainPID, proof.status.ServiceResult, proof.status.ExecMainStatus) {
+		return "unit-properties-gone-proof-terminal-not-success"
+	}
+	return validateUnitPropertiesGoneFinalStatus(status, statusErr)
+}
+
+func validateUnitPropertiesGoneFinalStatus(status TerminalStatus, statusErr error) string {
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) && operation.stage == terminalStatusGetUnit && operation.dbusClass == terminalStatusDBusGone {
+		return ""
+	}
+	if statusErr != nil {
+		if reason, ok := terminalStatusFailureReason(statusErr); ok {
+			return reason
+		}
+		return "already-gone-terminal-unavailable"
+	}
+	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		return "already-gone-terminal-not-success"
+	}
+	return "already-gone-terminal-unavailable"
+}
+
+// validateAlreadyGone accepts the intermediate alreadyGone reason only when
+// pinned-cgroup TerminationEvidence is Absent or Empty (exclusive) and strict
+// successful-inactive terminal proof is carried (MainPID 0, State inactive,
+// ServiceResult success, ExecMainStatus 0). failed/oom-kill/exit-code/nonzero
+// must not clear the cleanup failure. Returns "" on accept, or a fixed safe
+// diagnostic reason that does not expose cgroup or systemd details.
+func validateAlreadyGone(expectedCgroup string, termination TerminationEvidence, terminationErr error, status TerminalStatus, statusErr error, alreadyGone *alreadyGoneError) string {
+	if reason := validateAlreadyGoneTermination(expectedCgroup, termination, terminationErr); reason != "" {
+		return reason
+	}
+	if alreadyGone == nil || !validCgroup(alreadyGone.cgroup) || alreadyGone.cgroup != expectedCgroup || !successfulInactiveTerminal(alreadyGone.proof.State, alreadyGone.proof.MainPID, alreadyGone.proof.ServiceResult, alreadyGone.proof.ExecMainStatus) {
+		return "already-gone-terminal-unavailable"
+	}
+	if statusErr != nil {
+		if reason, ok := terminalStatusFailureReason(statusErr); ok {
+			return reason
+		}
+		var gone *terminalStatusGoneError
+		if errors.As(statusErr, &gone) {
+			return ""
+		}
+		return "already-gone-terminal-unavailable"
+	}
+	if !successfulInactiveTerminal(status.State, status.MainPID, status.ServiceResult, status.ExecMainStatus) {
+		return "already-gone-terminal-not-success"
+	}
+	return ""
+}
+
+// terminalStatusOperationReason reports a direct sanitized operation failure
+// without treating it as terminal proof. It uses only the fixed stage and
+// class retained by terminalStatusOperationError.
+func terminalStatusOperationReason(operation *terminalStatusOperationError) (string, bool) {
+	if operation == nil {
+		return "", false
+	}
+
+	var class string
+	switch operation.dbusClass {
+	case terminalStatusDBusGone:
+		class = "gone"
+	case terminalStatusDBusUnrecognized:
+		class = "unrecognized"
+	case terminalStatusDBusGeneric:
+		class = "unavailable"
+	default:
+		return "", false
+	}
+
+	switch operation.stage {
+	case terminalStatusGetUnit:
+		return "already-gone-terminal-get-unit-" + class, true
+	case terminalStatusUnitProperties:
+		return "already-gone-terminal-unit-properties-" + class, true
+	case terminalStatusServiceProperties:
+		return "already-gone-terminal-service-properties-" + class, true
+	case terminalStatusDecode:
+		return "already-gone-terminal-decode-unavailable", true
+	default:
+		return "", false
+	}
+}
+
+// terminalStatusFailureReason maps only fixed, sanitized status errors to
+// diagnostics. Callers still decide whether any error may stand in for proof.
+func terminalStatusFailureReason(statusErr error) (string, bool) {
+	var operation *terminalStatusOperationError
+	if errors.As(statusErr, &operation) {
+		return terminalStatusOperationReason(operation)
+	}
+
+	var unrecognizedDBus *terminalStatusUnrecognizedDBusError
+	if errors.As(statusErr, &unrecognizedDBus) {
+		return "already-gone-terminal-unrecognized-dbus", true
+	}
+
+	var unavailable *terminalStatusUnavailableError
+	if errors.As(statusErr, &unavailable) {
+		switch unavailable.stage {
+		case terminalStatusGetUnit:
+			return "already-gone-terminal-get-unit", true
+		case terminalStatusUnitProperties:
+			return "already-gone-terminal-unit-properties", true
+		case terminalStatusServiceProperties:
+			return "already-gone-terminal-service-properties", true
+		case terminalStatusDecode:
+			return "already-gone-terminal-decode-unavailable", true
+		}
+	}
+
+	return "", false
+}
+
+func validateAlreadyGoneTermination(expectedCgroup string, termination TerminationEvidence, terminationErr error) string {
+	if !validCgroup(expectedCgroup) || terminationErr != nil || termination.ControlGroup == "" {
+		return "already-gone-termination-unavailable"
+	}
+	if termination.ControlGroup != expectedCgroup {
+		return "already-gone-termination-mismatch"
+	}
+	if !termination.Absent && !termination.Empty {
+		return "already-gone-termination-mismatch"
+	}
+	if termination.Absent && termination.Empty {
+		return "already-gone-termination-not-exclusive"
+	}
+	return ""
+}
+
+// startDiagnostic retains a typed backend diagnosis only when it is safe to
+// expose. Other backend errors are classified by the supervisor operation.
+func startDiagnostic(stage string, err error) *ContainmentError {
+	if stage == "post-start-report" {
+		return containmentDiagnostic(stage, postStartReportReason(err))
+	}
+	var diagnostic *ContainmentError
+	if errors.As(err, &diagnostic) {
+		return containmentDiagnostic(diagnostic.Stage, diagnostic.ReasonCode)
+	}
+	return containmentDiagnostic(stage, "unavailable")
+}
+
+// postStartReportReason retains only the report's fixed, sanitized diagnosis.
+// It deliberately does not retain a unit name, D-Bus name/body, path, or
+// source error. A report-gone operation remains distinct because it proves
+// systemd unloaded the transient unit during the post-start check.
+func postStartReportReason(err error) string {
+	var operation *terminalStatusOperationError
+	if errors.As(err, &operation) {
+		stage := string(operation.stage)
+		switch operation.dbusClass {
+		case terminalStatusDBusGone:
+			return "report-" + stage + "-gone"
+		case terminalStatusDBusUnrecognized:
+			return "report-" + stage + "-unrecognized-dbus"
+		default:
+			return "report-" + stage + "-unavailable"
+		}
+	}
+
+	var validation *ReportValidationError
+	if errors.As(err, &validation) {
+		return "report-" + string(validation.Code)
+	}
+	return "unavailable"
+}
+
+// verifyDiagnostic records the failed post-start operation without retaining
+// raw backend, path, process, or attestation details.
+func verifyDiagnostic(ctx context.Context, u Unit, s ServiceSpec) *ContainmentError {
+	if u == nil {
+		return containmentDiagnostic("post-start-verify", "unavailable")
+	}
+	r, e := u.Report(ctx)
+	if e != nil {
+		return startDiagnostic("post-start-report", e)
+	}
+	if s.probe != nil {
+		verifier, ok := u.(attestedProbeVerifier)
+		if !ok {
+			return containmentDiagnostic("post-start-probe-attestation", "unavailable")
+		}
+		if err := verifier.VerifyAttestedProbe(ctx, s.probe); err != nil {
+			return startDiagnostic("post-start-probe-attestation", err)
+		}
+	} else {
+		verifier, ok := u.(attestedNodeVerifier)
+		if !ok {
+			return containmentDiagnostic("post-start-node-attestation", "unavailable")
+		}
+		if err := verifier.VerifyAttestedNode(ctx, s.Node); err != nil {
+			return startDiagnostic("post-start-node-attestation", err)
+		}
+	}
+	valid := r.MainPID > 0 && r.RuntimeTreeDigest == s.runtimeTreeDigest && r.UID > 0 && r.DynamicUser && r.PrivateUsers && r.ProtectProc == "invisible" && r.ProcSubset == "pid" && contains(r.ControlGroupMembers, r.MainPID) && r.MemoryMax == s.MemoryMax && r.MemorySwapMax == 0 && r.TasksMax == s.TasksMax && r.CPUQuotaPercent == s.CPUQuotaPercent && r.CPUQuotaPeriodUSec == s.CPUQuotaPeriodUSec && r.RuntimeMax == s.RuntimeMax && r.KillMode == s.KillMode && r.ProtectSystem == "strict" && r.CPUAccounting && r.NoNewPrivileges && r.PrivateNetwork && r.PrivateTmp && r.ProtectHome && r.CapabilityBoundingSet == 0 && r.AmbientCapabilities == 0 && r.RestrictAddressFamiliesAllow && same(r.ReadOnlyPaths, s.ReadOnlyPaths) && same(r.InaccessiblePaths, s.InaccessiblePaths) && same(r.BindReadOnlyPaths, s.BindReadOnlyPaths) && same(r.BindPaths, bindPathsForSpec(s)) && same(r.ReadWritePaths, s.ReadWritePaths) && same(r.RestrictAddressFamilies, s.RestrictAddressFamilies)
+	if !valid {
+		return containmentDiagnostic("post-start-verify", "verification-mismatch")
+	}
+	if snapshots, ok := u.(verifiedAccountingSnapshot); ok {
+		snapshots.MarkSnapshotVerified()
+	}
+	return nil
+}
+
+func verify(ctx context.Context, u Unit, s ServiceSpec) bool {
+	return verifyDiagnostic(ctx, u, s) == nil
+}
+func contains(a []int, x int) bool {
+	for _, v := range a {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+func same(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

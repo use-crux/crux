@@ -3,6 +3,11 @@ import { embedding, type DenseEmbedding } from '../../src/embedding'
 import { indexer } from '../../src/indexing'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
+
+function documents(input: Parameters<typeof schema2TextDocument>[0][]) {
+  return input.map(schema2TextDocument)
+}
 
 describe('indexer embedding-stage validation', () => {
   it('recomputes and replaces malformed dense cache entries', async () => {
@@ -29,7 +34,7 @@ describe('indexer embedding-stage validation', () => {
       }),
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     await docs.indexDocuments(input)
     const [entry] = (await records.list('indexer:docs:namespace:kb:embedding-cache:')).entries
@@ -71,7 +76,7 @@ describe('indexer embedding-stage validation', () => {
       cache: true,
     })
 
-    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'stable' }])
+    await docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'stable' }]))
     const sourcePrefix = 'indexer:docs:namespace:kb:source:source-a:'
     const cachePrefix = 'indexer:docs:namespace:kb:embedding-cache:'
     const sourceBefore = await records.list(sourcePrefix)
@@ -79,7 +84,7 @@ describe('indexer embedding-stage validation', () => {
     shouldFail = true
 
     await expect(
-      docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'changed' }]),
+      docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'changed' }])),
     ).rejects.toThrow('provider unavailable')
 
     await expect(records.list(sourcePrefix)).resolves.toEqual(sourceBefore)
@@ -107,7 +112,7 @@ describe('indexer embedding-stage validation', () => {
       cache: true,
     })
 
-    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'stable' }])
+    await docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'stable' }]))
     const sourcePrefix = 'indexer:docs:namespace:kb:source:source-a:'
     const cachePrefix = 'indexer:docs:namespace:kb:embedding-cache:'
     const sourceBefore = await records.list(sourcePrefix)
@@ -115,7 +120,7 @@ describe('indexer embedding-stage validation', () => {
     returnIncompleteOutput = true
 
     await expect(
-      docs.indexDocuments([{ namespace: 'kb', sourceId: 'source-a', content: 'changed' }]),
+      docs.indexDocuments(documents([{ namespace: 'kb', sourceId: 'source-a', content: 'changed' }])),
     ).rejects.toThrow(/embedding/i)
 
     await expect(records.list(sourcePrefix)).resolves.toEqual(sourceBefore)
@@ -144,7 +149,7 @@ describe('indexer embedding-stage validation', () => {
       dense,
       cache: true,
     })
-    const input = [{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }]
+    const input = documents([{ namespace: 'kb', sourceId: 'source-a', content: 'hello' }])
 
     const first = await docs.indexDocuments(input)
     const second = await docs.indexDocuments(input)

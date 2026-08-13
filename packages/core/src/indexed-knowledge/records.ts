@@ -8,7 +8,8 @@
  * @module
  */
 
-import type { CruxChunk, CruxParentChunk } from '../indexing/types'
+import type { CruxChunk, CruxParentChunk, SpreadsheetProvenance } from '../indexing/types'
+import { StoredEvidenceRequiredError, validateStoredEvidence } from '../indexing/stored-evidence'
 import type { ExactFilter, JsonObject, SearchLegMatch, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
@@ -32,6 +33,7 @@ type IndexedBaseRecord<TType extends IndexedRecordType> = {
   readonly metadata: Record<string, unknown>
   readonly source?: CruxChunk['source']
   readonly provenance?: CruxChunk['provenance']
+  readonly evidence?: CruxChunk['evidence']
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -68,6 +70,13 @@ export function createIndexedChunkRecord(input: {
   readonly sparse?: SparseVector
   readonly now: number
 }): IndexedChunkRecord {
+  if (!input.chunk.evidence) {
+    throw new StoredEvidenceRequiredError()
+  }
+  const evidence = validateStoredEvidence(input.chunk.evidence)
+  if (evidence.chunkId !== input.chunk.chunkId || evidence.normalizedContent !== input.chunk.content) {
+    throw new Error('Stored evidence must retain the indexed chunk ID and content exactly.')
+  }
   const source = projectSourceFacts(input.chunk.source)
   const parent =
     input.chunk.parent?.parentId !== undefined
@@ -92,6 +101,7 @@ export function createIndexedChunkRecord(input: {
     ...(source ? { source } : {}),
     ...(parent ? { parent } : {}),
     ...(input.chunk.provenance ? { provenance: input.chunk.provenance } : {}),
+    ...(evidence ? { evidence } : {}),
     ...(input.dense ? { embedding: input.dense } : {}),
     ...(input.sparse ? { sparseEmbedding: input.sparse } : {}),
     createdAt: input.now,
@@ -188,10 +198,23 @@ export function indexedChunkToHit(input: {
     : undefined
 
   const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
+  if (value.evidence === undefined) {
+    return null
+  }
+  let evidence: NonNullable<CruxChunk['evidence']>
+  try {
+    evidence = validateStoredEvidence(value.evidence)
+  } catch {
+    return null
+  }
+  if (evidence.chunkId !== value.chunkId || evidence.normalizedContent !== value.content) {
+    return null
+  }
   const matches = input.matches?.map((match) => ({ ...match }))
-  const provenance = {
-    ...(isRecord(value.provenance) ? value.provenance : {}),
-    ...(matches ? { matches } : {}),
+  const provenance = matches ? { matches } : undefined
+  const structuredSource = structuredSourceFromRecord(value.provenance)
+  if (structuredSource === null) {
+    return null
   }
 
   return {
@@ -201,9 +224,59 @@ export function indexedChunkToHit(input: {
     content: value.content,
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
+    evidence,
+    ...(structuredSource ? { structuredSource } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
-    ...(Object.keys(provenance).length > 0 ? { provenance } : {}),
+    ...(provenance ? { provenance } : {}),
   }
+}
+
+function structuredSourceFromRecord(value: unknown): { readonly spreadsheets: readonly SpreadsheetProvenance[] } | undefined | null {
+  if (!isRecord(value) || value.spreadsheets === undefined) {
+    return undefined
+  }
+  if (!Array.isArray(value.spreadsheets)) {
+    return null
+  }
+  const spreadsheets: SpreadsheetProvenance[] = []
+  for (const item of value.spreadsheets) {
+    if (!isRecord(item) || !hasExactKeys(item, ['sheetBlockId', 'tableBlockId', 'sheet', 'index', 'range', 'cells']) ||
+      typeof item.sheetBlockId !== 'string' || typeof item.tableBlockId !== 'string' || typeof item.sheet !== 'string' ||
+      typeof item.index !== 'number' || !Number.isInteger(item.index) || item.index < 0 || typeof item.range !== 'string' || !Array.isArray(item.cells)) {
+      return null
+    }
+    const cells: SpreadsheetProvenance['cells'][number][] = []
+    for (const cell of item.cells) {
+      if (!isRecord(cell) || !hasAllowedKeys(cell, ['id', 'address', 'row', 'column', 'displayedValue'], ['formula', 'mergeMaster', 'mergeRange']) ||
+        typeof cell.id !== 'string' || typeof cell.address !== 'string' || typeof cell.row !== 'number' || !Number.isInteger(cell.row) ||
+        cell.row < 1 || typeof cell.column !== 'number' || !Number.isInteger(cell.column) || cell.column < 1 || typeof cell.displayedValue !== 'string' ||
+        (cell.formula !== undefined && typeof cell.formula !== 'string') || (cell.mergeMaster !== undefined && typeof cell.mergeMaster !== 'string') ||
+        (cell.mergeRange !== undefined && typeof cell.mergeRange !== 'string')) {
+        return null
+      }
+      cells.push(Object.freeze({
+        id: cell.id as string,
+        address: cell.address as string,
+        row: cell.row as number,
+        column: cell.column as number,
+        displayedValue: cell.displayedValue as string,
+        ...(cell.formula === undefined ? {} : { formula: cell.formula as string }),
+        ...(cell.mergeMaster === undefined ? {} : { mergeMaster: cell.mergeMaster as string }),
+        ...(cell.mergeRange === undefined ? {} : { mergeRange: cell.mergeRange as string }),
+      }))
+    }
+    spreadsheets.push(Object.freeze({ ...item, cells: Object.freeze(cells) }) as SpreadsheetProvenance)
+  }
+  return Object.freeze({ spreadsheets: Object.freeze(spreadsheets) })
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return hasAllowedKeys(value, keys, [])
+}
+
+function hasAllowedKeys(value: Record<string, unknown>, required: readonly string[], optional: readonly string[]): boolean {
+  const allowed = new Set([...required, ...optional])
+  return required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => allowed.has(key))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

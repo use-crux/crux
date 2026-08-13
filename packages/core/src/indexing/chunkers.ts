@@ -10,6 +10,7 @@
 
 import { DEFAULT_MAX_CHARS, normalizeChunkingOptions } from './chunking-options'
 import { createStableId } from './hash'
+import { createStoredEvidence } from './stored-evidence'
 import { createMediaPartChunk, mediaParts } from './media-chunks'
 import {
   coarseProvenance,
@@ -34,6 +35,8 @@ import type {
   SemanticChunkerOptions,
   StructuredChunkerOptions,
   ChunkingOptions,
+  SpreadsheetCellProvenance,
+  SpreadsheetProvenance,
 } from './types'
 
 /** Structured chunker: splits each typed part, windowing table rows. */
@@ -87,14 +90,14 @@ function chunkDocumentStructuredUnits(
     }
     if (part.kind === 'json') {
       units.push({
-        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part), part.evidence),
         headingPath: [], headingInstanceIds: [], kind: 'narrative',
       })
       continue
     }
     if (part.kind === 'sheet') {
       units.push({
-        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part)),
+        chunk: createPartChunk(document, part.content, units.length, provenanceForPart(document, part), part.evidence),
         headingPath: [], headingInstanceIds: [], kind: 'narrative',
       })
       continue
@@ -112,6 +115,7 @@ function chunkDocumentStructuredUnits(
           slice.content,
           units.length,
           provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+          part.evidence,
         ),
         headingPath: [],
         headingInstanceIds: [],
@@ -148,7 +152,7 @@ export function chunkDocumentFlat(
       continue
     }
     if (part.kind === 'json' || part.kind === 'sheet') {
-      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part)))
+      chunks.push(createPartChunk(document, part.content, chunks.length, provenanceForPart(document, part), part.evidence))
       continue
     }
     for (const slice of splitDocumentSlices(part.content, normalized)) {
@@ -157,6 +161,7 @@ export function chunkDocumentFlat(
         slice.content,
         chunks.length,
         provenanceForPart(document, part, slice.content, { start: slice.start, end: slice.end }),
+        part.evidence,
       ))
     }
   }
@@ -357,19 +362,52 @@ function chunkTablePart(
     : part.content.split('\n').map((row) => row.split('|').map((cell) => cell.trim()))
   if (!rows.length) return []
   const header = part.columns ?? rows[0]
-  const bodyRows = rows.length > 1 && arraysEqual(rows[0], header) ? rows.slice(1) : rows
+  const includesHeaderRow = rows.length > 0 && arraysEqual(rows[0], header)
+  const bodyRows = includesHeaderRow ? rows.slice(1) : rows
+  const windows = bodyRows.length ? bodyRows : [[]]
+  const spreadsheetRows = part.spreadsheet ? indexSpreadsheetRows(part.spreadsheet) : undefined
   const chunks: CruxChunk[] = []
-  for (let index = 0; index < bodyRows.length; index += rowsPerChunk) {
-    const windowRows = bodyRows.slice(index, index + rowsPerChunk)
+  for (let index = 0; index < windows.length; index += rowsPerChunk) {
+    const windowRows = windows.slice(index, index + rowsPerChunk)
     const renderedRows = [header, ...windowRows].map((row) => row.join(' | ')).join('\n')
+    const sourceRowIndexes = [
+      ...(includesHeaderRow && index === 0 ? [0] : []),
+      ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
+    ]
+    const evidenceRowIndexes = [
+      ...(includesHeaderRow ? [0] : []),
+      ...windowRows.map((_, rowIndex) => index + rowIndex + (includesHeaderRow ? 1 : 0)),
+    ]
     chunks.push(
       createPartChunk(document, renderedRows, chunks.length, {
         ...coarseProvenance([part]),
+        ...(part.spreadsheet && spreadsheetRows ? { spreadsheets: [spreadsheetWindow(part.spreadsheet, spreadsheetRows, sourceRowIndexes)] } : {}),
         confidence: 'derived',
-      }),
+      }, tableEvidenceOrigin(part, spreadsheetRows, evidenceRowIndexes)),
     )
   }
   return chunks
+}
+
+function spreadsheetWindow(
+  spreadsheet: SpreadsheetProvenance,
+  rows: readonly (readonly SpreadsheetCellProvenance[])[],
+  sourceRowIndexes: readonly number[],
+): SpreadsheetProvenance {
+  return { ...spreadsheet, cells: sourceRowIndexes.flatMap((index) => rows[index] ?? []) }
+}
+
+function indexSpreadsheetRows(spreadsheet: SpreadsheetProvenance): readonly (readonly SpreadsheetCellProvenance[])[] {
+  const rows = new Map<number, SpreadsheetCellProvenance[]>()
+  for (const cell of spreadsheet.cells) {
+    const row = rows.get(cell.row)
+    if (row) {
+      row.push(cell)
+    } else {
+      rows.set(cell.row, [cell])
+    }
+  }
+  return [...rows.values()]
 }
 
 function createPartChunk(
@@ -377,23 +415,43 @@ function createPartChunk(
   content: string,
   ordinal: number,
   provenance?: ChunkProvenance,
+  evidenceOrigin?: CruxIngestPart['evidence'],
 ): CruxChunk {
   const source = sourceFactsWithLocations(document.source, provenance?.sourceLocations ?? [])
+  const chunkId = createStableId('chunk', {
+    sourceId: document.sourceId,
+    ordinal,
+    content,
+    provenance,
+  })
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
-    chunkId: createStableId('chunk', {
-      sourceId: document.sourceId,
-      ordinal,
-      content,
-      provenance,
-    }),
+    chunkId,
     ordinal,
     content,
     metadata: document.metadata ?? {},
     ...(source ? { source } : {}),
     ...(document.title ? { parent: { title: document.title } } : {}),
     ...(provenance ? { provenance } : {}),
+    ...(document.evidence && evidenceOrigin
+      ? { evidence: createStoredEvidence({ document: document.evidence, origin: evidenceOrigin, chunkId, normalizedContent: content, chunkerVersion: 'structured:2' }) }
+      : {}),
+  }
+}
+
+function tableEvidenceOrigin(
+  part: Extract<CruxIngestPart, { kind: 'table' }>,
+  rows: readonly (readonly SpreadsheetCellProvenance[])[] | undefined,
+  indexes: readonly number[],
+): CruxIngestPart['evidence'] {
+  if (!part.evidence || !rows) {
+    return part.evidence
+  }
+  return {
+    coordinate: part.evidence.coordinate,
+    producer: part.evidence.producer,
+    blockIds: [...part.evidence.blockIds.slice(0, 2), ...indexes.flatMap((index) => rows[index]?.map((cell) => cell.id) ?? [])],
   }
 }
 
@@ -516,15 +574,17 @@ export function chunkDocumentParentChild(
         ? provenance
         : provenanceForChildSlice(document, currentParentContent, provenance, slice)
       const childSource = sourceFactsWithLocations(document.source, childProvenance?.sourceLocations ?? [])
+      const chunkId = createStableId('chunk', {
+        sourceId: document.sourceId,
+        parentId,
+        ordinal: children.length,
+        content: slice.content,
+      })
+      const sourceEvidence = aggregateEvidence(currentParentChunks, currentParentContent, slice)
       children.push({
         namespace: document.namespace,
         sourceId: document.sourceId,
-        chunkId: createStableId('chunk', {
-          sourceId: document.sourceId,
-          parentId,
-          ordinal: children.length,
-          content: slice.content,
-        }),
+        chunkId,
         ordinal: children.length,
         content: slice.content,
         metadata: document.metadata ?? {},
@@ -534,6 +594,9 @@ export function chunkDocumentParentChild(
           ...(document.title ? { title: document.title } : {}),
         },
         ...(childProvenance ? { provenance: childProvenance } : {}),
+        ...(document.evidence && sourceEvidence
+          ? { evidence: createStoredEvidence({ document: document.evidence, origin: sourceEvidence, chunkId, normalizedContent: slice.content, chunkerVersion: 'parent-child:2' }) }
+          : {}),
       })
     })
     currentParentContent = ''
@@ -585,6 +648,7 @@ export async function chunkDocumentSemantic(
   const normalized = content ? normalizeBoundaries(boundaries, content.length) : []
   const chunks: CruxChunk[] = normalized.map((boundary, ordinal) => {
     const chunkContent = content.slice(boundary.start, boundary.end)
+    const evidenceOrigin = aggregatePartEvidence(document, content, boundary)
     const sourceSpans = document.content === content
       ? [{ start: boundary.start, end: boundary.end }]
       : []
@@ -605,12 +669,88 @@ export async function chunkDocumentSemantic(
         ...(sourceSpans.length ? { sourceSpans } : {}),
         confidence: sourceSpans.length ? 'exact' as const : 'derived' as const,
       },
+      ...(document.evidence && evidenceOrigin
+        ? { evidence: createStoredEvidence({ document: document.evidence, origin: evidenceOrigin, chunkId: createStableId('chunk', { sourceId: document.sourceId, boundary, content: chunkContent }), normalizedContent: chunkContent, chunkerVersion: 'semantic:2' }) }
+        : {}),
     }
   })
   for (const part of mediaParts(document)) {
     chunks.push(createMediaPartChunk(document, part, chunks.length))
   }
   return { chunks }
+}
+
+function aggregateEvidence(
+  chunks: readonly CruxChunk[],
+  content: string,
+  slice: { readonly start: number; readonly end: number },
+): CruxIngestPart['evidence'] | undefined {
+  const evidence = chunks.map((chunk) => chunk.evidence).filter((value): value is NonNullable<CruxChunk['evidence']> => value !== undefined)
+  if (!evidence.length || evidence.length !== chunks.length || joinChunkContent(chunks) !== content) {
+    return undefined
+  }
+  const contributors = chunkContributors(chunks, slice)
+  if (!contributors.length) {
+    return undefined
+  }
+  const contributorEvidence = contributors.map((chunk) => chunk.evidence!)
+  const [first] = contributorEvidence
+  if (!first || !contributorEvidence.every((value) => value.documentSha256 === first.documentSha256 && sameProducer(value.producer, first.producer))) {
+    return undefined
+  }
+  return { coordinate: { kind: 'document', documentSha256: first.documentSha256 }, producer: first.producer, blockIds: [...new Set(contributorEvidence.flatMap((value) => value.blockIds))] }
+}
+
+function aggregatePartEvidence(
+  document: CruxDocument,
+  content: string,
+  slice: { readonly start: number; readonly end: number },
+): CruxIngestPart['evidence'] | undefined {
+  const parts = (document.parts ?? []).filter((part): part is ContentPart => part.kind !== 'media')
+  if (!parts.length || !document.evidence || parts.map((part) => part.content).join('\n\n') !== content) {
+    return undefined
+  }
+  const contributors = partContributors(parts, slice)
+  const origins = contributors.map((part) => part.evidence).filter((value): value is NonNullable<CruxIngestPart['evidence']> => value !== undefined)
+  if (!origins.length || origins.length !== contributors.length) {
+    return undefined
+  }
+  const [first] = origins
+  if (!first || !origins.every((value) => sameProducer(value.producer, first.producer))) {
+    return undefined
+  }
+  return { coordinate: { kind: 'document', documentSha256: document.evidence.documentSha256 }, producer: first.producer, blockIds: [...new Set(origins.flatMap((value) => value.blockIds))] }
+}
+
+function joinChunkContent(chunks: readonly CruxChunk[]): string {
+  return chunks.map((chunk) => chunk.content).join('\n\n')
+}
+
+function chunkContributors(chunks: readonly CruxChunk[], slice: { readonly start: number; readonly end: number }): CruxChunk[] {
+  return contributors(chunks, slice, (chunk) => chunk.content)
+}
+
+type ContentPart = Exclude<CruxIngestPart, { kind: 'media' }>
+
+function partContributors(parts: readonly ContentPart[], slice: { readonly start: number; readonly end: number }): ContentPart[] {
+  return contributors(parts, slice, (part) => part.content)
+}
+
+function contributors<T>(items: readonly T[], slice: { readonly start: number; readonly end: number }, content: (item: T) => string): T[] {
+  let start = 0
+  const result: T[] = []
+  for (const [index, item] of items.entries()) {
+    const end = start + content(item).length
+    if (slice.start < end && start < slice.end) {
+      result.push(item)
+    }
+    start = end + (index === items.length - 1 ? 0 : 2)
+  }
+  return result
+}
+
+function sameProducer(left: NonNullable<CruxIngestPart['evidence']>['producer'], right: NonNullable<CruxIngestPart['evidence']>['producer']): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function arraysEqual(a: readonly string[], b: readonly string[]): boolean {

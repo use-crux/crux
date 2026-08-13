@@ -15,6 +15,7 @@ import type { KnowledgeRef } from '../../src/knowledge/refs'
 import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryStorage, type RecordStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextChunk, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 const indexerId = 'kb'
 const namespace = 'kb'
@@ -52,7 +53,7 @@ describe('built-in relation stages', () => {
     await docs.reindex([alpha, beta, missing])
 
     const secondEdges = await edgeRecords(storage.records)
-    expect(secondEdges.map((edge) => [refSourceId(edge.from), refSourceId(edge.to)])).toEqual([
+    expect(secondEdges.map((edge) => [refSourceId(edge.from), refSourceId(edge.to)]).sort()).toEqual([
       ['alpha', 'beta'],
       ['alpha', 'missing'],
     ])
@@ -170,18 +171,18 @@ async function pendingStatuses(records: RecordStore, stageId: string, sourceId: 
 }
 
 function document(sourceId: string, content: string, title = sourceId, url?: string): CruxDocument {
-  return {
+  return schema2TextDocument({
     namespace,
     sourceId,
     content,
     title,
     metadata: { title },
     ...(url ? { source: { url } } : {}),
-  }
+  })
 }
 
 function chunk(sourceId: string, chunkId: string, content: string): CruxChunk {
-  return { namespace, sourceId, chunkId, ordinal: Number(chunkId.slice(1)) || 0, content, metadata: {} }
+  return schema2TextChunk({ namespace, sourceId, chunkId, ordinal: Number(chunkId.slice(1)) || 0, content, metadata: {} })
 }
 
 function chunkRef(sourceId: string, chunkId: string): KnowledgeRef {

@@ -4,6 +4,7 @@ import { indexedEmbeddingSpaceKey } from "../../src/indexed-knowledge";
 import { indexer } from "../../src/indexing";
 import { retriever } from "../../src/retrieval";
 import { inMemoryRecordStore, inMemorySearchStore } from "../../src/storage";
+import { schema2TextDocument } from "../fixtures/schema2-stored-evidence";
 
 describe("namespace embedding-space guard", () => {
   it("retains the guard for surviving writers and names them in mismatch errors", async () => {
@@ -219,7 +220,7 @@ describe("namespace embedding-space guard", () => {
 });
 
 function document(sourceId: string, namespace = "shared") {
-  return { namespace, sourceId, content: sourceId };
+  return schema2TextDocument({ namespace, sourceId, content: sourceId });
 }
 
 function textEmbedding(

@@ -17,6 +17,39 @@ export type { SparseVector } from '../storage'
 export { transform, chunker, indexingPipeline } from './pipeline'
 export { indexer } from './define-indexer'
 export { corpus } from './define-corpus'
+export { IngestedDocumentContractError, validateIngestedDocument } from './ingested-document'
+export {
+  StoredEvidenceContractError,
+  StoredEvidenceRequiredError,
+  createStoredEvidence,
+  deserializeStoredEvidence,
+  serializeStoredEvidence,
+  validateStoredEvidence,
+} from './stored-evidence'
+export { normalizeIngestedDocument, normalizeXlsxDocument } from './normalize-ingested-document'
+export type {
+  ApplicationOperationProducer,
+  DocumentAsset,
+  DocumentBlock,
+  DocumentProducer,
+  DocumentSource,
+  IngestDiagnostic,
+  IngestedDocument,
+  IngestFormat,
+  Inline,
+  ListBlock,
+  ListItem,
+  PageBlock,
+  ParserIdentity,
+  Scalar,
+  SheetBlock,
+  SlideBlock,
+  SourceCoordinate,
+  TableBlock,
+  TableCell,
+  TextBlock,
+} from './ingested-document'
+export type { StoredEvidence, StoredEvidenceDocument, StoredEvidenceOrigin } from './stored-evidence'
 
 export type {
   // Documents, chunks, and provenance
@@ -32,6 +65,8 @@ export type {
   CruxSourceLocation,
   CruxSourceFacts,
   ChunkProvenance,
+  SpreadsheetCellProvenance,
+  SpreadsheetProvenance,
   CruxIngestLoadResultLike,
   // Chunking + pipeline
   ChunkingOptions,

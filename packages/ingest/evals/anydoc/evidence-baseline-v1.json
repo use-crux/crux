@@ -1,0 +1,1093 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "admission-decision",
+  "authorizesRouting": false,
+  "packageIdentity": {
+    "anydoc": "0.1.7",
+    "native": {
+      "package": "@firecrawl/anydoc-linux-x64-gnu@0.1.7",
+      "sha256": "cf20f17d1a6a8a51d41fcf11682a107e822d01c1055eafb6ed30bbfc2959704c"
+    },
+    "adapters": {
+      "mammoth": "1.12.0",
+      "csv-parse": "6.2.1",
+      "exceljs": "4.4.0",
+      "pdf-inspector": "1.12.0"
+    }
+  },
+  "decisionIdentity": {
+    "fixtureSha256": [
+      {
+        "fixtureId": "csv-control-v1",
+        "sha256": "416a2ff58e53cb4196bff8bbd9c67ec4253788f2e86fca317628b15e092b02e5"
+      },
+      {
+        "fixtureId": "doc-legacy-v1",
+        "sha256": "43d7f00b1bd7d0784b20245176327690137891a6e65577ca0f2e2dbb3ab9b1c1"
+      },
+      {
+        "fixtureId": "docm-macro-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "docx-structure-v1",
+        "sha256": "5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd"
+      },
+      {
+        "fixtureId": "encrypted-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "truncated-v1",
+        "sha256": "64f765c7aa8e2e5f4f4a7c90d1cc2b7afcaa29bea87493a490ff5b5e75ad9b58"
+      },
+      {
+        "fixtureId": "malformed-v1",
+        "sha256": "76b88821421dc40df237bee3a69fecd76003240e5bac3fe31b5f5cedc700e90f"
+      },
+      {
+        "fixtureId": "mislabeled-v1",
+        "sha256": "ed7e13db986967d27375e3aa61e6984c45449d3d6da69f573031a1fa3a375556"
+      },
+      {
+        "fixtureId": "expansion-heavy-v1",
+        "sha256": "f545dc2f93f8df769547a78a23cf54cc0f5c35bb8c591876ed7708c48c64e970"
+      },
+      {
+        "fixtureId": "external-link-v1",
+        "sha256": "edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574"
+      },
+      {
+        "fixtureId": "timeout-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "memory-limit-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "containment-unavailable-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "epub-prose-v1",
+        "sha256": "2a53090553242888578e45e11472ff6010ef508afc9c2edce4003a35ffda7fab"
+      },
+      {
+        "fixtureId": "ods-spreadsheet-v1",
+        "sha256": "27a0636ae8b699921d9ce14e9f2df5e272c5648408a688804eacf0ba11c0152e"
+      },
+      {
+        "fixtureId": "odt-prose-v1",
+        "sha256": "96446747eee321ec556b3cb3633d24158014c455d0e0a05bb1a6e24b0a19482b"
+      },
+      {
+        "fixtureId": "pdf-control-v1",
+        "sha256": "e4e51f0e57540b08b28b5379f6bfa4d32ec2097fe5490b7fe1133638756f0924"
+      },
+      {
+        "fixtureId": "ppt-legacy-v1",
+        "sha256": ""
+      },
+      {
+        "fixtureId": "pptx-structure-v1",
+        "sha256": "a41f60064fc760ee95fa78d0217a672f504f3d12a6da7435775e7666c497f80e"
+      },
+      {
+        "fixtureId": "rtf-prose-v1",
+        "sha256": "1be57882b7e295a39e752d865ae228315d804c165d8eead8e6f6e0b2ca9596d3"
+      },
+      {
+        "fixtureId": "xls-spreadsheet-v1",
+        "sha256": "89716212ee3279cdbda34421da01242df7917e09a624f80f116181514faa6975"
+      },
+      {
+        "fixtureId": "xlsx-control-v1",
+        "sha256": "3eab7f712ee5bc6f00d044040afb79f0fe9d885e1cf47a7a1d89aa445b7a113c"
+      }
+    ]
+  },
+  "gates": {
+    "maxConcurrentChildren": 1,
+    "productionEquivalent": false,
+    "hardMemoryContainment": false
+  },
+  "formats": [
+    {
+      "format": "csv",
+      "parser": "csv-parse",
+      "admitted": true,
+      "blockers": []
+    },
+    {
+      "format": "doc",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "doc-legacy-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "docm",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "docm-macro-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "docx",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "docx-structure-v1",
+        "encrypted-v1",
+        "truncated-v1",
+        "malformed-v1",
+        "mislabeled-v1",
+        "expansion-heavy-v1",
+        "external-link-v1",
+        "timeout-v1",
+        "memory-limit-v1",
+        "containment-unavailable-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "docx",
+      "parser": "mammoth",
+      "admitted": false,
+      "blockers": [
+        "docx-structure-v1"
+      ]
+    },
+    {
+      "format": "epub",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "epub-prose-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "ods",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "ods-spreadsheet-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "odt",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "odt-prose-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "pdf",
+      "parser": "pdf-inspector",
+      "admitted": true,
+      "blockers": []
+    },
+    {
+      "format": "ppt",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "ppt-legacy-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "pptx",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "pptx-structure-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "rtf",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "rtf-prose-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "xls",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "xls-spreadsheet-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "xlsx",
+      "parser": "anydoc",
+      "admitted": false,
+      "blockers": [
+        "xlsx-control-v1",
+        "hard-memory-containment"
+      ]
+    },
+    {
+      "format": "xlsx",
+      "parser": "exceljs",
+      "admitted": true,
+      "blockers": []
+    }
+  ],
+  "docxDecision": {
+    "primary": null,
+    "reason": "No candidate passed every format-wide gate."
+  },
+  "results": [
+    {
+      "fixtureId": "csv-control-v1",
+      "format": "csv",
+      "role": "control",
+      "sourceHash": "416a2ff58e53cb4196bff8bbd9c67ec4253788f2e86fca317628b15e092b02e5",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "csv-parse",
+          "selected": true,
+          "outcome": {
+            "kind": "success"
+          },
+          "hashes": {
+            "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
+            "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
+          },
+          "native": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "core": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": true,
+          "determinism": {
+            "deterministic": true,
+            "hashes": {
+              "native": "05f3ba57b92ff003ed26fb60abf0446accbff4b0e0579ec8589e6d2e7c68f7f4",
+              "core": "a3d0946905b3843252ecbad659a1d5b65e0468e9b800d7a8e9d6e9394be38f87"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "doc-legacy-v1",
+      "format": "doc",
+      "role": "candidate",
+      "sourceHash": "43d7f00b1bd7d0784b20245176327690137891a6e65577ca0f2e2dbb3ab9b1c1",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "docm-macro-v1",
+      "format": "docm",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "docx-structure-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "5766439b78597e77a28ebf41562ed2375edff1cf6de84eea22590ab73ce1a9fd",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        },
+        {
+          "parser": "mammoth",
+          "selected": false,
+          "outcome": {
+            "kind": "success"
+          },
+          "hashes": {
+            "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
+            "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
+          },
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "prose-text",
+              "prose-list",
+              "prose-nested-list",
+              "provenance:prose-nested-list",
+              "prose-notes",
+              "prose-assets",
+              "provenance:prose-assets",
+              "prose-coordinates"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "prose-text",
+              "prose-link",
+              "prose-notes",
+              "prose-assets",
+              "provenance:prose-assets",
+              "prose-coordinates"
+            ]
+          },
+          "projectionLosses": [
+            "prose-link"
+          ],
+          "rolloutBudgetGate": true,
+          "determinism": {
+            "deterministic": true,
+            "hashes": {
+              "native": "70ae313f872a7e3c64690b5754705eb718f6e6fd3784fd3e247293bec553a308",
+              "core": "a20c8e36b406ad6b0ed94c874463af55952735ef19e5b501a4477047a2ac3752"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "encrypted-v1",
+      "format": "docx",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "truncated-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "64f765c7aa8e2e5f4f4a7c90d1cc2b7afcaa29bea87493a490ff5b5e75ad9b58",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "malformed-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "76b88821421dc40df237bee3a69fecd76003240e5bac3fe31b5f5cedc700e90f",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "mislabeled-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "ed7e13db986967d27375e3aa61e6984c45449d3d6da69f573031a1fa3a375556",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "expansion-heavy-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "f545dc2f93f8df769547a78a23cf54cc0f5c35bb8c591876ed7708c48c64e970",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "external-link-v1",
+      "format": "docx",
+      "role": "candidate",
+      "sourceHash": "edd3f32d7f4ac15858e566362604802a92bd5f73042c24c47e778c32a4e92574",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "timeout-v1",
+      "format": "docx",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "memory-limit-v1",
+      "format": "docx",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "containment-unavailable-v1",
+      "format": "docx",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "epub-prose-v1",
+      "format": "epub",
+      "role": "candidate",
+      "sourceHash": "2a53090553242888578e45e11472ff6010ef508afc9c2edce4003a35ffda7fab",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "ods-spreadsheet-v1",
+      "format": "ods",
+      "role": "candidate",
+      "sourceHash": "27a0636ae8b699921d9ce14e9f2df5e272c5648408a688804eacf0ba11c0152e",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "odt-prose-v1",
+      "format": "odt",
+      "role": "candidate",
+      "sourceHash": "96446747eee321ec556b3cb3633d24158014c455d0e0a05bb1a6e24b0a19482b",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "pdf-control-v1",
+      "format": "pdf",
+      "role": "control",
+      "sourceHash": "e4e51f0e57540b08b28b5379f6bfa4d32ec2097fe5490b7fe1133638756f0924",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "pdf-inspector",
+          "selected": true,
+          "outcome": {
+            "kind": "success"
+          },
+          "hashes": {
+            "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
+            "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
+          },
+          "native": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "core": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": true,
+          "determinism": {
+            "deterministic": true,
+            "hashes": {
+              "native": "8b1b3451342252ab9e36708a70e91127bf6fe8f2f7c9fe926376cab9688ab4ca",
+              "core": "a4948adb711645ed2cb5ae7cb75b18acc3acd18535af2bd1fcf4de3b01c90d6f"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "ppt-legacy-v1",
+      "format": "ppt",
+      "role": "not-admitted",
+      "sourceHash": "",
+      "sourceHashMatches": false,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "pptx-structure-v1",
+      "format": "pptx",
+      "role": "candidate",
+      "sourceHash": "a41f60064fc760ee95fa78d0217a672f504f3d12a6da7435775e7666c497f80e",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "rtf-prose-v1",
+      "format": "rtf",
+      "role": "candidate",
+      "sourceHash": "1be57882b7e295a39e752d865ae228315d804c165d8eead8e6f6e0b2ca9596d3",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "xls-spreadsheet-v1",
+      "format": "xls",
+      "role": "candidate",
+      "sourceHash": "89716212ee3279cdbda34421da01242df7917e09a624f80f116181514faa6975",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "xlsx-control-v1",
+      "format": "xlsx",
+      "role": "control",
+      "sourceHash": "3eab7f712ee5bc6f00d044040afb79f0fe9d885e1cf47a7a1d89aa445b7a113c",
+      "sourceHashMatches": true,
+      "candidates": [
+        {
+          "parser": "anydoc",
+          "selected": false,
+          "outcome": {
+            "kind": "failure",
+            "error": "containment-unavailable"
+          },
+          "hashes": {},
+          "native": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "core": {
+            "passed": false,
+            "admitted": false,
+            "requiredFailures": [
+              "containment"
+            ]
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": false
+        },
+        {
+          "parser": "exceljs",
+          "selected": true,
+          "outcome": {
+            "kind": "success"
+          },
+          "hashes": {
+            "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
+            "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
+          },
+          "native": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "core": {
+            "passed": true,
+            "admitted": true,
+            "requiredFailures": []
+          },
+          "projectionLosses": [],
+          "rolloutBudgetGate": true,
+          "determinism": {
+            "deterministic": true,
+            "hashes": {
+              "native": "87b527f8fb9b0ff5d28b4cfb82fa2a08d83aa7566ba1957e22b14bdfc5c80345",
+              "core": "94a1fe7a143f750705f1147ff4b9e7c6a0295979b6b5a86543dbff3ef45fc068"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

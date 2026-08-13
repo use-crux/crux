@@ -9,6 +9,7 @@ import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import { boundary, guardrail } from '../../src/safety'
 import type { Message } from '../../src/generation/messages'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 function createDenseEmbedding() {
   return makeEmbedding({
@@ -115,9 +116,7 @@ describe('retriever tools', () => {
 
     expect(toolEvaluations).toBe(1)
     expect(retrievalEvaluations).toBe(0)
-    expect(providerMessages[1]).toContainEqual(
-      expect.objectContaining({ role: 'tool', content: 'safe search result' }),
-    )
+    expect(providerMessages[1]).toContainEqual(expect.objectContaining({ role: 'tool', content: 'safe search result' }))
   })
 
   it('injects a typed search tool by default when used directly in a prompt', async () => {
@@ -185,9 +184,7 @@ describe('retriever tools', () => {
 
     expect(Object.keys(tools)).toEqual(['search', 'getSource'])
     expect(tools.search.parameters.safeParse({ query: 'ops', limit: 2 }).success).toBe(true)
-    await expect(
-      tools.search.execute({ query: 'ops', limit: 2, filter: { topic: 'launch' } }),
-    ).resolves.toEqual({
+    await expect(tools.search.execute({ query: 'ops', limit: 2, filter: { topic: 'launch' } })).resolves.toEqual({
       kind: RETRIEVAL_HITS_KIND,
       hits: [
         {
@@ -216,11 +213,11 @@ describe('retriever tools', () => {
       dense,
     })
     await indexer.indexDocuments([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'guide.md',
         content: 'Store-backed source body',
-      },
+      }),
     ])
     const retriever = makeRetriever({
       id: 'docs',

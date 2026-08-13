@@ -3,30 +3,22 @@
 "@use-crux/ingest": minor
 ---
 
-Add provider-neutral page blocks and block provenance to Core. Structured and
-parent-child chunking now preserve PDF page and heading boundaries, repeat
-heading context, window tables without splitting rows, and retain block IDs.
+Replace legacy ingest provenance with the public schema-2 `IngestedDocument`
+and immutable `StoredEvidence` contracts. Core now retains validated document,
+producer, block, coordinate, and normalized-content evidence through chunking,
+storage, and retrieval; legacy aggregate-text spans are not schema-2 source
+truth.
 
-Prefer native layout-aware PDF extraction in Ingest, route only unreliable
-pages through visual description, and safely fall back document-wide to
-`pdfjs-dist` with a bounded downgrade warning.
+Built-in CSV, DOCX, XLSX, and PDF parsing now emits schema-2 evidence. Custom
+parsers selected through `ParserOptions.parsers` must implement
+`parser.schema2.parse()` and return a valid schema-2 document; legacy custom
+`parse()` results are rejected.
 
-Expose provider-neutral XLSX row, cell, formula, and exact worksheet/row-range
-source coordinates alongside the `rows` compatibility view, including sparse
-blank cell slots aligned with source accounting ranges. Render citation-facing
-XLSX cell values through their saved number formats instead of exposing raw
-numeric storage values.
-XLSX display projection now also preserves rich text, hyperlink display text,
-Excel error tokens, cached formula results including shared formulas, and merge
-membership metadata. Merge followers retain their coordinates with empty values
-and no formula while the master cell owns the displayed value/formula.
+XLSX evidence preserves exact sheet ranges and cells, saved display formats,
+rich text, hyperlinks, error tokens, cached/shared formulas, and merge
+ownership. CSV retains exact logical rows, DOCX retains document structure and
+inline/list text, and PDF retains every physical page, layout blocks/tables
+when available, and bounded downgrade diagnostics.
 
-Keep every physical PDF page in ingest output. Textless pages now produce a
-located warning and remain addressable when media description is unavailable,
-empty, or fails, rather than failing the whole document.
-XLSX malformed number-format warnings now include the sheet name, and failed PDF
-media descriptions emit a fixed warning without retaining provider error text.
-PDF loading-task cleanup failures no longer replace successful parse results or
-the primary parse error.
-Load the XLSX number formatter correctly from published ESM packages so saved
-formats remain active outside the Crux source workspace.
+Core's package test command now isolates test files in Node subprocesses to
+avoid cross-test filesystem and process-state leakage.

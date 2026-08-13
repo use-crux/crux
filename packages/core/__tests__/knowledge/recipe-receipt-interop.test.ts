@@ -5,6 +5,7 @@ import { communities, knowledgeBase, type KnowledgeModel } from '../../src/knowl
 import { globalSearch } from '../../src/retrieval'
 import type { CruxChunk } from '../../src/indexing'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('knowledge recipe request receipts', () => {
   it('projects real recipe trace knowledge into request inspection', async () => {
@@ -113,5 +114,5 @@ function searchFindings(prompt: string) {
 }
 
 function chunk(sourceId: string, chunkId: string, content: string): CruxChunk {
-  return { namespace: 'docs', sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace: 'docs', sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }

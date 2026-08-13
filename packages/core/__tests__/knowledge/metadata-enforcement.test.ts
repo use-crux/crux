@@ -6,6 +6,7 @@ import { knowledgeBase } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemoryStorage, inMemorySearchStore } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
 import type { CruxChunk } from '../../src/indexing'
+import { schema2TextChunk, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 function topicEmbedding() {
   return embedding({
@@ -35,12 +36,12 @@ describe('knowledgeBase metadataSchema enforcement', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'valid',
           content: 'valid guide',
           metadata: { topic: 'guides' },
-        },
+        }),
       ]),
     ).resolves.toMatchObject({ sourceCount: 1, chunkCount: 1 })
 
@@ -58,18 +59,18 @@ describe('knowledgeBase metadataSchema enforcement', () => {
     let thrown: unknown
     try {
       await docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'valid',
           content: 'valid guide',
           metadata: { topic: 'guides' },
-        },
-        {
+        }),
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'missing-topic',
           content: 'invalid guide',
           metadata: { section: 'setup' },
-        },
+        }),
       ])
     } catch (error) {
       thrown = error
@@ -96,12 +97,12 @@ describe('knowledgeBase metadataSchema enforcement', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'valid',
           content: 'valid guide',
           metadata: { topic: 'guides' },
-        },
+        }),
       ]),
     ).resolves.toMatchObject({ sourceCount: 1, chunkCount: 1 })
   })
@@ -115,12 +116,12 @@ describe('knowledgeBase metadataSchema enforcement', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'missing-topic',
           content: 'valid guide',
           metadata: { section: 'setup' },
-        },
+        }),
       ]),
     ).resolves.toMatchObject({ sourceCount: 1, chunkCount: 1 })
   })
@@ -171,18 +172,18 @@ describe('knowledgeBase metadataSchema enforcement', () => {
 
     await expect(
       docs.index([
-        {
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'valid',
           content: 'valid guide',
           metadata: { topic: 'guides' },
-        },
-        {
+        }),
+        schema2TextDocument({
           namespace: 'docs',
           sourceId: 'missing-topic',
           content: 'invalid guide',
           metadata: { section: 'setup' },
-        },
+        }),
       ]),
     ).resolves.toMatchObject({
       added: 1,
@@ -208,12 +209,12 @@ function chunk(
   metadata: Record<string, unknown>,
   ordinal = 0,
 ): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: 'docs',
     sourceId,
     chunkId: `${sourceId}-${ordinal}`,
     ordinal,
     content,
     metadata,
-  }
+  })
 }

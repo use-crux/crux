@@ -14,6 +14,7 @@ import {
 } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { RetrieverHit } from '../../src/retrieval'
+import { schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {
@@ -213,7 +214,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     })
 
     await docs.indexDocuments(
-      [{ namespace: 'kb', sourceId: 'intro', content: '  Hello indexing  ' }],
+      [schema2TextDocument({ namespace: 'kb', sourceId: 'intro', content: '  Hello indexing  ' })],
       { dryRun: true },
     )
     await observe.flush()
@@ -300,12 +301,12 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     await docs.sync([
       {
         ok: true,
-        document: {
+        document: schema2TextDocument({
           namespace: 'kb',
           sourceId: 'intro',
           content: 'Hello corpus',
           warnings: [{ code: 'minor', message: 'Minor parser warning' }],
-        },
+        }),
       },
     ])
     await observe.flush()

@@ -9,6 +9,7 @@ import { knowledgeCurrentKey } from '../../src/knowledge/keys'
 import { globalSearch, retrieve } from '../../src/retrieval'
 import type { CruxChunk } from '../../src/indexing'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 const ns = 'docs'
 
@@ -173,7 +174,7 @@ describe('globalSearch()', () => {
 })
 
 function chunk(sourceId: string, chunkId: string, content: string, metadata: Record<string, unknown> = {}): CruxChunk {
-  return { namespace: ns, sourceId, chunkId, ordinal: 0, content, metadata }
+  return schema2TextChunk({ namespace: ns, sourceId, chunkId, ordinal: 0, content, metadata })
 }
 
 function countingModel(options: { readonly invalidSearch?: boolean } = {}) {

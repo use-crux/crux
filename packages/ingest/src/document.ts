@@ -128,6 +128,7 @@ const INGEST_ERROR_CODES: ReadonlySet<IngestError['code']> = new Set([
   'invalid_document',
   'empty_namespace',
   'empty_source_id',
+  'evidence_required',
 ])
 
 /**

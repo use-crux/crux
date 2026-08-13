@@ -113,6 +113,21 @@ embed-workers: $(EMBED_DIR)
 		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/anydoc-runner.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/anydoc-runner.mjs" "$(EMBED_DIR)/anydoc-runner.mjs"; \
+		echo "Embedded anydoc-runner.mjs from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/anydoc-runner.mjs not found"; \
+		exit 1; \
+	fi
+	@if [ -f "$(LOCAL_WORKERS_DIST)/anydoc-runtime/manifest.json" ]; then \
+		rm -rf "$(EMBED_DIR)/anydoc-runtime"; \
+		cp -R "$(LOCAL_WORKERS_DIST)/anydoc-runtime" "$(EMBED_DIR)/anydoc-runtime"; \
+		echo "Embedded Anydoc native runtime tree from local-workers dist"; \
+	else \
+		echo "Error: $(LOCAL_WORKERS_DIST)/anydoc-runtime/manifest.json not found"; \
+		exit 1; \
+	fi
 
 .PHONY: embed-ui
 embed-ui: $(UI_EMBED_DIR)

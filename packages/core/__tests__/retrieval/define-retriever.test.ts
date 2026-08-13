@@ -6,6 +6,7 @@ import { retriever as makeRetriever } from '../../src/retrieval'
 import { inMemoryRecordStore, inMemorySearchStore } from '../../src/storage'
 import type { JsonObject, SearchHit } from '../../src/storage'
 import { textOf } from '../embedding/text-input'
+import { schema2TextDocument, schema2TextRecord } from '../fixtures/schema2-stored-evidence'
 
 function createDenseEmbedding() {
   return makeEmbedding({
@@ -45,20 +46,19 @@ function createSearchHit(
   score: number,
 ): { readonly record: JsonObject; readonly hit: SearchHit } {
   return {
-    record: {
-      _cruxRecordType: 'chunk',
-      namespace: value.namespace,
-      sourceId: value.sourceId,
-      chunkId: value.chunkId,
-      content: value.content,
-      metadata: value.metadata ?? {},
+    record: schema2TextRecord({
+      indexerId: key.split(':')[1]!,
       generationId: 'gen-test',
-      active: true,
-      ordinal: 0,
-      createdAt: 1,
-      updatedAt: 1,
-      ...(value.parent ? { parent: value.parent } : {}),
-    },
+      chunk: {
+        namespace: value.namespace,
+        sourceId: value.sourceId,
+        chunkId: value.chunkId,
+        content: value.content,
+        metadata: value.metadata ?? {},
+        ordinal: 0,
+        ...(value.parent ? { parent: value.parent } : {}),
+      },
+    }),
     hit: { key, score, matches: [{ kind: 'dense', rank: 1, score }] },
   }
 }
@@ -77,11 +77,11 @@ describe('retriever', () => {
     })
 
     await indexer.indexDocuments([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'guide.md',
         content: 'Alpha',
-      },
+      }),
     ])
 
     const retriever = makeRetriever({
@@ -154,6 +154,7 @@ describe('retriever', () => {
         provenance: {
           matches: [{ kind: 'dense', rank: 1, score: 0.92 }],
         },
+        evidence: expect.objectContaining({ schemaVersion: 2 }),
       },
     ])
   })
@@ -437,18 +438,18 @@ describe('retriever', () => {
     })
 
     await indexer.indexDocuments([
-      {
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'pricing-doc',
         title: 'Pricing',
         content: 'Pricing plan details',
-      },
-      {
+      }),
+      schema2TextDocument({
         namespace: 'docs',
         sourceId: 'support-doc',
         title: 'Support',
         content: 'Support guide',
-      },
+      }),
     ])
 
     const retriever = makeRetriever({
@@ -487,8 +488,8 @@ describe('retriever', () => {
       dense,
     })
 
-    await indexer.indexDocuments([{ namespace: 'docs', sourceId: 'pricing-doc', content: 'old pricing details' }])
-    await indexer.indexDocuments([{ namespace: 'docs', sourceId: 'pricing-doc', content: 'new pricing details' }])
+    await indexer.indexDocuments([schema2TextDocument({ namespace: 'docs', sourceId: 'pricing-doc', content: 'old pricing details' })])
+    await indexer.indexDocuments([schema2TextDocument({ namespace: 'docs', sourceId: 'pricing-doc', content: 'new pricing details' })])
 
     const retriever = makeRetriever({
       id: 'r1',

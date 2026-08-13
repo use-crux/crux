@@ -4,6 +4,7 @@ import { indexedEmbeddingSpaceKey } from '../../src/indexed-knowledge/embedding-
 import { indexer } from '../../src/indexing'
 import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2MediaDocument, schema2TextDocument } from '../fixtures/schema2-stored-evidence'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -33,7 +34,7 @@ describe('multimodal retrieval rules', () => {
       embed: provider,
     })
     await indexer({ id: 'docs', namespace: 'docs', storage, dense }).indexDocuments([
-      { namespace: 'docs', sourceId: 'guide', content: 'dog guide' },
+      schema2TextDocument({ namespace: 'docs', sourceId: 'guide', content: 'dog guide' }),
     ])
     provider.mockClear()
     const get = vi.spyOn(storage.records, 'get')
@@ -43,10 +44,7 @@ describe('multimodal retrieval rules', () => {
     await search.retrieve('dog again')
 
     expect(provider).toHaveBeenCalledTimes(2)
-    expect(provider.mock.calls.map((call) => call[1])).toEqual([
-      { role: 'query' },
-      { role: 'query' },
-    ])
+    expect(provider.mock.calls.map((call) => call[1])).toEqual([{ role: 'query' }, { role: 'query' }])
     const spaceKey = indexedEmbeddingSpaceKey('docs')
     expect(get.mock.calls.filter(([key]) => key === spaceKey)).toHaveLength(1)
   })
@@ -55,7 +53,7 @@ describe('multimodal retrieval rules', () => {
     const storage = inMemoryStorage()
     const indexed = fakeDense('indexed-space')
     await indexer({ id: 'docs', namespace: 'docs', storage, dense: indexed }).indexDocuments([
-      { namespace: 'docs', sourceId: 'guide', content: 'dog guide' },
+      schema2TextDocument({ namespace: 'docs', sourceId: 'guide', content: 'dog guide' }),
     ])
     await storage.records.delete(indexedEmbeddingSpaceKey('docs'))
 
@@ -100,7 +98,7 @@ describe('multimodal retrieval rules', () => {
     const storage = inMemoryStorage()
     const dense = fakeDense('recipe-space')
     await indexer({ id: 'docs', namespace: 'docs', storage, dense }).indexDocuments([
-      { namespace: 'docs', sourceId: 'photo', asset: image },
+      schema2MediaDocument({ namespace: 'docs', sourceId: 'photo', asset: image }),
     ])
     const search = retriever({ id: 'docs', namespace: 'docs', storage, dense })
     const direct = retrievalRecipe({ id: 'direct', retriever: search, steps: [retrieve()] })
@@ -146,23 +144,22 @@ describe('multimodal retrieval rules', () => {
       },
     })
     await indexer({ id: 'docs', namespace: 'docs', storage, dense }).indexDocuments([
-      { namespace: 'docs', sourceId: 'photo', asset: image },
+      schema2MediaDocument({ namespace: 'docs', sourceId: 'photo', asset: image }),
     ])
     const search = retriever({ id: 'docs', namespace: 'docs', storage, dense })
     const recipe = retrievalRecipe({ id: 'safe-errors', retriever: search, steps: [retrieve()] })
 
     let trace: unknown
-    await expect(observe.run(
-      { name: 'retrieve private image', rootPrimitive: 'retrieval.recipe' },
-      async () => {
+    await expect(
+      observe.run({ name: 'retrieve private image', rootPrimitive: 'retrieval.recipe' }, async () => {
         try {
           await recipe.retrieveWithTrace(image)
         } catch (error) {
           trace = error instanceof Error && 'trace' in error ? error.trace : undefined
           throw error
         }
-      },
-    )).rejects.toThrow('Retrieval source "docs" failed.')
+      }),
+    ).rejects.toThrow('Retrieval source "docs" failed.')
     await observe.flush()
 
     const evidence = JSON.stringify({ trace, records: transport.records })
@@ -174,14 +171,16 @@ describe('multimodal retrieval rules', () => {
     const search = retriever({
       id: 'custom',
       namespace: 'docs',
-      retrieve: async () => [{
-        namespace: 'docs',
-        source: { id: 'photo', mediaType: 'image/png' },
-        chunkId: '0',
-        content: '',
-        metadata: {},
-        score: 1,
-      }],
+      retrieve: async () => [
+        {
+          namespace: 'docs',
+          source: { id: 'photo', mediaType: 'image/png' },
+          chunkId: '0',
+          content: '',
+          metadata: {},
+          score: 1,
+        },
+      ],
       context: { query: 'dog' },
     })
 

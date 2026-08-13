@@ -28,6 +28,10 @@ export type {
   SourceLoader,
 } from './types'
 export { deriveContent } from './document'
+export { parseCsvDocument } from './csv'
+export { parseDocxDocument } from './docx'
+export { parseXlsxDocument } from './xlsx'
+export { parsePdfDocument } from './pdf'
 export { builtInParsers } from './parsers'
 export { textSource } from './text'
 export { fileSource, filesSource } from './files'

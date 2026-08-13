@@ -7,6 +7,7 @@ import { expandRelations, knowledgeBase, retrieve } from '../../src/retrieval'
 import type { RetrieverHit, RetrievalStepContext } from '../../src/retrieval'
 import type { RetrievalKnowledgeBinding } from '../../src/retrieval/recipe/knowledge-binding'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 describe('expandRelations', () => {
   it('throws an actionable error when no knowledge binding is present', async () => {
@@ -209,7 +210,7 @@ function chunk(input: {
   readonly parentId?: string
   readonly metadata?: Record<string, unknown>
 }): CruxChunk {
-  return {
+  return schema2TextChunk({
     namespace: 'docs',
     sourceId: 'guide',
     chunkId: input.chunkId,
@@ -217,5 +218,5 @@ function chunk(input: {
     content: input.content,
     metadata: input.metadata ?? {},
     ...(input.parentId ? { parent: { parentId: input.parentId } } : {}),
-  }
+  })
 }

@@ -9,6 +9,7 @@ import { createCommunityStore } from '../../src/knowledge/communities/store'
 import { knowledgeCurrentKey } from '../../src/knowledge/keys'
 import type { RetrieverHit } from '../../src/retrieval'
 import { inMemoryStorage } from '../../src/storage'
+import { schema2TextChunk } from '../fixtures/schema2-stored-evidence'
 
 export function requestHarness(reply?: (args: CallArgs) => string) {
   const spec: AdapterSpec<object, { readonly text: string }> = {
@@ -67,7 +68,7 @@ function searchFindings(promptText: string) {
 }
 
 export function chunk(sourceId: string, chunkId: string, content: string): CruxChunk {
-  return { namespace: 'docs', sourceId, chunkId, ordinal: 0, content, metadata: {} }
+  return schema2TextChunk({ namespace: 'docs', sourceId, chunkId, ordinal: 0, content, metadata: {} })
 }
 
 export function hit(sourceId: string, content: string): RetrieverHit {
