@@ -36,7 +36,8 @@ import type {
   SkillEntry,
   ThreadHistoryEntry,
 } from '../prompt/context-types'
-import type { ExcludedContext } from './types'
+import type { WorkPolicy } from '../work/policy'
+import type { ExcludedContext, ResolvedWorkPolicy } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
@@ -163,6 +164,7 @@ export interface Contribution {
   blackboard?: BlackboardEntry
   history?: HistoryProjection
   representations?: readonly RepresentationEntry[]
+  workPolicy?: WorkPolicy
   facts?: ContributionFacts
 }
 
@@ -248,6 +250,8 @@ export interface MergedResolution {
   toolMiddleware: ToolMiddleware[]
   constraints: Constraint[]
   guardrails: Guardrail[]
+  /** Merged Work execution policy, absent when no contribution authored one. */
+  workPolicy: ResolvedWorkPolicy | undefined
   metadata: Record<string, unknown>
 }
 
@@ -278,6 +282,7 @@ export function emptyMergedResolution(): MergedResolution {
     toolMiddleware: [],
     constraints: [],
     guardrails: [],
+    workPolicy: undefined,
     metadata: {},
   }
 }

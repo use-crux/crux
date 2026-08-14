@@ -108,6 +108,35 @@ Core owns the wrapper, binding, owner retention, kernel lifecycle, automatic
 control, and safe projection. Provider packages changed tests only; there is no
 provider-specific behavior.
 
+### Work policy and recursive cancellation
+
+Work policy is enforced at the process-local controller, never on provider
+I/O. A protected Prompt `use[]` contribution participates in Work admission
+outside any model content or prepare mutation and resolves by the minimum of
+the contribution and the ambient policy. The process-local controller owns
+per-owner FIFO admission entries and root ledgers. Work identity is immutable:
+`rootId`, `parentWorkId`, and `depth`. Occurrence reconnection happens before
+admission accounting, so replayed turns do not consume budget. Default policy
+limits are concurrency 8, maxOutstanding 32, maxDepth 4, maxStarts 64,
+maxActive 16.
+
+`maxStarts` is a lifetime bound; `maxActive` is released when a Work
+terminalizes. Detachment releases the owner's outstanding entry but retains
+root ledger charges, keeping root accounting stable across child detachment.
+
+Kernel attachment installs `AbortSignal` edges so cancellation is recursive: a
+parent cancel propagates to every descendant. Detachment synchronously severs
+the edge, so a detached child no longer cancels with its former parent, and
+cancellation prevents late completion of already-cancelled Work.
+`backgroundable` reuses the attached identity with an independent Effect
+retention, so its handle and cancellation stay stable without extending the
+parent's retention.
+
+There is no second registry, scheduler, or durable job system: Work policy
+sits on the existing process-local kernel. The current boundary is the typed
+Work-policy seam only; automatic resolved child-policy handoff and a
+restart-safe durable ledger are deferred to the later `#301` slice.
+
 `config()` may carry inert tooling configuration for adjacent Crux packages, but core must not execute
 those tools. The `indexer` config bag stores Project Indexer extension references, trust policy, and
 rule options as data only. `@use-crux/indexer` owns extension manifest validation, trust enforcement,

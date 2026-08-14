@@ -26,6 +26,7 @@ import type { RepresentationEntry } from "../request/representation/ladder-types
 import type { PromptText } from "../prompt-text";
 import type { Message } from "../generation/messages";
 import type { ThreadCommit } from "../thread/types";
+import type { WorkPolicy } from "../work/policy";
 
 // ─────────────────────────────────────────────────────────────────
 // Definition warnings
@@ -317,6 +318,7 @@ export type ContextEntry =
   | MemoryEntry
   | ThreadHistoryEntry
   | BlackboardEntry
+  | WorkPolicyEntry
   | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
   | ToolSource
@@ -346,6 +348,8 @@ export interface Contribution {
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   constraints?: readonly Constraint[];
   guardrails?: readonly Guardrail[];
+  /** Work policy contribution merged into the resolved execution policy. */
+  workPolicy?: WorkPolicy;
   /** Merged into `ResolvedPrompt.metadata` (last write wins per key). */
   metadata?: Readonly<Record<string, unknown>>;
 }
@@ -489,6 +493,15 @@ export interface BlackboardEntry {
   asContext(): Context<z.ZodType>;
   asTools(): AnyToolSet;
 }
+
+/**
+ * A Work policy entry in a prompt's `use` array.
+ *
+ * Created by `workPolicy()` from `@use-crux/core/work`. Prompt resolution
+ * merges every active policy contribution into one immutable protected
+ * execution policy; the limits are never rendered into model tokens.
+ */
+export type WorkPolicyEntry = WorkPolicy;
 
 // ─────────────────────────────────────────────────────────────────
 // Context tree (for createContexts)

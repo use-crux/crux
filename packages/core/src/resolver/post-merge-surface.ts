@@ -18,7 +18,7 @@ import type {
   SkillEntry,
   ThreadHistoryEntry,
 } from '../prompt/context-types'
-import type { ExcludedContext } from './types'
+import type { ExcludedContext, ResolvedWorkPolicy } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
@@ -55,6 +55,7 @@ export interface PostMergeSurface {
   readonly injectedConstraints: Constraint[]
   readonly injectedGuardrails: Guardrail[]
   readonly injectedMetadata: Record<string, unknown>
+  readonly workPolicy: ResolvedWorkPolicy | undefined
 }
 
 /** Resolve collective families and return the final surface for a pass. */
@@ -95,5 +96,6 @@ export async function resolvePostMergeSurface(
     injectedConstraints: merged.constraints,
     injectedGuardrails: merged.guardrails,
     injectedMetadata: merged.metadata,
+    workPolicy: merged.workPolicy,
   }
 }

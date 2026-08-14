@@ -423,6 +423,10 @@ export async function runPromptPass(
     resolved.metadata = postMerge.injectedMetadata;
   }
 
+  if (postMerge.workPolicy !== undefined) {
+    resolved.workPolicy = postMerge.workPolicy;
+  }
+
   if (postMerge.memories.length > 0) {
     resolved.memoryBindings = postMerge.memories.map((memory) => ({
       memory,

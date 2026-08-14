@@ -9,6 +9,7 @@ import type { AnyModel, AnyToolSet } from "../types";
 import type { ToolExecutionOptions } from "../types/tool";
 import type { ProcessLocalAgentWorkController } from "../work/internal/agent-work-controller";
 import { resolveAgentToolTurnId } from "../work/internal/agent-occurrence";
+import { currentInternalWorkAttachment } from "../work/internal/attached-context";
 import type { InternalWorkOwnerPort } from "../work/internal/owner-retained-work";
 import { isBackgroundableAgent } from "./backgroundable";
 import { bindBackgroundToolInput } from "./background-tool-input";
@@ -55,15 +56,16 @@ export function bindBackgroundAgentTools(
           description,
           parameters: input.schema,
           async execute(toolInput: unknown, execution: ToolExecutionOptions) {
-            const { input: businessInput, runInBackground } = input.bind(
-              toolInput,
-            );
+            const { input: businessInput, runInBackground } =
+              input.bind(toolInput);
             const occurrence = Object.freeze({
               ownerId: options.ownerId,
               turnId: resolveAgentToolTurnId(execution),
               toolCallId: execution.toolCallId,
               bindingKey: name,
             });
+
+            const ambient = currentInternalWorkAttachment();
 
             const agentHandle = await options.agentWork.spawnAgent(
               agent,
@@ -73,16 +75,22 @@ export function bindBackgroundAgentTools(
                 model: options.model,
                 occurrence,
                 targetLabel: name,
-                spawn: execution.abortSignal
+                spawn: ambient
                   ? {
-                      kind: "cancellation-only",
-                      signal: execution.abortSignal,
+                      kind: "attached",
+                      attachment: ambient,
                       effectParent: "independent",
                     }
-                  : {
-                      kind: "cancellation-only",
-                      effectParent: "independent",
-                    },
+                  : execution.abortSignal
+                    ? {
+                        kind: "cancellation-only",
+                        signal: execution.abortSignal,
+                        effectParent: "independent",
+                      }
+                    : {
+                        kind: "cancellation-only",
+                        effectParent: "independent",
+                      },
               },
             );
 

@@ -25,7 +25,11 @@ export interface InternalWorkCancellationOnly {
 
 /** Explicit linkage supplied when accepting an internal Work. @internal */
 export type InternalWorkSpawnOptions =
-  | { readonly kind: "attached"; readonly attachment: InternalWorkAttachment }
+  | {
+      readonly kind: "attached";
+      readonly attachment: InternalWorkAttachment;
+      readonly effectParent?: "independent";
+    }
   | InternalWorkCancellationOnly;
 
 interface AmbientWorkContext {
@@ -61,6 +65,8 @@ export interface InternalWorkCancellation {
   readonly signal: AbortSignal;
   /** Cooperatively request cancellation of this directly linked Work. */
   cancel(): void;
+  /** Sever the parent link, leaving this cancellation child-owned. */
+  detachParent(): boolean;
   dispose(): void;
 }
 
@@ -69,14 +75,44 @@ export function createInternalWorkCancellation(
   parentSignal?: AbortSignal,
 ): InternalWorkCancellation {
   const controller = new AbortController();
-  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  let parentListenerAttached = false;
 
-  if (parentSignal?.aborted) abortFromParent();
-  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+  const parent = parentSignal;
+
+  const abortFromParent = () => {
+    parentListenerAttached = false;
+    controller.abort(parent?.reason);
+  };
+
+  if (parent?.aborted) {
+    abortFromParent();
+  } else if (parent) {
+    parent.addEventListener("abort", abortFromParent, { once: true });
+    parentListenerAttached = true;
+  }
 
   return Object.freeze({
     signal: controller.signal,
     cancel: () => controller.abort(),
-    dispose: () => parentSignal?.removeEventListener("abort", abortFromParent),
+    detachParent: () => {
+      if (
+        !parentListenerAttached ||
+        !parent ||
+        controller.signal.aborted ||
+        parent.aborted
+      ) {
+        return false;
+      }
+
+      parent.removeEventListener("abort", abortFromParent);
+      parentListenerAttached = false;
+      return true;
+    },
+    dispose: () => {
+      if (parentListenerAttached && parent) {
+        parent.removeEventListener("abort", abortFromParent);
+        parentListenerAttached = false;
+      }
+    },
   });
 }

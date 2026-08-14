@@ -36,11 +36,11 @@ describe("process-local attached Work", () => {
     expect(childContext).not.toHaveProperty("cancel");
   });
 
-  it("attached child observes an already-aborted parent signal before target work begins", async () => {
+  it("an already-aborted attached parent cancels the queued child before target invocation", async () => {
     const cancellation = Object.freeze({ kind: "parent-pre-abort" });
     const parent = new AbortController();
     parent.abort(cancellation);
-    let observedBeforeTargetWork = false;
+    let targetInvoked = false;
     const kernel = createProcessLocalWorkKernel({
       createId: () => "work_pre_aborted_child",
       schedule: (start) => start(),
@@ -49,19 +49,22 @@ describe("process-local attached Work", () => {
     const child = await kernel.spawn(
       {
         async run(context) {
-          observedBeforeTargetWork = context.signal.aborted;
+          targetInvoked = true;
           context.signal.throwIfAborted();
           return "unreachable";
         },
       },
       {
         kind: "attached",
-        attachment: { parentId: "work_pre_aborted_parent", signal: parent.signal },
+        attachment: {
+          parentId: "work_pre_aborted_parent",
+          signal: parent.signal,
+        },
       },
     );
 
     await expect(child.result()).rejects.toBe(cancellation);
-    expect(observedBeforeTargetWork).toBe(true);
+    expect(targetInvoked).toBe(false);
   });
 
   it("aborting an attached parent while child work is in flight aborts the child signal and rejects the child result", async () => {
@@ -91,7 +94,10 @@ describe("process-local attached Work", () => {
       },
       {
         kind: "attached",
-        attachment: { parentId: "work_in_flight_parent", signal: parent.signal },
+        attachment: {
+          parentId: "work_in_flight_parent",
+          signal: parent.signal,
+        },
       },
     );
 
@@ -223,10 +229,10 @@ describe("process-local attached Work", () => {
     await expect(secondResult).rejects.toBe(cancellation);
     await expect(child.status()).resolves.toMatchObject({
       id: "work_terminal_race",
-      state: "failed",
+      state: "cancelled",
     });
     expect(driverRuns).toBe(1);
     expect(terminalAttempts).toBe(2);
-    expect(clockReads).toBe(3);
+    expect(clockReads).toBe(4);
   });
 });

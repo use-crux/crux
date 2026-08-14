@@ -15,6 +15,8 @@ import {
   type ProcessLocalAgentWorkController,
 } from "./internal/agent-work-controller";
 import { createProcessLocalWorkKernel } from "./internal/process-local-kernel";
+import { resolveWorkPolicy, type ResolvedWorkPolicy } from "./policy";
+import type { WorkPolicy } from "./policy";
 
 interface AgentWorkHostContext {
   readonly controller: ProcessLocalAgentWorkController;
@@ -32,6 +34,14 @@ export interface CreateAgentWorkHostOptions {
   readonly executor: AgentExecutor;
   /** Default model forwarded when the Agent does not pin one. */
   readonly model?: AnyModel;
+  /**
+   * Root Work policy applied to every child accepted by this host.
+   *
+   * @remarks Omitted limits fall back to the finite implementation defaults;
+   * authored limits only narrow the effective ceiling. The resolved policy is
+   * observable on the returned host as `policy`.
+   */
+  readonly policy?: WorkPolicy;
 }
 
 /**
@@ -48,19 +58,21 @@ export interface CreateAgentWorkHostOptions {
  * await child.send("Prioritize primary sources.")
  * ```
  */
-export function createAgentWorkHost(
-  options: CreateAgentWorkHostOptions,
-): {
+export function createAgentWorkHost(options: CreateAgentWorkHostOptions): {
+  /** Finite effective Work limits applied to every child accepted by this host. */
+  readonly policy: ResolvedWorkPolicy;
   run<TResult>(fn: () => TResult): TResult;
 } {
+  const policy = resolveWorkPolicy(options.policy);
   const kernel = createProcessLocalWorkKernel();
-  const controller = createProcessLocalAgentWorkController({ kernel });
+  const controller = createProcessLocalAgentWorkController({ kernel, policy });
   const context = Object.freeze({
     controller,
     executor: options.executor,
     ...(options.model !== undefined ? { model: options.model } : {}),
   });
   return Object.freeze({
+    policy,
     run: <TResult>(fn: () => TResult) => agentWorkHostScope.run(context, fn),
   });
 }

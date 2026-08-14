@@ -191,6 +191,9 @@ function hasProtectedCapabilities(
   if (seen.has(entry)) return false;
   seen.add(entry);
   if (entry._tag === "droppable") return false;
+  if (entry._tag === "WorkPolicy") {
+    return true;
+  }
   if (
     entry._tag === "Context" &&
     "constraints" in entry &&
