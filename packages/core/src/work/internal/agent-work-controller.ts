@@ -26,9 +26,19 @@ import type {
 } from "../agent-handle";
 import type { CancelOptions, CancelReceipt } from "../cancellation";
 import type { DetachReceipt } from "../detachment";
-import { WorkCancelledError, WorkFailedError, WorkNotActiveError } from "../errors";
+import {
+  WorkAdmissionError,
+  WorkCancelledError,
+  WorkFailedError,
+  WorkNotActiveError,
+} from "../errors";
 import type { WorkEvent, WorkStreamOptions } from "../events";
 import type { ExecutionStats } from "../handle";
+import {
+  intersectResolvedWorkPolicy,
+  resolveWorkPolicy,
+  type ResolvedWorkPolicy,
+} from "../policy";
 import type { WorkProgress, WorkProgressSnapshot } from "../progress";
 import type { WorkOwnership, WorkStatus } from "../status";
 import {
@@ -59,6 +69,7 @@ export interface ProcessLocalAgentWorkController {
       readonly occurrence?: AgentToolOccurrenceKey;
       readonly spawn?: InternalWorkSpawnOptions;
       readonly targetLabel?: string;
+      readonly policy?: ResolvedWorkPolicy;
     },
   ): Promise<AgentWorkHandle<InferAgentOutput<TAgent>>>;
   attachExisting<TOutput>(
@@ -90,6 +101,19 @@ export interface ProcessLocalAgentWorkController {
   recordCount(): number;
 }
 
+interface AgentWorkTopology {
+  readonly rootId: string;
+  readonly parentWorkId?: string;
+  readonly depth: number;
+  readonly policy: ResolvedWorkPolicy;
+}
+
+interface RootTreeLedger {
+  starts: number;
+  active: number;
+  rootTerminal: boolean;
+}
+
 interface AgentWorkRecord<TOutput = unknown> {
   readonly handle: InternalWorkHandle<TOutput>;
   readonly targetId: string;
@@ -97,6 +121,11 @@ interface AgentWorkRecord<TOutput = unknown> {
   readonly kind: "agent";
   readonly mailbox: AgentSteeringMailbox;
   readonly occurrence?: AgentToolOccurrenceKey;
+  readonly rootId: string;
+  readonly parentWorkId?: string;
+  readonly depth: number;
+  readonly policy: ResolvedWorkPolicy;
+  readonly releaseOwnerOutstanding?: () => void;
   ownership: WorkOwnership;
   progress?: WorkProgressSnapshot;
   readonly acceptedAt: Date;
@@ -107,14 +136,183 @@ interface AgentWorkRecord<TOutput = unknown> {
 export function createProcessLocalAgentWorkController(options: {
   readonly kernel: ProcessLocalWorkKernel;
   readonly now?: () => Date;
+  readonly policy?: ResolvedWorkPolicy;
 }): ProcessLocalAgentWorkController {
   const now = options.now ?? (() => new Date());
+  const hostPolicy = options.policy ?? resolveWorkPolicy();
   const occurrences = createAgentToolOccurrenceRegistry();
   const records = new Map<string, AgentWorkRecord>();
+  const rootLedgers = new Map<string, RootTreeLedger>();
   const pendingByOccurrence = new Map<
     string,
     Promise<AgentWorkHandle<unknown>>
   >();
+
+  // Per-owner admission gate: one atomic FIFO gate per owning execution. Host
+  // spawns without an occurrence share the controller's host owner.
+  interface AdmissionEntry {
+    state: "queued" | "running" | "settled";
+    outstandingReleased: boolean;
+    readonly start: () => void;
+    readonly settle: () => void;
+    readonly releaseOutstanding: () => void;
+  }
+
+  interface AdmissionGateState {
+    running: number;
+    outstanding: number;
+    queue: AdmissionEntry[];
+  }
+
+  const gates = new Map<string | symbol, AdmissionGateState>();
+  const hostOwnerKey = Symbol("process-local-agent-work-host-owner");
+
+  function ensureAdmissionGate(ownerKey: string | symbol): AdmissionGateState {
+    let gate = gates.get(ownerKey);
+    if (!gate) {
+      gate = { running: 0, outstanding: 0, queue: [] };
+      gates.set(ownerKey, gate);
+    }
+    return gate;
+  }
+
+  function admit(
+    ownerKey: string | symbol,
+    gate: AdmissionGateState,
+    policy: ResolvedWorkPolicy,
+    start: () => void,
+  ): AdmissionEntry {
+    const entry: AdmissionEntry = {
+      state: "queued",
+      outstandingReleased: false,
+      start,
+      settle: () => settleEntry(ownerKey, gate, entry),
+      releaseOutstanding: () => releaseEntryOutstanding(gate, entry),
+    };
+
+    if (gate.running < policy.concurrency) {
+      entry.state = "running";
+      gate.running += 1;
+      entry.start();
+    } else {
+      gate.queue.push(entry);
+    }
+
+    return entry;
+  }
+
+  function settleEntry(
+    ownerKey: string | symbol,
+    gate: AdmissionGateState,
+    entry: AdmissionEntry,
+  ): void {
+    if (entry.state === "settled") {
+      return;
+    }
+
+    releaseEntryOutstanding(gate, entry);
+
+    if (entry.state === "queued") {
+      entry.state = "settled";
+      removeEntry(gate.queue, entry);
+    } else {
+      entry.state = "settled";
+      gate.running -= 1;
+      promoteNext(gate);
+    }
+
+    maybeDeleteGate(ownerKey, gate);
+  }
+
+  function releaseEntryOutstanding(
+    gate: AdmissionGateState,
+    entry: AdmissionEntry,
+  ): void {
+    if (entry.outstandingReleased) {
+      return;
+    }
+    entry.outstandingReleased = true;
+    gate.outstanding -= 1;
+  }
+
+  function removeEntry(queue: AdmissionEntry[], entry: AdmissionEntry): void {
+    const index = queue.indexOf(entry);
+    if (index !== -1) {
+      queue.splice(index, 1);
+    }
+  }
+
+  function promoteNext(gate: AdmissionGateState): void {
+    const index = gate.queue.findIndex((entry) => entry.state === "queued");
+    if (index === -1) {
+      return;
+    }
+    const [entry] = gate.queue.splice(index, 1);
+    entry.state = "running";
+    gate.running += 1;
+    entry.start();
+  }
+
+  function maybeDeleteGate(
+    ownerKey: string | symbol,
+    gate: AdmissionGateState,
+  ): void {
+    if (
+      gate.outstanding === 0 &&
+      gate.running === 0 &&
+      gate.queue.length === 0
+    ) {
+      gates.delete(ownerKey);
+    }
+  }
+
+  function ensureRootLedger(rootId: string): RootTreeLedger {
+    let ledger = rootLedgers.get(rootId);
+    if (!ledger) {
+      ledger = { starts: 0, active: 0, rootTerminal: false };
+      rootLedgers.set(rootId, ledger);
+    }
+    return ledger;
+  }
+
+  function settleRootTerminal(rootId: string): void {
+    const ledger = rootLedgers.get(rootId);
+    if (!ledger) {
+      return;
+    }
+    ledger.rootTerminal = true;
+    maybeDeleteRootLedger(rootId, ledger);
+  }
+
+  function settleDescendant(rootId: string): void {
+    const ledger = rootLedgers.get(rootId);
+    if (!ledger) {
+      return;
+    }
+    ledger.active -= 1;
+    maybeDeleteRootLedger(rootId, ledger);
+  }
+
+  function maybeDeleteRootLedger(rootId: string, ledger: RootTreeLedger): void {
+    if (ledger.rootTerminal && ledger.active === 0) {
+      rootLedgers.delete(rootId);
+    }
+  }
+
+  function attachTreeSettlement(
+    handle: InternalWorkHandle<unknown>,
+    onSettle: () => void,
+  ): void {
+    let settled = false;
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      onSettle();
+    };
+    void handle.result().then(settle, settle);
+  }
 
   async function spawnAgent<TAgent extends AnyAgent>(
     agent: TAgent,
@@ -125,6 +323,7 @@ export function createProcessLocalAgentWorkController(options: {
       readonly occurrence?: AgentToolOccurrenceKey;
       readonly spawn?: InternalWorkSpawnOptions;
       readonly targetLabel?: string;
+      readonly policy?: ResolvedWorkPolicy;
     },
   ): Promise<AgentWorkHandle<InferAgentOutput<TAgent>>> {
     if (!spawnOptions.occurrence) {
@@ -170,31 +369,126 @@ export function createProcessLocalAgentWorkController(options: {
       readonly occurrence?: AgentToolOccurrenceKey;
       readonly spawn?: InternalWorkSpawnOptions;
       readonly targetLabel?: string;
+      readonly policy?: ResolvedWorkPolicy;
     },
   ): Promise<AgentWorkHandle<InferAgentOutput<TAgent>>> {
-    const handle = await options.kernel.spawn(
-      {
-        run: async (context) => {
-          const result = await spawnOptions.executor(agent, {
-            input,
-            model: spawnOptions.model,
-            signal: context.signal,
-            projectStepMessages: () =>
-              claimSteeringMessages(context.id),
-          });
-          close(context.id);
-          return result.output as InferAgentOutput<TAgent>;
+    const parent =
+      spawnOptions.spawn?.kind === "attached"
+        ? records.get(spawnOptions.spawn.attachment.parentId)
+        : undefined;
+
+    const depth = parent ? parent.depth + 1 : 0;
+
+    let policy = hostPolicy;
+
+    if (spawnOptions.policy) {
+      policy = intersectResolvedWorkPolicy(policy, spawnOptions.policy);
+    }
+
+    if (parent) {
+      policy = intersectResolvedWorkPolicy(policy, parent.policy);
+    }
+
+    if (depth > policy.tree.maxDepth) {
+      throw new WorkAdmissionError({ code: "work_admission_max_depth" });
+    }
+
+    // Tree admission for known parents, ahead of owner admission. A child
+    // consumes one start and one active slot in its root's ledger.
+    let treeLedger: RootTreeLedger | undefined;
+    if (parent) {
+      treeLedger = ensureRootLedger(parent.rootId);
+      if (treeLedger.starts >= policy.tree.maxStarts) {
+        throw new WorkAdmissionError({ code: "work_admission_max_starts" });
+      }
+      if (treeLedger.active >= policy.tree.maxActive) {
+        throw new WorkAdmissionError({ code: "work_admission_max_active" });
+      }
+    }
+
+    const ownerKey = spawnOptions.occurrence?.ownerId ?? hostOwnerKey;
+    const gate = ensureAdmissionGate(ownerKey);
+
+    // Atomic admission: reject before acceptance and before the executor is
+    // reached. Synchronous check plus increment keeps concurrent callers safe.
+    if (gate.outstanding >= policy.maxOutstanding) {
+      throw new WorkAdmissionError();
+    }
+    gate.outstanding += 1;
+
+    // Tentative tree acceptance, committed only if kernel.spawn succeeds.
+    if (treeLedger) {
+      treeLedger.starts += 1;
+      treeLedger.active += 1;
+    }
+
+    let entry: AdmissionEntry | undefined;
+
+    let handle: InternalWorkHandle<InferAgentOutput<TAgent>>;
+    try {
+      handle = await options.kernel.spawn(
+        {
+          run: async (context) => {
+            const result = await spawnOptions.executor(agent, {
+              input,
+              model: spawnOptions.model,
+              signal: context.signal,
+              projectStepMessages: () => claimSteeringMessages(context.id),
+            });
+            close(context.id);
+            return result.output as InferAgentOutput<TAgent>;
+          },
         },
-      },
-      spawnOptions.spawn,
+        spawnOptions.spawn,
+        (start) => {
+          entry = admit(ownerKey, gate, policy, start);
+        },
+      );
+    } catch (error) {
+      if (treeLedger) {
+        treeLedger.starts -= 1;
+        treeLedger.active -= 1;
+      }
+      if (entry) {
+        entry.settle();
+      } else {
+        gate.outstanding -= 1;
+        maybeDeleteGate(ownerKey, gate);
+      }
+      throw error;
+    }
+
+    // Release the per-owner slot when the kernel execution settles, then start
+    // the next queued entry FIFO.
+    void handle.result().then(
+      () => entry!.settle(),
+      () => entry!.settle(),
     );
 
-    return attachExisting(handle, {
+    const attached = attachExisting(handle, {
       targetId: agent.id,
       targetLabel: spawnOptions.targetLabel ?? agent.id,
       occurrence: spawnOptions.occurrence,
       input,
+      topology: {
+        rootId: parent ? parent.rootId : handle.id,
+        ...(parent ? { parentWorkId: parent.handle.id } : {}),
+        depth,
+        policy,
+      },
+      releaseOwnerOutstanding: () => entry!.releaseOutstanding(),
     });
+
+    // After acceptance, settle the tree once the kernel execution terminates.
+    if (parent) {
+      const rootId = parent.rootId;
+      attachTreeSettlement(handle, () => settleDescendant(rootId));
+    } else {
+      ensureRootLedger(handle.id);
+      attachTreeSettlement(handle, () => settleRootTerminal(handle.id));
+    }
+
+    return attached;
   }
 
   function attachExisting<TOutput>(
@@ -204,6 +498,8 @@ export function createProcessLocalAgentWorkController(options: {
       readonly targetLabel: string;
       readonly occurrence?: AgentToolOccurrenceKey;
       readonly input?: unknown;
+      readonly topology?: AgentWorkTopology;
+      readonly releaseOwnerOutstanding?: () => void;
     },
   ): AgentWorkHandle<TOutput> {
     const existing = records.get(handle.id);
@@ -232,6 +528,12 @@ export function createProcessLocalAgentWorkController(options: {
       occurrence = attachOptions.occurrence;
     }
 
+    const topology = attachOptions.topology ?? {
+      rootId: handle.id,
+      depth: 0,
+      policy: hostPolicy,
+    };
+
     const record: AgentWorkRecord = {
       handle: handle as InternalWorkHandle<unknown>,
       targetId: attachOptions.targetId,
@@ -242,6 +544,13 @@ export function createProcessLocalAgentWorkController(options: {
         now,
       }),
       ...(occurrence ? { occurrence } : {}),
+      rootId: topology.rootId,
+      ...(topology.parentWorkId ? { parentWorkId: topology.parentWorkId } : {}),
+      depth: topology.depth,
+      policy: topology.policy,
+      ...(attachOptions.releaseOwnerOutstanding
+        ? { releaseOwnerOutstanding: attachOptions.releaseOwnerOutstanding }
+        : {}),
       ownership: Object.freeze({ state: "attached" }),
       acceptedAt: now(),
       nextCommand: 0,
@@ -428,6 +737,37 @@ export function createProcessLocalAgentWorkController(options: {
             ownership: record.ownership,
           }) satisfies DetachReceipt;
         }
+
+        if (record.parentWorkId) {
+          const severed = handle.detachFromParent();
+          if (severed) {
+            record.releaseOwnerOutstanding?.();
+            record.ownership = Object.freeze({
+              state: "detached",
+              reason: "explicit",
+              detachedAt: now(),
+            });
+            return Object.freeze({
+              workId: handle.id,
+              outcome: "detached",
+              ownership: record.ownership,
+            }) satisfies DetachReceipt;
+          }
+
+          // Cancellation or terminalization won the sever: report an
+          // already-terminal receipt without changing ownership. A briefly
+          // cancel-requested status settles once the execution rejects.
+          const status = await handle.status();
+          if (status.state === "cancel-requested") {
+            await handle.result().catch(() => undefined);
+          }
+          return Object.freeze({
+            workId: handle.id,
+            outcome: "already-terminal",
+            ownership: record.ownership,
+          }) satisfies DetachReceipt;
+        }
+
         const status = await handle.status();
         if (
           status.state === "completed" ||
@@ -440,6 +780,7 @@ export function createProcessLocalAgentWorkController(options: {
             ownership: record.ownership,
           }) satisfies DetachReceipt;
         }
+        record.releaseOwnerOutstanding?.();
         record.ownership = Object.freeze({
           state: "detached",
           reason: "explicit",
@@ -480,10 +821,6 @@ export function createProcessLocalAgentWorkController(options: {
       status.state === "cancelled"
     ) {
       throw new WorkNotActiveError(record.handle.id);
-    }
-    if (record.ownership.state === "detached") {
-      // Application handles that retain capability may still steer. Model-facing
-      // control uses owner recovery and will not reach detached records.
     }
     return record.mailbox.accept({ commandId, content });
   }

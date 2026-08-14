@@ -37,6 +37,8 @@ export interface InternalWorkHandle<TOutput> {
   result(): Promise<TOutput>;
   /** Cooperatively request cancellation of this Work occurrence. */
   cancel(): boolean;
+  /** Detach this Work occurrence from its parent cancellation signal. */
+  detachFromParent(): boolean;
 }
 
 /** Injectable process-local infrastructure seams. @internal */
@@ -53,10 +55,20 @@ export interface ProcessLocalWorkKernelOptions {
 
 /** Explicitly instantiated, isolated Work registry and execution kernel. @internal */
 export interface ProcessLocalWorkKernel {
-  /** Accept and schedule one bound target with explicit optional linkage. */
+  /**
+   * Accept and schedule one bound target with explicit optional linkage.
+   *
+   * @param driver - Bound first-party target execution.
+   * @param options - Optional linkage for the accepted occurrence.
+   * @param scheduler - Per-occurrence override for the kernel-level start
+   *   scheduler. When supplied, it owns when the accepted occurrence's start
+   *   callback fires, which keeps the occurrence in the `queued` state until a
+   *   caller grants it a slot.
+   */
   spawn<TOutput>(
     driver: InternalWorkTargetDriver<TOutput>,
     options?: InternalWorkSpawnOptions,
+    scheduler?: (start: () => void) => void,
   ): Promise<InternalWorkHandle<TOutput>>;
 }
 
@@ -68,7 +80,6 @@ interface MutableWorkRecord {
 function isCancellationRequested(status: StoredWorkStatus): boolean {
   return status.state === "cancel-requested";
 }
-
 
 /**
  * Create an isolated process-local Work kernel.
@@ -102,6 +113,7 @@ export function createProcessLocalWorkKernel(
     async spawn<TOutput>(
       driver: InternalWorkTargetDriver<TOutput>,
       options?: InternalWorkSpawnOptions,
+      scheduler?: (start: () => void) => void,
     ): Promise<InternalWorkHandle<TOutput>> {
       const attachment =
         options?.kind === "attached"
@@ -137,11 +149,48 @@ export function createProcessLocalWorkKernel(
       const scheduled = new Promise<void>((resolve) => {
         start = resolve;
       });
+
+      const requestCancellation = (): boolean => {
+        const current = record.status;
+        const updatedAt = now().getTime();
+        switch (current.state) {
+          case "queued":
+            record.status = Object.freeze({
+              id,
+              state: "cancelled",
+              acceptedAt,
+              cancelledAt: updatedAt,
+              updatedAt,
+            });
+            start();
+            return true;
+          case "running":
+            record.status = Object.freeze({
+              id,
+              state: "cancel-requested",
+              acceptedAt,
+              startedAt: current.startedAt,
+              cancellationRequestedAt: updatedAt,
+              updatedAt,
+            });
+            return true;
+          case "cancel-requested":
+          case "completed":
+          case "failed":
+          case "cancelled":
+            return false;
+        }
+      };
+      cancellation.signal.addEventListener("abort", requestCancellation);
+      if (cancellation.signal.aborted) {
+        requestCancellation();
+      }
+
       const execution = runEffectBoundary(
         id,
         async (boundary) => {
           acceptEffects(boundary.ref);
-          schedule(start);
+          (scheduler ?? schedule)(start);
           await scheduled;
 
           if (record.status.state === "cancelled") {
@@ -158,7 +207,9 @@ export function createProcessLocalWorkKernel(
           });
           const context: InternalWorkExecutionContext = Object.freeze({
             id,
-            ...(attachment ? { attachedParentId: attachment.parentId } : undefined),
+            ...(attachment
+              ? { attachedParentId: attachment.parentId }
+              : undefined),
             signal: cancellation.signal,
             effects: boundary.ref,
           });
@@ -197,6 +248,20 @@ export function createProcessLocalWorkKernel(
             throw failure;
           }
           const completedAt = now().getTime();
+          if (
+            isCancellationRequested(record.status) &&
+            cancellation.signal.aborted
+          ) {
+            record.status = Object.freeze({
+              id,
+              state: "cancelled",
+              acceptedAt,
+              startedAt,
+              cancelledAt: completedAt,
+              updatedAt: completedAt,
+            });
+            throw cancellation.signal.reason;
+          }
           record.status = Object.freeze({
             id,
             state: "completed",
@@ -215,7 +280,11 @@ export function createProcessLocalWorkKernel(
           ? { effectParent: "independent" }
           : undefined,
       );
-      void execution.then(cancellation.dispose, cancellation.dispose);
+      const cleanup = () => {
+        cancellation.signal.removeEventListener("abort", requestCancellation);
+        cancellation.dispose();
+      };
+      void execution.then(cleanup, cleanup);
       void execution.catch(() => undefined);
       let effects: EffectScopeRef;
       try {
@@ -234,34 +303,19 @@ export function createProcessLocalWorkKernel(
         status: () => Promise.resolve(workStatusSnapshot(record.status)),
         result: () => execution,
         cancel: () => {
+          const accepted = requestCancellation();
+          if (accepted) {
+            cancellation.cancel();
+          }
+          return accepted;
+        },
+        detachFromParent: () => {
           const current = record.status;
-          const updatedAt = now().getTime();
           switch (current.state) {
             case "queued":
-              record.status = Object.freeze({
-                id,
-                state: "cancelled",
-                acceptedAt,
-                cancelledAt: updatedAt,
-                updatedAt,
-              });
-              cancellation.cancel();
-              return true;
             case "running":
-              record.status = Object.freeze({
-                id,
-                state: "cancel-requested",
-                acceptedAt,
-                startedAt: current.startedAt,
-                cancellationRequestedAt: updatedAt,
-                updatedAt,
-              });
-              cancellation.cancel();
-              return true;
-            case "cancel-requested":
-            case "completed":
-            case "failed":
-            case "cancelled":
+              return cancellation.detachParent();
+            default:
               return false;
           }
         },

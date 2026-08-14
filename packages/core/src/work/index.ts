@@ -2,7 +2,7 @@
 
 export { getWork } from "./get-work";
 export { spawn } from "./spawn";
-export { workPolicy } from "./policy";
+export { workPolicy, resolveWorkPolicy } from "./policy";
 export { createWorkHost } from "./internal/durable-host-context";
 export { createAgentWorkHost } from "./agent-host";
 export type {
@@ -10,23 +10,23 @@ export type {
   WorkHost,
 } from "./internal/durable-host-context";
 export type { CreateAgentWorkHostOptions } from "./agent-host";
-export type {
-  CancelOptions,
-  CancelReceipt,
-} from "./cancellation";
+export type { CancelOptions, CancelReceipt } from "./cancellation";
 export type {
   WorkPolicy,
   WorkPolicyOptions,
   WorkTreePolicy,
+  ResolvedWorkPolicy,
 } from "./policy";
 export type { DetachReceipt } from "./detachment";
 export type { WorkEvent, WorkStreamOptions } from "./events";
 export {
+  WorkAdmissionError,
   WorkCancelledError,
   WorkFailedError,
   WorkNotActiveError,
   WorkResultExpiredError,
 } from "./errors";
+export type { WorkAdmissionCategory, WorkAdmissionErrorCode } from "./errors";
 export type { ExecutionStats, SpawnWorkOptions, WorkHandle } from "./handle";
 export type {
   AgentSteeringContent,
