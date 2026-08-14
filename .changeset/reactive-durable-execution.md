@@ -404,3 +404,11 @@ string or multimodal content, is ordered and payload-safe in identity records,
 and delivers only at the next semantic provider-step boundary without changing
 tools or guardrails. The automatic model-facing `work` tool gains `send` for
 Agent children only while retaining a stable schema.
+
+Add finite process-local Agent Work policy defaults through the protected
+`workPolicy()` use contribution: per-owner FIFO concurrency and outstanding
+admission, root-scoped depth, lifetime-start, and active limits, typed
+retryable and permanent refusals, attached subtree cancellation, and
+detachment that releases owner outstanding while retaining root charges.
+Complete guide and reference docs cover authoring, limits, refusal handling,
+and detachment semantics.

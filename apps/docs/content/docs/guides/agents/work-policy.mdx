@@ -1,0 +1,218 @@
+---
+title: Work Policy
+description: Bound process-local Agent Work with finite, protected resource limits.
+---
+
+A background coordinator that fans out unchecked can starve a process in seconds:
+one Agent starts ten children, each starts ten more, and every one of them is a
+live provider call. Work policy exists so that a single `use` declaration — or no
+declaration at all — guarantees a finite ceiling on every Work tree a host runs.
+
+You need no configuration to be protected. Every process-local Agent Work host
+resolves a finite effective policy before it accepts a single occurrence.
+
+## The observable defaults
+
+When no policy is authored anywhere, a host enforces these exact limits:
+
+| Limit            | Default | Bounds                                                   |
+| ---------------- | ------- | -------------------------------------------------------- |
+| `concurrency`    | `8`     | Work occurrences executing at once per owner             |
+| `maxOutstanding` | `32`    | Queued-plus-active occurrences per owner awaiting a slot |
+| `tree.maxDepth`  | `4`     | Nesting depth of the Work tree, counting from the root   |
+| `tree.maxStarts` | `64`    | Lifetime accepted Agent descendants across the root      |
+| `tree.maxActive` | `16`    | Nonterminal Agent descendants active at once root-wide   |
+
+`concurrency` caps how many accepted occurrences actually run at the same time;
+`maxOutstanding` caps the total pool of running plus queued occurrences so the
+queue itself cannot grow without bound. The `tree` limits are root-scoped fan-out
+bounds: a root counts as depth `0`, so `maxDepth: 4` permits at most four levels
+of descendants. `maxStarts` counts lifetime accepted Agent descendants across the
+whole root, and `maxActive` counts all nonterminal Agent descendants root-wide at
+any instant — neither is accounted per node.
+
+## Declaring a policy
+
+Add a `workPolicy()` entry to any Prompt's `use` array. It is inert data until
+the Prompt is resolved, and the limits are never rendered into model tokens.
+
+```ts title="research-policy.ts"
+import { z } from "zod";
+import { prompt } from "@use-crux/core";
+import { workPolicy } from "@use-crux/core/work";
+
+const researchPrompt = prompt({
+  id: "research-prompt",
+  system: "Investigate a topic and cite primary sources.",
+  input: z.object({ task: z.string() }),
+  use: [workPolicy({ concurrency: 2, tree: { maxDepth: 2 } })],
+});
+```
+
+Wrap it in an Agent and it carries the same limits through every composition:
+
+```ts title="researcher.ts"
+import { agent } from "@use-crux/core/agent";
+
+const researcher = agent({
+  id: "researcher",
+  prompt: researchPrompt,
+});
+```
+
+Every authored count must be a positive safe integer; `workPolicy()` throws a
+`RangeError` otherwise. The contribution is deeply frozen and carries only the
+limits you wrote — omitted fields stay absent, not defaulted.
+
+### Protected minimum intersection
+
+When several contributions are active, resolution merges them into one immutable
+policy by the **strictest** value for each field. A limit authored once is kept
+verbatim; a limit authored more than once is the minimum. Fields never widen,
+never follow last-wins, and removing a limit from one contribution cannot raise
+the merged ceiling.
+
+That means a descendant cannot widen a limit its ancestor declared. A nested
+context or Prompt policy contribution in the `use` graph that asks for
+`concurrency: 16` under a parent that declared `concurrency: 2` still resolves to
+`2`, and a descendant Agent's execution policy intersects the same way — its own
+limits never widen the merged ceiling of the tree it joins.
+
+The merged result is **protected execution metadata**: it is carried outside the
+mutable request-amendment surface, so a `prepareStep` callback cannot remove or
+weaken it. It is execution control, not model-facing content.
+
+## Recipes
+
+### Bounded research fanout
+
+Pin the host-level root policy and let every accepted child inherit it:
+
+```ts title="fanout.ts"
+import { createAgentWorkHost, spawn } from "@use-crux/core";
+import { workPolicy } from "@use-crux/core/work";
+
+const host = createAgentWorkHost({
+  executor,
+  policy: workPolicy({
+    concurrency: 4,
+    maxOutstanding: 8,
+    tree: { maxDepth: 2, maxStarts: 6, maxActive: 3 },
+  }),
+});
+
+const reports = await host.run(async () => {
+  const children = await Promise.all([
+    spawn(researcher, { task: "Index the API surface." }),
+    spawn(researcher, { task: "Map the migration path." }),
+    spawn(researcher, { task: "Collect changelog notes." }),
+  ]);
+  return Promise.all(children.map((child) => child.result()));
+});
+```
+
+The resolved ceiling is also exposed as `host.policy` for diagnostics.
+
+### Handling admission rejections
+
+`spawn()` rejects with a typed `WorkAdmissionError` before acceptance when the
+active policy refuses a new occurrence. Branch on its stable `code`, or use
+`retryable` and `category` for provider-neutral handling:
+
+```ts title="admission.ts"
+import { WorkAdmissionError } from "@use-crux/core/work";
+
+try {
+  const child = await host.run(() =>
+    spawn(researcher, { task: "One more fan-out." }),
+  );
+  const report = await child.result();
+} catch (error) {
+  if (error instanceof WorkAdmissionError) {
+    if (error.retryable) {
+      await backOffAndRetry();
+    }
+    throw error;
+  }
+  throw error;
+}
+```
+
+| `code`                           | `category` | `retryable` | Meaning                                        |
+| -------------------------------- | ---------- | ----------- | ---------------------------------------------- |
+| `work_admission_max_outstanding` | `capacity` | `true`      | Per-owner queued-plus-active limit reached     |
+| `work_admission_max_active`      | `capacity` | `true`      | Root-wide nonterminal descendant limit reached |
+| `work_admission_max_depth`       | `topology` | `false`     | Maximum tree depth reached                     |
+| `work_admission_max_starts`      | `lifetime` | `false`     | Root-wide lifetime start limit reached         |
+
+Capacity rejections are retryable because draining below the limit may admit the
+same occurrence later. Topology and lifetime rejections are terminal for that
+occurrence — retrying unchanged cannot help.
+
+### Cancelling an attached subtree
+
+Children spawned inside a running Agent inherit its cooperative cancellation
+signal, so cancelling the root aborts the whole attached subtree:
+
+```ts title="cancel.ts"
+const root = await host.run(() =>
+  spawn(planner, { goal: "Ship the release." }),
+);
+
+await root.cancel({ reason: "Scope changed." });
+```
+
+Every attached descendant rejects with `WorkCancelledError`; `cancel()` returns a
+receipt with an `outcome` of `"cancelled"` or `"already-terminal"`. Cancellation
+is idempotent and cooperative — a completion that commits first stays
+authoritative.
+
+### Detaching while keeping the budget
+
+Detach a child you want to outlive a later parent cancellation. This assumes you
+already hold the root handle and an attached child handle — one spawned inside
+that root's execution — from earlier in the program:
+
+```ts title="detach.ts"
+// `child` is already attached to `root` (spawned inside root's execution).
+
+await child.detach();
+await root.cancel(); // no longer reaches the detached child
+const summary = await child.result();
+```
+
+`detach()` severs the child's link to the parent's cancellation signal only. The
+child still consumes its `maxStarts` and `maxActive` slots in the root's tree
+ledger until it terminalizes, so detaching does not refund the root budget — it
+just stops future parent cancellations from cascading.
+
+### Idempotent occurrence replay
+
+For an Agent-as-Tool child, the occurrence identity derives from the parent
+execution owner, turn/step, tool call, and binding key. When an adapter or
+provider replays the same step, the replay reconnects to the existing child
+occurrence instead of starting another; the first accept is atomic, so concurrent
+waiters join the same occurrence and conflicting reuse rejects deterministically.
+Separate parent runs never share occurrence identity even when tool-call ids
+collide.
+
+## Current boundary
+
+Two things are enforced today. First, a process-local host always applies the
+finite defaults, and it applies an explicit host/root policy from
+`createAgentWorkHost({ policy })` to every child it accepts. Second, a
+`workPolicy()` entry in a `use[]` array resolves into the Prompt's protected
+execution metadata — visible on the resolved Prompt and never surfaced to the
+model.
+
+What is **not** automatic yet is handing that resolved child policy back into
+restart-safe, durable Agent execution: that handoff belongs to the later durable
+Agent bridge. Today's enforcement is process-local, so process exit, a freeze, or
+a request landing on another worker loses accepted Work and its policy context.
+
+## Next
+
+Start from [Background Agent Work](/docs/guides/agents/background-agent-work) for
+the lifecycle these limits govern, and use the [Application Work
+reference](/docs/reference/crux-core/work) for the exact `spawn`, handle, status,
+and control contracts.

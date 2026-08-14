@@ -37,6 +37,8 @@
     "cache",
     "agent",
     "backgroundable-agent-work",
+    "work",
+    "work-policy",
     "session",
     "generation-model",
     "flow",

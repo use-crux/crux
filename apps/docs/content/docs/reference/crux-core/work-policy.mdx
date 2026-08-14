@@ -1,0 +1,209 @@
+---
+title: Work Policy API
+description: Admission budgets that bound per-owner concurrency and outstanding work, plus root-scoped tree depth, lifetime starts, and active descendants for agent work.
+---
+
+A `WorkPolicy` bounds how much agent work is admitted at once. Budgets are split
+across two scopes: **per-owner** (`concurrency`, `maxOutstanding`) and
+**root-scoped** (`tree.maxDepth`, `tree.maxStarts`, `tree.maxActive`). Authored
+contributions are deeply frozen, and effective host policies are resolved by
+default filling plus per-field minimum intersection.
+
+## Import
+
+```ts
+import {
+  workPolicy,
+  DEFAULT_WORK_POLICY,
+  resolveWorkPolicy,
+  createAgentWorkHost,
+  WorkAdmissionError,
+} from "@use-crux/core/work";
+```
+
+`workPolicy` is also root-exported from `@use-crux/core`.
+
+## `workPolicy(options)`
+
+```ts
+function workPolicy(options: WorkPolicyOptions): WorkPolicy;
+```
+
+```ts
+type WorkPolicyOptions = {
+  concurrency?: number;
+  maxOutstanding?: number;
+  tree?: {
+    maxDepth?: number;
+    maxStarts?: number;
+    maxActive?: number;
+  };
+};
+```
+
+Every option is optional, and any subset of fields may be provided (partial
+contribution). The returned `WorkPolicy` is a deeply frozen partial
+contribution: it carries a readonly `_tag` discriminant and only the limits the
+author supplied — omitted limits stay absent, not default-filled, so multiple
+contributions can merge by intersection:
+
+```ts
+type WorkPolicy = {
+  readonly _tag: "WorkPolicy";
+  readonly concurrency?: number;
+  readonly maxOutstanding?: number;
+  readonly tree?: {
+    readonly maxDepth?: number;
+    readonly maxStarts?: number;
+    readonly maxActive?: number;
+  };
+};
+```
+
+The fully resolved form is `ResolvedWorkPolicy`, where every numeric field is
+required:
+
+```ts
+type ResolvedWorkPolicy = {
+  readonly concurrency: number;
+  readonly maxOutstanding: number;
+  readonly tree: {
+    readonly maxDepth: number;
+    readonly maxStarts: number;
+    readonly maxActive: number;
+  };
+};
+```
+
+Each authored numeric value must be a positive safe integer; invalid values
+are rejected. The contribution is deep-frozen, so it is immutable and safe to
+share across concurrent work.
+
+## `DEFAULT_WORK_POLICY`
+
+```ts
+const DEFAULT_WORK_POLICY: Readonly<ResolvedWorkPolicy>;
+```
+
+The readonly resolved defaults:
+
+```ts
+{
+  concurrency: 8,
+  maxOutstanding: 32,
+  tree: {
+    maxDepth: 4,
+    maxStarts: 64,
+    maxActive: 16,
+  },
+}
+```
+
+## `resolveWorkPolicy(...policies)`
+
+```ts
+function resolveWorkPolicy(
+  ...policies: Array<WorkPolicy | undefined>
+): ResolvedWorkPolicy;
+```
+
+Resolves one or more policies (and optional gaps) into a single
+`ResolvedWorkPolicy` using two rules:
+
+- **Default filling** — a dimension not specified by any policy falls back to
+  `DEFAULT_WORK_POLICY`.
+- **Minimum intersection** — a dimension specified by multiple policies resolves
+  to the smallest value among them.
+
+```ts
+resolveWorkPolicy(
+  workPolicy({ concurrency: 16 }),
+  workPolicy({ concurrency: 8, tree: { maxActive: 4 } }),
+);
+// {
+//   concurrency: 8,            // min(16, 8)
+//   maxOutstanding: 32,        // default-filled
+//   tree: { maxDepth: 4, maxStarts: 64, maxActive: 4 },
+// }
+```
+
+## `createAgentWorkHost(options)`
+
+```ts
+createAgentWorkHost({
+  executor, // the agent executor that runs the work
+  model, // optional model selection
+  policy, // optional WorkPolicy
+});
+```
+
+- `executor` — the agent executor that runs admitted work.
+- `model?` — optional model selection for the hosted work.
+- `policy?` — optional `WorkPolicy`; when omitted, defaults apply.
+
+The returned host exposes its resolved policy as a readonly value:
+
+```ts
+host.policy; // ResolvedWorkPolicy
+```
+
+## `WorkAdmissionError`
+
+Thrown when work is refused because a budget would be exceeded.
+
+```ts
+class WorkAdmissionError extends Error {
+  constructor(reason?: { code: WorkAdmissionErrorCode });
+}
+```
+
+`reason` is a discriminated reason keyed on `code`; with no argument it
+defaults to `work_admission_max_outstanding`. Each code maps to a category and
+a retryability flag:
+
+| code                             | category   | retryable |
+| -------------------------------- | ---------- | --------- |
+| `work_admission_max_outstanding` | `capacity` | `true`    |
+| `work_admission_max_active`      | `capacity` | `true`    |
+| `work_admission_max_depth`       | `topology` | `false`   |
+| `work_admission_max_starts`      | `lifetime` | `false`   |
+
+Retryable codes may be retried once capacity frees up; non-retryable codes
+cannot succeed without changing the tree shape or lifetime budget.
+
+## Admission scopes
+
+**Per-owner** budgets are tracked for each work occurrence:
+
+- `concurrency` — the owner's own in-flight (concurrently running) work.
+- `maxOutstanding` — the owner's attached nonterminal work that is queued or
+  running.
+
+**Root-scoped** budgets are tracked at the root of the work tree and cover
+Agent descendants, excluding the depth-0 root:
+
+- `tree.maxDepth` — the depth of the tree rooted at the root work.
+- `tree.maxStarts` — the lifetime count of work starts across the entire tree.
+- `tree.maxActive` — the number of currently-active descendants across the tree.
+
+## Refund and lifecycle semantics
+
+- **Terminal completion** refunds the `active` count only.
+- **Detach** refunds the owner's `outstanding` count, but not the root-scoped
+  `starts` or `active` counts.
+- **Identical occurrence reconnect** is handled before counter accounting, so a
+  reconnecting occurrence does not double-count against the budgets.
+- **Cancellation wins over late completion** — a completion that arrives after
+  cancellation does not re-apply its effects.
+- **Detach synchronously wins only if it severs first** — detach takes effect
+  over competing operations only when it severs the work synchronously.
+
+> **Current boundary:** Finite defaults and an explicit host policy are
+> enforced process-locally today. `use[]` resolves protected policy metadata,
+> and automatic restart-safe durable child policy handoff is a later bridge.
+
+## Related
+
+- [/docs/guides/agents/work-policy](/docs/guides/agents/work-policy)
+- [/docs/reference/crux-core/work](/docs/reference/crux-core/work)
+- [/docs/reference/crux-core/backgroundable-agent-work](/docs/reference/crux-core/backgroundable-agent-work)

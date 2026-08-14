@@ -5,6 +5,7 @@
     "index",
     "agent",
     "background-agent-work",
+    "work-policy",
     "threads",
     "handoff",
     "blackboard",
